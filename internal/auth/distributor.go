@@ -38,6 +38,11 @@ type Distributor interface {
 	// hold accountJWT, and when its account was last pushed, if it was.
 	Current(ctx context.Context, operator types.NamespacedName, accountJWT string) (authv1beta1.Distribution, error)
 
+	// Lookup returns the newest JWT for account that a server trusting
+	// operator holds, or "" when every one of them answers that it holds
+	// none. The error wraps ErrUnreachable when that cannot be told.
+	Lookup(ctx context.Context, operator types.NamespacedName, account string) (string, error)
+
 	// Delete makes request, from jwtplane.SignDelete, the delete that every
 	// server trusting operator is sent now and whenever it joins; "" sends
 	// none.

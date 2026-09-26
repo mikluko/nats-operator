@@ -2,12 +2,15 @@ package auth
 
 import (
 	"cmp"
+	"context"
+	"errors"
 	"slices"
 	"time"
 
 	"github.com/nats-io/jwt/v2"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
@@ -64,6 +67,76 @@ func accountRevocations(recorded []authv1beta1.Revocation, prev, pub string, sig
 	}
 	slices.SortFunc(out, func(a, b authv1beta1.Revocation) int { return cmp.Compare(a.PublicKey, b.PublicKey) })
 	return out
+}
+
+// seed is the revocations an account is signed with, and whether the
+// servers were asked for them.
+type seed struct {
+	revocations []authv1beta1.Revocation
+	// asked is set when the servers answered.
+	asked bool
+	// unasked is why no server could be asked for an account signed
+	// regardless; it wraps ErrUnreachable.
+	unasked error
+}
+
+// seededRevocations returns the revocations to sign into the JWT of the
+// account pub. They are accountRevocations', merged with those of the
+// newest JWT d finds on the servers trusting operator where the status
+// cannot be trusted to hold them all: recorded and prev both empty, or
+// unrecovered set by an earlier signing that could not ask. Where no
+// server can be asked, an account whose status records it distributed is
+// not to be signed, and the error wraps ErrUnreachable; any other is
+// signed with what the status and users give. A nil d is asked nothing.
+func seededRevocations(ctx context.Context, d Distributor, operator types.NamespacedName, recorded []authv1beta1.Revocation, prev, pub string, signing []string, users []authv1beta1.NatsUser, unrecovered, distributed bool) (seed, error) {
+	revs := accountRevocations(recorded, prev, pub, signing, users)
+	if d == nil || !unrecovered && (prev != "" || len(recorded) > 0) {
+		return seed{revocations: revs}, nil
+	}
+	held, err := d.Lookup(ctx, operator, pub)
+	switch {
+	case errors.Is(err, ErrUnreachable) && !distributed:
+		return seed{revocations: revs, unasked: err}, nil
+	case err != nil:
+		return seed{}, err
+	}
+	return seed{revocations: accountRevocations(revs, held, pub, signing, users), asked: true}, nil
+}
+
+// recordSeed sets ConditionRevocationsUnrecovered on conds from s: True
+// while an account was signed without asking the servers, removed once
+// they answered.
+func recordSeed(conds *[]metav1.Condition, gen int64, s seed) {
+	switch {
+	case s.unasked != nil:
+		setCondition(conds, gen, ConditionRevocationsUnrecovered, metav1.ConditionTrue, ReasonUnreachable,
+			"status held neither a JWT nor revocations and no server could be asked for the JWT to recover them from; "+
+				"signed with the revocations its users give, and asked again once a server answers: "+s.unasked.Error())
+	case s.asked:
+		meta.RemoveStatusCondition(conds, ConditionRevocationsUnrecovered)
+	}
+}
+
+// unrecovered reports whether conds say an earlier signing could not ask
+// the servers for the revocations.
+func unrecovered(conds []metav1.Condition) bool {
+	return meta.IsStatusConditionTrue(conds, ConditionRevocationsUnrecovered)
+}
+
+// everDistributed reports whether d records a push of the account or a
+// server holding it.
+func everDistributed(d *authv1beta1.Distribution) bool {
+	return d != nil && (d.LastPushTime != nil || d.Current > 0)
+}
+
+// recoveryFailed reports err from seededRevocations on an account that is
+// therefore not signed, and returns how soon to try again.
+func recoveryFailed(err error, notReady func(reason, msg string)) (time.Duration, error) {
+	notReady(ReasonRecovering, "status holds neither a JWT nor revocations though the account was distributed, and the servers cannot be asked for the JWT to recover them from: "+err.Error())
+	if errors.Is(err, ErrUnreachable) {
+		return distributionRecheck, nil
+	}
+	return 0, err
 }
 
 // signedRevocations are revs as jwtplane signs them.

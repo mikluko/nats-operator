@@ -3,11 +3,13 @@ package auth_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/nats-io/jwt/v2"
+	"github.com/nats-io/nkeys"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -16,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -85,6 +88,14 @@ func TestEnvtestDistribution(t *testing.T) {
 		e.get(ct, demo, op)
 		assert.NotNil(ct, op.Status.SystemAccount)
 	})
+	fresh := &authv1beta1.NatsAccount{}
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, key("nats-system", "orders"), fresh)
+		ready(ct, fresh.Status.Conditions, fresh.Generation, auth.ReasonSigned)
+		assert.NotEmpty(ct, fresh.Status.JWT)
+		assert.True(ct, meta.IsStatusConditionTrue(fresh.Status.Conditions, auth.ConditionRevocationsUnrecovered))
+	})
+	require.Nil(t, lastPush(fresh.Status.Distribution), "never distributed: signed without a server to ask")
 	oc, err := jwt.DecodeOperatorClaims(op.Status.JWT)
 	require.NoError(t, err)
 	cl := startFullCluster(t, plane{opJWT: op.Status.JWT, sysJWT: op.Status.SystemAccount.JWT, sysPub: oc.SystemAccount}, 3)
@@ -145,6 +156,7 @@ spec:
 			distributed(ct, orders.Status.Conditions, orders.Status.Distribution)
 			distributed(ct, sys.Status.Conditions, sys.Status.Distribution)
 			ready(ct, orders.Status.Conditions, orders.Generation, auth.ReasonDistributed)
+			assert.Nil(ct, meta.FindStatusCondition(orders.Status.Conditions, auth.ConditionRevocationsUnrecovered), "the servers answered once up")
 		})
 		for i := range cl.srvs {
 			require.Equal(t, orders.Status.JWT, cl.held(i, orders.Status.PublicKey), "server %d", i)
@@ -199,6 +211,46 @@ spec:
 		}
 	})
 
+	t.Run("StatusLost", func(t *testing.T) {
+		accountUser := revokedUser(t, e, "leaver", "kind: NatsAccount, name: orders")
+		orders := &authv1beta1.NatsAccount{}
+		e.eventually(t, func(ct *assert.CollectT) {
+			e.get(ct, key("nats-system", "orders"), orders)
+			assert.True(ct, revokesKey(orders.Status.JWT, accountUser))
+		})
+		require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if err := c.Get(t.Context(), key("nats-system", "orders"), orders); err != nil {
+				return err
+			}
+			orders.Status = authv1beta1.NatsAccountStatus{}
+			return c.Status().Update(t.Context(), orders)
+		}))
+		e.eventually(t, func(ct *assert.CollectT) {
+			e.get(ct, key("nats-system", "orders"), orders)
+			assert.True(ct, revokesKey(orders.Status.JWT, accountUser), "the JWT signed after the status was lost revokes the user")
+			assert.True(ct, slices.ContainsFunc(orders.Status.Revocations, func(r authv1beta1.Revocation) bool { return r.PublicKey == accountUser }))
+		})
+
+		systemUser := revokedUser(t, e, "system-leaver", "kind: NatsSystemAccount, name: sys")
+		e.eventually(t, func(ct *assert.CollectT) {
+			e.get(ct, demo, op)
+			if assert.NotNil(ct, op.Status.SystemAccount) {
+				assert.True(ct, revokesKey(op.Status.SystemAccount.JWT, systemUser))
+			}
+		})
+		loseSystemAccountStatus(t, e)
+		sys := &authv1beta1.NatsSystemAccount{}
+		e.eventually(t, func(ct *assert.CollectT) {
+			e.get(ct, demo, op)
+			e.get(ct, key("nats-system", "sys"), sys)
+			if assert.NotNil(ct, op.Status.SystemAccount) {
+				assert.True(ct, revokesKey(op.Status.SystemAccount.JWT, systemUser), "the system account JWT signed after both were lost revokes the user")
+			}
+			assert.True(ct, slices.ContainsFunc(sys.Status.Revocations, func(r authv1beta1.Revocation) bool { return r.PublicKey == systemUser }))
+			ready(ct, op.Status.Conditions, op.Generation, auth.ReasonSigned)
+		})
+	})
+
 	t.Run("Deletion", func(t *testing.T) {
 		pubs := map[string]string{}
 		for _, name := range []string{"orders", "forever"} {
@@ -226,6 +278,82 @@ spec:
 		require.Contains(t, deleted, pubs["forever"])
 		require.Nil(t, deleted[pubs["forever"]].Expires, "kept for good")
 	})
+}
+
+// loseSystemAccountStatus clears demo's status.systemAccount and the whole
+// status of its NatsSystemAccount sys together: while demo names another
+// system account, neither is rebuilt from the other.
+func loseSystemAccountStatus(t *testing.T, e *env) {
+	t.Helper()
+	c := e.c
+	op := &authv1beta1.NatsOperator{}
+	e.update(t, demo, &authv1beta1.NatsOperator{}, func(o client.Object) {
+		o.(*authv1beta1.NatsOperator).Spec.SystemAccountRef.Name = "absent"
+	})
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, demo, op)
+		cond := meta.FindStatusCondition(op.Status.Conditions, auth.ConditionReady)
+		if assert.NotNil(ct, cond) {
+			assert.Equal(ct, auth.ReasonNotFound, cond.Reason)
+		}
+	})
+	sys := &authv1beta1.NatsSystemAccount{}
+	require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := c.Get(t.Context(), key("nats-system", "sys"), sys); err != nil {
+			return err
+		}
+		sys.Status = authv1beta1.NatsSystemAccountStatus{}
+		return c.Status().Update(t.Context(), sys)
+	}))
+	require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := c.Get(t.Context(), demo, op); err != nil {
+			return err
+		}
+		op.Status.SystemAccount = nil
+		return c.Status().Update(t.Context(), op)
+	}))
+	e.update(t, demo, &authv1beta1.NatsOperator{}, func(o client.Object) {
+		o.(*authv1beta1.NatsOperator).Spec.SystemAccountRef.Name = "sys"
+	})
+}
+
+// revokedUser creates a NatsUser named name with a public key of its own
+// in the account accountRef names, waits for it to be signed, deletes it,
+// and returns its key once it is gone.
+func revokedUser(t *testing.T, e *env, name, accountRef string) string {
+	t.Helper()
+	kp, err := nkeys.CreateUser()
+	require.NoError(t, err)
+	pub, err := kp.PublicKey()
+	require.NoError(t, err)
+	e.apply(t, `
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsUser
+metadata: {name: `+name+`, namespace: nats-system}
+spec:
+  accountRef: {`+accountRef+`}
+  publicKey: `+pub+`
+`)
+	u := &authv1beta1.NatsUser{}
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, key("nats-system", name), u)
+		ready(ct, u.Status.Conditions, u.Generation, auth.ReasonSigned)
+	})
+	require.NoError(t, e.c.Delete(t.Context(), u))
+	e.eventually(t, func(ct *assert.CollectT) {
+		assert.True(ct, apierrors.IsNotFound(e.c.Get(e.ctx, key("nats-system", name), &authv1beta1.NatsUser{})))
+	})
+	return pub
+}
+
+// revokesKey reports whether accountJWT revokes the user key pub.
+func revokesKey(accountJWT, pub string) bool {
+	c, err := jwt.DecodeAccountClaims(accountJWT)
+	if err != nil {
+		return false
+	}
+	_, ok := c.Revocations[pub]
+	return ok
 }
 
 // distributed asserts story 2's distribution status: every server holds

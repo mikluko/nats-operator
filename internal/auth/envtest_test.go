@@ -72,6 +72,22 @@ func (r *recorder) Current(context.Context, types.NamespacedName, string) (authv
 	return authv1beta1.Distribution{}, auth.ErrUnreachable
 }
 
+// Lookup implements auth.Distributor: the newest JWT for account pushed
+// for operator, standing for the servers that would hold it.
+func (r *recorder) Lookup(_ context.Context, operator types.NamespacedName, account string) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var newest string
+	var issued int64
+	for _, token := range r.pushes[operator] {
+		c, err := jwt.DecodeAccountClaims(token)
+		if err == nil && c.Subject == account && c.IssuedAt >= issued {
+			newest, issued = token, c.IssuedAt
+		}
+	}
+	return newest, nil
+}
+
 // Delete implements auth.Distributor.
 func (r *recorder) Delete(context.Context, types.NamespacedName, string) error {
 	return nil

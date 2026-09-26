@@ -45,10 +45,16 @@ const ActivationSigned = "signed"
 // The JWT revokes the keys of its NatsUsers being deleted or no longer
 // admitted, and keeps every revocation status.revocations records or it
 // already carried until none of the revocation's issuers is among the
-// account's signing keys. Each newly
+// account's signing keys. A status holding neither a JWT nor revocations
+// is recovered, with a Distributor, from the JWT the servers hold. While
+// no server can be asked, an account whose status.distribution records it
+// distributed is not signed, and any other is signed with
+// RevocationsUnrecovered True until a server answers. Each newly
 // signed JWT resets status.distribution to no server current; with a
 // Distributor, status.distribution and the Distributed condition then
-// follow the servers holding it.
+// follow the servers holding it. A JWT in status older than one the
+// Distributor already pushed, as a push whose status write was lost
+// leaves it, is replaced by one signed afresh.
 //
 // Deletion is held by AccountFinalizer until the account's public key is
 // in its NatsOperator's status.deletedAccounts, from which the operator's
@@ -137,7 +143,14 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	st.Revocations = accountRevocations(st.Revocations, st.JWT, pub, signing, users)
+	sd, err := seededRevocations(ctx, r.Distributor, opKey, st.Revocations, st.JWT, pub, signing, users,
+		unrecovered(st.Conditions), everDistributed(st.Distribution))
+	if err != nil {
+		again, err := recoveryFailed(err, notReady)
+		return reconcile.Result{RequeueAfter: again}, err
+	}
+	recordSeed(&st.Conditions, acc.Generation, sd)
+	st.Revocations = sd.revocations
 	a := jwtplane.Account{
 		Name:        acc.Name,
 		Keys:        keys.Keys,
@@ -158,14 +171,20 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 		notReady(ReasonInvalidJWT, err.Error())
 		return reconcile.Result{}, nil
 	}
-	if !sameAccountClaims(st.JWT, token) || due(st.JWT, now) || (!a.NoExpiry && lifetimeDiffers(st.JWT, accountTTL(a.TTL))) {
+	adopt := func() error {
 		err := push(ctx, r.Distributor, opKey, token)
 		if err := pushErr(err); err != nil {
-			return reconcile.Result{}, fmt.Errorf("push account JWT: %w", err)
+			return fmt.Errorf("push account JWT: %w", err)
 		}
 		st.JWT = token
 		st.JWTHash = JWTHash(token)
 		st.Distribution = pushed(st.Distribution, now, r.Distributor != nil && err == nil)
+		return nil
+	}
+	if !sameAccountClaims(st.JWT, token) || due(st.JWT, now) || (!a.NoExpiry && lifetimeDiffers(st.JWT, accountTTL(a.TTL))) {
+		if err := adopt(); err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 
 	if len(imports.unresolved) > 0 {
@@ -180,7 +199,14 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 		setCondition(&st.Conditions, acc.Generation, grant.ConditionReferencesResolved, metav1.ConditionTrue, ReasonAllImportsResolved, "")
 		setCondition(&st.Conditions, acc.Generation, ConditionReady, metav1.ConditionTrue, ReasonSigned, "")
 	}
-	again, err := distribute(ctx, r.Distributor, opKey, st.JWT, accountDistribution{&st.Distribution, &st.Conditions, acc.Generation})
+	dist := accountDistribution{&st.Distribution, &st.Conditions, acc.Generation}
+	again, err := distribute(ctx, r.Distributor, opKey, st.JWT, dist)
+	if errors.Is(err, ErrStaleJWT) && st.JWT != token {
+		if err := adopt(); err != nil {
+			return reconcile.Result{}, err
+		}
+		again, err = distribute(ctx, r.Distributor, opKey, st.JWT, dist)
+	}
 	res := requeueAtRenewal(st.JWT, now)
 	res.RequeueAfter = soonest(res.RequeueAfter, again)
 	return res, err

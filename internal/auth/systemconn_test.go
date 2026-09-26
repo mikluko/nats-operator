@@ -51,6 +51,11 @@ func TestSystemConnection_Conn(t *testing.T) {
 			creds:    creds(p.sys),
 		},
 		{
+			name:     "status.systemAccount lost: the operator JWT names the system account",
+			operator: operatorWithJWT(p.opJWT),
+			creds:    creds(p.sys),
+		},
+		{
 			name:     "a user of another account",
 			operator: operatorWithSystemAccount(p.sysPub),
 			creds:    creds(p.acc),
@@ -106,5 +111,12 @@ func operatorWithSystemAccount(pub string) *authv1beta1.NatsOperator {
 	return &authv1beta1.NatsOperator{
 		ObjectMeta: metav1.ObjectMeta{Namespace: demo.Namespace, Name: demo.Name},
 		Status:     authv1beta1.NatsOperatorStatus{SystemAccount: &authv1beta1.SystemAccountStatus{Name: "sys", PublicKey: pub}},
+	}
+}
+
+func operatorWithJWT(token string) *authv1beta1.NatsOperator {
+	return &authv1beta1.NatsOperator{
+		ObjectMeta: metav1.ObjectMeta{Namespace: demo.Namespace, Name: demo.Name},
+		Status:     authv1beta1.NatsOperatorStatus{JWT: token},
 	}
 }

@@ -30,7 +30,12 @@ import (
 // NatsAccount the operator signs that carries the preset, and revokes the
 // keys of its NatsUsers as AccountReconciler does an account's, the
 // revocations SystemAccountReconciler records in the NatsSystemAccount's
-// status among them.
+// status among them. Where neither that record nor status.systemAccount
+// holds anything to sign them from, they are recovered as AccountReconciler
+// recovers an account's, the NatsSystemAccount's status.distribution
+// saying whether it was distributed and the operator carrying
+// RevocationsUnrecovered; an operator whose status holds no JWT is taken
+// to have signed nothing yet.
 //
 // status.deletedAccounts, filled by AccountReconciler, keeps each deleted
 // account until its last JWT expires or its key is signed again; the
@@ -66,6 +71,7 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	notReady := func(reason, msg string) {
 		setCondition(&st.Conditions, op.Generation, ConditionReady, metav1.ConditionFalse, reason, msg)
 	}
+	signedBefore := st.JWT != ""
 	src, err := operatorKeySource(op)
 	if err != nil {
 		notReady(ReasonInvalidJWT, err.Error())
@@ -125,11 +131,21 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	if err != nil {
 		return 0, err
 	}
+	var lookup Distributor
+	if signedBefore {
+		lookup = r.Distributor
+	}
+	sd, err := seededRevocations(ctx, lookup, client.ObjectKeyFromObject(op), sys.Status.Revocations, prevJWT, sysPub, sysSigning, users,
+		unrecovered(st.Conditions), everDistributed(sys.Status.Distribution))
+	if err != nil {
+		return recoveryFailed(err, notReady)
+	}
+	recordSeed(&st.Conditions, op.Generation, sd)
 	sysJWT, err := jwtplane.SignSystemAccount(jwtplane.SystemAccount{
 		Name:             sys.Name,
 		Keys:             sysKeys.Keys,
 		StepdownAccounts: stepdownAccounts(accounts),
-		Revocations:      signedRevocations(accountRevocations(sys.Status.Revocations, prevJWT, sysPub, sysSigning, users)),
+		Revocations:      signedRevocations(sd.revocations),
 	}, keys.Keys, time.Now())
 	if err != nil {
 		notReady(ReasonInvalidKeys, err.Error())

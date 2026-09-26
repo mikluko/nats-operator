@@ -27,6 +27,8 @@ import (
 // and lives in that operator's status; an unreferenced one is not signed.
 // status.revocations records what that JWT revokes, and what the next one
 // is to revoke, as AccountReconciler records an account's.
+// It is not pushed again while the operator's RevocationsUnrecovered is
+// True, so the servers keep the JWT the revocations are recovered from.
 // A newly signed JWT resets status.distribution to no server current; with
 // a Distributor, status.distribution and the Distributed condition then
 // follow the servers holding it.
@@ -113,6 +115,9 @@ func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta
 		st.Distribution = pushed(st.Distribution, time.Now(), r.Distributor != nil)
 	}
 	setCondition(&st.Conditions, sys.Generation, ConditionReady, metav1.ConditionTrue, ReasonSigned, "")
+	if unrecovered(op.Status.Conditions) {
+		return 0, nil
+	}
 	return distribute(ctx, r.Distributor, key, signed.JWT, accountDistribution{&st.Distribution, &st.Conditions, sys.Generation})
 }
 

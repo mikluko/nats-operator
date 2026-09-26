@@ -15,6 +15,10 @@ const (
 	// ConditionDistributed is True on an account while every server
 	// trusting its operator holds its current JWT.
 	ConditionDistributed = "Distributed"
+	// ConditionRevocationsUnrecovered is True on an account, or on a
+	// NatsOperator for its system account, signed after its status lost
+	// its JWT and revocations while no server could be asked for them.
+	ConditionRevocationsUnrecovered = "RevocationsUnrecovered"
 )
 
 // Condition reasons.
@@ -42,6 +46,10 @@ const (
 	ReasonServersBehind      = "ServersBehind"
 	ReasonUnreachable        = "Unreachable"
 	ReasonUnobserved         = "Unobserved"
+	// ReasonRecovering is Ready's reason on an account whose status lost
+	// its JWT and its revocations but records it distributed, while no
+	// server can be asked for the JWT they are recovered from.
+	ReasonRecovering = "RecoveringRevocations"
 )
 
 // setCondition sets a condition of generation gen on conds.

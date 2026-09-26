@@ -2,6 +2,7 @@ package auth_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -217,6 +218,39 @@ func TestResolvers_Current(t *testing.T) {
 	d, err = r.Current(t.Context(), testOperator, v2)
 	require.NoError(t, err)
 	require.Equal(t, [2]int32{3, 3}, [2]int32{d.Servers, d.Current})
+}
+
+// TestResolvers_Lookup pins the answer revocations are recovered from:
+// "" only when every server says it holds no JWT, the newest JWT where
+// servers disagree, and ErrUnreachable where no server can be asked.
+func TestResolvers_Lookup(t *testing.T) {
+	p := newPlane(t)
+	c := startFullCluster(t, p, 3)
+	r := resolversOn(t, c, testOperator)
+	keys, pub := newAccount(t)
+	v1, v2 := signTwice(t, p, keys)
+
+	got, err := r.Lookup(t.Context(), testOperator, pub)
+	require.NoError(t, err)
+	require.Empty(t, got, "no server holds the account")
+
+	require.NoError(t, r.Push(t.Context(), testOperator, v1))
+	c.stop(2)
+	require.NoError(t, r.Push(t.Context(), testOperator, v2))
+	c.start(2)
+	require.Equal(t, v1, c.held(2, pub))
+	got, err = r.Lookup(t.Context(), testOperator, pub)
+	require.NoError(t, err)
+	require.Equal(t, v2, got, "the newest of the JWTs the servers hold")
+
+	down := &auth.Resolvers{
+		Conn: func(context.Context, types.NamespacedName) (*nats.Conn, error) {
+			return nil, errors.New("dial: refused")
+		},
+		Wait: 200 * time.Millisecond,
+	}
+	_, err = down.Lookup(t.Context(), testOperator, pub)
+	require.ErrorIs(t, err, auth.ErrUnreachable)
 }
 
 // TestResolvers_NeverPushesOlder pins Q2181's rule: a server keeps whatever

@@ -1,6 +1,9 @@
 package auth
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -9,6 +12,7 @@ import (
 	"github.com/nats-io/nkeys"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	"github.com/mikluko/nats-operator/internal/grant"
@@ -158,6 +162,173 @@ func TestAccountRevocations(t *testing.T) {
 			require.Equal(t, tt.want, accountRevocations(tt.recorded, tt.prev, accPub, tt.signing, tt.users))
 		})
 	}
+}
+
+// lookupOnly is a Distributor whose Lookup answers with jwt and err, and
+// that records every account it was asked for.
+type lookupOnly struct {
+	jwt   string
+	err   error
+	asked []string
+}
+
+func (d *lookupOnly) Lookup(_ context.Context, _ types.NamespacedName, account string) (string, error) {
+	d.asked = append(d.asked, account)
+	return d.jwt, d.err
+}
+
+func (*lookupOnly) Push(context.Context, types.NamespacedName, string) error { return nil }
+
+func (*lookupOnly) Current(context.Context, types.NamespacedName, string) (authv1beta1.Distribution, error) {
+	return authv1beta1.Distribution{}, nil
+}
+
+func (*lookupOnly) Delete(context.Context, types.NamespacedName, string) error { return nil }
+
+func TestSeededRevocations(t *testing.T) {
+	op := testKeys(t, nkeys.PrefixByteOperator, false)
+	acc := testKeys(t, nkeys.PrefixByteAccount, false)
+	accPub := testPub(t, acc.Identity)
+	keyA := testPub(t, acc.Signing[0].Pair)
+	t0 := time.Unix(1_800_000_000, 0)
+	revoked, deleting := userKey(t), userKey(t)
+	held, err := jwtplane.SignAccount(jwtplane.Account{Name: "a", Keys: acc, Revocations: []jwtplane.Revocation{{PublicKey: revoked, At: t0}}}, op, t0)
+	require.NoError(t, err)
+	current, err := jwtplane.SignAccount(jwtplane.Account{Name: "a", Keys: acc}, op, t0)
+	require.NoError(t, err)
+	rev := func(key string, at time.Time) authv1beta1.Revocation {
+		return authv1beta1.Revocation{PublicKey: key, At: metav1.Time{Time: at}, Issuers: []string{keyA}}
+	}
+	deletingUser := authv1beta1.NatsUser{
+		ObjectMeta: metav1.ObjectMeta{DeletionTimestamp: &metav1.Time{Time: t0.Add(time.Hour)}, Finalizers: []string{UserFinalizer}},
+		Status:     authv1beta1.NatsUserStatus{PublicKey: deleting},
+	}
+	unreachable := fmt.Errorf("%w: no server answered STATSZ", ErrUnreachable)
+
+	tests := []struct {
+		name        string
+		d           *lookupOnly
+		recorded    []authv1beta1.Revocation
+		prev        string
+		users       []authv1beta1.NatsUser
+		unrecovered bool
+		distributed bool
+		want        []authv1beta1.Revocation
+		wantAsked   bool
+		wantUnasked bool
+		wantErr     error
+	}{
+		{
+			name:      "claims found: the record is seeded from the servers' JWT",
+			d:         &lookupOnly{jwt: held},
+			users:     []authv1beta1.NatsUser{deletingUser},
+			want:      []authv1beta1.Revocation{rev(revoked, t0), rev(deleting, t0.Add(time.Hour))},
+			wantAsked: true,
+		},
+		{
+			name:      "claims empty: a new account is signed with its users' revocations alone",
+			d:         &lookupOnly{},
+			users:     []authv1beta1.NatsUser{deletingUser},
+			want:      []authv1beta1.Revocation{rev(deleting, t0.Add(time.Hour))},
+			wantAsked: true,
+		},
+		{
+			name:        "no connection, distributed: nothing to sign",
+			d:           &lookupOnly{jwt: held, err: unreachable},
+			distributed: true,
+			wantErr:     ErrUnreachable,
+		},
+		{
+			name:        "no connection, never distributed (fresh install): signed unasked",
+			d:           &lookupOnly{err: unreachable},
+			users:       []authv1beta1.NatsUser{deletingUser},
+			want:        []authv1beta1.Revocation{rev(deleting, t0.Add(time.Hour))},
+			wantUnasked: true,
+		},
+		{
+			name:        "signed unasked earlier: the servers' JWT is merged into the one signed since",
+			d:           &lookupOnly{jwt: held},
+			prev:        current,
+			users:       []authv1beta1.NatsUser{deletingUser},
+			unrecovered: true,
+			want:        []authv1beta1.Revocation{rev(revoked, t0), rev(deleting, t0.Add(time.Hour))},
+			wantAsked:   true,
+		},
+		{
+			name:        "signed unasked earlier, still no connection: still unasked",
+			d:           &lookupOnly{err: unreachable},
+			prev:        current,
+			unrecovered: true,
+			want:        []authv1beta1.Revocation{},
+			wantUnasked: true,
+		},
+		{
+			name:     "a record survives: the servers are not asked",
+			d:        &lookupOnly{err: unreachable},
+			recorded: []authv1beta1.Revocation{rev(revoked, t0)},
+			want:     []authv1beta1.Revocation{rev(revoked, t0)},
+		},
+		{
+			name: "a JWT survives: the servers are not asked",
+			d:    &lookupOnly{err: unreachable},
+			prev: current,
+			want: []authv1beta1.Revocation{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			slices.SortFunc(tt.want, func(a, b authv1beta1.Revocation) int { return strings.Compare(a.PublicKey, b.PublicKey) })
+			got, err := seededRevocations(t.Context(), tt.d, types.NamespacedName{Name: "op"}, tt.recorded, tt.prev, accPub, []string{keyA}, tt.users, tt.unrecovered, tt.distributed)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got.revocations)
+			require.Equal(t, tt.wantAsked, got.asked)
+			if tt.wantUnasked {
+				require.ErrorIs(t, got.unasked, ErrUnreachable)
+			} else {
+				require.NoError(t, got.unasked)
+			}
+		})
+	}
+
+	t.Run("no Distributor: nothing to ask", func(t *testing.T) {
+		got, err := seededRevocations(t.Context(), nil, types.NamespacedName{Name: "op"}, nil, "", accPub, []string{keyA}, nil, true, true)
+		require.NoError(t, err)
+		require.Equal(t, seed{revocations: []authv1beta1.Revocation{}}, got)
+	})
+}
+
+func TestRecordSeed(t *testing.T) {
+	var conds []metav1.Condition
+	recordSeed(&conds, 1, seed{unasked: fmt.Errorf("%w: down", ErrUnreachable)})
+	require.True(t, unrecovered(conds))
+	recordSeed(&conds, 1, seed{})
+	require.True(t, unrecovered(conds), "a signing that did not ask leaves it")
+	recordSeed(&conds, 1, seed{asked: true})
+	require.Empty(t, conds)
+}
+
+func TestEverDistributed(t *testing.T) {
+	require.False(t, everDistributed(nil))
+	require.False(t, everDistributed(&authv1beta1.Distribution{Servers: 3}))
+	require.True(t, everDistributed(&authv1beta1.Distribution{Servers: 3, Current: 1}))
+	require.True(t, everDistributed(&authv1beta1.Distribution{LastPushTime: &metav1.Time{}}))
+}
+
+func TestRecoveryFailed(t *testing.T) {
+	var reason string
+	notReady := func(r, _ string) { reason = r }
+	again, err := recoveryFailed(fmt.Errorf("%w: down", ErrUnreachable), notReady)
+	require.NoError(t, err)
+	require.Equal(t, distributionRecheck, again)
+	require.Equal(t, ReasonRecovering, reason)
+
+	other := errors.New("decode")
+	_, err = recoveryFailed(other, notReady)
+	require.ErrorIs(t, err, other)
 }
 
 func TestSignedRevocations(t *testing.T) {

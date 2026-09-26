@@ -229,6 +229,46 @@ func (r *Resolvers) Current(ctx context.Context, operator types.NamespacedName, 
 	return out, nil
 }
 
+// Lookup implements Distributor. A server whose resolver holds no JWT for
+// account answers with an empty reply; one failing to read it does not
+// answer, and neither is taken for one holding none.
+func (r *Resolvers) Lookup(ctx context.Context, operator types.NamespacedName, account string) (string, error) {
+	st := r.state(operator)
+	nc, err := r.conn(ctx, operator)
+	if err != nil {
+		return "", err
+	}
+	roster, err := r.roster(ctx, st, nc)
+	if err != nil {
+		return "", err
+	}
+	held, err := r.lookup(ctx, nc, account, len(roster))
+	if err != nil {
+		return "", err
+	}
+	var newest string
+	var issued int64
+	var none int
+	for _, token := range held {
+		if token == "" {
+			none++
+			continue
+		}
+		c, err := jwt.DecodeAccountClaims(token)
+		if err != nil || c.Subject != account {
+			continue
+		}
+		if newest == "" || c.IssuedAt > issued {
+			newest, issued = token, c.IssuedAt
+		}
+	}
+	if newest == "" && none < len(roster) {
+		return "", fmt.Errorf("%w: %d of %d servers answered CLAIMS.LOOKUP for account %s, none with its JWT",
+			ErrUnreachable, none, len(roster), account)
+	}
+	return newest, nil
+}
+
 // Delete implements Distributor. A request deleting the accounts the last
 // one did, signed by the same key, changes nothing.
 func (r *Resolvers) Delete(ctx context.Context, operator types.NamespacedName, request string) error {

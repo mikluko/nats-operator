@@ -46,8 +46,8 @@ func (s *SystemConnection) Conn(ctx context.Context, operator types.NamespacedNa
 		}
 		return nil, err
 	}
-	sys := op.Status.SystemAccount
-	if sys == nil || sys.PublicKey == "" {
+	sysPub := signedSystemAccount(&op)
+	if sysPub == "" {
 		return nil, fmt.Errorf("NatsOperator %s has not signed its system account", operator)
 	}
 	var nc natsv1beta1.NatsConnection
@@ -62,11 +62,25 @@ func (s *SystemConnection) Conn(ctx context.Context, operator types.NamespacedNa
 	if err != nil {
 		return nil, fmt.Errorf("NatsConnection %s: %w", s.Name, err)
 	}
-	if account != sys.PublicKey {
+	if account != sysPub {
 		return nil, fmt.Errorf("%w: NatsConnection %s is a user of %s, NatsOperator %s's system account is %s",
-			ErrForeignConnection, s.Name, account, operator, sys.PublicKey)
+			ErrForeignConnection, s.Name, account, operator, sysPub)
 	}
 	return s.Pool.Get(natsconn.ConnectionKey(s.Name), ep)
+}
+
+// signedSystemAccount returns the public key of op's system account as its
+// status records it, in status.systemAccount or else in the operator JWT,
+// or "" where it records none.
+func signedSystemAccount(op *authv1beta1.NatsOperator) string {
+	if sys := op.Status.SystemAccount; sys != nil && sys.PublicKey != "" {
+		return sys.PublicKey
+	}
+	c, err := jwt.DecodeOperatorClaims(op.Status.JWT)
+	if err != nil {
+		return ""
+	}
+	return c.SystemAccount
 }
 
 // credsAccount returns the account whose user the creds file carries.
