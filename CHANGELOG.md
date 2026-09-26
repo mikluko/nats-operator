@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Documentation site at <https://mikluko.github.io/nats-operator/>: the stories, the design and the ADRs under `/docs/`.
+- Documentation page `/docs/install/`: prerequisites, installing the chart and its values, the controllers' flags, the RBAC each controller holds, upgrade and uninstall.
 - CRDs for every kind at `v1beta1`, under `config/crd/`: `NatsReferenceGrant`, `NatsOperatorTrust`, `NatsAccountTrust` and `NatsConnection` in `nats.mikluko.io`; `NatsCluster` in `cluster.nats.mikluko.io`; `NatsOperator`, `NatsSystemAccount`, `NatsAccount` and `NatsUser` in `auth.nats.mikluko.io`; `NatsStream`, `NatsConsumer`, `NatsKeyValue`, `NatsObjectStore`, `NatsBalancer`, `NatsSystemBalancer` and `NatsClusterEvacuation` in `jetstream.nats.mikluko.io`.
 - The API server refuses mutually exclusive fields set together, a `NatsCluster` version below 2.15.0 or moving more than one minor at once, and changes nats-server would refuse to a stream's or consumer's immutable fields.
 - Helm chart `charts/nats-operator` installing the CRDs and any subset of the cluster, auth and JetStream controllers through `cluster.enabled`, `auth.enabled` and `jetstream.enabled`, each with its own ServiceAccount and RBAC limited to its own API group, `nats.mikluko.io` and the core objects it uses; images default to `ghcr.io/mikluko/nats-operator/<controller>` at the chart's `appVersion`.

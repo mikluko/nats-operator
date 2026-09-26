@@ -8,11 +8,13 @@ tool (
 )
 
 require (
+	github.com/go-logr/logr v1.4.3
 	github.com/nats-io/jwt/v2 v2.8.2
 	github.com/nats-io/nats-server/v2 v2.15.0
 	github.com/nats-io/nats.go v1.54.0
 	github.com/nats-io/nkeys v0.4.16
 	github.com/stretchr/testify v1.12.1
+	github.com/yuin/goldmark v1.7.16
 	go.yaml.in/yaml/v3 v3.0.5
 	k8s.io/api v0.36.3
 	k8s.io/apiextensions-apiserver v0.36.0
@@ -33,7 +35,6 @@ require (
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.1 // indirect
-	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/jsonpointer v0.23.1 // indirect
 	github.com/go-openapi/jsonreference v0.21.5 // indirect
