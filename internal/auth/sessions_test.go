@@ -160,3 +160,32 @@ func TestConnSessions_Kick(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, n, "every server answered with none")
 }
+
+// TestConnSessions_KickNoRoster pins that a kick pass no server answers,
+// as over a system connection that lost its server and buffers its
+// publishes, is ErrUnreachable rather than none found.
+func TestConnSessions_KickNoRoster(t *testing.T) {
+	p := newPlane(t)
+	srv := startServers(t, p, 1)[0]
+	kp, err := nkeys.CreateUser()
+	require.NoError(t, err)
+	pub, err := kp.PublicKey()
+	require.NoError(t, err)
+	seed, err := kp.Seed()
+	require.NoError(t, err)
+	token, err := jwtplane.SignUser(jwtplane.User{Name: "ctl", PublicKey: pub, SystemAccount: true, Preset: jwtplane.PresetAuthController}, p.sys)
+	require.NoError(t, err)
+	sysNC, err := nats.Connect(srv.ClientURL(), nats.UserJWTAndSeed(token, string(seed)),
+		nats.MaxReconnects(-1), nats.ReconnectWait(time.Hour))
+	require.NoError(t, err)
+	t.Cleanup(sysNC.Close)
+	srv.Shutdown()
+	require.Eventually(t, sysNC.IsReconnecting, 5*time.Second, 20*time.Millisecond)
+
+	s := auth.ConnSessions{
+		Conn: func(context.Context, types.NamespacedName) (*nats.Conn, error) { return sysNC, nil },
+		Wait: 200 * time.Millisecond,
+	}
+	_, err = s.Kick(t.Context(), types.NamespacedName{Namespace: "ns", Name: "op"}, p.accPub, pub)
+	require.ErrorIs(t, err, auth.ErrUnreachable)
+}

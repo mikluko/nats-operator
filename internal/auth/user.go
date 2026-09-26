@@ -310,7 +310,8 @@ type userAccount struct {
 	// jwt is the account JWT as signed; empty where it is not signed, as
 	// for a system account no operator names.
 	jwt string
-	// distribution is how many servers hold jwt.
+	// distribution is how many servers hold jwt; nil where unknown, as for
+	// a system account whose status counts servers for another JWT.
 	distribution *authv1beta1.Distribution
 }
 
@@ -349,13 +350,15 @@ func (r *UserReconciler) lookupAccount(ctx context.Context, kind authv1beta1.Acc
 		out.keys = systemAccountKeySource(&sys)
 		out.operator = refKey(sys.Spec.OperatorRef, sys.Namespace)
 		out.publicKey = sys.Status.PublicKey
-		out.distribution = sys.Status.Distribution
 		var op authv1beta1.NatsOperator
 		if err := r.Get(ctx, out.operator, &op); client.IgnoreNotFound(err) != nil {
 			return out, false, err
 		}
 		if s := op.Status.SystemAccount; s != nil && s.Name == sys.Name && s.PublicKey == sys.Status.PublicKey && refKey(op.Spec.SystemAccountRef, op.Namespace) == key {
 			out.jwt = s.JWT
+		}
+		if out.jwt != "" && sys.Status.JWTHash == JWTHash(out.jwt) {
+			out.distribution = sys.Status.Distribution
 		}
 	default:
 		var acc authv1beta1.NatsAccount

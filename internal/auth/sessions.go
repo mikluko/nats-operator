@@ -46,6 +46,7 @@ type ConnSessions struct {
 // is asked for the user's connections by a CONNZ ping filtered on user and
 // account server-side, and every connection found is kicked by its server
 // ID and client ID. A connection gone before its kick counts as kicked.
+// An empty roster is ErrUnreachable.
 func (s ConnSessions) Kick(ctx context.Context, operator types.NamespacedName, account, user string) (int, error) {
 	nc, err := s.Conn(ctx, operator)
 	if err != nil {
@@ -92,6 +93,9 @@ func (s ConnSessions) Kick(ctx context.Context, operator types.NamespacedName, a
 	})
 	if err != nil {
 		return 0, err
+	}
+	if len(roster) == 0 {
+		return 0, fmt.Errorf("%w: no server answered STATSZ", ErrUnreachable)
 	}
 	var silent []string
 	for id := range roster {

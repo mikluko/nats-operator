@@ -371,6 +371,123 @@ spec:
 		ac, err := jwt.DecodeAccountClaims(now.Status.JWT)
 		return err != nil || ac.Revocations[pub] == 0
 	}, 2*time.Second, 100*time.Millisecond, "the revocation outlives the user")
+
+	t.Run("SystemAccount", e.testSystemUserDeletion)
+}
+
+// testSystemUserDeletion deletes a user of a NatsSystemAccount whose
+// status.distribution counts servers holding a JWT other than the revoking
+// one the NatsOperator signed: the user is held, kick pass or not, until
+// status.jwtHash names that JWT and every server holds it. The system
+// account is kept from catching up by withdrawing the grant its
+// cross-namespace operatorRef needs.
+func (e *env) testSystemUserDeletion(t *testing.T) {
+	for _, ns := range []string{"sysdel-op", "sysdel-sys"} {
+		require.NoError(t, e.c.Create(t.Context(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}))
+	}
+	kp, err := nkeys.CreateUser()
+	require.NoError(t, err)
+	pub, err := kp.PublicKey()
+	require.NoError(t, err)
+	sysToOp := `
+apiVersion: nats.mikluko.io/v1beta1
+kind: NatsReferenceGrant
+metadata: {name: sys-to-op, namespace: sysdel-op}
+spec:
+  from: [{group: auth.nats.mikluko.io, kind: NatsSystemAccount, namespace: sysdel-sys}]
+  to: [{group: auth.nats.mikluko.io, kind: NatsOperator}]
+`
+	e.apply(t, sysToOp+`---
+apiVersion: nats.mikluko.io/v1beta1
+kind: NatsReferenceGrant
+metadata: {name: op-to-sys, namespace: sysdel-sys}
+spec:
+  from: [{group: auth.nats.mikluko.io, kind: NatsOperator, namespace: sysdel-op}]
+  to: [{group: auth.nats.mikluko.io, kind: NatsSystemAccount}]
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsOperator
+metadata: {name: ops, namespace: sysdel-op}
+spec:
+  systemAccountRef: {namespace: sysdel-sys, name: sys}
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsSystemAccount
+metadata: {name: sys, namespace: sysdel-sys}
+spec:
+  operatorRef: {namespace: sysdel-op, name: ops}
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsUser
+metadata: {name: held, namespace: sysdel-sys}
+spec:
+  accountRef: {kind: NatsSystemAccount, name: sys}
+  publicKey: `+pub+`
+`)
+	opKey, sysKey, userKey := key("sysdel-op", "ops"), key("sysdel-sys", "sys"), key("sysdel-sys", "held")
+	var op authv1beta1.NatsOperator
+	var sys authv1beta1.NatsSystemAccount
+	u := &authv1beta1.NatsUser{}
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, sysKey, &sys)
+		ready(ct, sys.Status.Conditions, sys.Generation, auth.ReasonSigned)
+		e.get(ct, userKey, u)
+		ready(ct, u.Status.Conditions, u.Generation, auth.ReasonSigned)
+	})
+
+	var g natsv1beta1.NatsReferenceGrant
+	require.NoError(t, e.c.Get(t.Context(), key("sysdel-op", "sys-to-op"), &g))
+	require.NoError(t, e.c.Delete(t.Context(), &g))
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, sysKey, &sys)
+		cond := meta.FindStatusCondition(sys.Status.Conditions, grant.ConditionReferencesResolved)
+		if assert.NotNil(ct, cond) {
+			assert.Equal(ct, grant.ReasonNoGrant, cond.Reason)
+		}
+	})
+	setDistribution := func() {
+		require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if err := e.c.Get(t.Context(), sysKey, &sys); err != nil {
+				return err
+			}
+			sys.Status.Distribution = &authv1beta1.Distribution{Servers: 1, Current: 1}
+			return e.c.Status().Update(t.Context(), &sys)
+		}))
+	}
+	setDistribution()
+
+	require.NoError(t, e.c.Delete(t.Context(), u))
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, opKey, &op)
+		if assert.NotNil(ct, op.Status.SystemAccount) {
+			ac, err := jwt.DecodeAccountClaims(op.Status.SystemAccount.JWT)
+			if assert.NoError(ct, err) {
+				assert.Contains(ct, ac.Revocations, pub)
+			}
+		}
+		e.get(ct, userKey, u)
+		cond := meta.FindStatusCondition(u.Status.Conditions, auth.ConditionReady)
+		if assert.NotNil(ct, cond) {
+			assert.Equal(ct, auth.ReasonDistributing, cond.Reason)
+		}
+	})
+	require.Never(t, func() bool {
+		return apierrors.IsNotFound(e.c.Get(t.Context(), userKey, &authv1beta1.NatsUser{}))
+	}, 2*time.Second, 100*time.Millisecond, "a distribution counted for another JWT holds the user")
+
+	g.ResourceVersion = ""
+	require.NoError(t, e.c.Create(t.Context(), &g))
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, opKey, &op)
+		e.get(ct, sysKey, &sys)
+		if assert.NotNil(ct, op.Status.SystemAccount) {
+			assert.Equal(ct, auth.JWTHash(op.Status.SystemAccount.JWT), sys.Status.JWTHash)
+		}
+	})
+	setDistribution()
+	e.eventually(t, func(ct *assert.CollectT) {
+		assert.True(ct, apierrors.IsNotFound(e.c.Get(e.ctx, userKey, &authv1beta1.NatsUser{})), "the user is gone")
+	})
 }
 
 // testRevocationRecord pins that an account's revocations are recorded in
