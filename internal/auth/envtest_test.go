@@ -175,7 +175,7 @@ func TestEnvtest(t *testing.T) {
 	c, err := client.New(cfg, client.Options{Scheme: s})
 	require.NoError(t, err)
 	e.c = c
-	for _, ns := range []string{"nats-system", "team-a", "rot", "offline", "flip", "payments", "orders"} {
+	for _, ns := range []string{"nats-system", "team-a", "rot", "offline", "flip", "payments", "orders", "foreign"} {
 		require.NoError(t, c.Create(t.Context(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}))
 	}
 	for _, f := range []string{
@@ -194,6 +194,7 @@ func TestEnvtest(t *testing.T) {
 	t.Run("Story5", e.testStory5)
 	t.Run("ServedByNatsServer", e.testServed)
 	t.Run("CrossNamespaceImport", e.testCrossNamespaceImport)
+	t.Run("ImportFromOtherOperator", e.testImportFromOtherOperator)
 	t.Run("NoExpiryAndAccountTrust", e.testNoExpiryAndAccountTrust)
 	t.Run("Rotation", e.testRotation)
 	t.Run("OfflineIdentities", e.testOfflineIdentities)
@@ -467,6 +468,70 @@ spec:
 		g.Spec.To = g.Spec.To[:1]
 	})
 	e.eventually(t, state(false, grant.ReasonReferenceNotPermitted, grant.ReasonNoGrant))
+}
+
+// testImportFromOtherOperator pins that an import from a NatsAccount
+// signed by another NatsOperator is left out of the JWT and keeps the
+// importer from Ready.
+func (e *env) testImportFromOtherOperator(t *testing.T) {
+	e.apply(t, `
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsOperator
+metadata: {name: foreign, namespace: foreign}
+spec:
+  systemAccountRef: {name: sys}
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsSystemAccount
+metadata: {name: sys, namespace: foreign}
+spec:
+  operatorRef: {name: foreign}
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsAccount
+metadata: {name: exporter, namespace: foreign}
+spec:
+  operatorRef: {name: foreign}
+  exports:
+    - {name: events, type: Stream, subject: "foreign.events.>"}
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsAccount
+metadata: {name: importer, namespace: foreign}
+spec:
+  operatorRef: {name: demo, namespace: nats-system}
+  imports:
+    - accountRef: {kind: NatsAccount, name: exporter}
+      export: events
+---
+apiVersion: nats.mikluko.io/v1beta1
+kind: NatsReferenceGrant
+metadata: {name: foreign, namespace: nats-system}
+spec:
+  from: [{group: auth.nats.mikluko.io, kind: NatsAccount, namespace: foreign}]
+  to: [{group: auth.nats.mikluko.io, kind: NatsOperator, name: demo}]
+`)
+	var exporter, importer authv1beta1.NatsAccount
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, key("foreign", "exporter"), &exporter)
+		e.get(ct, key("foreign", "importer"), &importer)
+		ready(ct, exporter.Status.Conditions, exporter.Generation, auth.ReasonSigned)
+		cond := meta.FindStatusCondition(importer.Status.Conditions, auth.ConditionReady)
+		if assert.NotNil(ct, cond) {
+			assert.Equal(ct, metav1.ConditionFalse, cond.Status)
+			assert.Equal(ct, auth.ReasonImportsUnresolved, cond.Reason)
+		}
+		rr := meta.FindStatusCondition(importer.Status.Conditions, grant.ConditionReferencesResolved)
+		if assert.NotNil(ct, rr) {
+			assert.Equal(ct, auth.ReasonImportsUnresolved, rr.Reason)
+			assert.Equal(ct, "exporter/events: NatsAccount foreign/exporter is signed by NatsOperator foreign/foreign, not nats-system/demo", rr.Message)
+		}
+		assert.NotEmpty(ct, importer.Status.JWT)
+	})
+	require.Empty(t, importer.Status.Imports)
+	c, err := jwt.DecodeAccountClaims(importer.Status.JWT)
+	require.NoError(t, err)
+	require.Empty(t, c.Imports)
 }
 
 // testNoExpiryAndAccountTrust pins jwtTTL: 0 (Q2181) and the reference form

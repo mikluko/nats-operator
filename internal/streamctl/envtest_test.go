@@ -3,6 +3,7 @@ package streamctl
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -27,6 +28,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
+	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
@@ -62,6 +64,88 @@ func TestEnvtest(t *testing.T) {
 
 	t.Run("Story1", func(t *testing.T) { testStory1(t, c, quickstart) })
 	t.Run("Story3", func(t *testing.T) { testStory3(t, c, unmanaged) })
+	t.Run("ConnectionGone", func(t *testing.T) { testConnectionGone(t, c, quickstart) })
+}
+
+// testConnectionGone deletes a NatsConnection before the resources that
+// name it, each under deletionPolicy Delete, and sees every resource go
+// while its server object stays.
+func testConnectionGone(t *testing.T, c client.Client, n *testNATS) {
+	const ns = "teardown"
+	require.NoError(t, c.Create(t.Context(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}))
+	conn := &natsv1beta1.NatsConnection{
+		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "gone"},
+		Spec:       natsv1beta1.NatsConnectionSpec{Servers: n.urls},
+	}
+	ref := natsv1beta1.ObjectReference{Name: conn.Name}
+	policies := js.Policies{AdoptionPolicy: js.AdoptionNever, TerminalPolicy: js.TerminalHold}
+	objs := []client.Object{
+		&js.NatsStream{
+			ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "teardown"},
+			Spec: js.NatsStreamSpec{ConnectionRef: ref, Policies: policies, DeletionPolicy: js.DeletionDelete,
+				StreamConfig: js.StreamConfig{Name: "TEARDOWN", Subjects: []string{"teardown.>"}}},
+		},
+		&js.NatsConsumer{
+			ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "teardown"},
+			Spec: js.NatsConsumerSpec{ConnectionRef: &ref, Stream: "TEARDOWN", Policies: policies, DeletionPolicy: js.DeletionDelete,
+				ConsumerConfig: js.ConsumerConfig{Name: "teardown"}},
+		},
+		&js.NatsKeyValue{
+			ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "teardown"},
+			Spec:       js.NatsKeyValueSpec{ConnectionRef: ref, Policies: policies, DeletionPolicy: js.DeletionDelete},
+		},
+		&js.NatsObjectStore{
+			ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "teardown"},
+			Spec:       js.NatsObjectStoreSpec{ConnectionRef: ref, Policies: policies, DeletionPolicy: js.DeletionDelete},
+		},
+	}
+	require.NoError(t, c.Create(t.Context(), conn))
+	for _, o := range objs {
+		require.NoError(t, c.Create(t.Context(), o), "%T", o)
+	}
+	for _, o := range objs {
+		eventually(t, c, o, func(ct *assert.CollectT) {
+			st, err := syncStatus(o)
+			if assert.NoError(ct, err) {
+				assert.True(ct, meta.IsStatusConditionTrue(st.Conditions, lifecycle.ConditionReady), "%T %+v", o, st.Conditions)
+			}
+		})
+	}
+
+	require.NoError(t, c.Delete(t.Context(), conn))
+	require.Eventually(t, func() bool {
+		return apierrors.IsNotFound(c.Get(t.Context(), client.ObjectKeyFromObject(conn), conn))
+	}, 30*time.Second, 200*time.Millisecond)
+	for _, o := range objs {
+		require.NoError(t, c.Delete(t.Context(), o), "%T", o)
+	}
+	for _, o := range objs {
+		require.Eventually(t, func() bool {
+			return apierrors.IsNotFound(c.Get(t.Context(), client.ObjectKeyFromObject(o), o))
+		}, 30*time.Second, 200*time.Millisecond, "%T holds its finalizer", o)
+	}
+
+	j := n.connect(t)
+	streamInfo(t, j, "TEARDOWN")
+	_, err := j.Consumer(t.Context(), "TEARDOWN", "teardown")
+	require.NoError(t, err)
+	streamInfo(t, j, "KV_teardown")
+	streamInfo(t, j, "OBJ_teardown")
+}
+
+// syncStatus returns the SyncStatus of a JetStream object resource.
+func syncStatus(o client.Object) (*js.SyncStatus, error) {
+	switch o := o.(type) {
+	case *js.NatsStream:
+		return &o.Status.SyncStatus, nil
+	case *js.NatsConsumer:
+		return &o.Status.SyncStatus, nil
+	case *js.NatsKeyValue:
+		return &o.Status.SyncStatus, nil
+	case *js.NatsObjectStore:
+		return &o.Status.SyncStatus, nil
+	}
+	return nil, fmt.Errorf("%T is not a JetStream object resource", o)
 }
 
 func startManager(t *testing.T, cfg *rest.Config) {

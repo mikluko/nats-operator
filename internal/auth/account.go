@@ -435,6 +435,10 @@ func (r *AccountReconciler) resolveImports(ctx context.Context, acc *authv1beta1
 			}
 			return out, err
 		}
+		if exOp, op := refKey(exporter.Spec.OperatorRef, exporter.Namespace), refKey(acc.Spec.OperatorRef, acc.Namespace); exOp != op {
+			skip("NatsAccount %s is signed by NatsOperator %s, not %s", exKey, exOp, op)
+			continue
+		}
 		if exporter.Status.PublicKey == "" {
 			skip("NatsAccount %s has no public key yet", exKey)
 			continue

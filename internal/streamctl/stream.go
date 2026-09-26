@@ -27,7 +27,8 @@ const StreamKind = "NatsStream"
 
 // StreamReconciler keeps NatsStreams' streams at their specs through their
 // connections, under their lifecycle policies. Deleting a NatsStream whose
-// deletionPolicy is Delete waits until its connection can delete the stream.
+// deletionPolicy is Delete waits until its connection can delete the stream,
+// unless lifecycle.Released lets it go.
 type StreamReconciler struct {
 	Client client.Client
 	Dialer *natsconn.Dialer
@@ -79,11 +80,14 @@ func (r *StreamReconciler) finalize(ctx context.Context, s *js.NatsStream) (reco
 		if err != nil {
 			return reconcile.Result{}, err
 		}
-		if api == nil {
+		switch {
+		case api == nil && !lifecycle.Released(&s.Status.SyncStatus):
 			return reconcile.Result{RequeueAfter: natsconn.DefaultRetryAfter}, lifecycle.PatchStatus(ctx, r.Client, base, s, base.Status, s.Status)
-		}
-		if err := lifecycle.Finalize(ctx, s.UID, s.Spec.DeletionPolicy, &streamObject{api: api, obj: s}); err != nil {
-			return reconcile.Result{}, err
+		case api == nil:
+		default:
+			if err := lifecycle.Finalize(ctx, s.UID, s.Spec.DeletionPolicy, &streamObject{api: api, obj: s}); err != nil {
+				return reconcile.Result{}, err
+			}
 		}
 	}
 	return reconcile.Result{}, lifecycle.RemoveFinalizer(ctx, r.Client, s)

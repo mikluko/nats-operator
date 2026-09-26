@@ -101,12 +101,15 @@ func (k bucketKind[P]) finalize(ctx context.Context, c client.Client, d *natscon
 		if err != nil {
 			return reconcile.Result{}, err
 		}
-		if api == nil {
+		switch {
+		case api == nil && !lifecycle.Released(f.sync):
 			return reconcile.Result{RequeueAfter: natsconn.DefaultRetryAfter},
 				lifecycle.PatchStatus(ctx, c, base, obj, k.fields(base).status(), f.status())
-		}
-		if err := lifecycle.Finalize(ctx, obj.GetUID(), f.deletion, k.object(api, c, obj)); err != nil {
-			return reconcile.Result{}, err
+		case api == nil:
+		default:
+			if err := lifecycle.Finalize(ctx, obj.GetUID(), f.deletion, k.object(api, c, obj)); err != nil {
+				return reconcile.Result{}, err
+			}
 		}
 	}
 	return reconcile.Result{}, lifecycle.RemoveFinalizer(ctx, c, obj)

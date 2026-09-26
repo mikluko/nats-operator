@@ -7,6 +7,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -49,6 +50,17 @@ func Connect(ctx context.Context, d *natsconn.Dialer, from grant.Referrer, ref n
 	}
 	meta.RemoveStatusCondition(&status.Conditions, grant.ConditionReferencesResolved)
 	return &API{Conn: nc}, nil
+}
+
+// Released reports whether a resource being deleted, whose Connect returned
+// no API, drops its finalizer without running its deletion policy: the
+// NatsConnection does not exist or no grant admits it, so nothing will reach
+// the server object through it. A connection that exists and fails holds the
+// finalizer.
+func Released(status *jetstreamv1beta1.SyncStatus) bool {
+	c := meta.FindStatusCondition(status.Conditions, ConditionReady)
+	return c != nil && c.Status == metav1.ConditionFalse &&
+		(c.Reason == ReasonConnectionNotFound || c.Reason == grant.ReasonReferenceNotPermitted)
 }
 
 func isAPIStatus(err error) bool {

@@ -341,19 +341,43 @@ func TestStreamDeletion(t *testing.T) {
 	}
 }
 
-func TestStreamDeleteWaitsForConnection(t *testing.T) {
-	f := newFixture(t)
-	f.create(newStream("orders", "ORDERS", func(s *js.NatsStreamSpec) {
-		s.DeletionPolicy = js.DeletionDelete
-		s.ConnectionRef = natsv1beta1.ObjectReference{Name: "missing"}
-	}))
-	f.reconcileStream("orders")
-	require.NoError(t, f.c.Delete(t.Context(), f.stream("orders")))
-	res := f.reconcileStream("orders")
-	require.NotZero(t, res.RequeueAfter)
-	s := f.stream("orders")
-	require.Contains(t, s.Finalizers, lifecycle.Finalizer)
-	condition(t, s.Status.Conditions, lifecycle.ConditionReady, metav1.ConditionFalse, lifecycle.ReasonConnectionNotFound)
+func TestStreamDeleteUnreachableConnection(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		ref      natsv1beta1.ObjectReference
+		reason   string
+		released bool
+	}{
+		{"not found", natsv1beta1.ObjectReference{Name: "missing"}, lifecycle.ReasonConnectionNotFound, true},
+		{"no grant", natsv1beta1.ObjectReference{Name: "demo", Namespace: "elsewhere"}, grant.ReasonReferenceNotPermitted, true},
+		{"failing", natsv1beta1.ObjectReference{Name: "broken"}, lifecycle.ReasonConnectionFailed, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t)
+			f.create(&natsv1beta1.NatsConnection{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "broken"},
+				Spec: natsv1beta1.NatsConnectionSpec{
+					Servers:     f.nats.urls,
+					Credentials: &natsv1beta1.Credentials{SecretKeyRef: natsv1beta1.CredentialsSecretKeySelector{Name: "absent", Key: "user.creds"}},
+				},
+			})
+			f.create(newStream("orders", "ORDERS", func(s *js.NatsStreamSpec) {
+				s.DeletionPolicy = js.DeletionDelete
+				s.ConnectionRef = tc.ref
+			}))
+			f.reconcileStream("orders")
+			require.NoError(t, f.c.Delete(t.Context(), f.stream("orders")))
+			res := f.reconcileStream("orders")
+			if tc.released {
+				require.True(t, f.gone(&js.NatsStream{ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "orders"}}), "the finalizer is removed")
+				return
+			}
+			require.NotZero(t, res.RequeueAfter)
+			s := f.stream("orders")
+			require.Contains(t, s.Finalizers, lifecycle.Finalizer)
+			condition(t, s.Status.Conditions, lifecycle.ConditionReady, metav1.ConditionFalse, tc.reason)
+		})
+	}
 }
 
 func TestStreamConnectionUnresolved(t *testing.T) {

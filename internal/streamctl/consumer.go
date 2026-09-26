@@ -58,7 +58,8 @@ var immutableConsumerKeys = []string{
 // NatsStream to be Ready and, without connectionRef, uses its connection.
 // Deleting a NatsConsumer whose deletionPolicy is Delete waits until its
 // connection can delete the consumer, except where its streamRef names a
-// NatsStream that no longer exists: that leaves the server alone.
+// NatsStream that no longer exists or lifecycle.Released lets it go: those
+// leave the server alone.
 type ConsumerReconciler struct {
 	Client client.Client
 	Dialer *natsconn.Dialer
@@ -116,7 +117,7 @@ func (r *ConsumerReconciler) finalize(ctx context.Context, c *js.NatsConsumer) (
 		}
 		var wait *lifecycle.WaitError
 		switch {
-		case o == nil && !streamGone(c):
+		case o == nil && !streamGone(c) && !lifecycle.Released(&c.Status.SyncStatus):
 			return reconcile.Result{RequeueAfter: natsconn.DefaultRetryAfter}, lifecycle.PatchStatus(ctx, r.Client, base, c, base.Status, c.Status)
 		case o == nil:
 		default:
