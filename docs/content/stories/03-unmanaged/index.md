@@ -27,6 +27,12 @@ A stream that exists and is not the controller's, with no adoption policy set, s
 
 {{< manifest "status-natsstream-ledger.yaml" >}}
 
+## A key-value bucket and an object store
+
+Declared the same way as streams, with the same connection and lifecycle policies.
+
+{{< manifest "natskeyvalue-objectstore.yaml" >}}
+
 ## Consumers
 
 A consumer names its stream by server-side name, for a stream with no resource, or by reference to a `NatsStream`, which it then waits for.
