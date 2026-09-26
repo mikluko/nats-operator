@@ -1,0 +1,280 @@
+package api_test
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"sigs.k8s.io/yaml"
+)
+
+// TestEnvtest installs the generated CRDs into a real API server and pins
+// that every story manifest is accepted, that every CEL rule refuses what
+// it names, and the schema defaults.
+func TestEnvtest(t *testing.T) {
+	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
+		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")
+	}
+	env := &envtest.Environment{
+		CRDDirectoryPaths:     []string{"../config/crd"},
+		ErrorIfCRDPathMissing: true,
+	}
+	cfg, err := env.Start()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, env.Stop()) })
+	c, err := client.New(cfg, client.Options{})
+	require.NoError(t, err)
+
+	t.Run("CRDs", func(t *testing.T) { testCRDsInstalled(t, env) })
+
+	docs := storyManifests(t)
+	namespaces := map[string]bool{"rules": true}
+	for _, doc := range docs {
+		namespaces[doc.obj.GetNamespace()] = true
+	}
+	for ns := range namespaces {
+		require.NoError(t, c.Create(t.Context(), parse(t, fmt.Sprintf("apiVersion: v1\nkind: Namespace\nmetadata: {name: %s}\n", ns))))
+	}
+
+	t.Run("StoryManifests", func(t *testing.T) {
+		for _, doc := range docs {
+			t.Run(doc.name, func(t *testing.T) {
+				require.NoError(t, c.Create(t.Context(), doc.obj.DeepCopy(), client.DryRunAll, client.FieldValidation("Strict")))
+			})
+		}
+	})
+	t.Run("CreateRules", func(t *testing.T) { testCreateRules(t, c) })
+	t.Run("TransitionRules", func(t *testing.T) { testTransitionRules(t, c) })
+	t.Run("Defaults", func(t *testing.T) { testDefaults(t, c) })
+}
+
+// testCRDsInstalled pins one installed CRD per registered Nats kind.
+func testCRDsInstalled(t *testing.T, env *envtest.Environment) {
+	installed := map[string]bool{}
+	for _, crd := range env.CRDs {
+		installed[crd.Spec.Group+"/"+crd.Spec.Names.Kind] = true
+	}
+	var want int
+	for gvk := range apiScheme(t).AllKnownTypes() {
+		if !strings.HasPrefix(gvk.Kind, "Nats") || strings.HasSuffix(gvk.Kind, "List") {
+			continue
+		}
+		want++
+		require.True(t, installed[gvk.Group+"/"+gvk.Kind], "no CRD for %s", gvk)
+	}
+	require.Len(t, installed, want)
+}
+
+var apiVersions = map[string]string{
+	"NatsOperatorTrust":  "nats.mikluko.io/v1beta1",
+	"NatsAccountTrust":   "nats.mikluko.io/v1beta1",
+	"NatsCluster":        "cluster.nats.mikluko.io/v1beta1",
+	"NatsOperator":       "auth.nats.mikluko.io/v1beta1",
+	"NatsSystemAccount":  "auth.nats.mikluko.io/v1beta1",
+	"NatsAccount":        "auth.nats.mikluko.io/v1beta1",
+	"NatsUser":           "auth.nats.mikluko.io/v1beta1",
+	"NatsConnection":     "nats.mikluko.io/v1beta1",
+	"NatsStream":         "jetstream.nats.mikluko.io/v1beta1",
+	"NatsConsumer":       "jetstream.nats.mikluko.io/v1beta1",
+	"NatsKeyValue":       "jetstream.nats.mikluko.io/v1beta1",
+	"NatsObjectStore":    "jetstream.nats.mikluko.io/v1beta1",
+	"NatsBalancer":       "jetstream.nats.mikluko.io/v1beta1",
+	"NatsSystemBalancer": "jetstream.nats.mikluko.io/v1beta1",
+}
+
+// manifest renders an object of kind in the rules namespace, its spec given
+// as flow-style YAML.
+func manifest(kind, name, spec string) string {
+	return fmt.Sprintf("apiVersion: %s\nkind: %s\nmetadata: {name: %s, namespace: rules}\nspec: %s\n", apiVersions[kind], kind, name, spec)
+}
+
+func parse(t *testing.T, doc string) *unstructured.Unstructured {
+	t.Helper()
+	var m map[string]any
+	require.NoError(t, yaml.Unmarshal([]byte(doc), &m))
+	return &unstructured.Unstructured{Object: m}
+}
+
+const (
+	seed    = "{secretKeyRef: {name: s, key: k}}"
+	signing = "[{name: a, secretKeyRef: {name: s, key: k}}]"
+)
+
+// testCreateRules pins each CEL rule that refuses a spec at create.
+func testCreateRules(t *testing.T, c client.Client) {
+	cluster := func(extra string) string {
+		return manifest("NatsCluster", "c", "{version: 2.15.0, replicas: 1"+extra+"}")
+	}
+	user := func(kind, extra string) string {
+		return manifest("NatsUser", "u", "{accountRef: {kind: "+kind+", name: a}"+extra+"}")
+	}
+	account := func(kind, extra string) string {
+		return manifest(kind, "a", "{operatorRef: {name: o}"+extra+"}")
+	}
+	tests := []struct {
+		name string
+		obj  string
+		want string
+	}{
+		{"operator trust with both forms", manifest("NatsOperatorTrust", "t", "{operatorRef: {name: o}, operatorJWT: x, systemAccountJWT: z}"), "set exactly one of operatorRef"},
+		{"operator trust with neither form", manifest("NatsOperatorTrust", "t", "{}"), "set exactly one of operatorRef"},
+		{"operator trust with half the literal form", manifest("NatsOperatorTrust", "t", "{operatorJWT: x}"), "operatorJWT and systemAccountJWT are set together"},
+		{"account trust with both forms", manifest("NatsAccountTrust", "t", "{accountRef: {name: a}, publicKey: A}"), "set exactly one of accountRef and publicKey"},
+		{"account trust with jwt beside accountRef", manifest("NatsAccountTrust", "t", "{accountRef: {name: a}, jwt: x}"), "jwt is set only beside publicKey"},
+
+		{"version below minimum", manifest("NatsCluster", "c", "{version: 2.14.9, replicas: 1}"), "2.15.0 or later"},
+		{"version not semver", manifest("NatsCluster", "c", "{version: latest, replicas: 1}"), "2.15.0 or later"},
+		{"leaf JetStream without domain", cluster(", jetstream: {}, leafRemotes: [{connectionRef: {name: hub}}]"), "must set jetstream.domain"},
+		{"leaf remote binding two accounts", cluster(", leafRemotes: [{connectionRef: {name: hub}, localAccount: A, localSystemAccount: true}]"), "localAccount, localAccountTrustRef and localSystemAccount are mutually exclusive"},
+		{"route TLS with two certificates", cluster(", routes: {tls: {secretRef: {name: s}, certManager: {issuerRef: {name: i}}}}"), "secretRef and certManager are mutually exclusive"},
+		{"disabled route TLS with a certificate", cluster(", routes: {tls: {enabled: false, secretRef: {name: s}}}"), "only while route TLS is enabled"},
+		{"gateway TLS without a certificate", cluster(", gateway: {discovery: Explicit, remotes: [{name: a, url: u}], tls: {}}"), "set exactly one of secretRef and certManager"},
+		{"leafnode TLS with two certificates", cluster(", leafnodes: {tls: {secretRef: {name: s}, certManager: {issuerRef: {name: i}}}}"), "set exactly one of secretRef and certManager"},
+
+		{"operator jwt beside identity key", manifest("NatsOperator", "o", "{systemAccountRef: {name: sys}, jwt: x, keys: {identity: "+seed+", signing: "+signing+"}}"), "jwt and keys.identity are mutually exclusive"},
+		{"operator jwt without signing key", manifest("NatsOperator", "o", "{systemAccountRef: {name: sys}, jwt: x}"), "jwt requires at least one signing key"},
+		{"account publicKey beside identity key", account("NatsAccount", ", publicKey: A, keys: {identity: "+seed+", signing: "+signing+"}"), "publicKey and keys.identity are mutually exclusive"},
+		{"account publicKey without signing key", account("NatsAccount", ", publicKey: A"), "publicKey requires at least one signing key"},
+		{"system account publicKey beside identity key", account("NatsSystemAccount", ", publicKey: A, keys: {identity: "+seed+", signing: "+signing+"}"), "publicKey and keys.identity are mutually exclusive"},
+		{"system account publicKey without signing key", account("NatsSystemAccount", ", publicKey: A"), "publicKey requires at least one signing key"},
+		{"export preset beside a name", account("NatsAccount", ", exports: [{preset: jetstream-stepdown, name: x}]"), "either preset alone"},
+		{"export without subject", account("NatsAccount", ", exports: [{name: x, type: Stream}]"), "either preset alone"},
+		{"response type on a stream export", account("NatsAccount", ", exports: [{name: x, type: Stream, subject: s, responseType: Singleton}]"), "responseType is set only on a Service export"},
+		{"importers on a public export", account("NatsAccount", ", exports: [{name: x, type: Service, subject: s, importers: [{kind: NatsAccount, name: a}]}]"), "importers are listed only on a Private export"},
+
+		{"user preset beside permissions", user("NatsAccount", ", preset: leafnode, permissions: {publish: {allow: [a]}}"), "preset and permissions are mutually exclusive"},
+		{"user preset beside connectionTypes", user("NatsAccount", ", preset: leafnode, connectionTypes: [LEAFNODE]"), "preset and connectionTypes are mutually exclusive"},
+		{"user publicKey beside credentials", user("NatsAccount", ", publicKey: U, credentials: {secretKeyRef: {name: s}}"), "publicKey and credentials are mutually exclusive"},
+		{"controller preset on an ordinary account", user("NatsAccount", ", preset: cluster-controller"), "a controller preset is for a NatsSystemAccount user"},
+		{"readonly preset on the system account", user("NatsSystemAccount", ", preset: readonly"), "the readonly preset is for a NatsAccount user"},
+		{"unknown connection type", user("NatsAccount", ", connectionTypes: [CARRIER_PIGEON]"), "Unsupported value"},
+
+		{"consumer with stream and streamRef", manifest("NatsConsumer", "k", "{connectionRef: {name: c}, stream: S, streamRef: {name: s}}"), "set exactly one of stream and streamRef"},
+		{"consumer with neither stream nor streamRef", manifest("NatsConsumer", "k", "{connectionRef: {name: c}}"), "set exactly one of stream and streamRef"},
+		{"consumer by stream name without connection", manifest("NatsConsumer", "k", "{stream: S}"), "connectionRef is required unless streamRef is set"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := c.Create(t.Context(), parse(t, tt.obj), client.DryRunAll, client.FieldValidation("Strict"))
+			require.ErrorContains(t, err, tt.want)
+		})
+	}
+}
+
+// testTransitionRules pins each transition rule: an empty want means the
+// update is accepted.
+func testTransitionRules(t *testing.T, c client.Client) {
+	stream := func(name, spec string) string {
+		return manifest("NatsStream", name, "{connectionRef: {name: c}"+spec+"}")
+	}
+	consumer := func(spec string) string {
+		return manifest("NatsConsumer", "k", "{connectionRef: {name: c}, stream: S"+spec+"}")
+	}
+	cluster := func(version string) string {
+		return manifest("NatsCluster", "c", "{version: "+version+", replicas: 1}")
+	}
+	tests := []struct {
+		name          string
+		before, after string
+		want          string
+	}{
+		{"patch upgrade", cluster("2.15.0"), cluster("2.15.3"), ""},
+		{"patch downgrade", cluster("2.15.3"), cluster("2.15.1"), ""},
+		{"one minor up", cluster("2.15.0"), cluster("2.16.0"), ""},
+		{"two minors up", cluster("2.15.0"), cluster("2.17.0"), "at most one minor at a time"},
+		{"one minor down", cluster("2.16.0"), cluster("2.15.9"), ""},
+		{"two minors down", cluster("2.17.0"), cluster("2.15.9"), "at most one minor at a time"},
+		{"major up", cluster("2.15.0"), cluster("3.0.0"), "at most one minor at a time"},
+
+		{"stream renamed", stream("orders", ", name: ORDERS"), stream("orders", ", name: OTHER"), "the stream name is immutable"},
+		{"stream name spelled as metadata.name", stream("orders", ""), stream("orders", ", name: orders"), ""},
+		{"stream name set away from metadata.name", stream("orders", ""), stream("orders", ", name: OTHER"), "the stream name is immutable"},
+		{"storage changed", stream("s", ", storage: File"), stream("s", ", storage: Memory"), "storage is immutable"},
+		{"storage late-initialized", stream("s", ""), stream("s", ", storage: Memory"), ""},
+		{"retention to WorkQueue", stream("s", ", retention: Limits"), stream("s", ", retention: WorkQueue"), "to or from WorkQueue"},
+		{"retention from WorkQueue", stream("s", ", retention: WorkQueue"), stream("s", ", retention: Interest"), "to or from WorkQueue"},
+		{"retention Limits to Interest", stream("s", ", retention: Limits"), stream("s", ", retention: Interest"), ""},
+		{"mirror changed", stream("s", ", mirror: {name: A}"), stream("s", ", mirror: {name: B}"), "mirror cannot change"},
+		{"mirror removed", stream("s", ", mirror: {name: A}"), stream("s", ""), ""},
+		{"sealed", stream("s", ", sealed: false"), stream("s", ", sealed: true"), ""},
+		{"unsealed", stream("s", ", sealed: true"), stream("s", ", sealed: false"), "sealed cannot be unset"},
+		{"denyDelete unset", stream("s", ", denyDelete: true"), stream("s", ", denyDelete: false"), "denyDelete cannot be unset"},
+		{"denyPurge unset", stream("s", ", denyPurge: true"), stream("s", ", denyPurge: false"), "denyPurge cannot be unset"},
+		{"allowMsgTTL unset", stream("s", ", allowMsgTTL: true"), stream("s", ", allowMsgTTL: false"), "allowMsgTTL cannot be unset"},
+		{"allowMsgSchedules unset", stream("s", ", allowMsgSchedules: true"), stream("s", ", allowMsgSchedules: false"), "allowMsgSchedules cannot be unset"},
+		{"allowMsgCounter set", stream("s", ", allowMsgCounter: false"), stream("s", ", allowMsgCounter: true"), "allowMsgCounter is immutable"},
+		{"persistMode changed", stream("s", ", persistMode: Default"), stream("s", ", persistMode: Async"), "persistMode is immutable"},
+
+		{"consumer renamed", consumer(", name: a"), consumer(", name: b"), "the consumer name is immutable"},
+		{"deliverPolicy changed", consumer(", deliverPolicy: All"), consumer(", deliverPolicy: New"), "deliverPolicy is immutable"},
+		{"ackPolicy changed", consumer(", ackPolicy: Explicit"), consumer(", ackPolicy: None"), "ackPolicy is immutable"},
+		{"replayPolicy changed", consumer(", replayPolicy: Instant"), consumer(", replayPolicy: Original"), "replayPolicy is immutable"},
+		{"optStartSeq changed", consumer(", optStartSeq: 1"), consumer(", optStartSeq: 2"), "optStartSeq is immutable"},
+		{"optStartTime changed", consumer(", optStartTime: '2026-01-01T00:00:00Z'"), consumer(", optStartTime: '2026-01-02T00:00:00Z'"), "optStartTime is immutable"},
+		{"heartbeat changed", consumer(", heartbeat: 5s"), consumer(", heartbeat: 10s"), "heartbeat is immutable"},
+		{"heartbeat respelled", consumer(", heartbeat: 5s"), consumer(", heartbeat: 5000ms"), ""},
+		{"flowControl changed", consumer(", flowControl: false"), consumer(", flowControl: true"), "flowControl is immutable"},
+		{"maxWaiting changed", consumer(", maxWaiting: 1"), consumer(", maxWaiting: 2"), "maxWaiting is immutable"},
+		{"deliverPolicy changed with recreate", consumer(", deliverPolicy: All"), consumer(", deliverPolicy: New, recreateOnImmutableChange: true"), ""},
+		{"ackWait changed", consumer(", ackWait: 30s"), consumer(", ackWait: 1m"), ""},
+
+		{"bucket renamed", manifest("NatsKeyValue", "kv", "{connectionRef: {name: c}, name: a}"), manifest("NatsKeyValue", "kv", "{connectionRef: {name: c}, name: b}"), "the bucket name is immutable"},
+		{"object store renamed", manifest("NatsObjectStore", "os", "{connectionRef: {name: c}, name: a}"), manifest("NatsObjectStore", "os", "{connectionRef: {name: c}, name: b}"), "the bucket name is immutable"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			before := parse(t, tt.before)
+			require.NoError(t, c.Create(t.Context(), before))
+			t.Cleanup(func() { require.NoError(t, c.Delete(context.Background(), before)) })
+			after := parse(t, tt.after)
+			after.SetResourceVersion(before.GetResourceVersion())
+			err := c.Update(t.Context(), after, client.DryRunAll)
+			if tt.want == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.want)
+		})
+	}
+}
+
+// testDefaults pins the schema defaults the API server fills in.
+func testDefaults(t *testing.T, c client.Client) {
+	tests := []struct {
+		name string
+		obj  string
+		path []string
+		want any
+	}{
+		{"creds key", manifest("NatsConnection", "d", "{servers: [nats://x], credentials: {secretKeyRef: {name: s}}}"), []string{"spec", "credentials", "secretKeyRef", "key"}, "user.creds"},
+		{"CA key", manifest("NatsConnection", "d", "{servers: [nats://x], tls: {ca: {secretKeyRef: {name: s}}}}"), []string{"spec", "tls", "ca", "secretKeyRef", "key"}, "ca.crt"},
+		{"route TLS on", manifest("NatsCluster", "d", "{version: 2.15.0, replicas: 1, routes: {tls: {}}}"), []string{"spec", "routes", "tls", "enabled"}, true},
+		{"account JWT TTL", manifest("NatsAccount", "d", "{operatorRef: {name: o}}"), []string{"spec", "jwtTTL"}, "48h"},
+		{"stream adoption", manifest("NatsStream", "d", "{connectionRef: {name: c}}"), []string{"spec", "adoptionPolicy"}, "Never"},
+		{"stream terminal", manifest("NatsStream", "d", "{connectionRef: {name: c}}"), []string{"spec", "terminalPolicy"}, "Hold"},
+		{"stream deletion", manifest("NatsStream", "d", "{connectionRef: {name: c}}"), []string{"spec", "deletionPolicy"}, "Retain"},
+		{"consumer deletion", manifest("NatsConsumer", "d", "{connectionRef: {name: c}, stream: S}"), []string{"spec", "deletionPolicy"}, "Delete"},
+		{"key-value deletion", manifest("NatsKeyValue", "d", "{connectionRef: {name: c}}"), []string{"spec", "deletionPolicy"}, "Retain"},
+		{"object store deletion", manifest("NatsObjectStore", "d", "{connectionRef: {name: c}}"), []string{"spec", "deletionPolicy"}, "Retain"},
+		{"account balancer leader moves", manifest("NatsBalancer", "d", "{connectionRef: {name: c}}"), []string{"spec", "moves", "leader"}, true},
+		{"account balancer placement moves", manifest("NatsBalancer", "d", "{connectionRef: {name: c}}"), []string{"spec", "moves", "placement"}, false},
+		{"system balancer leader moves", manifest("NatsSystemBalancer", "d", "{connectionRef: {name: c}}"), []string{"spec", "moves", "leader"}, true},
+		{"system balancer placement moves", manifest("NatsSystemBalancer", "d", "{connectionRef: {name: c}}"), []string{"spec", "moves", "placement"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			obj := parse(t, tt.obj)
+			require.NoError(t, c.Create(t.Context(), obj, client.DryRunAll))
+			got, found, err := unstructured.NestedFieldNoCopy(obj.Object, tt.path...)
+			require.NoError(t, err)
+			require.True(t, found, "%v not defaulted", tt.path)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
