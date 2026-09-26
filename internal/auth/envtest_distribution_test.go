@@ -164,6 +164,26 @@ spec:
 		require.NotNil(t, orders.Status.Distribution.LastPushTime)
 	})
 
+	t.Run("SystemAccountPushLost", func(t *testing.T) {
+		op := &authv1beta1.NatsOperator{}
+		require.NoError(t, c.Get(t.Context(), demo, op))
+		lost := resignedLater(t, e, op.Status.SystemAccount.JWT)
+		require.NoError(t, resolvers.Push(t.Context(), demo, lost))
+		e.update(t, demo, &authv1beta1.NatsOperator{}, func(o client.Object) {
+			o.SetAnnotations(map[string]string{"test/nudge": "push-lost"})
+		})
+		sys := &authv1beta1.NatsSystemAccount{}
+		e.eventually(t, func(ct *assert.CollectT) {
+			e.get(ct, demo, op)
+			e.get(ct, key("nats-system", "sys"), sys)
+			assert.GreaterOrEqual(ct, issuedAt(t, op.Status.SystemAccount.JWT), issuedAt(t, lost))
+			distributed(ct, sys.Status.Conditions, sys.Status.Distribution)
+		})
+		for i := range cl.srvs {
+			require.Equal(t, op.Status.SystemAccount.JWT, cl.held(i, op.Status.SystemAccount.PublicKey), "server %d", i)
+		}
+	})
+
 	t.Run("RenewedAtHalfTTL", func(t *testing.T) {
 		short := &authv1beta1.NatsAccount{}
 		e.eventually(t, func(ct *assert.CollectT) {
@@ -344,6 +364,40 @@ spec:
 		assert.True(ct, apierrors.IsNotFound(e.c.Get(e.ctx, key("nats-system", name), &authv1beta1.NatsUser{})))
 	})
 	return pub
+}
+
+// resignedLater returns the claims of accountJWT signed again, by the
+// operator key in a Secret in nats-system that issued it, at least a second
+// after it was issued: the JWT a push leaves on the servers when the status
+// write recording it is lost.
+func resignedLater(t *testing.T, e *env, accountJWT string) string {
+	t.Helper()
+	c, err := jwt.DecodeAccountClaims(accountJWT)
+	require.NoError(t, err)
+	var secrets corev1.SecretList
+	require.NoError(t, e.c.List(t.Context(), &secrets, client.InNamespace("nats-system")))
+	for _, s := range secrets.Items {
+		kp, err := nkeys.FromSeed(s.Data[auth.SeedKey])
+		if err != nil {
+			continue
+		}
+		if pub, err := kp.PublicKey(); err != nil || pub != c.Issuer {
+			continue
+		}
+		time.Sleep(time.Until(time.Unix(c.IssuedAt+1, 0)))
+		token, err := c.Encode(kp)
+		require.NoError(t, err)
+		return token
+	}
+	require.FailNow(t, "no Secret in nats-system holds the seed of "+c.Issuer)
+	return ""
+}
+
+func issuedAt(t *testing.T, accountJWT string) int64 {
+	t.Helper()
+	c, err := jwt.DecodeAccountClaims(accountJWT)
+	require.NoError(t, err)
+	return c.IssuedAt
 }
 
 // revokesKey reports whether accountJWT revokes the user key pub.

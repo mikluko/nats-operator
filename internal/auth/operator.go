@@ -35,7 +35,9 @@ import (
 // recovers an account's, the NatsSystemAccount's status.distribution
 // saying whether it was distributed and the operator carrying
 // RevocationsUnrecovered; an operator whose status holds no JWT is taken
-// to have signed nothing yet.
+// to have signed nothing yet. A system account JWT in status that the
+// servers hold a newer one of, as after a push whose status write was
+// lost, is signed and pushed afresh.
 //
 // status.deletedAccounts, filled by AccountReconciler, keeps each deleted
 // account until its last JWT expires or its key is signed again; the
@@ -151,7 +153,8 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 		notReady(ReasonInvalidKeys, err.Error())
 		return 0, nil
 	}
-	if prev == nil || prev.Name != sys.Name || !sameAccountClaims(prev.JWT, sysJWT) {
+	if prev == nil || prev.Name != sys.Name || !sameAccountClaims(prev.JWT, sysJWT) ||
+		!unrecovered(st.Conditions) && superseded(ctx, r.Distributor, client.ObjectKeyFromObject(op), prev.JWT) {
 		if err := pushErr(push(ctx, r.Distributor, client.ObjectKeyFromObject(op), sysJWT)); err != nil {
 			return 0, fmt.Errorf("push system account JWT: %w", err)
 		}

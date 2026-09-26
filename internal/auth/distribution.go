@@ -67,6 +67,21 @@ func distribute(ctx context.Context, d Distributor, operator types.NamespacedNam
 	return 0, nil
 }
 
+// superseded reports whether a server trusting operator holds a JWT for
+// token's account issued after token: token is pushed to servers behind
+// and d answers ErrStaleJWT. Any other outcome is false and left for
+// distribute to report. With d nil it is false.
+func superseded(ctx context.Context, d Distributor, operator types.NamespacedName, token string) bool {
+	if d == nil || token == "" {
+		return false
+	}
+	got, err := d.Current(ctx, operator, token)
+	if err != nil || got.Current >= got.Servers {
+		return false
+	}
+	return errors.Is(d.Push(ctx, operator, token), ErrStaleJWT)
+}
+
 // pushErr is err from a push of a newly signed JWT, less ErrUnreachable:
 // a JWT no server can be asked to take is written to status all the same,
 // and distribute pushes it once one can.
