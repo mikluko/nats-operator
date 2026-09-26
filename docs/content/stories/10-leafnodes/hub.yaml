@@ -42,7 +42,16 @@ spec:
   accountRef:
     kind: NatsAccount
     name: telemetry
-  preset: leafnode   # allowed_connection_types [LEAFNODE], pub/sub on telemetry.>
+  # A preset cannot know the account's subjects, so a leaf user that is
+  # narrowed to some of them names the connection type beside its
+  # permissions; `preset: leafnode` alone is a leaf connection with full
+  # account access.
+  connectionTypes: [LEAFNODE]
+  permissions:
+    publish:
+      allow: ["telemetry.>"]
+    subscribe:
+      allow: ["telemetry.>", "_INBOX.>"]
   credentials:
     secretKeyRef:
       name: edge-site-1-leaf-creds
