@@ -64,13 +64,14 @@ func startNATS(t *testing.T, n int, secure bool) *testNATS {
 	}
 	for i := range n {
 		opts := &server.Options{
-			ServerName: fmt.Sprintf("n%d", i),
-			Host:       "127.0.0.1",
-			Port:       -1,
-			NoLog:      true,
-			NoSigs:     true,
-			JetStream:  true,
-			StoreDir:   t.TempDir(),
+			ServerName:        fmt.Sprintf("n%d", i),
+			Host:              "127.0.0.1",
+			Port:              -1,
+			NoLog:             true,
+			NoSigs:            true,
+			JetStream:         true,
+			StoreDir:          t.TempDir(),
+			JetStreamMaxStore: 1 << 40,
 		}
 		if n > 1 {
 			opts.Cluster = server.ClusterOpts{Name: "test", Host: "127.0.0.1", Port: ports[i]}

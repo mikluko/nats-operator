@@ -34,6 +34,8 @@ type fixture struct {
 	c         client.Client
 	streams   *StreamReconciler
 	consumers *ConsumerReconciler
+	kvs       *KeyValueReconciler
+	stores    *ObjectStoreReconciler
 	now       time.Time
 }
 
@@ -42,7 +44,7 @@ func newFixture(t *testing.T) *fixture {
 	n := startNATS(t, 1, false)
 	b := fake.NewClientBuilder().
 		WithScheme(testScheme(t)).
-		WithStatusSubresource(&js.NatsStream{}, &js.NatsConsumer{}, &natsv1beta1.NatsConnection{}).
+		WithStatusSubresource(&js.NatsStream{}, &js.NatsConsumer{}, &js.NatsKeyValue{}, &js.NatsObjectStore{}, &natsv1beta1.NatsConnection{}).
 		WithObjects(&natsv1beta1.NatsConnection{
 			ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "demo"},
 			Spec:       natsv1beta1.NatsConnectionSpec{Servers: n.urls},
@@ -50,6 +52,8 @@ func newFixture(t *testing.T) *fixture {
 	idx := indexerFunc(func(obj client.Object, field string, extract client.IndexerFunc) { b.WithIndex(obj, field, extract) })
 	require.NoError(t, lifecycle.IndexUID(t.Context(), idx, &js.NatsStream{}))
 	require.NoError(t, lifecycle.IndexUID(t.Context(), idx, &js.NatsConsumer{}))
+	require.NoError(t, lifecycle.IndexUID(t.Context(), idx, &js.NatsKeyValue{}))
+	require.NoError(t, lifecycle.IndexUID(t.Context(), idx, &js.NatsObjectStore{}))
 	c := b.Build()
 	pool := natsconn.NewPool()
 	t.Cleanup(pool.Close)
@@ -58,6 +62,8 @@ func newFixture(t *testing.T) *fixture {
 	syncer := lifecycle.Syncer{Resync: testResync, Now: func() time.Time { return f.now }}
 	f.streams = &StreamReconciler{Client: c, Dialer: dialer, Syncer: syncer}
 	f.consumers = &ConsumerReconciler{Client: c, Dialer: dialer, Syncer: syncer}
+	f.kvs = &KeyValueReconciler{Client: c, Dialer: dialer, Syncer: syncer}
+	f.stores = &ObjectStoreReconciler{Client: c, Dialer: dialer, Syncer: syncer}
 	return f
 }
 

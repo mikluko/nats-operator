@@ -253,11 +253,15 @@ func (s Syncer) settle(ctx context.Context, r Resource, o Object, info *Info, m 
 	return info, nil
 }
 
+// errCodeStreamInvalidConfig is nats-server's JSStreamInvalidConfigF, a
+// stream config refused as invalid, which it reports with code 500.
+const errCodeStreamInvalidConfig jetstream.ErrorCode = 10052
+
 // classify turns a JetStream API error refusing the request as invalid into
 // a TerminalError, and returns any other error as it is.
 func classify(err error) error {
 	var apiErr *jetstream.APIError
-	if errors.As(err, &apiErr) && apiErr.Code == http.StatusBadRequest {
+	if errors.As(err, &apiErr) && (apiErr.Code == http.StatusBadRequest || apiErr.ErrorCode == errCodeStreamInvalidConfig) {
 		return &TerminalError{Reason: ReasonRejected, Message: apiErr.Description}
 	}
 	return err

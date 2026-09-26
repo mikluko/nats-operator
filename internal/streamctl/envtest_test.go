@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -38,8 +39,8 @@ const envResync = 2 * time.Second
 // TestEnvtest runs the jetstream-controller's reconcilers in a manager
 // against a real API server over the manifests of story 1 (a stream on a
 // NATS cluster without an auth plane) and story 3 (adoption, a Terminal
-// stream under Retry, and consumers on a NATS cluster requiring TLS and
-// credentials), each against a three-server in-process NATS cluster. Only
+// stream under Retry, consumers, a key-value bucket and an object store on a
+// NATS cluster requiring TLS and credentials), each against a three-server in-process NATS cluster. Only
 // the NatsConnections' servers are rewritten to reach them.
 func TestEnvtest(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
@@ -74,6 +75,8 @@ func startManager(t *testing.T, cfg *rest.Config) {
 	syncer := lifecycle.Syncer{Resync: envResync}
 	require.NoError(t, (&StreamReconciler{Client: mgr.GetClient(), Dialer: dialer, Syncer: syncer}).SetupWithManager(t.Context(), mgr))
 	require.NoError(t, (&ConsumerReconciler{Client: mgr.GetClient(), Dialer: dialer, Syncer: syncer}).SetupWithManager(t.Context(), mgr))
+	require.NoError(t, (&KeyValueReconciler{Client: mgr.GetClient(), Dialer: dialer, Syncer: syncer}).SetupWithManager(t.Context(), mgr))
+	require.NoError(t, (&ObjectStoreReconciler{Client: mgr.GetClient(), Dialer: dialer, Syncer: syncer}).SetupWithManager(t.Context(), mgr))
 	go func() { _ = mgr.Start(t.Context()) }()
 }
 
@@ -112,7 +115,8 @@ func testStory3(t *testing.T, c client.Client, n *testNATS) {
 	} {
 		require.NoError(t, c.Create(t.Context(), s))
 	}
-	applyStory(t, c, n, "03-unmanaged/01-natsconnection.yaml", "03-unmanaged/01-natsstreams.yaml", "03-unmanaged/01-natsconsumer.yaml")
+	applyStory(t, c, n, "03-unmanaged/01-natsconnection.yaml", "03-unmanaged/01-natsstreams.yaml", "03-unmanaged/01-natsconsumer.yaml",
+		"03-unmanaged/01-natskeyvalue-objectstore.yaml")
 
 	t.Run("Adopt", func(t *testing.T) {
 		s := eventuallyStream(t, c, "payments", "payments", func(ct *assert.CollectT, s *js.NatsStream) {
@@ -163,6 +167,8 @@ func testStory3(t *testing.T, c client.Client, n *testNATS) {
 		}, 30*time.Second, 200*time.Millisecond, "the resync recreates the consumer the stream took with it")
 	})
 
+	t.Run("KeyValueAndObjectStore", func(t *testing.T) { testStory3Buckets(t, c, j) })
+
 	t.Run("Deletion", func(t *testing.T) {
 		require.NoError(t, c.Delete(t.Context(), &js.NatsConsumer{ObjectMeta: metav1.ObjectMeta{Namespace: "payments", Name: "payments-settlement"}}))
 		require.NoError(t, c.Delete(t.Context(), &js.NatsStream{ObjectMeta: metav1.ObjectMeta{Namespace: "payments", Name: "refunds"}}))
@@ -177,6 +183,60 @@ func testStory3(t *testing.T, c client.Client, n *testNATS) {
 		require.ErrorIs(t, err, jetstream.ErrConsumerNotFound, "consumers default to Delete")
 		streamInfo(t, j, "REFUNDS")
 	})
+}
+
+// testStory3Buckets checks story 3's bucket and object store: both created
+// from their manifests, and both kept on the server when their resources
+// are deleted under the default Retain.
+func testStory3Buckets(t *testing.T, c client.Client, j jetstream.JetStream) {
+	kv := &js.NatsKeyValue{ObjectMeta: metav1.ObjectMeta{Namespace: "payments", Name: "sessions"}}
+	eventually(t, c, kv, func(ct *assert.CollectT) {
+		assert.True(ct, meta.IsStatusConditionTrue(kv.Status.Conditions, lifecycle.ConditionReady), "%+v", kv.Status.Conditions)
+		assert.True(ct, meta.IsStatusConditionTrue(kv.Status.Conditions, lifecycle.ConditionSynced), "%+v", kv.Status.Conditions)
+	})
+	require.Equal(t, &js.Ownership{Origin: js.OwnershipCreated, UID: kv.UID}, kv.Status.Ownership)
+	require.Len(t, kv.Status.Server.Replicas, 2)
+	bucket, err := j.KeyValue(t.Context(), "sessions")
+	require.NoError(t, err)
+	st, err := bucket.Status(t.Context())
+	require.NoError(t, err)
+	require.EqualValues(t, 5, st.History())
+	require.Equal(t, 24*time.Hour, st.TTL())
+	cfg := streamInfo(t, j, "KV_sessions").Config
+	require.Equal(t, 3, cfg.Replicas)
+	require.EqualValues(t, 64<<10, cfg.MaxMsgSize)
+	require.EqualValues(t, 1<<30, cfg.MaxBytes)
+	require.Equal(t, string(kv.UID), cfg.Metadata[lifecycle.OwnerKey])
+
+	os := &js.NatsObjectStore{ObjectMeta: metav1.ObjectMeta{Namespace: "payments", Name: "receipts"}}
+	eventually(t, c, os, func(ct *assert.CollectT) {
+		assert.True(ct, meta.IsStatusConditionTrue(os.Status.Conditions, lifecycle.ConditionReady), "%+v", os.Status.Conditions)
+	})
+	require.Equal(t, js.DeletionRetain, os.Spec.DeletionPolicy, "Retain is the default")
+	cfg = streamInfo(t, j, "OBJ_receipts").Config
+	require.Equal(t, 2160*time.Hour, cfg.MaxAge)
+	require.EqualValues(t, 50<<30, cfg.MaxBytes)
+	require.Equal(t, jetstream.S2Compression, cfg.Compression)
+	require.Equal(t, string(os.UID), cfg.Metadata[lifecycle.OwnerKey])
+
+	require.NoError(t, c.Delete(t.Context(), kv))
+	require.NoError(t, c.Delete(t.Context(), os))
+	require.Eventually(t, func() bool {
+		return apierrors.IsNotFound(c.Get(t.Context(), client.ObjectKeyFromObject(kv), kv)) &&
+			apierrors.IsNotFound(c.Get(t.Context(), client.ObjectKeyFromObject(os), os))
+	}, 30*time.Second, 200*time.Millisecond)
+	streamInfo(t, j, "KV_sessions")
+	streamInfo(t, j, "OBJ_receipts")
+}
+
+// eventually reads obj again until check passes on it.
+func eventually(t *testing.T, c client.Client, obj client.Object, check func(*assert.CollectT)) {
+	t.Helper()
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
+		if assert.NoError(ct, c.Get(t.Context(), client.ObjectKeyFromObject(obj), obj)) {
+			check(ct)
+		}
+	}, 60*time.Second, 200*time.Millisecond)
 }
 
 // applyStory creates every object in files, pointing each NatsConnection at
