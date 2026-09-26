@@ -4,6 +4,7 @@
 package main
 
 import (
+	_ "embed"
 	"flag"
 	"fmt"
 	"os"
@@ -14,6 +15,11 @@ import (
 
 // page is the page's path from the repository root.
 const page = "docs/content/docs/reference/telemetry.md"
+
+// operator is the page's section on the OpenTelemetry Operator.
+//
+//go:embed operator.md
+var operator string
 
 // envVar is one environment variable the SDK reads, as the page lists it.
 type envVar struct {
@@ -78,6 +84,7 @@ Each controller exports metrics and traces through the OpenTelemetry Go SDK, con
 	}
 
 	b.WriteString("\nA variable with `METRICS` or `TRACES` in its name applies to that signal alone and overrides the one without.\n")
+	b.WriteString(operator)
 
 	b.WriteString("\n## Metrics\n\nThe gauges are read off the resources' status at each export. Every point carries `kind`, `namespace` and `name` of the resource it describes.\n\n")
 	b.WriteString("| Instrument | Type | Unit | Controllers | Attributes | Reads | Value |\n|---|---|---|---|---|---|---|\n")

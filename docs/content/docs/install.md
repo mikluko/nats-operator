@@ -8,7 +8,7 @@ The Helm chart `nats-operator` installs the CRDs of all four API groups and any 
 
 ## Prerequisites
 
-- **Kubernetes 1.29 or later.** The chart declares `kubeVersion: ">=1.29.0-0"`, which the collector's native sidecar needs; Helm refuses to install it on an older cluster.
+- **Kubernetes 1.29 or later.** The chart declares `kubeVersion: ">=1.29.0-0"`; Helm refuses to install it on an older cluster.
 - **Helm**, to install from an OCI registry.
 - **nats-server 2.15.0 or later.** The API server refuses a `NatsCluster` whose `spec.version` is below 2.15.0.
 - **cert-manager, optional.** Only the cluster controller uses it, and only for a `NatsCluster` that names `certManager` under `routes.tls`, `gateway.tls` or `leafnodes.tls`. Without cert-manager, such a `NatsCluster` reports `Progressing` with the message `cert-manager Certificate is not a known kind: cert-manager is not installed`, and its servers wait for the certificate. Route TLS with no certificate named is self-signed and needs no cert-manager.
@@ -40,7 +40,7 @@ To check the installed controllers:
 helm test nats-operator --namespace nats-operator --logs
 ```
 
-For each enabled controller this starts the Pod `<release>-<controller>-test`, which GETs the controller's `/healthz` on port `8081` through the Service `<release>-<controller>-test` and, with `telemetry.prometheus.enabled`, `/metrics` through `<release>-<controller>-prometheus`. Each URL gets 30 tries, two seconds apart. The test Pods and Services stay until the next `helm test` replaces them.
+For each enabled controller this starts the Pod `<release>-<controller>-test`, which GETs the controller's `/healthz` on port `8081` through the Service `<release>-<controller>-test`, with 30 tries, two seconds apart. The test Pods and Services stay until the next `helm test` replaces them.
 
 Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NATS cluster with JetStream.
 
@@ -50,12 +50,20 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 |---|---|---|
 | `imagePullSecrets` | `[]` | Pull secrets of every controller's pod. |
 | `leaderElection.enabled` | `true` | `--leader-elect` on every controller, and a Role on Leases in the release namespace. Keep it on with more than one replica. |
+| `nodeSelector` | `{}` | Node selector of every controller's pod. |
+| `annotations` | `{}` | Annotations of every controller's Deployment. |
+| `podAnnotations` | `{}` | Annotations of every controller's pod, such as the OpenTelemetry Operator's injection annotations under [Telemetry]({{< relref "/docs/reference/telemetry#the-opentelemetry-operator" >}}). |
+| `affinity` | `{}` | Affinity of every controller's pod. |
 | `cluster.enabled` | `true` | Installs the cluster controller. |
 | `cluster.replicas` | `1` | Replicas of its Deployment. |
 | `cluster.image.repository` | `ghcr.io/mikluko/nats-operator/cluster-controller` | Its image. |
 | `cluster.image.tag` | `""` | Its image tag; empty is the chart's `appVersion`. |
 | `cluster.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
 | `cluster.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources. |
+| `cluster.nodeSelector` | `{}` | Its pod's node selector, each key set over `nodeSelector`. |
+| `cluster.annotations` | `{}` | Its Deployment's annotations, each key set over `annotations`. |
+| `cluster.podAnnotations` | `{}` | Its pod's annotations, each key set over `podAnnotations`. |
+| `cluster.affinity` | `{}` | Its pod's affinity, each of `nodeAffinity`, `podAffinity` and `podAntiAffinity` replacing the one under `affinity` whole. |
 | `auth.enabled` | `true` | Installs the auth controller. |
 | `auth.replicas` | `1` | Replicas of its Deployment. |
 | `auth.systemConnection` | `""` | `--system-connection` of the auth controller, as `namespace/name`; empty, the flag is not passed. |
@@ -63,26 +71,23 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `auth.image.tag` | `""` | Its image tag; empty is the chart's `appVersion`. |
 | `auth.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
 | `auth.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources. |
+| `auth.nodeSelector` | `{}` | Its pod's node selector, each key set over `nodeSelector`. |
+| `auth.annotations` | `{}` | Its Deployment's annotations, each key set over `annotations`. |
+| `auth.podAnnotations` | `{}` | Its pod's annotations, each key set over `podAnnotations`. |
+| `auth.affinity` | `{}` | Its pod's affinity, each of `nodeAffinity`, `podAffinity` and `podAntiAffinity` replacing the one under `affinity` whole. |
 | `jetstream.enabled` | `true` | Installs the JetStream controller. |
 | `jetstream.replicas` | `1` | Replicas of its Deployment. |
 | `jetstream.image.repository` | `ghcr.io/mikluko/nats-operator/jetstream-controller` | Its image. |
 | `jetstream.image.tag` | `""` | Its image tag; empty is the chart's `appVersion`. |
 | `jetstream.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
 | `jetstream.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources. |
+| `jetstream.nodeSelector` | `{}` | Its pod's node selector, each key set over `nodeSelector`. |
+| `jetstream.annotations` | `{}` | Its Deployment's annotations, each key set over `annotations`. |
+| `jetstream.podAnnotations` | `{}` | Its pod's annotations, each key set over `podAnnotations`. |
+| `jetstream.affinity` | `{}` | Its pod's affinity, each of `nodeAffinity`, `podAffinity` and `podAntiAffinity` replacing the one under `affinity` whole. |
 | `tests.image.repository` | `busybox` | Image of the `helm test` pods. |
 | `tests.image.tag` | `"1.37.0"` | Its image tag. |
 | `tests.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
-| `telemetry.env` | `[]` | Environment variables appended to every controller's container, such as the OpenTelemetry SDK's `OTEL_*` settings. |
-| `telemetry.collector.enabled` | `true` | Runs an OpenTelemetry Collector as a native sidecar in every controller's pod, and sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` on every controller; a change to `telemetry.collector.config` rolls the Deployments. |
-| `telemetry.collector.image.repository` | `otel/opentelemetry-collector` | Its image. |
-| `telemetry.collector.image.tag` | `"0.161.0"` | Its image tag. |
-| `telemetry.collector.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
-| `telemetry.collector.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources. |
-| `telemetry.collector.config` | `{receivers: {otlp: {protocols: {grpc: {endpoint: "localhost:4317"}, http: {endpoint: "localhost:4318"}}}}, processors: {batch: {}}, exporters: {nop: {}}, service: {pipelines: {traces: {receivers: [otlp], processors: [batch], exporters: [nop]}, metrics: {receivers: [otlp], processors: [batch], exporters: [nop]}, logs: {receivers: [otlp], processors: [batch], exporters: [nop]}}}}` | The whole collector config, in the ConfigMap `<release>-otel-collector`. The default receives OTLP over gRPC on `localhost:4317` and over HTTP on `localhost:4318`, and discards it; replace its exporters to send it to a backend. |
-| `telemetry.prometheus.enabled` | `false` | Sets `OTEL_METRICS_EXPORTER=prometheus`, `OTEL_EXPORTER_PROMETHEUS_HOST=0.0.0.0` and `OTEL_EXPORTER_PROMETHEUS_PORT` on every controller, which then serves its metrics for Prometheus to pull instead of exporting them over OTLP; adds the container port `prometheus` and the Service `<release>-<controller>-prometheus`. |
-| `telemetry.prometheus.port` | `9464` | The listener's port, on the container and the Service. |
-| `telemetry.prometheus.serviceMonitor.enabled` | `false` | With `telemetry.prometheus.enabled`, a `monitoring.coreos.com/v1` ServiceMonitor `<release>-<controller>` on that Service. |
-| `telemetry.prometheus.serviceMonitor.labels` | `{}` | Labels added to each ServiceMonitor. |
 
 ## Controller flags
 

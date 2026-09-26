@@ -9,18 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `helm test` on the chart checks every enabled controller's `/healthz` and, with `telemetry.prometheus.enabled`, its Prometheus `/metrics`, from a pod of chart value `tests.image` (`busybox:1.37.0`).
+- `helm test` on the chart checks every enabled controller's `/healthz` from a pod of chart value `tests.image` (`busybox:1.37.0`).
 - The chart validates its values against `values.schema.json`: `helm install`, `helm upgrade` and `helm lint` refuse a key the chart does not know.
 - The chart requires Kubernetes 1.29 or later.
 - Documentation site at <https://mikluko.github.io/nats-operator/>: the stories, the design and the ADRs under `/docs/`.
-- Every controller's pod runs an OpenTelemetry Collector sidecar, `otel/opentelemetry-collector:0.161.0`, receiving OTLP on `localhost:4317` (gRPC) and `localhost:4318` (HTTP) and discarding it until `telemetry.collector.config` names a backend; `telemetry.collector.enabled: false` removes it.
-- With `telemetry.collector.enabled`, the chart sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`, the sidecar's OTLP/HTTP receiver, on every controller; `telemetry.env` can override it.
-- Chart value `telemetry.prometheus.enabled` serves each controller's OpenTelemetry metrics for Prometheus to pull on port `telemetry.prometheus.port` (9464) through the Service `<release>-<controller>-prometheus`, with a ServiceMonitor under `telemetry.prometheus.serviceMonitor.enabled`.
-- Chart value `telemetry.env`, environment variables appended to every controller's container.
+- Chart values `nodeSelector`, `annotations` (on the Deployment), `podAnnotations` and `affinity`, globally and under `cluster`, `auth` and `jetstream`; a controller's keys are set over the global ones.
+- The chart carries no telemetry configuration: the OpenTelemetry Operator instruments the controllers through `instrumentation.opentelemetry.io/inject-sdk` and `sidecar.opentelemetry.io/inject` in `podAnnotations`.
 - Chart value `auth.systemConnection`, the `namespace/name` of the `NatsConnection` passed to the auth controller as `--system-connection`.
 - Documentation page `/docs/install/`: prerequisites, installing the chart and its values, the controllers' flags, the RBAC each controller holds, upgrade and uninstall.
 - Documentation page `/docs/reference/api/`: every kind, field and enum value of the four API groups, with each field's type, whether it is required, and its schema default.
-- Documentation page `/docs/reference/telemetry/`: the environment variables that configure the controllers' OpenTelemetry export, every instrument with its unit, attributes and the status field it reads, the reconcile spans, and the Kubernetes events by reason.
+- Documentation page `/docs/reference/telemetry/`: the environment variables that configure the controllers' OpenTelemetry export, every instrument with its unit, attributes and the status field it reads, the reconcile spans, the Kubernetes events by reason, and how the OpenTelemetry Operator sets that environment.
 - Each controller exports OpenTelemetry metrics and traces through the SDK's environment configuration, a signal only once `OTEL_<SIGNAL>_EXPORTER`, `OTEL_EXPORTER_OTLP_<SIGNAL>_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT` is set and none while `OTEL_SDK_DISABLED` is `true`: gauges of a rollout's pending servers and closed gate, balancer leader skew and pending moves, an evacuation's remaining streams and stale placements, and every resource's conditions; a counter of held balancer passes; and a span per reconcile.
 - The controllers record Kubernetes events `MoveStarted`, `MoveDone`, `MoveCancelled`, `MoveRefused`, `EvacuationRefused`, `RolloutStep`, `GateBlocked`, `JWTPushed`, `JWTHeld` and `UserKicked`.
 - `NatsClusterEvacuation` `status.remaining` counts the streams still to leave the source cluster.

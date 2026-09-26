@@ -120,3 +120,84 @@ tests:
       - lengthEqual:
           path: spec.template.spec.containers[0].args
           count: 4
+  - it: sets no annotations, nodeSelector or affinity by default
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - notExists: {path: metadata.annotations}
+      - notExists: {path: spec.template.metadata.annotations}
+      - notExists: {path: spec.template.spec.nodeSelector}
+      - notExists: {path: spec.template.spec.affinity}
+  - it: puts annotations on the Deployment, jetstream.annotations over the global ones
+    set:
+      annotations: {a: global, b: global}
+      jetstream.annotations: {b: jetstream, c: jetstream}
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: metadata.annotations
+          value: {a: global, b: jetstream, c: jetstream}
+      - notExists: {path: spec.template.metadata.annotations}
+  - it: puts podAnnotations on the pod template, jetstream.podAnnotations over the global ones
+    set:
+      podAnnotations: {a: global, b: global}
+      jetstream.podAnnotations: {b: jetstream, c: jetstream}
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations
+          value: {a: global, b: jetstream, c: jetstream}
+      - notExists: {path: metadata.annotations}
+  - it: sets nodeSelector, jetstream.nodeSelector over the global one
+    set:
+      nodeSelector: {a: global, b: global}
+      jetstream.nodeSelector: {b: jetstream, c: jetstream}
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.nodeSelector
+          value: {a: global, b: jetstream, c: jetstream}
+  - it: sets affinity, each key of jetstream.affinity replacing the global one whole
+    set:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions: [{key: pool, operator: In, values: [system]}]
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector: {matchLabels: {app: global}}
+      jetstream.affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: topology.kubernetes.io/zone
+                labelSelector: {matchLabels: {app: jetstream}}
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity
+          value:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions: [{key: pool, operator: In, values: [system]}]
+            podAntiAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    topologyKey: topology.kubernetes.io/zone
+                    labelSelector: {matchLabels: {app: jetstream}}
+  - it: takes none of another controller's annotations, nodeSelector or affinity
+    set:
+      cluster.annotations: {a: cluster}
+      cluster.podAnnotations: {a: cluster}
+      cluster.nodeSelector: {a: cluster}
+      cluster.affinity: {podAntiAffinity: {}}
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - notExists: {path: metadata.annotations}
+      - notExists: {path: spec.template.metadata.annotations}
+      - notExists: {path: spec.template.spec.nodeSelector}
+      - notExists: {path: spec.template.spec.affinity}

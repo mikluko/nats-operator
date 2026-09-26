@@ -14,6 +14,14 @@ tests:
       auth.systemConnection: nats/auth-controller
       cluster.image.tag: v9
       tests.image.tag: "1.36"
+      annotations: {a: global}
+      podAnnotations: {a: global}
+      nodeSelector: {a: global}
+      affinity: {nodeAffinity: {}, podAffinity: {}, podAntiAffinity: {}}
+      cluster.annotations: {a: cluster}
+      auth.podAnnotations: {a: auth}
+      jetstream.nodeSelector: {a: jetstream}
+      auth.affinity: {podAntiAffinity: {}}
     asserts:
       - notFailedTemplate: {}
   - it: refuses a misspelled top-level key
@@ -40,3 +48,15 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "at '/tests': additional properties 'imag' not allowed"
+  - it: refuses a misspelled key under a controller's affinity
+    set:
+      jetstream.affinity.podAntiAffinty: {}
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/jetstream/affinity': additional properties 'podAntiAffinty' not allowed"
+  - it: refuses an annotation that is not a string
+    set:
+      podAnnotations.replicas: 3
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/podAnnotations/replicas': got number, want string"

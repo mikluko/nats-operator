@@ -48,7 +48,7 @@ tests:
           value:
             - sh
             - -c
-            - &check |
+            - |
               for url in "$@"; do
                 n=0
                 until wget -q -O /dev/null -T 5 "$url"; do
@@ -60,21 +60,6 @@ tests:
               done
             - check
             - http://rel-auth-controller-test.nats.svc:8081/healthz
-  - it: also GETs /metrics through the Prometheus Service with the listener on
-    set:
-      telemetry.prometheus.enabled: true
-      telemetry.prometheus.port: 9999
-    documentSelector: {path: kind, value: Pod}
-    asserts:
-      - equal:
-          path: spec.containers[0].command
-          value:
-            - sh
-            - -c
-            - *check
-            - check
-            - http://rel-auth-controller-test.nats.svc:8081/healthz
-            - http://rel-auth-controller-prometheus.nats.svc:9999/metrics
   - it: pulls tests.image
     set:
       tests.image.repository: registry.example/busybox

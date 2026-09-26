@@ -34,6 +34,19 @@
         }
       }
     },
+    "strings": {
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    },
+    "affinity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "nodeAffinity": {"type": "object"},
+        "podAffinity": {"type": "object"},
+        "podAntiAffinity": {"type": "object"}
+      }
+    },
     "controller": {
       "type": "object",
       "additionalProperties": false,
@@ -42,7 +55,11 @@
         "enabled": {"type": "boolean"},
         "replicas": {"type": "integer", "minimum": 0},
         "image": {"$ref": "#/definitions/image"},
-        "resources": {"$ref": "#/definitions/resources"}
+        "resources": {"$ref": "#/definitions/resources"},
+        "nodeSelector": {"$ref": "#/definitions/strings"},
+        "annotations": {"$ref": "#/definitions/strings"},
+        "podAnnotations": {"$ref": "#/definitions/strings"},
+        "affinity": {"$ref": "#/definitions/affinity"}
       }
     }
   },
@@ -61,6 +78,10 @@
       "additionalProperties": false,
       "properties": {"enabled": {"type": "boolean"}}
     },
+    "nodeSelector": {"$ref": "#/definitions/strings"},
+    "annotations": {"$ref": "#/definitions/strings"},
+    "podAnnotations": {"$ref": "#/definitions/strings"},
+    "affinity": {"$ref": "#/definitions/affinity"},
     "cluster": {"$ref": "#/definitions/controller"},
     "auth": {
       "type": "object",
@@ -71,7 +92,11 @@
         "replicas": {"type": "integer", "minimum": 0},
         "systemConnection": {"type": "string", "pattern": "^([a-z0-9-]+/[a-z0-9.-]+)?$"},
         "image": {"$ref": "#/definitions/image"},
-        "resources": {"$ref": "#/definitions/resources"}
+        "resources": {"$ref": "#/definitions/resources"},
+        "nodeSelector": {"$ref": "#/definitions/strings"},
+        "annotations": {"$ref": "#/definitions/strings"},
+        "podAnnotations": {"$ref": "#/definitions/strings"},
+        "affinity": {"$ref": "#/definitions/affinity"}
       }
     },
     "jetstream": {"$ref": "#/definitions/controller"},
@@ -79,51 +104,6 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {"image": {"$ref": "#/definitions/image"}}
-    },
-    "telemetry": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "env": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["name"],
-            "properties": {
-              "name": {"type": "string", "minLength": 1},
-              "value": {"type": "string"},
-              "valueFrom": {"type": "object"}
-            }
-          }
-        },
-        "collector": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "enabled": {"type": "boolean"},
-            "image": {"$ref": "#/definitions/image"},
-            "resources": {"$ref": "#/definitions/resources"},
-            "config": {"type": "object"}
-          }
-        },
-        "prometheus": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "enabled": {"type": "boolean"},
-            "port": {"type": "integer", "minimum": 1, "maximum": 65535},
-            "serviceMonitor": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "enabled": {"type": "boolean"},
-                "labels": {"type": "object", "additionalProperties": {"type": "string"}}
-              }
-            }
-          }
-        }
-      }
     }
   }
 }
