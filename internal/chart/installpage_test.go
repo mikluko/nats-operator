@@ -12,7 +12,6 @@ import (
 	"github.com/yuin/goldmark/extension"
 	extast "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"sigs.k8s.io/yaml"
 )
 
@@ -64,7 +63,7 @@ func TestInstallPage_Values(t *testing.T) {
 }
 
 // TestInstallPage_RBAC pins that the install page's RBAC tables are each
-// controller's rendered ClusterRole, exactly.
+// controller's ClusterRole as its helm-unittest suite fixes it, exactly.
 func TestInstallPage_RBAC(t *testing.T) {
 	headings := map[string]string{
 		"Cluster controller":   "cluster",
@@ -88,11 +87,8 @@ func TestInstallPage_RBAC(t *testing.T) {
 	}
 	require.NotNil(t, common)
 
-	objs := render(t)
 	for _, c := range controllers {
-		var cr rbacv1.ClusterRole
-		convert(t, objs["ClusterRole/rel-"+c+"-controller"], &cr)
-		require.Equal(t, flatten(t, cr.Rules), merge(page[c], common), c)
+		require.Equal(t, clusterRoleFixture(t, c), merge(page[c], common), c)
 	}
 }
 

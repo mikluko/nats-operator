@@ -1,0 +1,3 @@
+{{- if .Values.jetstream.enabled }}
+{{- include "nats-operator.test" (dict "root" . "name" "jetstream-controller") }}
+{{- end }}

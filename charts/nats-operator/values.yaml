@@ -55,6 +55,13 @@ jetstream:
     limits:
       memory: 256Mi
 
+# The image of the `helm test` pods, which need sh and wget.
+tests:
+  image:
+    repository: busybox
+    tag: "1.37.0"
+    pullPolicy: IfNotPresent
+
 # OpenTelemetry for every enabled controller. The controllers' SDK exports
 # over OTLP to localhost, where the collector sidecar receives it.
 telemetry:

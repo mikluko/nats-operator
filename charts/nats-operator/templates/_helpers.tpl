@@ -248,3 +248,84 @@ spec:
 {{- end }}
 {{- end }}
 {{- end }}
+
+{{/*
+nats-operator.test renders one controller's `helm test` hook: a Service on its
+probes port and a Pod that GETs /healthz through it and, with
+telemetry.prometheus.enabled, /metrics through the Prometheus Service. The Pod
+tries each URL 30 times, two seconds apart, before it fails. It takes a dict
+of root (the chart context) and name (the controller's name).
+*/}}
+{{- define "nats-operator.test" -}}
+{{- $fullname := include "nats-operator.fullname" . -}}
+{{- $telemetry := .root.Values.telemetry -}}
+{{- $image := .root.Values.tests.image -}}
+{{- $ns := .root.Release.Namespace -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-test
+  namespace: {{ $ns }}
+  labels:
+    {{- include "nats-operator.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-weight: "-1"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  selector:
+    {{- include "nats-operator.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: probes
+      port: 8081
+      targetPort: probes
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ $fullname }}-test
+  namespace: {{ $ns }}
+  labels:
+    {{- include "nats-operator.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  restartPolicy: Never
+  {{- with .root.Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: check
+      image: {{ printf "%s:%s" $image.repository $image.tag | quote }}
+      imagePullPolicy: {{ $image.pullPolicy }}
+      command:
+        - sh
+        - -c
+        - |
+          for url in "$@"; do
+            n=0
+            until wget -q -O /dev/null -T 5 "$url"; do
+              n=$((n + 1))
+              [ "$n" -lt 30 ] || { echo "FAIL $url"; exit 1; }
+              sleep 2
+            done
+            echo "ok $url"
+          done
+        - check
+        - http://{{ $fullname }}-test.{{ $ns }}.svc:8081/healthz
+        {{- if $telemetry.prometheus.enabled }}
+        - http://{{ $fullname }}-prometheus.{{ $ns }}.svc:{{ $telemetry.prometheus.port }}/metrics
+        {{- end }}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+{{- end }}

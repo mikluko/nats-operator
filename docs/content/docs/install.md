@@ -8,7 +8,7 @@ The Helm chart `nats-operator` installs the CRDs of all four API groups and any 
 
 ## Prerequisites
 
-- **Kubernetes.** The chart declares no `kubeVersion`. The chart and its CRDs are tested against a Kubernetes 1.36 API server.
+- **Kubernetes 1.29 or later.** The chart declares `kubeVersion: ">=1.29.0-0"`, which the collector's native sidecar needs; Helm refuses to install it on an older cluster.
 - **Helm**, to install from an OCI registry.
 - **nats-server 2.15.0 or later.** The API server refuses a `NatsCluster` whose `spec.version` is below 2.15.0.
 - **cert-manager, optional.** Only the cluster controller uses it, and only for a `NatsCluster` that names `certManager` under `routes.tls`, `gateway.tls` or `leafnodes.tls`. Without cert-manager, such a `NatsCluster` reports `Progressing` with the message `cert-manager Certificate is not a known kind: cert-manager is not installed`, and its servers wait for the certificate. Route TLS with no certificate named is self-signed and needs no cert-manager.
@@ -31,6 +31,16 @@ helm install nats-operator oci://ghcr.io/mikluko/nats-operator/charts/nats-opera
   --namespace nats-operator --create-namespace \
   --set auth.enabled=false --set jetstream.enabled=false
 ```
+
+The chart ships a values schema: a key it does not know, misspelled or not, fails `helm install`, `helm upgrade` and `helm lint`.
+
+To check the installed controllers:
+
+```sh
+helm test nats-operator --namespace nats-operator --logs
+```
+
+For each enabled controller this starts the Pod `<release>-<controller>-test`, which GETs the controller's `/healthz` on port `8081` through the Service `<release>-<controller>-test` and, with `telemetry.prometheus.enabled`, `/metrics` through `<release>-<controller>-prometheus`. Each URL gets 30 tries, two seconds apart. The test Pods and Services stay until the next `helm test` replaces them.
 
 Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NATS cluster with JetStream.
 
@@ -59,6 +69,9 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `jetstream.image.tag` | `""` | Its image tag; empty is the chart's `appVersion`. |
 | `jetstream.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
 | `jetstream.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources. |
+| `tests.image.repository` | `busybox` | Image of the `helm test` pods. |
+| `tests.image.tag` | `"1.37.0"` | Its image tag. |
+| `tests.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
 | `telemetry.env` | `[]` | Environment variables appended to every controller's container, such as the OpenTelemetry SDK's `OTEL_*` settings. |
 | `telemetry.collector.enabled` | `true` | Runs an OpenTelemetry Collector as a native sidecar in every controller's pod, and sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` on every controller; a change to `telemetry.collector.config` rolls the Deployments. |
 | `telemetry.collector.image.repository` | `otel/opentelemetry-collector` | Its image. |
@@ -151,6 +164,7 @@ helm uninstall nats-operator --namespace nats-operator
 This removes the controllers' Deployments, ServiceAccounts and RBAC. It leaves behind:
 
 - the CRDs, and with them every custom resource and everything the controllers created for them: StatefulSets, Services, ConfigMaps, Secrets, PodDisruptionBudgets and cert-manager Certificates;
+- after a `helm test`, its Pods and Services `<release>-<controller>-test`;
 - with leader election on, the Leases `cluster.nats.mikluko.io`, `auth.nats.mikluko.io` and `jetstream.nats.mikluko.io` in the release namespace.
 
 Some kinds carry a finalizer that only their controller removes, so delete them while it still runs:

@@ -1,0 +1,122 @@
+suite: jetstream-controller
+templates:
+  - templates/jetstream-controller.yaml
+release:
+  name: rel
+  namespace: nats
+tests:
+  - it: renders the ServiceAccount, RBAC and Deployment with the other two disabled
+    set:
+      cluster.enabled: false
+      auth.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 6
+      - containsDocument: {kind: ServiceAccount, apiVersion: v1, name: rel-jetstream-controller, namespace: nats, any: true}
+      - containsDocument: {kind: ClusterRole, apiVersion: rbac.authorization.k8s.io/v1, name: rel-jetstream-controller, any: true}
+      - containsDocument: {kind: ClusterRoleBinding, apiVersion: rbac.authorization.k8s.io/v1, name: rel-jetstream-controller, any: true}
+      - containsDocument: {kind: Role, apiVersion: rbac.authorization.k8s.io/v1, name: rel-jetstream-controller-leader-election, namespace: nats, any: true}
+      - containsDocument: {kind: RoleBinding, apiVersion: rbac.authorization.k8s.io/v1, name: rel-jetstream-controller-leader-election, namespace: nats, any: true}
+      - containsDocument: {kind: Deployment, apiVersion: apps/v1, name: rel-jetstream-controller, namespace: nats, any: true}
+  - it: renders nothing while jetstream.enabled is false
+    set:
+      jetstream.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: grants exactly its ClusterRole rules
+    documentSelector: {path: kind, value: ClusterRole}
+    asserts:
+      - equal:
+          path: rules
+          value:
+            - apiGroups: [jetstream.nats.mikluko.io]
+              resources: [natsstreams, natsconsumers, natskeyvalues, natsobjectstores, natsbalancers, natssystembalancers, natsclusterevacuations]
+              verbs: [get, list, watch, update, patch]
+            - apiGroups: [jetstream.nats.mikluko.io]
+              resources: [natsstreams/status, natsconsumers/status, natskeyvalues/status, natsobjectstores/status, natsbalancers/status, natssystembalancers/status, natsclusterevacuations/status]
+              verbs: [get, update, patch]
+            - apiGroups: [jetstream.nats.mikluko.io]
+              resources: [natsstreams/finalizers, natsconsumers/finalizers, natskeyvalues/finalizers, natsobjectstores/finalizers, natsbalancers/finalizers, natssystembalancers/finalizers, natsclusterevacuations/finalizers]
+              verbs: [update]
+            - apiGroups: [nats.mikluko.io]
+              resources: [natsconnections, natsreferencegrants]
+              verbs: [get, list, watch]
+            - apiGroups: [nats.mikluko.io]
+              resources: [natsconnections/status]
+              verbs: [get, update, patch]
+            - apiGroups: [""]
+              resources: [secrets]
+              verbs: [get, list, watch]
+            - apiGroups: [""]
+              resources: [events]
+              verbs: [create, patch]
+            - apiGroups: [events.k8s.io]
+              resources: [events]
+              verbs: [create, patch]
+  - it: binds its ClusterRole to its ServiceAccount
+    documentSelector: {path: kind, value: ClusterRoleBinding}
+    asserts:
+      - equal:
+          path: roleRef
+          value: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: rel-jetstream-controller}
+      - equal:
+          path: subjects
+          value: [{kind: ServiceAccount, name: rel-jetstream-controller, namespace: nats}]
+  - it: grants every verb on Leases for leader election
+    documentSelector: {path: kind, value: Role}
+    asserts:
+      - equal:
+          path: rules
+          value:
+            - apiGroups: [coordination.k8s.io]
+              resources: [leases]
+              verbs: [get, list, watch, create, update, patch, delete]
+  - it: runs under its ServiceAccount with leader election on its API group
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: rel-jetstream-controller
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --leader-elect=true
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --leader-election-id=jetstream.nats.mikluko.io
+  - it: tags its image with the chart's appVersion by default
+    chart:
+      appVersion: 9.8.7
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/mikluko/nats-operator/jetstream-controller:9.8.7
+  - it: tags its image with jetstream.image.tag when set
+    set:
+      jetstream.image.tag: v9
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/mikluko/nats-operator/jetstream-controller:v9
+  - it: drops the leader election Role and passes --leader-elect=false while leaderElection.enabled is false
+    set:
+      leaderElection.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 4
+      - containsDocument: {kind: Role, apiVersion: rbac.authorization.k8s.io/v1, name: rel-jetstream-controller-leader-election, namespace: nats, any: true}
+        not: true
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --leader-elect=false
+        documentSelector: {path: kind, value: Deployment}
+  - it: passes no --system-connection, even with auth.systemConnection set
+    set:
+      auth.systemConnection: nats/auth-controller
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.containers[0].args
+          count: 4

@@ -49,27 +49,20 @@ chart-crds:
     mkdir -p charts/nats-operator/crds
     cp config/crd/*.yaml charts/nats-operator/crds/
 
-# helm lint, and helm template for each single-controller subset and all
-# three, each under every combination of the telemetry options.
+# helm lint under the defaults and each chart-testing values file, a lint that
+# must fail on a misspelled key, and the chart's helm-unittest suites.
 chart:
     #!/usr/bin/env sh
     set -eu
     helm lint --strict charts/nats-operator
-    for sets in \
-        "cluster.enabled=true,auth.enabled=false,jetstream.enabled=false" \
-        "cluster.enabled=false,auth.enabled=true,jetstream.enabled=false" \
-        "cluster.enabled=false,auth.enabled=false,jetstream.enabled=true" \
-        "cluster.enabled=true,auth.enabled=true,jetstream.enabled=true"; do
-        for telemetry in \
-            "telemetry.collector.enabled=true,telemetry.prometheus.enabled=false" \
-            "telemetry.collector.enabled=false,telemetry.prometheus.enabled=false" \
-            "telemetry.collector.enabled=true,telemetry.prometheus.enabled=true" \
-            "telemetry.collector.enabled=false,telemetry.prometheus.enabled=true" \
-            "telemetry.collector.enabled=true,telemetry.prometheus.enabled=true,telemetry.prometheus.serviceMonitor.enabled=true" \
-            "telemetry.collector.enabled=false,telemetry.prometheus.enabled=true,telemetry.prometheus.serviceMonitor.enabled=true"; do
-            helm template nats-operator charts/nats-operator --set "$sets,$telemetry" > /dev/null
-        done
+    for f in charts/nats-operator/ci/*-values.yaml; do
+        helm lint --strict charts/nats-operator -f "$f"
     done
+    if helm lint --strict charts/nats-operator --set cluster.enabeld=true >/dev/null 2>&1; then
+        echo "helm lint accepted the misspelled key cluster.enabeld" >&2
+        exit 1
+    fi
+    helm unittest charts/nats-operator
 
 # The API reference page, from the Go types under api/ and the templates
 # under hack/api-docs/.

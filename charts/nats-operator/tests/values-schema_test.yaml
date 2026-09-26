@@ -1,0 +1,42 @@
+suite: values.schema.json
+templates:
+  - templates/cluster-controller.yaml
+release:
+  name: rel
+  namespace: nats
+tests:
+  - it: accepts values.yaml
+    asserts:
+      - notFailedTemplate: {}
+  - it: accepts every option the other suites set
+    set:
+      leaderElection.enabled: false
+      auth.systemConnection: nats/auth-controller
+      cluster.image.tag: v9
+      tests.image.tag: "1.36"
+    asserts:
+      - notFailedTemplate: {}
+  - it: refuses a misspelled top-level key
+    set:
+      leaderElecton.enabled: false
+    asserts:
+      - failedTemplate:
+          errorPattern: "additional properties 'leaderElecton' not allowed"
+  - it: refuses a misspelled controller key
+    set:
+      cluster.enabeld: false
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/cluster': additional properties 'enabeld' not allowed"
+  - it: refuses a misspelled image key
+    set:
+      auth.image.tga: v9
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/auth/image': additional properties 'tga' not allowed"
+  - it: refuses a misspelled key under tests
+    set:
+      tests.imag.tag: "1.36"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/tests': additional properties 'imag' not allowed"

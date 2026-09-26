@@ -1,0 +1,86 @@
+suite: tests/jetstream-controller
+templates:
+  - templates/tests/jetstream-controller.yaml
+release:
+  name: rel
+  namespace: nats
+tests:
+  - it: renders a test hook Service on the probes port and a test hook Pod, with the other two disabled
+    set:
+      cluster.enabled: false
+      auth.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 2
+      - containsDocument: {kind: Service, apiVersion: v1, name: rel-jetstream-controller-test, namespace: nats, any: true}
+      - containsDocument: {kind: Pod, apiVersion: v1, name: rel-jetstream-controller-test, namespace: nats, any: true}
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: test
+      - equal:
+          path: spec.selector
+          value:
+            app.kubernetes.io/name: nats-operator
+            app.kubernetes.io/instance: rel
+            app.kubernetes.io/component: jetstream-controller
+        documentSelector: {path: kind, value: Service}
+      - equal:
+          path: spec.ports
+          value: [{name: probes, port: 8081, targetPort: probes}]
+        documentSelector: {path: kind, value: Service}
+  - it: renders nothing while jetstream.enabled is false
+    set:
+      jetstream.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: GETs /healthz through the test Service
+    documentSelector: {path: kind, value: Pod}
+    asserts:
+      - equal:
+          path: spec.restartPolicy
+          value: Never
+      - equal:
+          path: spec.containers[0].image
+          value: busybox:1.37.0
+      - equal:
+          path: spec.containers[0].command
+          value:
+            - sh
+            - -c
+            - &check |
+              for url in "$@"; do
+                n=0
+                until wget -q -O /dev/null -T 5 "$url"; do
+                  n=$((n + 1))
+                  [ "$n" -lt 30 ] || { echo "FAIL $url"; exit 1; }
+                  sleep 2
+                done
+                echo "ok $url"
+              done
+            - check
+            - http://rel-jetstream-controller-test.nats.svc:8081/healthz
+  - it: also GETs /metrics through the Prometheus Service with the listener on
+    set:
+      telemetry.prometheus.enabled: true
+      telemetry.prometheus.port: 9999
+    documentSelector: {path: kind, value: Pod}
+    asserts:
+      - equal:
+          path: spec.containers[0].command
+          value:
+            - sh
+            - -c
+            - *check
+            - check
+            - http://rel-jetstream-controller-test.nats.svc:8081/healthz
+            - http://rel-jetstream-controller-prometheus.nats.svc:9999/metrics
+  - it: pulls tests.image
+    set:
+      tests.image.repository: registry.example/busybox
+      tests.image.tag: "1.36"
+    documentSelector: {path: kind, value: Pod}
+    asserts:
+      - equal:
+          path: spec.containers[0].image
+          value: registry.example/busybox:1.36

@@ -2,7 +2,8 @@
 # Runs the story bundles end to end on minikube clusters inside a Debian
 # machine from the Apple `container` CLI: creates or reuses the machine and
 # the clusters, builds the controller images into them, installs the chart
-# from the working tree in each and runs hack/e2e from the host.
+# from the working tree in each, runs its `helm test` there and runs hack/e2e
+# from the host.
 #
 # The clusters share one Docker network, named after the home profile, so a
 # LoadBalancer Service's address, which MetalLB hands out from that network,
@@ -300,8 +301,9 @@ build_images() {
 }
 
 # install_chart installs the chart from the working tree in context $1 with
-# the controllers named in $2 enabled, reading image lines from stdin. CRDs
-# are applied first because helm installs a chart's crds/ only on first
+# the controllers named in $2 enabled, reading image lines from stdin, and
+# runs its `helm test`, printing the test pods' logs to stderr when it fails.
+# CRDs are applied first because helm installs a chart's crds/ only on first
 # install.
 install_chart() {
 	local key repo tag
@@ -317,6 +319,11 @@ install_chart() {
 	helm upgrade --install "$release" "$root/charts/nats-operator" --kube-context "$1" \
 		--namespace "$release_ns" --create-namespace \
 		--wait --timeout 3m "${sets[@]}"
+	local out
+	if ! out=$(helm test "$release" --kube-context "$1" --namespace "$release_ns" --logs --timeout 3m 2>&1); then
+		printf '%s\n' "$out" >&2
+		return 1
+	fi
 }
 
 mkdir -p "$work"

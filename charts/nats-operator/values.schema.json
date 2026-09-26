@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "pullPolicy"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"type": "string"},
+        "pullPolicy": {"enum": ["Always", "IfNotPresent", "Never"]}
+      }
+    },
+    "quantities": {
+      "type": "object",
+      "additionalProperties": {"type": ["string", "number"]}
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests": {"$ref": "#/definitions/quantities"},
+        "limits": {"$ref": "#/definitions/quantities"},
+        "claims": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {"name": {"type": "string"}, "request": {"type": "string"}}
+          }
+        }
+      }
+    },
+    "controller": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "replicas", "image"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "replicas": {"type": "integer", "minimum": 0},
+        "image": {"$ref": "#/definitions/image"},
+        "resources": {"$ref": "#/definitions/resources"}
+      }
+    }
+  },
+  "properties": {
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {"name": {"type": "string"}}
+      }
+    },
+    "leaderElection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"enabled": {"type": "boolean"}}
+    },
+    "cluster": {"$ref": "#/definitions/controller"},
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "replicas", "image"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "replicas": {"type": "integer", "minimum": 0},
+        "systemConnection": {"type": "string", "pattern": "^([a-z0-9-]+/[a-z0-9.-]+)?$"},
+        "image": {"$ref": "#/definitions/image"},
+        "resources": {"$ref": "#/definitions/resources"}
+      }
+    },
+    "jetstream": {"$ref": "#/definitions/controller"},
+    "tests": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"image": {"$ref": "#/definitions/image"}}
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "env": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "value": {"type": "string"},
+              "valueFrom": {"type": "object"}
+            }
+          }
+        },
+        "collector": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "image": {"$ref": "#/definitions/image"},
+            "resources": {"$ref": "#/definitions/resources"},
+            "config": {"type": "object"}
+          }
+        },
+        "prometheus": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+            "serviceMonitor": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {"type": "boolean"},
+                "labels": {"type": "object", "additionalProperties": {"type": "string"}}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

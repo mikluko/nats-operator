@@ -1,0 +1,6 @@
+cluster:
+  enabled: true
+auth:
+  enabled: false
+jetstream:
+  enabled: false
