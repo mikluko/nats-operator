@@ -1,7 +1,8 @@
-// Package e2e runs the story bundles under docs/content/stories against a
-// live Kubernetes cluster: step by step, it applies each step's manifests,
+// Package e2e runs the story bundles under docs/content/stories against
+// live Kubernetes clusters: step by step, it applies each step's manifests,
 // deletes what the step deletes, and waits for the live objects to contain
-// every status and live file of the step.
+// every status and live file of the step, each file in the cluster its
+// story places it in.
 package e2e
 
 import (
@@ -35,8 +36,29 @@ type Bundle struct {
 	Base *Bundle
 	// Skip is why the harness does not run the story, or "".
 	Skip string
+	// Clusters places the bundle's files in Kubernetes clusters, the home
+	// cluster first; empty means the story runs in one Kubernetes cluster.
+	Clusters []Placement
 	// Steps are ordered by step number.
 	Steps []Step
+
+	files []bundleFile
+}
+
+// Placement names the files of a bundle that are applied to, deleted from,
+// and whose expectations are read from, one Kubernetes cluster.
+type Placement struct {
+	// Name is the story's name for the Kubernetes cluster.
+	Name  string   `json:"name"`
+	Files []string `json:"files"`
+}
+
+// bundleFile is one loaded bundle file.
+type bundleFile struct {
+	base string
+	name FileName
+	objs []*unstructured.Unstructured
+	exp  Expectation
 }
 
 // Step is every file of a bundle that carries one step number: the
@@ -164,35 +186,81 @@ func loadBundle(dir string) (*Bundle, error) {
 	}
 	slices.Sort(files)
 	for _, path := range files {
-		base := filepath.Base(path)
-		name, err := ParseFileName(base)
+		f := bundleFile{base: filepath.Base(path)}
+		if f.name, err = ParseFileName(f.base); err != nil {
+			return nil, err
+		}
+		switch f.name.Role {
+		case RoleStatus, RoleLive:
+			f.exp, err = loadExpectation(path, f.name)
+		default:
+			f.objs, err = loadObjects(path)
+		}
 		if err != nil {
 			return nil, err
 		}
-		step := b.step(name.Step)
-		switch name.Role {
-		case RoleStatus, RoleLive:
-			exp, err := loadExpectation(path, name)
-			if err != nil {
-				return nil, err
-			}
-			step.Expectations = append(step.Expectations, exp)
-		case RoleDelete:
-			objs, err := loadObjects(path)
-			if err != nil {
-				return nil, err
-			}
-			step.Delete = append(step.Delete, objs...)
-		default:
-			objs, err := loadObjects(path)
-			if err != nil {
-				return nil, err
-			}
-			step.Apply = append(step.Apply, objs...)
-		}
+		b.add(f)
+	}
+	return b, checkPlacement(dir, files, b.Clusters)
+}
+
+// add files f under its step, keeping the steps ordered.
+func (b *Bundle) add(f bundleFile) {
+	b.files = append(b.files, f)
+	step := b.step(f.name.Step)
+	switch f.name.Role {
+	case RoleStatus, RoleLive:
+		step.Expectations = append(step.Expectations, f.exp)
+	case RoleDelete:
+		step.Delete = append(step.Delete, f.objs...)
+	default:
+		step.Apply = append(step.Apply, f.objs...)
 	}
 	slices.SortFunc(b.Steps, func(x, y Step) int { return x.Number - y.Number })
-	return b, nil
+}
+
+// checkPlacement fails when a placement names a file the bundle lacks, or
+// leaves one of its files in no Kubernetes cluster.
+func checkPlacement(dir string, files []string, clusters []Placement) error {
+	if len(clusters) == 0 {
+		return nil
+	}
+	placed := map[string]bool{}
+	for _, p := range clusters {
+		for _, f := range p.Files {
+			if !slices.Contains(files, filepath.Join(dir, f)) {
+				return fmt.Errorf("%s: cluster %s places %s, which the bundle does not have", dir, p.Name, f)
+			}
+			placed[f] = true
+		}
+	}
+	for _, path := range files {
+		if !placed[filepath.Base(path)] {
+			return fmt.Errorf("%s: in none of the Kubernetes clusters index.md places files in", path)
+		}
+	}
+	return nil
+}
+
+// Parts returns one bundle per Kubernetes cluster b is placed in, in the
+// order of Clusters, each holding the steps of its placement's files; a
+// bundle with no placement is its own only part. A part's Clusters holds its
+// own placement alone, and a part starts from no other bundle.
+func (b *Bundle) Parts() []*Bundle {
+	if len(b.Clusters) == 0 {
+		return []*Bundle{b}
+	}
+	parts := make([]*Bundle, 0, len(b.Clusters))
+	for _, p := range b.Clusters {
+		part := &Bundle{Name: b.Name, Number: b.Number, Skip: b.Skip, Clusters: []Placement{p}}
+		for _, f := range b.files {
+			if slices.Contains(p.Files, f.base) {
+				part.add(f)
+			}
+		}
+		parts = append(parts, part)
+	}
+	return parts
 }
 
 func (b *Bundle) step(n int) *Step {
@@ -205,7 +273,7 @@ func (b *Bundle) step(n int) *Step {
 	return &b.Steps[len(b.Steps)-1]
 }
 
-// readFrontMatter sets b's After and Skip from the YAML front matter
+// readFrontMatter sets b's After, Skip and Clusters from the YAML front matter
 // opening path, if path exists and has any.
 func readFrontMatter(path string, b *Bundle) error {
 	raw, err := os.ReadFile(path)
@@ -226,15 +294,16 @@ func readFrontMatter(path string, b *Bundle) error {
 			var fm struct {
 				Params struct {
 					E2E struct {
-						After int    `json:"after"`
-						Skip  string `json:"skip"`
+						After    int         `json:"after"`
+						Skip     string      `json:"skip"`
+						Clusters []Placement `json:"clusters"`
 					} `json:"e2e"`
 				} `json:"params"`
 			}
 			if err := yaml.Unmarshal(block.Bytes(), &fm); err != nil {
 				return fmt.Errorf("%s: front matter: %w", path, err)
 			}
-			b.After, b.Skip = fm.Params.E2E.After, fm.Params.E2E.Skip
+			b.After, b.Skip, b.Clusters = fm.Params.E2E.After, fm.Params.E2E.Skip, fm.Params.E2E.Clusters
 			return nil
 		}
 		block.Write(s.Bytes())

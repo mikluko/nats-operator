@@ -3,7 +3,11 @@ title: A supercluster across Kubernetes clusters
 weight: 6
 params:
   e2e:
-    skip: needs more than one Kubernetes cluster
+    clusters:
+      - name: east
+        files: [01-natsoperatortrust.yaml, 01-east.yaml, 01-east-auth.yaml]
+      - name: west
+        files: [01-natsoperatortrust.yaml, 01-west.yaml, 01-status-natscluster-west.yaml]
 ---
 
 Two Kubernetes clusters, `east` and `west`, each with its own NATS cluster, joined by gateways into one supercluster with no hub. `east` is the home cluster: the auth controller runs there, holds the signing key, and every account is declared there.

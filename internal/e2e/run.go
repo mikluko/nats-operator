@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -35,9 +36,11 @@ type Result struct {
 	Detail  string
 }
 
-// Runner runs story bundles through Client.
+// Runner runs story bundles through Clients.
 type Runner struct {
-	Client client.Client
+	// Clients reach one Kubernetes cluster each, the home cluster first; a
+	// story's placements are taken by these in order.
+	Clients []client.Client
 	// Timeout bounds the wait for each step's expectations, and separately
 	// the wait for a previous story's namespace to finish deleting.
 	Timeout  time.Duration
@@ -48,13 +51,31 @@ type Runner struct {
 
 const fieldOwner = "nats-operator-e2e"
 
-// Run runs one bundle, after every bundle it starts from: it deletes and
-// recreates every namespace their objects are declared in, then, bundle by
-// bundle and step by step, server-side applies the step's manifests, deletes
-// the objects it deletes, and polls until each of its expectations' target
-// objects contains it or Timeout passes. An expectation that names no object
-// fails the story before anything is applied, and a bundle whose
-// SkipReason is not "" is skipped.
+// share is one Kubernetes cluster's part of one step: the client reaching
+// it, the step's files placed there, and the object each expectation reads.
+type share struct {
+	client  client.Client
+	where   string
+	step    Step
+	targets []*unstructured.Unstructured
+}
+
+// stage is one step of one bundle across every Kubernetes cluster.
+type stage struct {
+	at     string
+	shares []share
+}
+
+// Run runs one bundle, after every bundle it starts from. In each Kubernetes
+// cluster the bundles place files in, the home cluster when they place none,
+// it deletes and recreates every namespace the cluster's objects are
+// declared in; then, bundle by bundle and step by step, it server-side
+// applies the step's manifests and deletes the objects it deletes in their
+// clusters, and polls until each of its expectations' target objects, read
+// in the expectation's cluster, contains it or Timeout passes. An
+// expectation that names no object of its cluster fails the story before
+// anything is applied; a bundle whose SkipReason is not "", or that places
+// files in more clusters than Clients reach, is skipped.
 func (r *Runner) Run(ctx context.Context, b *Bundle) Result {
 	start := time.Now()
 	res := func(o Outcome, detail string) Result {
@@ -64,70 +85,119 @@ func (r *Runner) Run(ctx context.Context, b *Bundle) Result {
 		r.logf("%s: skipped: %s", b.Name, reason)
 		return res(Skip, reason)
 	}
-	type stage struct {
-		bundle  *Bundle
-		step    Step
-		targets []*unstructured.Unstructured
-	}
+	namespaces := make([][]string, len(r.Clients))
+	wheres := make([]string, len(r.Clients))
 	var stages []stage
 	for _, c := range b.Chain() {
-		for _, s := range c.Steps {
-			st := stage{bundle: c, step: s}
-			for _, e := range s.Expectations {
-				t, err := c.Target(s.Number, e)
-				if err != nil {
-					return res(Fail, fmt.Sprintf("%s: %v", c.Name, err))
+		parts := c.Parts()
+		if len(parts) > len(r.Clients) {
+			reason := fmt.Sprintf("needs %d Kubernetes clusters, the run has %d", len(parts), len(r.Clients))
+			r.logf("%s: skipped: %s", b.Name, reason)
+			return res(Skip, reason)
+		}
+		var numbers []int
+		for i, p := range parts {
+			if wheres[i] == "" {
+				wheres[i] = where(p)
+			}
+			for _, ns := range p.Namespaces() {
+				if !slices.Contains(namespaces[i], ns) {
+					namespaces[i] = append(namespaces[i], ns)
 				}
-				st.targets = append(st.targets, t)
+			}
+			for _, s := range p.Steps {
+				if !slices.Contains(numbers, s.Number) {
+					numbers = append(numbers, s.Number)
+				}
+			}
+		}
+		slices.Sort(numbers)
+		for _, n := range numbers {
+			st := stage{at: fmt.Sprintf("%s step %d", c.Name, n)}
+			for i, p := range parts {
+				j := slices.IndexFunc(p.Steps, func(s Step) bool { return s.Number == n })
+				if j < 0 {
+					continue
+				}
+				sh := share{client: r.Clients[i], where: where(p), step: p.Steps[j]}
+				for _, e := range sh.step.Expectations {
+					t, err := p.Target(n, e)
+					if err != nil {
+						return res(Fail, fmt.Sprintf("%s: %v", c.Name+sh.where, err))
+					}
+					sh.targets = append(sh.targets, t)
+				}
+				st.shares = append(st.shares, sh)
 			}
 			stages = append(stages, st)
 		}
 	}
-	for _, ns := range b.Namespaces() {
-		r.logf("%s: fresh namespace %s", b.Name, ns)
-		if err := r.freshNamespace(ctx, ns); err != nil {
-			return res(Fail, err.Error())
+	for i, nss := range namespaces {
+		slices.Sort(nss)
+		for _, ns := range nss {
+			r.logf("%s: fresh namespace %s%s", b.Name, ns, wheres[i])
+			if err := r.freshNamespace(ctx, r.Clients[i], ns); err != nil {
+				return res(Fail, err.Error())
+			}
 		}
 	}
 	for _, st := range stages {
-		at := fmt.Sprintf("%s step %d", st.bundle.Name, st.step.Number)
-		for _, o := range st.step.Apply {
-			r.logf("%s: apply %s %s", at, o.GetKind(), key(o))
-			if err := r.Client.Apply(ctx, client.ApplyConfigurationFromUnstructured(o.DeepCopy()), client.FieldOwner(fieldOwner), client.ForceOwnership); err != nil {
-				return res(Fail, fmt.Sprintf("%s: apply %s %s: %v", at, o.GetKind(), key(o), err))
+		n := 0
+		for _, sh := range st.shares {
+			for _, o := range sh.step.Apply {
+				r.logf("%s: apply %s %s%s", st.at, o.GetKind(), key(o), sh.where)
+				if err := sh.client.Apply(ctx, client.ApplyConfigurationFromUnstructured(o.DeepCopy()), client.FieldOwner(fieldOwner), client.ForceOwnership); err != nil {
+					return res(Fail, fmt.Sprintf("%s: apply %s %s%s: %v", st.at, o.GetKind(), key(o), sh.where, err))
+				}
 			}
-		}
-		for _, o := range st.step.Delete {
-			r.logf("%s: delete %s %s", at, o.GetKind(), key(o))
-			if err := r.Client.Delete(ctx, o.DeepCopy()); client.IgnoreNotFound(err) != nil {
-				return res(Fail, fmt.Sprintf("%s: delete %s %s: %v", at, o.GetKind(), key(o), err))
+			for _, o := range sh.step.Delete {
+				r.logf("%s: delete %s %s%s", st.at, o.GetKind(), key(o), sh.where)
+				if err := sh.client.Delete(ctx, o.DeepCopy()); client.IgnoreNotFound(err) != nil {
+					return res(Fail, fmt.Sprintf("%s: delete %s %s%s: %v", st.at, o.GetKind(), key(o), sh.where, err))
+				}
 			}
+			n += len(sh.step.Expectations)
 		}
-		if len(st.step.Expectations) == 0 {
+		if n == 0 {
 			continue
 		}
-		r.logf("%s: polling %d files, timeout %s", at, len(st.step.Expectations), r.Timeout)
-		diff, err := r.poll(ctx, st.step.Expectations, st.targets)
+		r.logf("%s: polling %d files, timeout %s", st.at, n, r.Timeout)
+		diff, err := r.poll(ctx, st.shares)
 		if err != nil {
-			return res(Fail, fmt.Sprintf("%s: %v", at, err))
+			return res(Fail, fmt.Sprintf("%s: %v", st.at, err))
 		}
 		if diff != "" {
-			return res(Fail, fmt.Sprintf("%s: timed out after %s\n%s", at, r.Timeout, diff))
+			return res(Fail, fmt.Sprintf("%s: timed out after %s\n%s", st.at, r.Timeout, diff))
 		}
 	}
 	return res(Pass, "")
 }
 
-// poll returns "" once every expectation holds, or the diff of the last
-// check when Timeout passes.
-func (r *Runner) poll(ctx context.Context, exps []Expectation, targets []*unstructured.Unstructured) (string, error) {
+// where names p's Kubernetes cluster in log lines and diffs, or is "" for a
+// bundle that places no files.
+func where(p *Bundle) string {
+	if len(p.Clusters) != 1 {
+		return ""
+	}
+	return " in " + p.Clusters[0].Name
+}
+
+// poll returns "" once every expectation holds, or else the diff of the
+// last check when Timeout passes, which is never "" when no check completed.
+// Each round first publishes the external hostnames of every cluster's
+// LoadBalancer Services to all of them.
+func (r *Runner) poll(ctx context.Context, shares []share) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.Timeout)
 	defer cancel()
 	tick := time.NewTicker(r.Interval)
 	defer tick.Stop()
-	var diff string
+	diff := "  no status read before the deadline\n"
 	for {
-		d, err := r.check(ctx, exps, targets)
+		err := PublishHosts(ctx, r.Clients)
+		var d string
+		if err == nil {
+			d, err = r.check(ctx, shares)
+		}
 		switch {
 		case err == nil && d == "":
 			return "", nil
@@ -149,53 +219,55 @@ func (r *Runner) poll(ctx context.Context, exps []Expectation, targets []*unstru
 
 // check reads every target once and renders the expectations it fails; a
 // target that does not exist yet fails its expectation rather than the check.
-func (r *Runner) check(ctx context.Context, exps []Expectation, targets []*unstructured.Unstructured) (string, error) {
+func (r *Runner) check(ctx context.Context, shares []share) (string, error) {
 	var b strings.Builder
-	for i, e := range exps {
-		t := targets[i]
-		live := &unstructured.Unstructured{}
-		live.SetGroupVersionKind(t.GroupVersionKind())
-		head := fmt.Sprintf("  %s -> %s %s\n", e.File, t.GetKind(), key(t))
-		err := r.Client.Get(ctx, client.ObjectKeyFromObject(t), live)
-		switch {
-		case apierrors.IsNotFound(err):
-			b.WriteString(head + "    object not found\n")
-			continue
-		case err != nil:
-			return "", fmt.Errorf("get %s %s: %w", t.GetKind(), key(t), err)
-		}
-		if ms := Diff(e.Want, live.Object); len(ms) > 0 {
-			b.WriteString(head + FormatMismatches(ms, "    "))
+	for _, sh := range shares {
+		for i, e := range sh.step.Expectations {
+			t := sh.targets[i]
+			live := &unstructured.Unstructured{}
+			live.SetGroupVersionKind(t.GroupVersionKind())
+			head := fmt.Sprintf("  %s -> %s %s%s\n", e.File, t.GetKind(), key(t), sh.where)
+			err := sh.client.Get(ctx, client.ObjectKeyFromObject(t), live)
+			switch {
+			case apierrors.IsNotFound(err):
+				b.WriteString(head + "    object not found\n")
+				continue
+			case err != nil:
+				return "", fmt.Errorf("get %s %s%s: %w", t.GetKind(), key(t), sh.where, err)
+			}
+			if ms := Diff(e.Want, live.Object); len(ms) > 0 {
+				b.WriteString(head + FormatMismatches(ms, "    "))
+			}
 		}
 	}
 	return b.String(), nil
 }
 
-func (r *Runner) freshNamespace(ctx context.Context, name string) error {
+func (r *Runner) freshNamespace(ctx context.Context, c client.Client, name string) error {
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}
-	err := r.Client.Delete(ctx, ns)
+	err := c.Delete(ctx, ns)
 	switch {
 	case apierrors.IsNotFound(err):
 	case err != nil:
 		return fmt.Errorf("delete namespace %s: %w", name, err)
 	default:
-		if err := r.awaitGone(ctx, ns); err != nil {
+		if err := r.awaitGone(ctx, c, ns); err != nil {
 			return err
 		}
 	}
-	if err := r.Client.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}); err != nil {
+	if err := c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}); err != nil {
 		return fmt.Errorf("create namespace %s: %w", name, err)
 	}
 	return nil
 }
 
-func (r *Runner) awaitGone(ctx context.Context, ns *corev1.Namespace) error {
+func (r *Runner) awaitGone(ctx context.Context, c client.Client, ns *corev1.Namespace) error {
 	ctx, cancel := context.WithTimeout(ctx, r.Timeout)
 	defer cancel()
 	tick := time.NewTicker(r.Interval)
 	defer tick.Stop()
 	for {
-		err := r.Client.Get(ctx, client.ObjectKeyFromObject(ns), &corev1.Namespace{})
+		err := c.Get(ctx, client.ObjectKeyFromObject(ns), &corev1.Namespace{})
 		if apierrors.IsNotFound(err) {
 			return nil
 		}

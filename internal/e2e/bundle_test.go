@@ -34,7 +34,6 @@ func TestLoadBundles_Stories(t *testing.T) {
 	}
 	require.Equal(t, map[string]string{
 		"03-unmanaged":       "needs a NATS cluster the controllers did not deploy, holding streams created at runtime",
-		"06-supercluster":    "needs more than one Kubernetes cluster",
 		"07-balancing":       "its statuses describe moves made and pending across many streams, which its manifests alone do not produce",
 		"08-stream-transfer": "runs in the story 6 supercluster, which spans Kubernetes clusters",
 		"09-acceptance":      "needs more than one Kubernetes cluster",
@@ -233,4 +232,81 @@ func TestSkipReason(t *testing.T) {
 		(&Bundle{Base: base}).SkipReason())
 	require.Equal(t, "own", (&Bundle{Base: base, Skip: "own"}).SkipReason())
 	require.Empty(t, (&Bundle{Base: &Bundle{}}).SkipReason())
+}
+
+func TestLoadBundles_SuperclusterParts(t *testing.T) {
+	bundles, err := LoadBundles(storiesDir)
+	require.NoError(t, err)
+	super := bundles[5]
+	require.Equal(t, "06-supercluster", super.Name)
+
+	type placed struct {
+		cluster string
+		objects []string
+		targets map[string]string
+	}
+	var got []placed
+	for _, p := range super.Parts() {
+		require.Len(t, p.Clusters, 1)
+		pl := placed{cluster: p.Clusters[0].Name, targets: map[string]string{}}
+		for _, o := range p.Objects(1) {
+			pl.objects = append(pl.objects, o.GetKind()+" "+o.GetName())
+		}
+		for _, s := range p.Steps {
+			for _, e := range s.Expectations {
+				obj, err := p.Target(s.Number, e)
+				require.NoError(t, err, e.File)
+				pl.targets[e.File] = obj.GetKind() + " " + key(obj)
+			}
+		}
+		got = append(got, pl)
+	}
+	require.Equal(t, []placed{
+		{
+			cluster: "east",
+			objects: []string{"NatsUser west-cluster-controller", "NatsUser west-jetstream-controller", "NatsCluster east", "NatsOperatorTrust acme"},
+			targets: map[string]string{},
+		},
+		{
+			cluster: "west",
+			objects: []string{"NatsOperatorTrust acme", "NatsCluster west"},
+			targets: map[string]string{"01-status-natscluster-west.yaml": "NatsCluster nats-system/west"},
+		},
+	}, got)
+}
+
+func TestLoadBundles_UnplacedIsOnePart(t *testing.T) {
+	bundles, err := LoadBundles(storiesDir)
+	require.NoError(t, err)
+	parts := bundles[0].Parts()
+	require.Len(t, parts, 1)
+	require.Same(t, bundles[0], parts[0])
+	require.Empty(t, parts[0].Clusters)
+}
+
+func TestLoadBundles_PlacementErrors(t *testing.T) {
+	const cm = "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x, namespace: a}\n"
+	tests := []struct {
+		name  string
+		index string
+		err   string
+	}{
+		{
+			name:  "file placed nowhere",
+			index: "---\ntitle: t\nparams:\n  e2e:\n    clusters:\n      - {name: east, files: [01-a.yaml]}\n---\n",
+			err:   "01-b.yaml: in none of the Kubernetes clusters",
+		},
+		{
+			name:  "placement names a missing file",
+			index: "---\nparams:\n  e2e:\n    clusters:\n      - {name: east, files: [01-a.yaml, 01-b.yaml, 01-c.yaml]}\n---\n",
+			err:   "cluster east places 01-c.yaml, which the bundle does not have",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := writeBundle(t, map[string]string{"01-a.yaml": cm, "01-b.yaml": cm, "index.md": tt.index})
+			_, err := LoadBundles(root)
+			require.ErrorContains(t, err, tt.err)
+		})
+	}
 }

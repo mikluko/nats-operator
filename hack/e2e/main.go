@@ -1,6 +1,6 @@
-// Command e2e runs the story bundles against the Kubernetes cluster the
-// current kubeconfig names and prints a per-story result table. It exits 1
-// when any story fails.
+// Command e2e runs the story bundles against the Kubernetes clusters the
+// kubeconfig contexts in -contexts name, the home cluster first, and prints a
+// per-story result table. It exits 1 when any story fails.
 package main
 
 import (
@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"k8s.io/client-go/kubernetes/scheme"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/mikluko/nats-operator/internal/e2e"
 )
@@ -25,15 +25,16 @@ func main() {
 	only := flag.String("only", "", "comma-separated story numbers to run; empty runs all")
 	timeout := flag.Duration("timeout", 5*time.Minute, "how long each story waits for its statuses")
 	interval := flag.Duration("interval", 2*time.Second, "how often statuses are read")
+	contexts := flag.String("contexts", "", "comma-separated kubeconfig contexts, the home cluster first; empty is the current context alone")
 	flag.Parse()
 
-	if err := run(*stories, *only, *timeout, *interval); err != nil {
+	if err := run(*stories, *only, *contexts, *timeout, *interval); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "e2e:", err)
 		os.Exit(1)
 	}
 }
 
-func run(dir, only string, timeout, interval time.Duration) error {
+func run(dir, only, contexts string, timeout, interval time.Duration) error {
 	selected, err := parseNumbers(only)
 	if err != nil {
 		return err
@@ -42,15 +43,11 @@ func run(dir, only string, timeout, interval time.Duration) error {
 	if err != nil {
 		return err
 	}
-	cfg, err := ctrl.GetConfig()
+	clients, err := newClients(contexts)
 	if err != nil {
 		return err
 	}
-	c, err := client.New(cfg, client.Options{Scheme: scheme.Scheme})
-	if err != nil {
-		return err
-	}
-	r := &e2e.Runner{Client: c, Timeout: timeout, Interval: interval, Log: os.Stderr}
+	r := &e2e.Runner{Clients: clients, Timeout: timeout, Interval: interval, Log: os.Stderr}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -75,6 +72,26 @@ func run(dir, only string, timeout, interval time.Duration) error {
 		return fmt.Errorf("stories failed")
 	}
 	return nil
+}
+
+func newClients(contexts string) ([]client.Client, error) {
+	names := []string{""}
+	if contexts != "" {
+		names = strings.Split(contexts, ",")
+	}
+	clients := make([]client.Client, 0, len(names))
+	for _, name := range names {
+		cfg, err := config.GetConfigWithContext(strings.TrimSpace(name))
+		if err != nil {
+			return nil, fmt.Errorf("context %q: %w", name, err)
+		}
+		c, err := client.New(cfg, client.Options{Scheme: scheme.Scheme})
+		if err != nil {
+			return nil, fmt.Errorf("context %q: %w", name, err)
+		}
+		clients = append(clients, c)
+	}
+	return clients, nil
 }
 
 func parseNumbers(s string) (map[int]bool, error) {
