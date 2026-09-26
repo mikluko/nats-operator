@@ -64,16 +64,9 @@ envtest:
     KUBEBUILDER_ASSETS="$(go tool setup-envtest use {{ envtest_k8s_version }} --bin-dir "{{ bin }}" -p path)" \
         go test -race ./... -run Envtest
 
-# The end-to-end run against a Kubernetes cluster on Apple containers; the
-# script lands with the harness, and this recipe names it so `just e2e` is
-# the one command from the start.
+# The story bundles end to end on a Kubernetes cluster from the Apple
+# `container` CLI; hack/e2e.sh lists the E2E_* variables it reads.
 e2e:
-    #!/usr/bin/env sh
-    set -eu
-    if [ ! -x hack/e2e.sh ]; then
-        echo "hack/e2e.sh is not present; the e2e harness has not landed" >&2
-        exit 1
-    fi
     hack/e2e.sh
 
 clean:
