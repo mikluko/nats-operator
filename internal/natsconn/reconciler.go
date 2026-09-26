@@ -42,6 +42,10 @@ const SecretField = "natsconn.nats.mikluko.io/secret"
 // reconciled again when Reconciler.RetryAfter is zero.
 const DefaultRetryAfter = 30 * time.Second
 
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections,verbs=get;list;watch
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+
 // Reconciler reports Ready on NatsConnections from their pooled
 // connections: True while connected, False with the reason otherwise. It
 // closes a connection whose NatsConnection is deleted or no longer
