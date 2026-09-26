@@ -16,6 +16,14 @@ var ErrReloadUnconfirmed = errors.New("reload not confirmed by VARZ")
 type ConfigState struct {
 	Digest   string
 	LoadTime time.Time
+	// CertNotAfter is the expiry of the certificate each listener loaded.
+	CertNotAfter CertNotAfter
+}
+
+// CertNotAfter is the expiry of the certificate each TLS listener of a
+// server loaded, zero on a listener without one.
+type CertNotAfter struct {
+	Cluster, Gateway, Leafnode time.Time
 }
 
 // Config returns the ConfigState of the server with ID serverID.
@@ -30,7 +38,12 @@ func (o *Observer) Config(ctx context.Context, serverID string) (ConfigState, er
 	if r.Data == nil {
 		return ConfigState{}, fmt.Errorf("%w: VARZ from %s: empty response", ErrServer, serverID)
 	}
-	return ConfigState{Digest: r.Data.ConfigDigest, LoadTime: r.Data.ConfigLoadTime}, nil
+	d := r.Data
+	return ConfigState{Digest: d.ConfigDigest, LoadTime: d.ConfigLoadTime, CertNotAfter: CertNotAfter{
+		Cluster:  d.Cluster.TLSCertNotAfter,
+		Gateway:  d.Gateway.TLSCertNotAfter,
+		Leafnode: d.Leafnode.TLSCertNotAfter,
+	}}, nil
 }
 
 // Reload asks the server with ID serverID to reload its configuration file

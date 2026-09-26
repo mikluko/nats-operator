@@ -17,6 +17,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 )
@@ -122,7 +123,7 @@ func certManagerIssuer(nc *clusterv1beta1.NatsCluster) *clusterv1beta1.IssuerRef
 // routesCertificate is the cert-manager Certificate that issues the route
 // certificate into the Secret routesSecretName names.
 func routesCertificate(nc *clusterv1beta1.NatsCluster, issuer *clusterv1beta1.IssuerReference) *unstructured.Unstructured {
-	return certificate(nc, nc.Name+"-routes", routesSecretName(nc), issuer, routeDNSNames(nc))
+	return certificate(nc, routesCertificateName(nc), routesSecretName(nc), issuer, routeDNSNames(nc), peerUsages)
 }
 
 // gatewaySecret names the Secret the gateway certificate is mounted from,
@@ -183,13 +184,22 @@ func gatewayHosts(nc *clusterv1beta1.NatsCluster) []string {
 // gatewayCertificate is the cert-manager Certificate that issues the
 // gateway certificate for hosts into the Secret gatewaySecretName names.
 func gatewayCertificate(nc *clusterv1beta1.NatsCluster, issuer *clusterv1beta1.IssuerReference, hosts []string) *unstructured.Unstructured {
-	return certificate(nc, nc.Name+"-gateway", gatewaySecretName(nc), issuer, hosts)
+	return certificate(nc, gatewayCertificateName(nc), gatewaySecretName(nc), issuer, hosts, peerUsages)
 }
 
+func routesCertificateName(nc *clusterv1beta1.NatsCluster) string  { return nc.Name + "-routes" }
+func gatewayCertificateName(nc *clusterv1beta1.NatsCluster) string { return nc.Name + "-gateway" }
+
+var certificateGVK = schema.GroupVersionKind{Group: "cert-manager.io", Version: "v1", Kind: "Certificate"}
+
+// peerUsages are the usages of a certificate a server both serves and
+// dials its peers with.
+var peerUsages = []string{"server auth", "client auth"}
+
 // certificate is a cert-manager Certificate named name, issued by issuer
-// into Secret secret for hosts, a host that parses as an IP address being
-// an IP SAN.
-func certificate(nc *clusterv1beta1.NatsCluster, name, secret string, issuer *clusterv1beta1.IssuerReference, hosts []string) *unstructured.Unstructured {
+// into Secret secret for hosts with usages, a host that parses as an IP
+// address being an IP SAN.
+func certificate(nc *clusterv1beta1.NatsCluster, name, secret string, issuer *clusterv1beta1.IssuerReference, hosts, usages []string) *unstructured.Unstructured {
 	kind := issuer.Kind
 	if kind == "" {
 		kind = "Issuer"
@@ -208,7 +218,7 @@ func certificate(nc *clusterv1beta1.NatsCluster, name, secret string, issuer *cl
 	}
 	spec := map[string]any{
 		"secretName": secret,
-		"usages":     []any{"server auth", "client auth"},
+		"usages":     toAny(usages),
 		"privateKey": map[string]any{"algorithm": "ECDSA", "size": int64(256)},
 		"issuerRef":  map[string]any{"name": issuer.Name, "kind": kind, "group": group},
 	}
@@ -218,15 +228,18 @@ func certificate(nc *clusterv1beta1.NatsCluster, name, secret string, issuer *cl
 	if len(ips) > 0 {
 		spec["ipAddresses"] = ips
 	}
-	u := &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "cert-manager.io/v1",
-		"kind":       "Certificate",
-		"metadata": map[string]any{
-			"name":      name,
-			"namespace": nc.Namespace,
-		},
-		"spec": spec,
-	}}
+	u := &unstructured.Unstructured{Object: map[string]any{"spec": spec}}
+	u.SetGroupVersionKind(certificateGVK)
+	u.SetName(name)
+	u.SetNamespace(nc.Namespace)
 	u.SetLabels(labels(nc))
 	return u
+}
+
+func toAny(ss []string) []any {
+	out := make([]any, len(ss))
+	for i, s := range ss {
+		out[i] = s
+	}
+	return out
 }

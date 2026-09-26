@@ -428,7 +428,7 @@ func TestOperatorReload_OverSystemUser(t *testing.T) {
 	require.NoError(t, os.WriteFile(a.files[0], retagged, 0o600))
 	rl, err := a.sys.Reloader(ctx, a.nc)
 	require.NoError(t, err)
-	applied, err := reloadServer(ctx, rl, a.snap, Server{Name: "demo-0", ConfigMap: &corev1.ConfigMap{Data: map[string]string{configFile: string(retagged)}}})
+	applied, err := reloadServer(ctx, rl, a.snap, Server{Name: "demo-0", ConfigMap: &corev1.ConfigMap{Data: map[string]string{configFile: string(retagged)}}}, Certs{})
 	require.NoError(t, err)
 	require.True(t, applied)
 	require.Equal(t, []string{"az:b"}, varzTags(t, a.srvs[0]))

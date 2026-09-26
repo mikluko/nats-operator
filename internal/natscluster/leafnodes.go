@@ -435,42 +435,37 @@ func leafnodesCertSecret(nc *clusterv1beta1.NatsCluster) string {
 	return leafnodesCertSecretName(nc)
 }
 
+func leafnodesCertificateName(nc *clusterv1beta1.NatsCluster) string { return nc.Name + "-leafnodes" }
+
 // leafnodesCertificate is the cert-manager Certificate issuing the
-// leafnode listener's certificate for the advertised host, or for the
-// leafnode Service's in-cluster names when nothing is advertised.
+// leafnode listener's certificate for leafnodesHosts.
 func leafnodesCertificate(nc *clusterv1beta1.NatsCluster, issuer *clusterv1beta1.IssuerReference) *unstructured.Unstructured {
-	u := routesCertificate(nc, issuer)
-	u.SetName(nc.Name + "-leafnodes")
-	spec := u.Object["spec"].(map[string]any)
-	spec["secretName"] = leafnodesCertSecretName(nc)
-	spec["usages"] = []any{"server auth"}
-	var dnsNames, ips []any
-	if host, _, err := net.SplitHostPort(nc.Spec.Leafnodes.Advertise); err == nil && host != "" {
-		if net.ParseIP(host) != nil {
-			ips = append(ips, host)
-		} else {
-			dnsNames = append(dnsNames, host)
-		}
-	} else {
-		base := fmt.Sprintf("%s.%s.svc", leafnodesServiceName(nc), nc.Namespace)
-		dnsNames = []any{base, base + ".cluster.local"}
-	}
-	delete(spec, "dnsNames")
-	if len(dnsNames) > 0 {
-		spec["dnsNames"] = dnsNames
-	}
-	if len(ips) > 0 {
-		spec["ipAddresses"] = ips
-	}
-	return u
+	return certificate(nc, leafnodesCertificateName(nc), leafnodesCertSecretName(nc), issuer, leafnodesHosts(nc), []string{"server auth"})
 }
 
-// applyLeafnodes makes what a hub's listener and a leaf's remotes need
-// outside the servers exist: the leafnode Service and the leaf remotes
-// Secret, each deleted once spec no longer asks for it, and the listener's
-// certificate. It returns what the servers wait for, or "" once nothing is
-// missing.
-func (r *Reconciler) applyLeafnodes(ctx context.Context, nc *clusterv1beta1.NatsCluster, plan *Plan) (string, error) {
+// leafnodesHosts are the hosts leaf nodes dial the listener at: the
+// advertised host, or the leafnode Service's in-cluster names when nothing
+// is advertised.
+func leafnodesHosts(nc *clusterv1beta1.NatsCluster) []string {
+	if host, _, err := net.SplitHostPort(nc.Spec.Leafnodes.Advertise); err == nil && host != "" {
+		return []string{host}
+	}
+	base := fmt.Sprintf("%s.%s.svc", leafnodesServiceName(nc), nc.Namespace)
+	return []string{base, base + ".cluster.local"}
+}
+
+// leafnodesIssuer returns the issuer the leafnode listener's certificate
+// comes from, or nil when cert-manager does not issue it.
+func leafnodesIssuer(nc *clusterv1beta1.NatsCluster) *clusterv1beta1.IssuerReference {
+	if ln := nc.Spec.Leafnodes; ln != nil && ln.TLS != nil && ln.TLS.CertManager != nil {
+		return &ln.TLS.CertManager.IssuerRef
+	}
+	return nil
+}
+
+// applyLeafnodes makes the leafnode Service and the leaf remotes Secret
+// exist, each deleted once spec no longer asks for it.
+func (r *Reconciler) applyLeafnodes(ctx context.Context, nc *clusterv1beta1.NatsCluster, plan *Plan) error {
 	var remotes, svc client.Object
 	if s := leafRemotesSecret(nc, plan.LeafRemotes); s != nil {
 		remotes = s
@@ -481,7 +476,7 @@ func (r *Reconciler) applyLeafnodes(ctx context.Context, nc *clusterv1beta1.Nats
 	if err := r.applyOwned(ctx, nc, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: leafRemotesSecretName(nc), Namespace: nc.Namespace}}, remotes, func(have, want client.Object) {
 		have.(*corev1.Secret).Data = want.(*corev1.Secret).Data
 	}); err != nil {
-		return "", err
+		return err
 	}
 	if err := r.applyOwned(ctx, nc, &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: leafnodesServiceName(nc), Namespace: nc.Namespace}}, svc, func(have, want client.Object) {
 		h, w := have.(*corev1.Service), want.(*corev1.Service)
@@ -490,45 +485,9 @@ func (r *Reconciler) applyLeafnodes(ctx context.Context, nc *clusterv1beta1.Nats
 		h.Spec.Selector = w.Spec.Selector
 		h.Spec.Ports = w.Spec.Ports
 	}); err != nil {
-		return "", err
+		return err
 	}
-
-	name := leafnodesCertSecret(nc)
-	if name == "" {
-		return "", nil
-	}
-	if cm := nc.Spec.Leafnodes.TLS.CertManager; cm != nil {
-		want := leafnodesCertificate(nc, &cm.IssuerRef)
-		cert := &unstructured.Unstructured{}
-		cert.SetGroupVersionKind(want.GroupVersionKind())
-		cert.SetName(want.GetName())
-		cert.SetNamespace(want.GetNamespace())
-		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, cert, func() error {
-			cert.SetLabels(merged(cert.GetLabels(), want.GetLabels()))
-			cert.Object["spec"] = want.Object["spec"]
-			return controllerutil.SetControllerReference(nc, cert, r.Client.Scheme())
-		})
-		if meta.IsNoMatchError(err) {
-			return "cert-manager Certificate is not a known kind: cert-manager is not installed", nil
-		}
-		if err != nil {
-			return "", fmt.Errorf("apply leafnodes certificate: %w", err)
-		}
-	}
-	secret := &corev1.Secret{}
-	err := r.Client.Get(ctx, client.ObjectKey{Namespace: nc.Namespace, Name: name}, secret)
-	switch {
-	case apierrors.IsNotFound(err):
-		return fmt.Sprintf("Secret %s does not exist", name), nil
-	case err != nil:
-		return "", fmt.Errorf("get leafnodes certificate secret: %w", err)
-	}
-	for _, k := range []string{corev1.TLSCertKey, corev1.TLSPrivateKeyKey} {
-		if len(secret.Data[k]) == 0 {
-			return fmt.Sprintf("Secret %s has no %s", name, k), nil
-		}
-	}
-	return "", nil
+	return nil
 }
 
 // applyOwned creates or updates obj from want, owned by nc, copying what

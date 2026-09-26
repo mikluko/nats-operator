@@ -208,6 +208,8 @@ type Inputs struct {
 	// GatewayCA reports whether the gateway certificate Secret holds
 	// ca.crt; gateway peers are then verified against it, both ways.
 	GatewayCA bool
+	// Certs are the TLS Secrets the servers mount.
+	Certs Certs
 }
 
 // serverConfig renders server's config within nc from in under layout l,

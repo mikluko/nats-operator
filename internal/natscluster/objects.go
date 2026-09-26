@@ -48,9 +48,11 @@ type Server struct {
 type Plan struct {
 	// Revision is the config revision: a digest of every server's config
 	// and StatefulSet, the revision itself and the volume claim templates
-	// excluded.
+	// excluded, and of the TLS Secrets they mount.
 	Revision string
 	Limits   Limits
+	// Certs are the TLS Secrets the plan's servers mount.
+	Certs Certs
 	// LeafRemotes are the resolved remotes the plan was rendered with.
 	LeafRemotes []LeafRemote
 
@@ -67,6 +69,7 @@ type Plan struct {
 func Render(nc *clusterv1beta1.NatsCluster, in Inputs, remotes ...LeafRemote) (*Plan, error) {
 	p := &Plan{
 		LeafRemotes:     remotes,
+		Certs:           in.Certs,
 		Limits:          deriveLimits(&nc.Spec),
 		HeadlessService: headlessService(nc),
 		ClientService:   clientService(nc),
@@ -99,6 +102,9 @@ func Render(nc *clusterv1beta1.NatsCluster, in Inputs, remotes ...LeafRemote) (*
 			return nil, err
 		}
 		p.Servers = append(p.Servers, Server{Name: name, StatefulSet: sts})
+	}
+	for _, c := range []MountedCert{in.Certs.Routes, in.Certs.Gateway, in.Certs.Leafnodes} {
+		h.Write([]byte(c.Digest))
 	}
 	p.Revision = hex.EncodeToString(h.Sum(nil))[:10]
 	for i := range p.Servers {

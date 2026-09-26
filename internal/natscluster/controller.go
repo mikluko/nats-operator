@@ -16,7 +16,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/events"
@@ -88,7 +87,7 @@ type Reconciler struct {
 // +kubebuilder:rbac:groups="",resources=services;configmaps;secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;delete
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsoperatortrusts;natsreferencegrants,verbs=get;list;watch
 
 // TrustField is the field index SetupWithManager registers on NatsClusters:
@@ -208,11 +207,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		setCondition(&nc.Status, *cond, nc.Generation)
 		return ctrl.Result{RequeueAfter: resyncUnsettled}, r.patchStatus(ctx, orig, nc)
 	}
-	gatewayWait, gatewayCA, err := r.ensureGatewayCert(ctx, nc)
+	certs, certWait, certReason, err := r.ensureCerts(ctx, nc)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	plan, err := Render(nc, Inputs{Trust: trust, GatewayCA: gatewayCA}, remotes...)
+	plan, err := Render(nc, Inputs{Trust: trust, GatewayCA: certs.Gateway.CA, Certs: certs}, remotes...)
 	if err != nil {
 		setCondition(&nc.Status, metav1.Condition{
 			Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: ReasonUnsupportedSpec, Message: err.Error(),
@@ -223,20 +222,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if err := r.applyShared(ctx, nc, plan); err != nil {
 		return ctrl.Result{}, err
 	}
-	routeWait, err := r.ensureRouteCert(ctx, nc)
-	if err != nil {
+	if err := r.applyLeafnodes(ctx, nc, plan); err != nil {
 		return ctrl.Result{}, err
-	}
-	certWait, certReason := routeWait, ReasonRouteCertNotReady
-	if certWait == "" {
-		certWait, certReason = gatewayWait, ReasonGatewayCertNotReady
-	}
-	leafWait, err := r.applyLeafnodes(ctx, nc, plan)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	if certWait == "" && leafWait != "" {
-		certWait, certReason = leafWait, ReasonLeafnodesCertNotReady
 	}
 
 	stsByName, err := r.statefulSets(ctx, nc)
@@ -358,107 +345,6 @@ func (r *Reconciler) deleteOwned(ctx context.Context, nc *clusterv1beta1.NatsClu
 		return fmt.Errorf("delete %s: %w", obj.GetName(), err)
 	}
 	return nil
-}
-
-// ensureGatewayCert requests the gateway certificate from cert-manager when
-// it issues it. It returns what the servers wait for, "" once the Secret
-// holds tls.crt and tls.key, and whether the Secret also holds ca.crt.
-func (r *Reconciler) ensureGatewayCert(ctx context.Context, nc *clusterv1beta1.NatsCluster) (string, bool, error) {
-	name := gatewaySecret(nc)
-	if name == "" {
-		return "", false, nil
-	}
-	if issuer := gatewayIssuer(nc); issuer != nil {
-		hosts := gatewayHosts(nc)
-		if len(hosts) == 0 {
-			return "gateway.tls.certManager has no host to issue for: list this NATS cluster in gateway.remotes or set gateway.advertise", false, nil
-		}
-		wait, err := r.applyCertificate(ctx, nc, gatewayCertificate(nc, issuer, hosts))
-		if wait != "" || err != nil {
-			return wait, false, err
-		}
-	}
-	secret := &corev1.Secret{}
-	err := r.Client.Get(ctx, client.ObjectKey{Namespace: nc.Namespace, Name: name}, secret)
-	switch {
-	case apierrors.IsNotFound(err):
-		return fmt.Sprintf("Secret %s does not exist", name), false, nil
-	case err != nil:
-		return "", false, fmt.Errorf("get gateway secret: %w", err)
-	}
-	for _, k := range []string{corev1.TLSCertKey, corev1.TLSPrivateKeyKey} {
-		if len(secret.Data[k]) == 0 {
-			return fmt.Sprintf("Secret %s has no %s", name, k), false, nil
-		}
-	}
-	return "", len(secret.Data[caKey]) > 0, nil
-}
-
-// applyCertificate creates or updates the cert-manager Certificate want.
-// It returns what the servers wait for when cert-manager is not installed.
-func (r *Reconciler) applyCertificate(ctx context.Context, nc *clusterv1beta1.NatsCluster, want *unstructured.Unstructured) (string, error) {
-	cert := &unstructured.Unstructured{}
-	cert.SetGroupVersionKind(want.GroupVersionKind())
-	cert.SetName(want.GetName())
-	cert.SetNamespace(want.GetNamespace())
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, cert, func() error {
-		cert.SetLabels(merged(cert.GetLabels(), want.GetLabels()))
-		cert.Object["spec"] = want.Object["spec"]
-		return controllerutil.SetControllerReference(nc, cert, r.Client.Scheme())
-	})
-	if meta.IsNoMatchError(err) {
-		return "cert-manager Certificate is not a known kind: cert-manager is not installed", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("apply certificate %s: %w", want.GetName(), err)
-	}
-	return "", nil
-}
-
-// ensureRouteCert makes the route certificate Secret exist: generated when
-// self-signed, requested from cert-manager when it issues it, only read when
-// named. It returns what the servers wait for, or "" once the Secret holds
-// every key a server mounts.
-func (r *Reconciler) ensureRouteCert(ctx context.Context, nc *clusterv1beta1.NatsCluster) (string, error) {
-	name := routesSecret(nc)
-	if name == "" {
-		return "", nil
-	}
-	selfSigned := name == routesSecretName(nc)
-	if issuer := certManagerIssuer(nc); issuer != nil {
-		selfSigned = false
-		wait, err := r.applyCertificate(ctx, nc, routesCertificate(nc, issuer))
-		if wait != "" || err != nil {
-			return wait, err
-		}
-	}
-
-	secret := &corev1.Secret{}
-	err := r.Client.Get(ctx, client.ObjectKey{Namespace: nc.Namespace, Name: name}, secret)
-	switch {
-	case apierrors.IsNotFound(err) && selfSigned:
-		secret, err = selfSignedRouteSecret(nc, routeDNSNames(nc), r.now())
-		if err != nil {
-			return "", err
-		}
-		if err := controllerutil.SetControllerReference(nc, secret, r.Client.Scheme()); err != nil {
-			return "", err
-		}
-		if err := r.Client.Create(ctx, secret); err != nil {
-			return "", fmt.Errorf("create route secret: %w", err)
-		}
-		return "", nil
-	case apierrors.IsNotFound(err):
-		return fmt.Sprintf("Secret %s does not exist", name), nil
-	case err != nil:
-		return "", fmt.Errorf("get route secret: %w", err)
-	}
-	for _, k := range []string{corev1.TLSCertKey, corev1.TLSPrivateKeyKey, caKey} {
-		if len(secret.Data[k]) == 0 {
-			return fmt.Sprintf("Secret %s has no %s", name, k), nil
-		}
-	}
-	return "", nil
 }
 
 func (r *Reconciler) now() time.Time {

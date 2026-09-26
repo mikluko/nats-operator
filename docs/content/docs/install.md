@@ -118,7 +118,7 @@ Each controller's ClusterRole is named `<release>-<controller>`, for example `na
 | `apps` | `statefulsets` | `get`, `list`, `watch`, `create`, `update`, `patch`, `delete` |
 | `""` | `configmaps`, `services`, `secrets` | `get`, `list`, `watch`, `create`, `update`, `patch`, `delete` |
 | `policy` | `poddisruptionbudgets` | `get`, `list`, `watch`, `create`, `update`, `patch`, `delete` |
-| `cert-manager.io` | `certificates` | `get`, `list`, `watch`, `create`, `update`, `patch` |
+| `cert-manager.io` | `certificates` | `get`, `list`, `watch`, `create`, `update`, `patch`, `delete` |
 | `""` | `pods` | `get`, `list`, `watch` |
 | `""` | `persistentvolumeclaims` | `get`, `list`, `watch`, `delete` |
 

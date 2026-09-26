@@ -15,13 +15,16 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/events"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -316,6 +319,24 @@ func TestEnvtestReconcile(t *testing.T) {
 			again := reconcileWith(t, got)
 			require.Equal(t, clusterv1beta1.ConfigAppliedByReload, again.Status.Config.AppliedBy)
 			require.Len(t, fake.reloaded(), 3, "an applied revision was reloaded again")
+		})
+
+		t.Run("a rotated route certificate reloads", func(t *testing.T) {
+			nc, first := setUp(t, "rotate", func(*clusterv1beta1.NatsClusterSpec) {})
+			secret := &corev1.Secret{}
+			require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "rotate", Name: routesSecretName(nc)}, secret))
+			rotated, err := selfSignedRouteSecret(nc, routeDNSNames(nc), clock)
+			require.NoError(t, err)
+			secret.Data = rotated.Data
+			require.NoError(t, c.Update(ctx, secret))
+
+			got := reconcileWith(t, nc)
+			require.NotEqual(t, first, got.Status.Config.Revision)
+			require.Equal(t, clusterv1beta1.ConfigAppliedByReload, got.Status.Config.AppliedBy)
+			for name, sts := range statefulSets(t, "rotate") {
+				require.Equal(t, got.Status.Config.Revision, sts.Annotations[AnnotationConfigRevision], name)
+			}
+			require.ElementsMatch(t, []string{"demo-0", "demo-1", "demo-2"}, fake.reloaded())
 		})
 
 		t.Run("an unconfirmed reload falls back to a restart", func(t *testing.T) {
@@ -811,4 +832,51 @@ func TestEnvtestReconcile(t *testing.T) {
 			require.ErrorContains(t, err, "spec.auth.resolver")
 		})
 	})
+
+	t.Run("an unset issuer deletes the Certificate", func(t *testing.T) {
+		_, err := envtest.InstallCRDs(cfg, envtest.CRDInstallOptions{CRDs: []*apiextensionsv1.CustomResourceDefinition{certificateCRD()}})
+		require.NoError(t, err)
+		issuer := &clusterv1beta1.CertManagerCertificate{IssuerRef: clusterv1beta1.IssuerReference{Name: "ca"}}
+		nc := newCluster(t, "issuer", func(nc *clusterv1beta1.NatsCluster) {
+			nc.Spec.Routes = &clusterv1beta1.Routes{TLS: &clusterv1beta1.RoutesTLS{CertificateSource: clusterv1beta1.CertificateSource{CertManager: issuer}}}
+			nc.Spec.Leafnodes = &clusterv1beta1.Leafnodes{TLS: &clusterv1beta1.ListenerTLS{CertificateSource: clusterv1beta1.CertificateSource{CertManager: issuer}}}
+		})
+		certificate := func(name string) error {
+			u := &unstructured.Unstructured{}
+			u.SetGroupVersionKind(certificateGVK)
+			return c.Get(ctx, types.NamespacedName{Namespace: "issuer", Name: name}, u)
+		}
+		_, got := reconcile(t, nc)
+		condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonRouteCertNotReady)
+		require.NoError(t, certificate("demo-routes"))
+		require.NoError(t, certificate("demo-leafnodes"))
+
+		got.Spec.Routes = nil
+		got.Spec.Leafnodes.TLS = nil
+		require.NoError(t, c.Update(ctx, got))
+		_, got = reconcile(t, got)
+		condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonCreating)
+		require.True(t, apierrors.IsNotFound(certificate("demo-routes")), "routes Certificate kept")
+		require.True(t, apierrors.IsNotFound(certificate("demo-leafnodes")), "leafnodes Certificate kept")
+	})
+}
+
+// certificateCRD is enough of cert-manager's Certificate CRD for the API
+// server to store one.
+func certificateCRD() *apiextensionsv1.CustomResourceDefinition {
+	return &apiextensionsv1.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{Name: "certificates.cert-manager.io"},
+		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+			Group: certificateGVK.Group,
+			Names: apiextensionsv1.CustomResourceDefinitionNames{Plural: "certificates", Singular: "certificate", Kind: certificateGVK.Kind, ListKind: "CertificateList"},
+			Scope: apiextensionsv1.NamespaceScoped,
+			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{{
+				Name: certificateGVK.Version, Served: true, Storage: true,
+				Schema: &apiextensionsv1.CustomResourceValidation{OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+					Type:                   "object",
+					XPreserveUnknownFields: ptr.To(true),
+				}},
+			}},
+		},
+	}
 }

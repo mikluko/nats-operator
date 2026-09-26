@@ -109,7 +109,7 @@ func (r *Reconciler) applyConfig(ctx context.Context, nc *clusterv1beta1.NatsClu
 		applied := false
 		rl, err := reloader()
 		if err == nil {
-			applied, err = reloadServer(ctx, rl, snap, s)
+			applied, err = reloadServer(ctx, rl, snap, s, plan.Certs)
 		}
 		if err == nil && !applied && r.reloadExpired(cm) {
 			err = fmt.Errorf("%s did not load revision %s within %s", s.Name, plan.Revision, reloadWindow)
@@ -158,10 +158,11 @@ func runningVersion(sts *appsv1.StatefulSet) string {
 	return ""
 }
 
-// reloadServer reports whether server s has loaded its rendered config,
-// requesting a reload when it has not. It returns false without an error
-// while the server is unobserved or still loads the previous file.
-func reloadServer(ctx context.Context, rl ServerReloader, snap *sysobs.Snapshot, s Server) (bool, error) {
+// reloadServer reports whether server s has loaded its rendered config and
+// the certificates in certs, requesting a reload when it has not. It
+// returns false without an error while the server is unobserved or still
+// loads a previous file.
+func reloadServer(ctx context.Context, rl ServerReloader, snap *sysobs.Snapshot, s Server, certs Certs) (bool, error) {
 	id := serverID(snap, s.Name)
 	if id == "" {
 		return false, nil
@@ -174,14 +175,14 @@ func reloadServer(ctx context.Context, rl ServerReloader, snap *sysobs.Snapshot,
 	if err != nil {
 		return false, err
 	}
-	if st.Digest == want {
+	if st.Digest == want && certs.loaded(st.CertNotAfter) {
 		return true, nil
 	}
 	st, err = rl.Reload(ctx, id)
 	if err != nil {
 		return false, err
 	}
-	return st.Digest == want, nil
+	return st.Digest == want && certs.loaded(st.CertNotAfter), nil
 }
 
 // serverID is the ID of the server named name in snap, or "" when snap
