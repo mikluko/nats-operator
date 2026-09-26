@@ -238,8 +238,9 @@ func TestChart_SystemConnection(t *testing.T) {
 	}
 }
 
-// TestChart_Telemetry pins the collector sidecar, on by default and receiving
-// OTLP on localhost:4317, and the Prometheus listener, off by default.
+// TestChart_Telemetry pins the collector sidecar, on by default, receiving
+// OTLP on localhost:4317 and :4318 and named to every controller by
+// OTEL_EXPORTER_OTLP_ENDPOINT, and the Prometheus listener, off by default.
 func TestChart_Telemetry(t *testing.T) {
 	for _, tc := range []struct {
 		name           string
@@ -313,16 +314,24 @@ func TestChart_Telemetry(t *testing.T) {
 				sm, hasSM := objs["ServiceMonitor/"+name]
 				require.Equal(t, tc.prometheus, hasSvc, c)
 				require.Equal(t, tc.serviceMonitor, hasSM, c)
+
+				var env []corev1.EnvVar
+				if tc.collector {
+					env = append(env, corev1.EnvVar{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: "http://localhost:4318"})
+				}
+				if tc.prometheus {
+					env = append(env,
+						corev1.EnvVar{Name: "OTEL_METRICS_EXPORTER", Value: "prometheus"},
+						corev1.EnvVar{Name: "OTEL_EXPORTER_PROMETHEUS_HOST", Value: "0.0.0.0"},
+						corev1.EnvVar{Name: "OTEL_EXPORTER_PROMETHEUS_PORT", Value: strconv.Itoa(int(port))},
+					)
+				}
+				require.Equal(t, env, container.Env, c)
+
 				if !tc.prometheus {
-					require.Empty(t, container.Env, c)
 					require.Empty(t, promPorts, c)
 					continue
 				}
-				require.Equal(t, []corev1.EnvVar{
-					{Name: "OTEL_METRICS_EXPORTER", Value: "prometheus"},
-					{Name: "OTEL_EXPORTER_PROMETHEUS_HOST", Value: "0.0.0.0"},
-					{Name: "OTEL_EXPORTER_PROMETHEUS_PORT", Value: strconv.Itoa(int(port))},
-				}, container.Env)
 				require.Equal(t, []corev1.ContainerPort{{Name: "prometheus", ContainerPort: port}}, promPorts)
 
 				var s corev1.Service
@@ -381,19 +390,21 @@ func requireCollectorConfig(t *testing.T, cm *unstructured.Unstructured) {
 }
 
 // TestChart_TelemetryEnv pins that telemetry.env is appended to every
-// controller's env, after the Prometheus listener's.
+// controller's env, after the collector endpoint and the Prometheus listener's,
+// so a user entry overrides either.
 func TestChart_TelemetryEnv(t *testing.T) {
 	objs := render(t,
 		"telemetry.prometheus.enabled=true",
-		"telemetry.env[0].name=OTEL_SERVICE_NAME",
-		"telemetry.env[0].value=nats",
+		"telemetry.env[0].name=OTEL_EXPORTER_OTLP_ENDPOINT",
+		"telemetry.env[0].value=http://collector:4318",
 	)
 	for _, c := range controllers {
 		var d appsv1.Deployment
 		convert(t, objs["Deployment/rel-"+c+"-controller"], &d)
 		env := d.Spec.Template.Spec.Containers[0].Env
-		require.Len(t, env, 4, c)
-		require.Equal(t, corev1.EnvVar{Name: "OTEL_SERVICE_NAME", Value: "nats"}, env[3], c)
+		require.Len(t, env, 5, c)
+		require.Equal(t, corev1.EnvVar{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: "http://localhost:4318"}, env[0], c)
+		require.Equal(t, corev1.EnvVar{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: "http://collector:4318"}, env[4], c)
 	}
 }
 

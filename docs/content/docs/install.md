@@ -60,7 +60,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `jetstream.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
 | `jetstream.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources. |
 | `telemetry.env` | `[]` | Environment variables appended to every controller's container, such as the OpenTelemetry SDK's `OTEL_*` settings. |
-| `telemetry.collector.enabled` | `true` | Runs an OpenTelemetry Collector as a native sidecar in every controller's pod; a change to `telemetry.collector.config` rolls the Deployments. |
+| `telemetry.collector.enabled` | `true` | Runs an OpenTelemetry Collector as a native sidecar in every controller's pod, and sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` on every controller; a change to `telemetry.collector.config` rolls the Deployments. |
 | `telemetry.collector.image.repository` | `otel/opentelemetry-collector` | Its image. |
 | `telemetry.collector.image.tag` | `"0.161.0"` | Its image tag. |
 | `telemetry.collector.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |

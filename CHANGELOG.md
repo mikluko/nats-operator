@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Documentation site at <https://mikluko.github.io/nats-operator/>: the stories, the design and the ADRs under `/docs/`.
 - Every controller's pod runs an OpenTelemetry Collector sidecar, `otel/opentelemetry-collector:0.161.0`, receiving OTLP on `localhost:4317` (gRPC) and `localhost:4318` (HTTP) and discarding it until `telemetry.collector.config` names a backend; `telemetry.collector.enabled: false` removes it.
+- With `telemetry.collector.enabled`, the chart sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`, the sidecar's OTLP/HTTP receiver, on every controller; `telemetry.env` can override it.
 - Chart value `telemetry.prometheus.enabled` serves each controller's OpenTelemetry metrics for Prometheus to pull on port `telemetry.prometheus.port` (9464) through the Service `<release>-<controller>-prometheus`, with a ServiceMonitor under `telemetry.prometheus.serviceMonitor.enabled`.
 - Chart value `telemetry.env`, environment variables appended to every controller's container.
 - Chart value `auth.systemConnection`, the `namespace/name` of the `NatsConnection` passed to the auth controller as `--system-connection`.

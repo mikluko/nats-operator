@@ -167,8 +167,12 @@ spec:
             {{- range .args }}
             - {{ . | quote }}
             {{- end }}
-          {{- if or $telemetry.prometheus.enabled $telemetry.env }}
+          {{- if or $telemetry.collector.enabled $telemetry.prometheus.enabled $telemetry.env }}
           env:
+            {{- if $telemetry.collector.enabled }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://localhost:4318
+            {{- end }}
             {{- if $telemetry.prometheus.enabled }}
             - name: OTEL_METRICS_EXPORTER
               value: prometheus
