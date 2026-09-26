@@ -1,0 +1,19 @@
+status:
+  observedGeneration: 1
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Signed
+  publicKey: ODEMO...IDENTITY
+  signingKeys:
+    - ODEMO...SIGNING1
+  seedSecrets:
+    identity: demo-operator-identity
+    signing: [demo-operator-signing-1]
+  # Public and signed, not secrets. A NatsOperatorTrust with operatorRef
+  # mirrors them; elsewhere they are copied into a literal one (story 6).
+  jwt: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...
+  systemAccount:
+    name: sys
+    publicKey: ADEMO...SYS
+    jwt: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...

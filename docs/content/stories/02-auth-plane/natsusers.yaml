@@ -1,0 +1,89 @@
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsUser
+metadata:
+  name: orders-service
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsAccount
+    name: orders
+  permissions:
+    publish:
+      allow: ["orders.>", "$JS.API.>"]
+    subscribe:
+      allow: ["orders.>", "_INBOX.>"]
+  # Optional. The Secret takes the shape a NatsConnection reads by default:
+  # the creds under key `user.creds`, which `key` overrides.
+  credentials:
+    secretKeyRef:
+      name: orders-service-creds
+---
+# Bring your own key: the client holds the seed, the auth controller signs a
+# JWT for the public key and publishes it in status. No Secret is written, so
+# `publicKey` and `credentials` are mutually exclusive.
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsUser
+metadata:
+  name: orders-batch
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsAccount
+    name: orders
+  publicKey: UDXU4RCSJNZOIQHZNWXHXORDPRTGNJAHAHFRGZNEEJCPQTT2M7NLCNF4
+  permissions:
+    publish:
+      allow: ["orders.batch.>"]
+---
+# What the JetStream controller acts as inside the orders account (Q2067: the
+# system account cannot touch another account's streams). An ordinary user,
+# declared like any other; the auth controller knows nothing of its purpose.
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsUser
+metadata:
+  name: orders-jetstream
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsAccount
+    name: orders
+  permissions:
+    publish:
+      allow: ["$JS.API.>"]
+    subscribe:
+      allow: ["_INBOX.>"]
+  credentials:
+    secretKeyRef:
+      name: orders-jetstream-creds
+---
+# The cluster controller's own identity in this Kubernetes cluster (Q2075).
+# An explicit NatsUser with a permission preset, not a user minted
+# automatically from the NatsCluster. The preset expands to the subjects that
+# controller calls; `permissions` would be refused beside it.
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsUser
+metadata:
+  name: cluster-controller
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsSystemAccount
+    name: sys
+  preset: cluster-controller
+  credentials:
+    secretKeyRef:
+      name: cluster-controller-creds
+---
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsUser
+metadata:
+  name: jetstream-controller
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsSystemAccount
+    name: sys
+  preset: jetstream-controller
+  credentials:
+    secretKeyRef:
+      name: jetstream-controller-creds

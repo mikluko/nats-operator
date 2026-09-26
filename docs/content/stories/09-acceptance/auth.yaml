@@ -1,0 +1,100 @@
+# All of it in the home cluster, prod-east.
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsOperator
+metadata:
+  name: acme
+  namespace: nats-system
+spec:
+  systemAccountRef:
+    name: sys
+---
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsSystemAccount
+metadata:
+  name: sys
+  namespace: nats-system
+spec:
+  operatorRef:
+    name: acme
+---
+# Four services in two environments: eight accounts. Only the prod chain is
+# written out; the dev accounts are the same with -dev names and smaller
+# limits.
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsAccount
+metadata:
+  name: checks-prod
+  namespace: nats-system
+spec:
+  operatorRef:
+    name: acme
+  exports:
+    - name: run
+      type: Service
+      subject: "checks.run.>"
+---
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsAccount
+metadata:
+  name: monitoring-prod
+  namespace: nats-system
+spec:
+  operatorRef:
+    name: acme
+  limits:
+    jetstream:
+      memoryStorage: 36Gi
+      diskStorage: 300Gi
+  exports:
+    - name: executions
+      type: Stream
+      subject: "monitoring.execution.>"
+    - name: state-changes
+      type: Stream
+      subject: "monitoring.state.>"
+    - name: execute
+      type: Service
+      subject: "monitoring.execute"
+    - name: configure
+      type: Service
+      subject: "monitoring.configure"
+  imports:
+    - accountRef:
+        kind: NatsAccount
+        name: checks-prod
+      export: run
+---
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsAccount
+metadata:
+  name: core-prod
+  namespace: nats-system
+spec:
+  operatorRef:
+    name: acme
+  imports:
+    - accountRef:
+        kind: NatsAccount
+        name: monitoring-prod
+      export: state-changes
+    - accountRef:
+        kind: NatsAccount
+        name: monitoring-prod
+      export: configure
+---
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsAccount
+metadata:
+  name: collector-prod
+  namespace: nats-system
+spec:
+  operatorRef:
+    name: acme
+  limits:
+    jetstream:
+      diskStorage: 50Gi
+  imports:
+    - accountRef:
+        kind: NatsAccount
+        name: monitoring-prod
+      export: executions

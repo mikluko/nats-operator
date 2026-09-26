@@ -1,0 +1,7 @@
+{{- $name := .Get 0 -}}
+{{- with .Page.Resources.Get $name -}}
+<p><code>{{ $name }}</code></p>
+{{ highlight .Content "yaml" "" }}
+{{- else -}}
+{{- errorf "manifest %q is not a file in %s" $name .Page.File.Dir -}}
+{{- end -}}

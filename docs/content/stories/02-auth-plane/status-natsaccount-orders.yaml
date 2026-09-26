@@ -1,0 +1,18 @@
+status:
+  observedGeneration: 2
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Distributed
+    - type: Distributed
+      status: "True"
+      reason: AllServersCurrent
+      message: 3 of 3 servers hold this JWT
+  publicKey: AORDERS...
+  jwtHash: 9c41e7
+  # Built by the auth controller: the server roster from STATSZ, each server's
+  # CLAIMS.LOOKUP compared to jwtHash (Q2068 found no server-side primitive).
+  distribution:
+    servers: 3
+    current: 3
+    lastPushTime: "2026-09-25T16:20:03Z"

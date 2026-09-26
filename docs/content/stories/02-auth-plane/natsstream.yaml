@@ -1,0 +1,15 @@
+# Story 1's stream, moved into the orders account: only connectionRef changes.
+apiVersion: jetstream.nats.mikluko.io/v1alpha1
+kind: NatsStream
+metadata:
+  name: orders
+  namespace: nats-system
+spec:
+  connectionRef:
+    name: demo-orders
+  subjects: ["orders.>"]
+  storage: File
+  replicas: 3
+  retention: Limits
+  maxAge: 72h
+  maxBytes: 5Gi

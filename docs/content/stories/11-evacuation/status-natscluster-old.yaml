@@ -1,0 +1,9 @@
+# prod-east after `kubectl delete natscluster prod-east`: deletion waits while
+# the cluster still holds JetStream data. The one-shot annotation
+# cluster.nats.mikluko.io/force-delete overrides it.
+status:
+  conditions:
+    - type: Deleting
+      status: "True"
+      reason: JetStreamDataRemains
+      message: 2 stream groups still placed in prod-east (orders/ORDERS, payments/KV_sessions)

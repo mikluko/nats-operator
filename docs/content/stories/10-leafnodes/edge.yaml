@@ -1,0 +1,68 @@
+# In the edge site's own Kubernetes cluster. No auth controller, no NATS
+# operator: the leaf runs with no accounts, and everything its local clients
+# publish reaches the hub in the account the remote's credentials sign into.
+apiVersion: nats.mikluko.io/v1alpha1
+kind: NatsConnection
+metadata:
+  name: hub
+  namespace: nats-system
+spec:
+  servers: ["tls://leaf.prod-east.acme.example:7422"]
+  credentials:
+    secretKeyRef:
+      name: edge-site-1-leaf-creds
+---
+apiVersion: cluster.nats.mikluko.io/v1alpha1
+kind: NatsCluster
+metadata:
+  name: edge-site-1
+  namespace: nats-system
+spec:
+  version: 2.15.1
+  replicas: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      memory: 1Gi
+  jetstream:
+    # Required with leafRemotes: without its own domain the leaf's JetStream
+    # would try to join the hub's meta group.
+    domain: edge-site-1
+    volumeClaimTemplate:
+      spec:
+        resources:
+          requests:
+            storage: 20Gi
+  # A leaf is a NatsCluster that dials out. Remotes are added and removed by
+  # config reload (nats-server 2.15.0 reload.go:931), so no restart.
+  leafRemotes:
+    - connectionRef:
+        name: hub
+      # With no auth plane on the leaf there is one local account, the
+      # global one; `localAccount` names another when the leaf has several.
+---
+# A local buffer that keeps accepting while the link is down, and a source
+# on the hub side is how it drains; that part is ordinary JetStream config
+# in the hub's telemetry account, not shown.
+apiVersion: nats.mikluko.io/v1alpha1
+kind: NatsConnection
+metadata:
+  name: local
+  namespace: nats-system
+spec:
+  servers: ["nats://edge-site-1.nats-system.svc:4222"]
+---
+apiVersion: jetstream.nats.mikluko.io/v1alpha1
+kind: NatsStream
+metadata:
+  name: telemetry-buffer
+  namespace: nats-system
+spec:
+  connectionRef:
+    name: local
+  name: TELEMETRY_BUFFER
+  subjects: ["telemetry.>"]
+  replicas: 3
+  maxAge: 72h

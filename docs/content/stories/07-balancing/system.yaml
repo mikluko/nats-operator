@@ -1,0 +1,34 @@
+# Owned by the platform team: evenness across the whole NATS cluster, every
+# account included, on system credentials alone.
+apiVersion: nats.mikluko.io/v1alpha1
+kind: NatsConnection
+metadata:
+  name: demo-sys
+  namespace: nats-system
+spec:
+  servers: ["nats://demo.nats-system.svc:4222"]
+  credentials:
+    secretKeyRef:
+      name: jetstream-controller-creds   # the preset jetstream-controller system user
+---
+apiVersion: jetstream.nats.mikluko.io/v1alpha1
+kind: NatsSystemBalancer
+metadata:
+  name: demo
+  namespace: nats-system
+spec:
+  # At most one per NATS cluster.
+  connectionRef:
+    name: demo-sys
+  moves:
+    # $JS.API.ACCOUNT.STREAM.MOVE accepts the system account for any account
+    # (nats-server 2.15.0 jetstream_api.go:3188). Opt-in, as every placement
+    # move is.
+    placement: true
+    # Runs for every account carrying the jetstream-stepdown export preset
+    # (below); the rest are reported in status.capabilities.
+    leader: true
+  # One move per pass, none while the NATS cluster is not Settled.
+  interval: 1m
+  # Moves stay inside the NATS cluster a stream is placed in. Moving a stream
+  # to another NATS cluster is a spec edit (story 8), never a balancer move.

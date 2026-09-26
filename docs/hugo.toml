@@ -1,0 +1,7 @@
+baseURL = "https://mikluko.github.io/nats-operator/"
+title = "nats-operator"
+languageCode = "en"
+disableKinds = ["taxonomy", "term", "RSS", "sitemap"]
+
+[markup.highlight]
+  noClasses = true

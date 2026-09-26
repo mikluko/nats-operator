@@ -1,0 +1,15 @@
+# What lets the system balancer move this account's leaders. The preset
+# expands to two service exports, $JS.API.STREAM.LEADER.STEPDOWN.* and
+# $JS.API.CONSUMER.LEADER.STEPDOWN.*.*, and the auth controller adds the
+# matching imports to the system account's JWT under a per-account prefix.
+# Proven on nats-server 2.15.0 (Q2135).
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsAccount
+metadata:
+  name: payments
+  namespace: nats-system
+spec:
+  operatorRef:
+    name: demo
+  exports:
+    - preset: jetstream-stepdown

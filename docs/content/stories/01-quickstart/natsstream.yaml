@@ -1,0 +1,28 @@
+# Story 1, continued: the same engineer wants one stream on that cluster.
+apiVersion: jetstream.nats.mikluko.io/v1alpha1
+kind: NatsStream
+metadata:
+  name: orders
+  namespace: nats-system
+spec:
+  # The only way to a NATS cluster. The account is whichever one the
+  # connection's credentials sign into.
+  connectionRef:
+    name: demo
+  # Never (default) | Adopt | AdoptOrCreate. Never: the controller creates the
+  # stream, and if one of that name exists that it does not own, the resource
+  # goes Terminal rather than taking it over. Adoption is story 3.
+  adoptionPolicy: Never
+  # Retain (default for streams, KV and object stores) | Delete. Retain leaves
+  # the stream and its data on the server when this resource is deleted.
+  deletionPolicy: Retain
+  # Hold (default) | Retry: what a Terminal condition does, story 3.
+  terminalPolicy: Hold
+  # Optional; falls back to metadata.name.
+  name: ORDERS
+  subjects: ["orders.>"]
+  storage: File
+  replicas: 3
+  retention: Limits
+  maxAge: 72h
+  maxBytes: 5Gi

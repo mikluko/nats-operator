@@ -1,0 +1,34 @@
+# A kind of its own so RBAC can grant it to the platform team alone, and so
+# the fields NATS refuses on a system account (JetStream) do not exist here.
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsSystemAccount
+metadata:
+  name: sys
+  namespace: nats-system
+spec:
+  operatorRef:
+    name: demo
+---
+# The auth controller stops at JWT claims: these limits are signed into the
+# account JWT and nothing else about JetStream is configured here.
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsAccount
+metadata:
+  name: orders
+  namespace: nats-system
+spec:
+  operatorRef:
+    name: demo
+  # The account JWT expires after this and is re-signed at half of it, so an
+  # account deleted while a server was away cannot outlive one TTL there.
+  # 48h is the default; the system account's JWT never expires.
+  jwtTTL: 48h
+  limits:
+    connections: 500
+    subscriptions: 10000
+    payload: 1Mi
+    jetstream:
+      memoryStorage: 1Gi
+      diskStorage: 50Gi
+      streams: 20
+      consumers: 200

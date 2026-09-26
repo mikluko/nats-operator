@@ -1,0 +1,55 @@
+# Adoption follows ACK's adoption-policy (adopt, adopt-or-create), as typed
+# fields.
+apiVersion: jetstream.nats.mikluko.io/v1alpha1
+kind: NatsStream
+metadata:
+  name: payments
+  namespace: payments
+spec:
+  connectionRef:
+    name: shared-payments
+  # The stream must already exist; if it does not, the resource waits
+  # (Adopted=False, reason NotFound) and never creates it. On adoption the
+  # controller writes the server's config into this spec, so the spec needs
+  # only what identifies the stream. See natsstream-payments-adopted.yaml.
+  adoptionPolicy: Adopt
+  name: PAYMENTS
+---
+apiVersion: jetstream.nats.mikluko.io/v1alpha1
+kind: NatsStream
+metadata:
+  name: refunds
+  namespace: payments
+spec:
+  connectionRef:
+    name: shared-payments
+  # Adopt if it exists, create it if not: what a new environment and an old
+  # one can share unchanged. The spec as written is applied to the server
+  # either way; fields it omits are filled in from the server afterwards
+  # (LateInitialized, as in ACK), with server-side apply keeping them apart
+  # from the fields a GitOps tool owns.
+  adoptionPolicy: AdoptOrCreate
+  name: REFUNDS
+  subjects: ["refunds.>"]
+  storage: File
+  replicas: 3
+  maxAge: 2160h
+---
+# adoptionPolicy defaults to Never, and a stream of this name already exists
+# that the controller did not create: the resource goes Terminal and nothing
+# on the server changes. See status-natsstream-ledger.yaml.
+apiVersion: jetstream.nats.mikluko.io/v1alpha1
+kind: NatsStream
+metadata:
+  name: ledger
+  namespace: payments
+spec:
+  connectionRef:
+    name: shared-payments
+  # Hold (default): a Terminal condition stays until the resource is edited.
+  # Retry: the check reruns every resync period and clears itself once the
+  # cause is gone, for example when the conflicting stream is deleted by hand.
+  terminalPolicy: Retry
+  name: LEDGER
+  subjects: ["ledger.>"]
+  replicas: 3

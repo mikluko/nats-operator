@@ -1,0 +1,8 @@
+apiVersion: nats.mikluko.io/v1alpha1
+kind: NatsOperatorTrust
+metadata:
+  name: acme
+  namespace: nats-system
+spec:
+  operatorJWT: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...
+  systemAccountJWT: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...

@@ -1,0 +1,52 @@
+# A remote Kubernetes cluster: no auth controller, no signing key. What it
+# needs is the NatsOperatorTrust above, the same gateway remotes as every
+# member, and the controllers' creds Secrets, which External Secrets or SOPS
+# delivers from the home cluster.
+apiVersion: cluster.nats.mikluko.io/v1alpha1
+kind: NatsCluster
+metadata:
+  name: west
+  namespace: nats-system
+spec:
+  version: 2.15.0
+  replicas: 3
+  resources:
+    requests:
+      cpu: "1"
+      memory: 4Gi
+    limits:
+      memory: 4Gi
+  jetstream:
+    volumeClaimTemplate:
+      spec:
+        storageClassName: gp3
+        resources:
+          requests:
+            storage: 100Gi
+  serverTags:
+    region: us-west-2
+  auth:
+    trustRef:
+      name: acme
+    systemCredentials:
+      secretKeyRef:
+        name: west-cluster-controller-creds
+  gateway:
+    discovery: Explicit
+    remotes:
+      - name: east
+        url: tls://nats-east.example.net:7222
+      - name: west
+        url: tls://nats-west.example.net:7222
+    tls:
+      certManager:
+        issuerRef:
+          kind: ClusterIssuer
+          name: letsencrypt
+    service:
+      type: LoadBalancer
+      annotations:
+        service.beta.kubernetes.io/aws-load-balancer-type: external
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+        external-dns.alpha.kubernetes.io/hostname: nats-west.example.net
+    advertise: nats-west.example.net:7222

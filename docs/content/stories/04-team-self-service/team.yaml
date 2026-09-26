@@ -1,0 +1,66 @@
+# Owned by the payments team, in its own namespace. The team never reads
+# nats-system: its creds Secret lands here.
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsUser
+metadata:
+  name: payments-api
+  namespace: payments
+spec:
+  accountRef:
+    kind: NatsAccount
+    namespace: nats-system   # admitted by the payments-users grant
+    name: payments
+  permissions:
+    publish:
+      allow: ["payments.>", "$JS.API.>"]
+    subscribe:
+      allow: ["payments.>", "_INBOX.>"]
+  credentials:
+    secretKeyRef:
+      name: payments-api-creds
+---
+# The user the JetStream controller acts as in this account.
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsUser
+metadata:
+  name: payments-jetstream
+  namespace: payments
+spec:
+  accountRef:
+    kind: NatsAccount
+    namespace: nats-system
+    name: payments
+  permissions:
+    publish:
+      allow: ["$JS.API.>"]
+    subscribe:
+      allow: ["_INBOX.>"]
+  credentials:
+    secretKeyRef:
+      name: payments-jetstream-creds
+---
+# Everything JetStream stays in the team's namespace: no grant needed.
+apiVersion: nats.mikluko.io/v1alpha1
+kind: NatsConnection
+metadata:
+  name: demo
+  namespace: payments
+spec:
+  servers: ["nats://demo.nats-system.svc:4222"]
+  credentials:
+    secretKeyRef:
+      name: payments-jetstream-creds
+---
+apiVersion: jetstream.nats.mikluko.io/v1alpha1
+kind: NatsStream
+metadata:
+  name: payments
+  namespace: payments
+spec:
+  connectionRef:
+    name: demo
+  name: PAYMENTS
+  subjects: ["payments.>"]
+  storage: File
+  replicas: 3
+  maxAge: 720h

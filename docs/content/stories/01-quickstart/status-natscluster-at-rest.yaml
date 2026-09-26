@@ -1,0 +1,42 @@
+status:
+  observedGeneration: 1
+  version: 2.15.0
+  replicas: 3
+  readyReplicas: 3
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: AllServersReady
+    - type: Settled
+      status: "True"
+      reason: AllGroupsCurrent
+      message: every Raft group has a leader and every member is current
+    - type: Progressing
+      status: "False"
+      reason: UpToDate
+  # What a NatsConnection's `servers` is copied from. No other controller
+  # reads it, and there is no intermediate Secret.
+  endpoints:
+    client: nats://demo.nats-system.svc:4222
+    monitor: http://demo.nats-system.svc:8222
+  config:
+    revision: 3f9a1c
+    appliedBy: Restart
+  jetstream:
+    metaLeader: demo-1
+    limits:
+      maxMemoryStore: 3Gi
+      maxFileStore: 19Gi
+  servers:
+    - name: demo-0
+      version: 2.15.0
+      ready: true
+      configRevision: 3f9a1c
+    - name: demo-1
+      version: 2.15.0
+      ready: true
+      configRevision: 3f9a1c
+    - name: demo-2
+      version: 2.15.0
+      ready: true
+      configRevision: 3f9a1c

@@ -1,0 +1,19 @@
+# The only edit: placement.cluster. Within one supercluster a placement change
+# is a move request (nats-server 2.15.0 jetstream_cluster.go:10794): the
+# server builds a new group in west, copies the stream and its consumers
+# live, then drops the east copies. What publishers and pull consumers see
+# meanwhile is unverified until Q2073.
+apiVersion: jetstream.nats.mikluko.io/v1alpha1
+kind: NatsStream
+metadata:
+  name: orders
+  namespace: orders
+spec:
+  connectionRef:
+    name: acme-orders
+  name: ORDERS
+  subjects: ["orders.>"]
+  storage: File
+  replicas: 3
+  placement:
+    cluster: west

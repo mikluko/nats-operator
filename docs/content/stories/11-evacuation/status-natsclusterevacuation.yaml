@@ -1,0 +1,22 @@
+# Every movable stream has moved; two resources pin prod-east in their own
+# spec, so the evacuation never becomes Ready until their owners change
+# placement.cluster. Balancers skip streams an evacuation is moving.
+status:
+  observedGeneration: 1
+  conditions:
+    - type: Ready
+      status: "False"
+      reason: PinnedObjects
+      message: 2 resources pin placement.cluster prod-east
+    - type: Progressing
+      status: "False"
+      reason: NothingMovable
+  moved: 41
+  inFlight: 0
+  pinned:
+    - kind: NatsStream
+      namespace: orders
+      name: orders
+    - kind: NatsKeyValue
+      namespace: payments
+      name: sessions

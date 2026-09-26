@@ -1,0 +1,34 @@
+# Owned by the platform team, in nats-system: the account and its limits.
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsAccount
+metadata:
+  name: payments
+  namespace: nats-system
+spec:
+  operatorRef:
+    name: demo
+  limits:
+    connections: 200
+    jetstream:
+      memoryStorage: 512Mi
+      diskStorage: 100Gi
+      streams: 10
+      consumers: 100
+---
+# The platform team's consent: NatsUsers in the payments namespace may
+# reference the payments account here, and nothing else in nats-system.
+# nats.mikluko.io is the one group all three controllers read.
+apiVersion: nats.mikluko.io/v1alpha1
+kind: NatsReferenceGrant
+metadata:
+  name: payments-users
+  namespace: nats-system
+spec:
+  from:
+    - group: auth.nats.mikluko.io
+      kind: NatsUser
+      namespace: payments
+  to:
+    - group: auth.nats.mikluko.io
+      kind: NatsAccount
+      name: payments   # omitted: every NatsAccount in nats-system

@@ -1,0 +1,26 @@
+# The monitoring account publishes check results as a stream and answers
+# execute requests as a service. One export is public, one is private.
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsAccount
+metadata:
+  name: monitoring
+  namespace: nats-system
+spec:
+  operatorRef:
+    name: demo
+  exports:
+    - name: check-results
+      type: Stream
+      subject: "monitoring.results.>"
+      # Public (default): any account may import it.
+    - name: execute
+      type: Service
+      subject: "monitoring.execute"
+      responseType: Singleton   # Singleton (default) | Stream | Chunked
+      # Private exports need an activation token per importer, signed
+      # by this account. The auth controller mints one for each account named
+      # here; an import from any other account is refused.
+      access: Private
+      importers:
+        - kind: NatsAccount
+          name: core

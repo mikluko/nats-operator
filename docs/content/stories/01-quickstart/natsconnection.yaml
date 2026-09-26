@@ -1,0 +1,13 @@
+# How the JetStream controller reaches a NATS cluster, managed or not: it
+# reads no other API group. For a managed cluster the URL is the one
+# NatsCluster.status.endpoints.client reports.
+apiVersion: nats.mikluko.io/v1alpha1
+kind: NatsConnection
+metadata:
+  name: demo
+  namespace: nats-system
+spec:
+  servers: ["nats://demo.nats-system.svc:4222"]
+  # No credentials: this cluster has no auth plane, so the connection lands
+  # in the global account. Story 2 adds `credentials`.
+  # The route certificate is self-signed; client TLS is not configured here.

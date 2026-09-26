@@ -1,0 +1,36 @@
+# A consumer names its stream one of two ways, never both.
+#
+# `stream`: the server-side name, for a stream that has no resource. The
+# consumer's connection has to land in the stream's account.
+apiVersion: jetstream.nats.mikluko.io/v1alpha1
+kind: NatsConsumer
+metadata:
+  name: ledger-audit
+  namespace: payments
+spec:
+  connectionRef:
+    name: shared-payments
+  stream: LEDGER
+  name: audit
+  deliverPolicy: All
+  ackPolicy: Explicit
+---
+# `streamRef`: a NatsStream resource. The controller waits for it to be Ready
+# before creating the consumer, and connectionRef defaults to the stream's.
+apiVersion: jetstream.nats.mikluko.io/v1alpha1
+kind: NatsConsumer
+metadata:
+  name: payments-settlement
+  namespace: payments
+spec:
+  streamRef:
+    name: payments
+  adoptionPolicy: AdoptOrCreate
+  # deletionPolicy omitted: Delete is the default for consumers, since
+  # deleting one discards delivery state, not data.
+  name: settlement
+  deliverPolicy: All
+  ackPolicy: Explicit
+  ackWait: 30s
+  maxDeliver: 10
+  filterSubjects: ["payments.settled.>"]

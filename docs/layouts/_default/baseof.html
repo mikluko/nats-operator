@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="{{ .Site.LanguageCode }}">
+<head><meta charset="utf-8"><title>{{ .Title }} · {{ .Site.Title }}</title></head>
+<body style="max-width: 60rem; margin: 2rem auto; font-family: sans-serif">
+<p><a href="{{ "stories/" | relURL }}">Stories</a></p>
+{{ block "main" . }}{{ end }}
+</body>
+</html>

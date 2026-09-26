@@ -1,0 +1,89 @@
+# Every account carries the same two users, `service` and `readonly`: sixteen
+# NatsUsers for eight accounts. One account's pair is written out.
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsUser
+metadata:
+  name: monitoring-prod-service
+  namespace: monitoring
+spec:
+  accountRef:
+    kind: NatsAccount
+    namespace: nats-system
+    name: monitoring-prod
+  permissions:
+    publish:
+      allow: [">"]
+    subscribe:
+      allow: [">"]
+  credentials:
+    secretKeyRef:
+      name: nats-service-creds
+---
+# The readonly preset: subscribe to everything, publish only to the
+# JetStream introspection subjects ($JS.API.INFO, STREAM.NAMES, STREAM.LIST,
+# STREAM.INFO.*, CONSUMER.NAMES.*, CONSUMER.LIST.*, CONSUMER.INFO.*.*).
+# `permissions` is refused beside a preset.
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsUser
+metadata:
+  name: monitoring-prod-readonly
+  namespace: monitoring
+spec:
+  accountRef:
+    kind: NatsAccount
+    namespace: nats-system
+    name: monitoring-prod
+  preset: readonly
+  credentials:
+    secretKeyRef:
+      name: nats-readonly-creds
+---
+# The remote clusters' controllers, two per remote (story 6).
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsUser
+metadata:
+  name: dev-east-cluster-controller
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsSystemAccount
+    name: sys
+  preset: cluster-controller
+  credentials:
+    secretKeyRef:
+      name: dev-east-cluster-controller-creds
+---
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsUser
+metadata:
+  name: prod-west-cluster-controller
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsSystemAccount
+    name: sys
+  preset: cluster-controller
+  credentials:
+    secretKeyRef:
+      name: prod-west-cluster-controller-creds
+# ...and the matching jetstream-controller users.
+---
+# What lets the monitoring namespace's users reach the accounts in
+# nats-system.
+apiVersion: nats.mikluko.io/v1alpha1
+kind: NatsReferenceGrant
+metadata:
+  name: monitoring-users
+  namespace: nats-system
+spec:
+  from:
+    - group: auth.nats.mikluko.io
+      kind: NatsUser
+      namespace: monitoring
+  to:
+    - group: auth.nats.mikluko.io
+      kind: NatsAccount
+      name: monitoring-prod
+    - group: auth.nats.mikluko.io
+      kind: NatsAccount
+      name: monitoring-dev

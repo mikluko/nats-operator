@@ -1,0 +1,3 @@
+# Trust roots through trust objects that hold a reference or literal values
+
+Every `NatsCluster` with an auth plane reaches its trust roots through `auth.trustRef` to a `NatsOperatorTrust`, and a leaf binds accounts through `NatsAccountTrust`. Each trust object holds either a reference to the live `NatsOperator` or `NatsAccount` in the same Kubernetes cluster, whose status the auth controller fills, or literal JWTs and keys copied by GitOps where no auth controller runs. This replaced three ways to get trust (`auth.operatorRef`, a supercluster resource's inline trust, per-leaf literals) with one, and keeps the cluster controller from reading the auth group.

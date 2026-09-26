@@ -1,0 +1,39 @@
+# Story 1: a platform engineer wants a three-server NATS cluster with JetStream
+# in one Kubernetes cluster, and nothing else.
+apiVersion: cluster.nats.mikluko.io/v1alpha1
+kind: NatsCluster
+metadata:
+  name: demo
+  namespace: nats-system
+spec:
+  # The controller keeps a reload allow-list per nats-server version (Q2070),
+  # so the version is a field it reads, not a tag it parses out of an image.
+  # `image` overrides the repository only.
+  version: 2.15.0
+  replicas: 3
+
+  resources:
+    requests:
+      cpu: "1"
+      memory: 4Gi
+    limits:
+      memory: 4Gi
+  # GOMEMLIMIT and jetstream.max_memory_store derive from limits.memory;
+  # max_file_store derives from the PVC size. Shown in status, overridable
+  # under jetstream.limits.
+
+  jetstream:
+    volumeClaimTemplate:
+      spec:
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 20Gi
+
+  # No `routes` block: route TLS is on by default, and with no certificate
+  # named the controller self-signs one. `routes.tls.secretRef` or
+  # `routes.tls.certManager.issuerRef` name a real one instead, and
+  # `routes.tls.enabled: false` turns it off.
+
+  # No `auth` block: servers run with no accounts and no client auth, every
+  # client lands in the global account. Story 2 adds the auth plane.

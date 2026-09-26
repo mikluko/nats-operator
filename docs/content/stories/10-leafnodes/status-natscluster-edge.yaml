@@ -1,0 +1,19 @@
+status:
+  observedGeneration: 1
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: AllServersReady
+    - type: Settled
+      status: "True"
+      reason: AllGroupsCurrent
+    - type: LeafnodesConnected
+      status: "True"
+      reason: AllRemotesConnected
+      message: 3 of 3 servers connected to 1 remote
+  leafRemotes:
+    - connectionRef: hub
+      connected: 3
+      account: ATELEMETRY...   # the hub account the credentials sign into
+  endpoints:
+    client: nats://edge-site-1.nats-system.svc:4222

@@ -1,0 +1,61 @@
+# The home Kubernetes cluster: the auth controller runs here, and here alone.
+apiVersion: cluster.nats.mikluko.io/v1alpha1
+kind: NatsCluster
+metadata:
+  name: east   # the gateway name, and the remote name the other members use
+  namespace: nats-system
+spec:
+  version: 2.15.0
+  replicas: 3
+  resources:
+    requests:
+      cpu: "2"
+      memory: 8Gi
+    limits:
+      memory: 8Gi
+  jetstream:
+    volumeClaimTemplate:
+      spec:
+        storageClassName: gp3
+        resources:
+          requests:
+            storage: 200Gi
+  serverTags:
+    region: us-east-2
+  auth:
+    # The literal NatsOperatorTrust replicated to every member, even here in
+    # the home cluster, so every member boots from the same object.
+    trustRef:
+      name: acme
+    systemCredentials:
+      secretKeyRef:
+        name: cluster-controller-creds
+  gateway:
+    # Joining a supercluster is this list: every member's NatsCluster carries
+    # the same one, kept alike by GitOps (a shared component). Explicit
+    # renders each entry as a gateway remote with reject_unknown on; Gossip
+    # renders them as seeds with reject_unknown off. Either way a change
+    # restarts servers: gateway config is not reloadable (Q2070). A cluster's
+    # own entry is allowed and skipped.
+    discovery: Explicit
+    remotes:
+      - name: east
+        url: tls://nats-east.example.net:7222
+      - name: west
+        url: tls://nats-west.example.net:7222
+    # TLS is optional on every listener; without a `tls` block gateways run
+    # in the clear.
+    tls:
+      certManager:
+        issuerRef:
+          kind: ClusterIssuer
+          name: letsencrypt
+    # The external Service is rendered from this template; its hostname is
+    # what the server advertises and what the other members' remotes name.
+    service:
+      type: LoadBalancer
+      annotations:
+        service.beta.kubernetes.io/aws-load-balancer-type: external
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+        external-dns.alpha.kubernetes.io/hostname: nats-east.example.net
+    advertise: nats-east.example.net:7222

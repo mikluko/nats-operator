@@ -1,0 +1,168 @@
+# One NatsCluster per Kubernetes cluster; each file lives in its own
+# cluster's GitOps tree. Only what differs between them is commented.
+apiVersion: cluster.nats.mikluko.io/v1alpha1
+kind: NatsCluster
+metadata:
+  name: prod-east   # home cluster
+  namespace: nats-system
+spec:
+  # 2.15.0 is the minimum supported nats-server version.
+  version: 2.15.1
+  replicas: 5
+  resources:
+    requests:
+      cpu: "6"
+      memory: 29Gi
+    limits:
+      memory: 29Gi
+  jetstream:
+    # Overrides the memory store derived from limits.memory.
+    limits:
+      maxMemoryStore: 10Gi
+    volumeClaimTemplate:
+      spec:
+        storageClassName: gp3
+        resources:
+          requests:
+            storage: 500Gi
+  serverTags:
+    cluster: prod-east
+    region: us-east-2
+  auth:
+    trustRef:
+      name: acme
+    systemCredentials:
+      secretKeyRef:
+        name: cluster-controller-creds
+  gateway:
+    discovery: Explicit
+    remotes:
+      - name: prod-east
+        url: tls://nats.prod-east.acme.example:7222
+      - name: dev-east
+        url: tls://nats.dev-east.acme.example:7222
+      - name: prod-west
+        url: tls://nats.prod-west.acme.example:7222
+    tls:
+      certManager:
+        issuerRef:
+          kind: ClusterIssuer
+          name: letsencrypt
+    service:
+      type: LoadBalancer
+      annotations:
+        service.beta.kubernetes.io/aws-load-balancer-type: external
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+        external-dns.alpha.kubernetes.io/hostname: nats.prod-east.acme.example
+    advertise: nats.prod-east.acme.example:7222
+---
+apiVersion: cluster.nats.mikluko.io/v1alpha1
+kind: NatsCluster
+metadata:
+  name: dev-east
+  namespace: nats-system
+spec:
+  version: 2.15.0
+  replicas: 3
+  resources:
+    requests:
+      cpu: "1500m"
+      memory: 3Gi
+    limits:
+      memory: 3Gi
+  jetstream:
+    volumeClaimTemplate:
+      spec:
+        storageClassName: gp3
+        resources:
+          requests:
+            storage: 100Gi
+  serverTags:
+    cluster: dev-east
+    region: us-east-2
+  # Scheduling passes through: dev pins every server to one zone.
+  podTemplate:
+    spec:
+      nodeSelector:
+        topology.kubernetes.io/zone: us-east-2a
+  auth:
+    trustRef:
+      name: acme
+    systemCredentials:
+      secretKeyRef:
+        name: dev-east-cluster-controller-creds
+  gateway:
+    discovery: Explicit
+    remotes:
+      - name: prod-east
+        url: tls://nats.prod-east.acme.example:7222
+      - name: dev-east
+        url: tls://nats.dev-east.acme.example:7222
+      - name: prod-west
+        url: tls://nats.prod-west.acme.example:7222
+    tls:
+      certManager:
+        issuerRef:
+          kind: ClusterIssuer
+          name: letsencrypt
+    service:
+      type: LoadBalancer
+      annotations:
+        service.beta.kubernetes.io/aws-load-balancer-type: external
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+        external-dns.alpha.kubernetes.io/hostname: nats.dev-east.acme.example
+    advertise: nats.dev-east.acme.example:7222
+---
+apiVersion: cluster.nats.mikluko.io/v1alpha1
+kind: NatsCluster
+metadata:
+  name: prod-west
+  namespace: nats-system
+spec:
+  version: 2.15.0
+  replicas: 3
+  resources:
+    requests:
+      cpu: "1500m"
+      memory: 3Gi
+    limits:
+      memory: 3Gi
+  jetstream:
+    volumeClaimTemplate:
+      spec:
+        storageClassName: gp3
+        resources:
+          requests:
+            storage: 100Gi
+  # Tags are free: this cluster's placement tag is not its name, so streams
+  # placed by `cluster:west` tag keep working across a rename.
+  serverTags:
+    cluster: west
+    region: us-west-2
+  auth:
+    trustRef:
+      name: acme
+    systemCredentials:
+      secretKeyRef:
+        name: prod-west-cluster-controller-creds
+  gateway:
+    discovery: Explicit
+    remotes:
+      - name: prod-east
+        url: tls://nats.prod-east.acme.example:7222
+      - name: dev-east
+        url: tls://nats.dev-east.acme.example:7222
+      - name: prod-west
+        url: tls://nats.prod-west.acme.example:7222
+    tls:
+      certManager:
+        issuerRef:
+          kind: ClusterIssuer
+          name: letsencrypt
+    service:
+      type: LoadBalancer
+      annotations:
+        service.beta.kubernetes.io/aws-load-balancer-type: external
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+        external-dns.alpha.kubernetes.io/hostname: nats.prod-west.acme.example
+    advertise: nats.prod-west.acme.example:7222

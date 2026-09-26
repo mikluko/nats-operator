@@ -1,0 +1,21 @@
+status:
+  observedGeneration: 1
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Distributed
+    - type: ReferencesResolved
+      status: "True"
+      reason: AllImportsResolved
+  imports:
+    - export: monitoring/check-results
+      subject: "monitoring.results.>"
+      localSubject: "upstream.results.>"
+      type: Stream
+    - export: monitoring/execute
+      subject: "monitoring.execute"
+      type: Service
+      activation: signed   # minted from monitoring's importers list
+  distribution:
+    servers: 3
+    current: 3

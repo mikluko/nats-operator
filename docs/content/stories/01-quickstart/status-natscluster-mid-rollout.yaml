@@ -1,0 +1,49 @@
+# spec.version changed 2.15.0 -> 2.15.1. A version change is restart-only,
+# so the rollout restarts one server at a time, gating each on Settled.
+status:
+  observedGeneration: 2
+  version: 2.15.0
+  replicas: 3
+  readyReplicas: 2
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: QuorumAvailable
+      message: 2 of 3 servers ready
+    - type: Settled
+      status: "False"
+      reason: GroupsCatchingUp
+      message: 4 Raft groups have a member on demo-1 that is not current
+    - type: Progressing
+      status: "True"
+      reason: RollingRestart
+      message: restarting demo-1 (2 of 3); waiting for Settled
+  config:
+    revision: 8b27e0
+    appliedBy: Restart
+    restartReason: version 2.15.0 -> 2.15.1 is restart-only
+  rollout:
+    targetRevision: 8b27e0
+    updated: [demo-2]
+    current: demo-1
+    pending: [demo-0]
+    gate:
+      waitingFor: Settled
+      since: "2026-09-25T16:02:11Z"
+      # When the gate never opens the rollout holds here; timeout and what
+      # follows it are Q2077's.
+  jetstream:
+    metaLeader: demo-0
+  servers:
+    - name: demo-0
+      version: 2.15.0
+      ready: true
+      configRevision: 3f9a1c
+    - name: demo-1
+      version: 2.15.1
+      ready: false
+      configRevision: 8b27e0
+    - name: demo-2
+      version: 2.15.1
+      ready: true
+      configRevision: 8b27e0

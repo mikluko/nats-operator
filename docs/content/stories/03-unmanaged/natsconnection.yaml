@@ -1,0 +1,24 @@
+# Story 3: an application team runs on a NATS cluster someone else deployed
+# (a Helm release in `messaging`), and wants the streams its services created
+# at runtime declared as resources, without recreating them.
+#
+# Identical in shape to stories 1 and 2: the JetStream controller cannot tell
+# a managed NATS cluster from this one, and does not need to.
+apiVersion: nats.mikluko.io/v1alpha1
+kind: NatsConnection
+metadata:
+  name: shared-payments
+  namespace: payments
+spec:
+  servers: ["tls://nats.messaging.svc:4222"]
+  tls:
+    ca:
+      # `key` defaults to ca.crt, the key cert-manager writes.
+      secretKeyRef:
+        name: messaging-nats-ca
+  # Minted by whoever runs that NATS cluster's auth plane and delivered here
+  # by them. The account is whichever one these credentials sign into.
+  credentials:
+    secretKeyRef:
+      name: payments-secrets
+      key: nats.creds   # defaults to user.creds, the key NatsUser writes

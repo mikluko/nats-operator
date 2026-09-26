@@ -1,0 +1,87 @@
+# A second edge site that enforces the hub's accounts locally: it trusts the
+# hub's NATS operator, and its clients authenticate against the same accounts
+# as the hub's. Still not a supercluster member.
+#
+# The same NatsOperatorTrust the supercluster members read, copied here by
+# GitOps.
+apiVersion: nats.mikluko.io/v1alpha1
+kind: NatsOperatorTrust
+metadata:
+  name: acme
+  namespace: nats-system
+spec:
+  operatorJWT: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...
+  systemAccountJWT: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...
+---
+# Account JWTs come only through a remote bound to the system account
+# (Q2138): without it the leaf cannot fetch an account it has not cached. The
+# creds are a hub user in the system account; the hub recognises the account
+# by the JWT's issuer, not by name.
+apiVersion: nats.mikluko.io/v1alpha1
+kind: NatsConnection
+metadata:
+  name: hub-system
+  namespace: nats-system
+spec:
+  servers: ["tls://leaf.prod-east.acme.example:7422"]
+  credentials:
+    secretKeyRef:
+      name: edge-site-2-system-leaf-creds
+---
+apiVersion: nats.mikluko.io/v1alpha1
+kind: NatsConnection
+metadata:
+  name: hub-telemetry
+  namespace: nats-system
+spec:
+  servers: ["tls://leaf.prod-east.acme.example:7422"]
+  credentials:
+    secretKeyRef:
+      name: edge-site-2-leaf-creds
+---
+apiVersion: cluster.nats.mikluko.io/v1alpha1
+kind: NatsCluster
+metadata:
+  name: edge-site-2
+  namespace: nats-system
+spec:
+  version: 2.15.1
+  replicas: 3
+  jetstream:
+    domain: edge-site-2
+    volumeClaimTemplate:
+      spec:
+        resources:
+          requests:
+            storage: 20Gi
+  auth:
+    trustRef:
+      name: acme
+    # Cache (default for a leaf) | Full. Memory cannot fetch, so it is not
+    # offered where accounts arrive over a leaf.
+    resolver: Cache
+  leafRemotes:
+    - connectionRef:
+        name: hub-system
+      # The leaf's system account, known from trustRef.
+      localSystemAccount: true
+    - connectionRef:
+        name: hub-telemetry
+      localAccountTrustRef:
+        name: telemetry
+---
+# The account the telemetry remote binds to. In the home Kubernetes cluster
+# this would be `accountRef: {name: telemetry}`, resolved from the live
+# NatsAccount; here, with no auth controller, the literal form, copied by
+# GitOps. `accountRef` and `publicKey` are exclusive.
+apiVersion: nats.mikluko.io/v1alpha1
+kind: NatsAccountTrust
+metadata:
+  name: telemetry
+  namespace: nats-system
+spec:
+  publicKey: ATELEMETRY...
+  # Preloaded, so the account's clients authenticate while the leaf link is
+  # down or before it first connects. Whether the resolver then prefers a
+  # newer JWT fetched over the system remote is unverified.
+  jwt: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...

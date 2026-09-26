@@ -1,0 +1,64 @@
+# In the hub's Kubernetes cluster: prod-east from story 9, now accepting leaf
+# connections. Only `leafnodes` is new on the NatsCluster.
+apiVersion: cluster.nats.mikluko.io/v1alpha1
+kind: NatsCluster
+metadata:
+  name: prod-east
+  namespace: nats-system
+spec:
+  version: 2.15.1
+  replicas: 5
+  auth:
+    trustRef:
+      name: acme
+    systemCredentials:
+      secretKeyRef:
+        name: cluster-controller-creds
+  leafnodes:
+    # Optional, as on every listener.
+    tls:
+      certManager:
+        issuerRef:
+          kind: ClusterIssuer
+          name: letsencrypt
+    service:
+      type: LoadBalancer
+      annotations:
+        service.beta.kubernetes.io/aws-load-balancer-type: external
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+        external-dns.alpha.kubernetes.io/hostname: leaf.prod-east.acme.example
+    advertise: leaf.prod-east.acme.example:7422
+  # ...the rest as in story 9.
+---
+# What the edge site authenticates as: an ordinary user in the account its
+# traffic lands in, usable only for a leafnode connection. Its Secret is
+# carried to the edge by External Secrets, as the remote controllers' are.
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsUser
+metadata:
+  name: edge-site-1
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsAccount
+    name: telemetry
+  preset: leafnode   # allowed_connection_types [LEAFNODE], pub/sub on telemetry.>
+  credentials:
+    secretKeyRef:
+      name: edge-site-1-leaf-creds
+---
+# For an operator-mode leaf (edge-operator.yaml): the system-account leaf
+# user its account lookups travel over.
+apiVersion: auth.nats.mikluko.io/v1alpha1
+kind: NatsUser
+metadata:
+  name: edge-site-2-system
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsSystemAccount
+    name: sys
+  preset: leafnode
+  credentials:
+    secretKeyRef:
+      name: edge-site-2-system-leaf-creds
