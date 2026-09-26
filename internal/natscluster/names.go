@@ -12,7 +12,9 @@ const (
 	LabelServer  = "cluster.nats.mikluko.io/server"
 
 	// AnnotationConfigRevision on a server's StatefulSet and ConfigMap names
-	// the config revision they were rendered at.
+	// the config revision they were rendered at; on its pod template, the
+	// revision its pod was last restarted for, so that every restart changes
+	// the template.
 	AnnotationConfigRevision = "cluster.nats.mikluko.io/config-revision"
 
 	// AnnotationSpecDigest on a server's StatefulSet is a digest of the

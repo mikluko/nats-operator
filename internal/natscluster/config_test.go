@@ -92,6 +92,8 @@ func TestServerConfig(t *testing.T) {
 			"listen": "0.0.0.0:4222",
 			"http": "0.0.0.0:8222",
 			"pid_file": "/var/run/nats/nats.pid",
+			"lame_duck_duration": "2m0s",
+			"lame_duck_grace_period": "10s",
 			"server_metadata": {"config_revision": "r1"},
 			"cluster": {
 				"name": "demo",
@@ -121,6 +123,8 @@ func TestServerConfig(t *testing.T) {
 			"listen": "0.0.0.0:4222",
 			"http": "0.0.0.0:8222",
 			"pid_file": "/var/run/nats/nats.pid",
+			"lame_duck_duration": "2m0s",
+			"lame_duck_grace_period": "10s",
 			"server_tags": ["az:1", "zone:a"],
 			"server_metadata": {"config_revision": "r1"},
 			"cluster": {
@@ -143,9 +147,10 @@ func TestServerConfig(t *testing.T) {
 }
 
 // startRendered boots every server of nc from its rendered config, on
-// loopback ports and temporary directories, and returns their monitoring
-// endpoints, the servers and the first server's client URL.
-func startRendered(t *testing.T, nc *clusterv1beta1.NatsCluster, revision string) ([]sysobs.Endpoint, []*server.Server, string) {
+// loopback ports and temporary directories, with each of override applied
+// to the parsed options, and returns their monitoring endpoints, the
+// servers and the first server's client URL.
+func startRendered(t *testing.T, nc *clusterv1beta1.NatsCluster, revision string, override ...func(*server.Options)) ([]sysobs.Endpoint, []*server.Server, string) {
 	t.Helper()
 	free := func() int {
 		l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -189,6 +194,9 @@ func startRendered(t *testing.T, nc *clusterv1beta1.NatsCluster, revision string
 		require.NoError(t, err)
 		require.NotNil(t, o.Cluster.TLSConfig, "route TLS not parsed")
 		o.NoLog, o.NoSigs = true, true
+		for _, f := range override {
+			f(o)
+		}
 		s, err := server.NewServer(o)
 		require.NoError(t, err)
 		go s.Start()

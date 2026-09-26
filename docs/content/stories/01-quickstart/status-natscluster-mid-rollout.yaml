@@ -30,8 +30,8 @@ status:
     gate:
       waitingFor: Settled
       since: "2026-09-25T16:02:11Z"
-      # When the gate never opens the rollout holds here; timeout and what
-      # follows it are Q2077's.
+      # A gate that stays shut holds here with no timeout; after ten
+      # minutes Progressing reads GateBlocked, naming the lagging groups.
   jetstream:
     metaLeader: demo-0
   servers:

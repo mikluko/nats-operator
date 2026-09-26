@@ -35,7 +35,9 @@ const (
 
 	ReasonUpToDate          = "UpToDate"
 	ReasonCreating          = "Creating"
-	ReasonRolloutPending    = "RolloutPending"
+	ReasonRollingRestart    = "RollingRestart"
+	ReasonGateBlocked       = "GateBlocked"
+	ReasonRolloutPaused     = "RolloutPaused"
 	ReasonReloadPending     = "ReloadPending"
 	ReasonScaleDownPending  = "ScaleDownPending"
 	ReasonUnsupportedSpec   = "UnsupportedSpec"
@@ -44,13 +46,15 @@ const (
 
 // Observed is what one reconcile saw and did: the servers' StatefulSets by
 // name, which of them it created, the observation of the NATS cluster or
-// why there is none, and how the revision is applied to servers not on it.
+// why there is none, how the revision is applied to servers not on it, and
+// the rollout decision.
 type Observed struct {
 	StatefulSets map[string]*appsv1.StatefulSet
 	Created      []string
 	Snapshot     *sysobs.Snapshot
 	ObserveErr   error
 	Apply        configApply
+	Rollout      rolloutDecision
 }
 
 // computeStatus returns nc's status from plan and what was observed,
@@ -66,6 +70,7 @@ func computeStatus(nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed) clust
 		Monitor: fmt.Sprintf("http://%s.%s.svc:%d", clientServiceName(nc), nc.Namespace, PortMonitor),
 	}
 	st.Config = configStatus(nc.Status.Config, plan, o.Apply)
+	st.Rollout = o.Rollout.Status
 
 	reported := map[string]sysobs.Server{}
 	if o.Snapshot != nil {
@@ -226,15 +231,17 @@ func serversOf(us []sysobs.Unsettled) []string {
 }
 
 // progressingCondition is True while the StatefulSets differ from the
-// plan: servers being created, servers on another revision, or servers
-// beyond spec.replicas. Servers on another revision are RolloutPending
-// unless every one of them is reloading.
+// plan: servers being created, a rollout, servers reloading to the
+// revision, or servers beyond spec.replicas.
 func progressingCondition(nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed) metav1.Condition {
 	c := metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionTrue}
 	if len(o.Created) > 0 {
 		c.Reason = ReasonCreating
 		c.Message = "creating " + strings.Join(o.Created, ", ")
 		return c
+	}
+	if o.Rollout.Status != nil {
+		return o.Rollout.Progressing
 	}
 	var stale []string
 	for _, s := range plan.Servers {
@@ -243,12 +250,8 @@ func progressingCondition(nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed
 		}
 	}
 	if len(stale) > 0 {
-		c.Reason = ReasonRolloutPending
-		c.Message = fmt.Sprintf("%s not on revision %s", strings.Join(stale, ", "), plan.Revision)
-		if !slices.ContainsFunc(stale, func(s string) bool { return !slices.Contains(o.Apply.Reloading, s) }) {
-			c.Reason = ReasonReloadPending
-			c.Message = fmt.Sprintf("reloading %s to revision %s", strings.Join(stale, ", "), plan.Revision)
-		}
+		c.Reason = ReasonReloadPending
+		c.Message = fmt.Sprintf("reloading %s to revision %s", strings.Join(stale, ", "), plan.Revision)
 		return c
 	}
 	var extra []string

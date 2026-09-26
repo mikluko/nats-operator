@@ -152,8 +152,12 @@ func TestReload(t *testing.T) {
 	target := srvs["C1-0"]
 	o := New(connect(t, c1.clientPort[1], "sys"), "C1")
 
-	before, err := o.Config(context.Background(), target.ID())
-	require.NoError(t, err)
+	var before ConfigState
+	require.Eventually(t, func() bool {
+		var err error
+		before, err = o.Config(context.Background(), target.ID())
+		return err == nil
+	}, 10*time.Second, 100*time.Millisecond, "the target's system subscriptions never reached the observer")
 	require.NotEmpty(t, before.Digest)
 
 	raw, err := os.ReadFile(target.conf)

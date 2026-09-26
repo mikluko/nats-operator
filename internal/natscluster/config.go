@@ -19,6 +19,8 @@ type Config struct {
 	Listen         string            `json:"listen"`
 	HTTP           string            `json:"http"`
 	PidFile        string            `json:"pid_file"`
+	LameDuck       string            `json:"lame_duck_duration"`
+	LameDuckGrace  string            `json:"lame_duck_grace_period"`
 	ServerTags     []string          `json:"server_tags,omitempty"`
 	ServerMetadata map[string]string `json:"server_metadata,omitempty"`
 	Cluster        ClusterConfig     `json:"cluster"`
@@ -151,11 +153,13 @@ func routeTLSEnabled(spec *clusterv1beta1.NatsClusterSpec) bool {
 // revision through server_metadata unless revision is empty.
 func serverConfig(nc *clusterv1beta1.NatsCluster, server string, l Layout, revision string) *Config {
 	c := &Config{
-		ServerName: server,
-		Listen:     l.ClientListen,
-		HTTP:       l.MonitorListen,
-		PidFile:    l.PidFile,
-		ServerTags: serverTags(nc.Spec.ServerTags),
+		ServerName:    server,
+		Listen:        l.ClientListen,
+		HTTP:          l.MonitorListen,
+		PidFile:       l.PidFile,
+		LameDuck:      lameDuckDuration.String(),
+		LameDuckGrace: lameDuckGracePeriod.String(),
+		ServerTags:    serverTags(nc.Spec.ServerTags),
 		Cluster: ClusterConfig{
 			Name:   nc.Name,
 			Listen: l.RouteListen,

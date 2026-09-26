@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -83,6 +84,81 @@ func TestComputeStatus_AtRest(t *testing.T) {
 	require.Equal(t, want.Status.JetStream.Limits.MaxFileStore.String(), got.JetStream.Limits.MaxFileStore.String())
 	got.Conditions, want.Status.Conditions = nil, nil
 	require.Equal(t, want.Status, got)
+}
+
+// TestComputeStatus_MidRollout pins the status story 1 shows in the middle
+// of a version bump, its revisions aside, as the rollout decides it.
+func TestComputeStatus_MidRollout(t *testing.T) {
+	b, err := os.ReadFile("../../docs/content/stories/01-quickstart/status-natscluster-mid-rollout.yaml")
+	require.NoError(t, err)
+	var want clusterv1beta1.NatsCluster
+	require.NoError(t, yaml.UnmarshalStrict(b, &want))
+
+	nc := storyCluster(t)
+	nc.Generation = 2
+	nc.Spec.Version = "2.15.1"
+	plan, err := Render(nc)
+	require.NoError(t, err)
+	const old = "3f9a1c"
+	storyRevision := want.Status.Rollout.TargetRevision
+	want.Status.Config.Revision = plan.Revision
+	want.Status.Rollout.TargetRevision = plan.Revision
+	for i := range want.Status.Servers {
+		if want.Status.Servers[i].ConfigRevision == storyRevision {
+			want.Status.Servers[i].ConfigRevision = plan.Revision
+		}
+	}
+	nc.Status.Version = "2.15.0"
+	nc.Status.Config = want.Status.Config.DeepCopy()
+	nc.Status.Rollout = want.Status.Rollout.DeepCopy()
+
+	sets := map[string]*appsv1.StatefulSet{}
+	for _, s := range plan.Servers {
+		sts := s.StatefulSet.DeepCopy()
+		sts.Status.ObservedGeneration, sts.Status.UpdatedReplicas, sts.Status.ReadyReplicas = sts.Generation, 1, 1
+		sets[s.Name] = sts
+	}
+	sets["demo-0"].Annotations[AnnotationConfigRevision] = old
+	sets["demo-1"].Status.ReadyReplicas = 0
+
+	snap := &sysobs.Snapshot{}
+	for _, s := range []struct{ name, version, revision string }{
+		{"demo-0", "2.15.0", old}, {"demo-1", "2.15.1", plan.Revision}, {"demo-2", "2.15.1", plan.Revision},
+	} {
+		snap.Servers = append(snap.Servers, sysobs.Server{Name: s.name, Version: s.version, JetStream: true,
+			Metadata: map[string]string{MetadataConfigRevision: s.revision}})
+	}
+	members := []sysobs.Member{{Server: "demo-0", Current: true}, {Server: "demo-1"}, {Server: "demo-2", Current: true}}
+	snap.Groups = []sysobs.Group{{Kind: sysobs.KindMeta, Leader: "demo-0", Members: members}}
+	for _, stream := range []string{"A", "B", "C"} {
+		snap.Groups = append(snap.Groups, sysobs.Group{Kind: sysobs.KindStream, Stream: stream, Leader: "demo-0", Members: members})
+	}
+
+	o := Observed{
+		StatefulSets: sets,
+		Snapshot:     snap,
+		Apply:        configApply{Restart: map[string]string{"demo-0": "version 2.15.0 -> 2.15.1 is restart-only"}},
+	}
+	r := &Reconciler{Now: func() time.Time { return want.Status.Rollout.Gate.Since.Add(time.Minute) }}
+	o.Rollout = decide(r.rolloutState(nc, plan, o))
+	require.Empty(t, o.Rollout.Step)
+	got := computeStatus(nc, plan, o)
+
+	require.Len(t, got.Conditions, len(want.Status.Conditions))
+	for _, w := range want.Status.Conditions {
+		c := meta.FindStatusCondition(got.Conditions, w.Type)
+		require.NotNil(t, c, w.Type)
+		require.Equal(t, w.Status, c.Status, w.Type)
+		require.Equal(t, w.Reason, c.Reason, w.Type)
+		require.Equal(t, w.Message, c.Message, w.Type)
+		require.Equal(t, int64(2), c.ObservedGeneration)
+	}
+	require.Equal(t, want.Status.Rollout, got.Rollout)
+	require.Equal(t, want.Status.Config, got.Config)
+	require.Equal(t, want.Status.Servers, got.Servers)
+	require.Equal(t, want.Status.Version, got.Version)
+	require.Equal(t, want.Status.ReadyReplicas, got.ReadyReplicas)
+	require.Equal(t, want.Status.JetStream.MetaLeader, got.JetStream.MetaLeader)
 }
 
 func TestComputeStatus_KeepsUnobservedVersion(t *testing.T) {
@@ -166,6 +242,11 @@ func TestProgressingCondition(t *testing.T) {
 	twoStale["demo-2"].Annotations[AnnotationConfigRevision] = "old"
 	extra := readySets(plan)
 	extra["demo-3"] = &appsv1.StatefulSet{}
+	rolling := rolloutDecision{
+		Status: &clusterv1beta1.RolloutStatus{TargetRevision: plan.Revision, Current: "demo-1"},
+		Progressing: metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionTrue, Reason: ReasonRollingRestart,
+			Message: "restarting demo-1 (1 of 1)"},
+	}
 
 	tests := []struct {
 		name    string
@@ -176,9 +257,9 @@ func TestProgressingCondition(t *testing.T) {
 	}{
 		{"up to date", Observed{StatefulSets: readySets(plan)}, metav1.ConditionFalse, ReasonUpToDate, ""},
 		{"creating", Observed{StatefulSets: readySets(plan), Created: []string{"demo-0", "demo-2"}}, metav1.ConditionTrue, ReasonCreating, "creating demo-0, demo-2"},
-		{"stale revision", Observed{StatefulSets: stale}, metav1.ConditionTrue, ReasonRolloutPending, "demo-1 not on revision " + plan.Revision},
+		{"rolling out", Observed{StatefulSets: stale, Apply: configApply{Restart: map[string]string{"demo-1": "x"}}, Rollout: rolling}, metav1.ConditionTrue, ReasonRollingRestart, "restarting demo-1 (1 of 1)"},
 		{"reloading", Observed{StatefulSets: stale, Apply: configApply{Reloading: []string{"demo-1"}}}, metav1.ConditionTrue, ReasonReloadPending, "reloading demo-1 to revision " + plan.Revision},
-		{"reloading one of two stale", Observed{StatefulSets: twoStale, Apply: configApply{Reloading: []string{"demo-1"}, Restart: map[string]string{"demo-2": "x"}}}, metav1.ConditionTrue, ReasonRolloutPending, "demo-1, demo-2 not on revision " + plan.Revision},
+		{"a rollout outranks a reload", Observed{StatefulSets: twoStale, Apply: configApply{Reloading: []string{"demo-1"}, Restart: map[string]string{"demo-2": "x"}}, Rollout: rolling}, metav1.ConditionTrue, ReasonRollingRestart, "restarting demo-1 (1 of 1)"},
 		{"beyond replicas", Observed{StatefulSets: extra}, metav1.ConditionTrue, ReasonScaleDownPending, "demo-3 beyond 3 replicas"},
 	}
 	for _, tt := range tests {

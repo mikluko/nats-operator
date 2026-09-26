@@ -86,8 +86,8 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // Reconcile creates what a NatsCluster renders and reports its status. A
 // server's ConfigMap and StatefulSet are created when absent; a changed
-// revision is reloaded where the change reloads, and is otherwise reported
-// as RolloutPending with the server's StatefulSet left as it is.
+// revision is reloaded where the change reloads, and is otherwise rolled
+// out one restart at a time.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	nc := &clusterv1beta1.NatsCluster{}
 	if err := r.Client.Get(ctx, req.NamespacedName, nc); err != nil {
@@ -144,6 +144,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		if obs.Apply, err = r.applyConfig(ctx, nc, plan, stsByName, obs.Snapshot); err != nil {
 			return ctrl.Result{}, err
 		}
+		if obs.Rollout, err = r.rollout(ctx, nc, plan, obs); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	nc.Status = computeStatus(nc, plan, obs)
@@ -155,7 +158,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if err := r.patchStatus(ctx, orig, nc); err != nil {
 		return ctrl.Result{}, err
 	}
-	if meta.IsStatusConditionTrue(nc.Status.Conditions, ConditionSettled) && nc.Status.ReadyReplicas == nc.Spec.Replicas && len(obs.Apply.Reloading) == 0 {
+	if meta.IsStatusConditionTrue(nc.Status.Conditions, ConditionSettled) && nc.Status.ReadyReplicas == nc.Spec.Replicas && len(obs.Apply.Reloading) == 0 && obs.Rollout.Status == nil {
 		return ctrl.Result{RequeueAfter: resyncSettled}, nil
 	}
 	return ctrl.Result{RequeueAfter: resyncUnsettled}, nil

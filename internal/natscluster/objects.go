@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"strconv"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -25,7 +26,15 @@ const (
 	ExporterImage = "natsio/prometheus-nats-exporter:0.17.3"
 )
 
-const terminationGracePeriod = 300
+// A server in lame-duck mode steps down every Raft leader it holds, tells
+// its clients after lameDuckGracePeriod, spreads their disconnects over the
+// rest of lameDuckDuration and exits; terminationGracePeriod, in seconds,
+// must outlast all of it.
+const (
+	terminationGracePeriod = 300
+	lameDuckDuration       = 2 * time.Minute
+	lameDuckGracePeriod    = 10 * time.Second
+)
 
 // Server is one server's rendered objects.
 type Server struct {
@@ -91,6 +100,8 @@ func Render(nc *clusterv1beta1.NatsCluster) (*Plan, error) {
 			AnnotationConfigRevision: p.Revision,
 			AnnotationSpecDigest:     specDigests[s.Name],
 		}
+		tmpl := &s.StatefulSet.Spec.Template
+		tmpl.Annotations = merged(tmpl.Annotations, map[string]string{AnnotationConfigRevision: p.Revision})
 	}
 	return p, nil
 }

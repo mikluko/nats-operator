@@ -232,12 +232,12 @@ func TestEnvtestReconcile(t *testing.T) {
 			obs.set(nil)
 		})
 
-		t.Run("a spec change is not rolled out", func(t *testing.T) {
+		t.Run("a restart waits for an observed cluster", func(t *testing.T) {
 			require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(got), got))
 			got.Spec.Version = "2.15.1"
 			require.NoError(t, c.Update(ctx, got))
 			_, changed := reconcile(t, got)
-			condition(t, changed, ConditionProgressing, metav1.ConditionTrue, ReasonRolloutPending)
+			condition(t, changed, ConditionProgressing, metav1.ConditionTrue, ReasonRollingRestart)
 			require.NotEqual(t, revision, changed.Status.Config.Revision)
 			require.Equal(t, clusterv1beta1.ConfigAppliedByRestart, changed.Status.Config.AppliedBy)
 			require.Equal(t, "version 2.15.0 -> 2.15.1 is restart-only", changed.Status.Config.RestartReason)
@@ -322,7 +322,7 @@ func TestEnvtestReconcile(t *testing.T) {
 
 			clock = clock.Add(reloadWindow + time.Second)
 			got = reconcileWith(t, got)
-			condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonRolloutPending)
+			condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonRollingRestart)
 			require.Equal(t, clusterv1beta1.ConfigAppliedByRestart, got.Status.Config.AppliedBy)
 			require.Contains(t, got.Status.Config.RestartReason, "did not load revision "+got.Status.Config.Revision)
 			cm := configMap(t, "lag", "demo-0")
@@ -330,7 +330,7 @@ func TestEnvtestReconcile(t *testing.T) {
 
 			calls := len(fake.calls)
 			got = reconcileWith(t, got)
-			condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonRolloutPending)
+			condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonRollingRestart)
 			require.Len(t, fake.calls, calls, "a revision marked for restart was reloaded")
 			for _, sts := range statefulSets(t, "lag") {
 				require.NotEqual(t, got.Status.Config.Revision, sts.Annotations[AnnotationConfigRevision])
@@ -342,7 +342,7 @@ func TestEnvtestReconcile(t *testing.T) {
 			fake.reject = fmt.Errorf("%w: RELOAD: 500 config reload not supported", sysobs.ErrServer)
 			t.Cleanup(func() { fake.reject = nil })
 			got := reconcileWith(t, nc)
-			condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonRolloutPending)
+			condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonRollingRestart)
 			require.Equal(t, clusterv1beta1.ConfigAppliedByRestart, got.Status.Config.AppliedBy)
 			require.Contains(t, got.Status.Config.RestartReason, "reload failed: ")
 			require.Contains(t, got.Status.Config.RestartReason, "config reload not supported")
@@ -354,7 +354,7 @@ func TestEnvtestReconcile(t *testing.T) {
 				s.JetStream.Domain = "hub"
 			})
 			got := reconcileWith(t, nc)
-			condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonRolloutPending)
+			condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonRollingRestart)
 			require.Equal(t, clusterv1beta1.ConfigAppliedByRestart, got.Status.Config.AppliedBy)
 			require.Equal(t, "jetstream.domain is restart-only", got.Status.Config.RestartReason)
 			require.Empty(t, fake.calls)
@@ -371,9 +371,135 @@ func TestEnvtestReconcile(t *testing.T) {
 				return got, err
 			}()
 			require.NoError(t, err)
-			condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonRolloutPending)
+			condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonRollingRestart)
 			require.Equal(t, "no system account connection to reload over", got.Status.Config.RestartReason)
 		})
+	})
+
+	t.Run("a version bump rolls one server at a time", func(t *testing.T) {
+		const ns = "rollout"
+		robs := &fakeObserver{}
+		rr := &Reconciler{Client: c, Observer: robs}
+		reconcileWith := func(t *testing.T, nc *clusterv1beta1.NatsCluster) *clusterv1beta1.NatsCluster {
+			t.Helper()
+			_, err := rr.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(nc)})
+			require.NoError(t, err)
+			got := &clusterv1beta1.NatsCluster{}
+			require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(nc), got))
+			return got
+		}
+		// running is what each server runs: its version and revision, as a
+		// Settled observation reports them with demo-0 leading the meta group.
+		running := map[string][2]string{}
+		observe := func() {
+			snap := &sysobs.Snapshot{}
+			var members []sysobs.Member
+			for _, name := range []string{"demo-0", "demo-1", "demo-2"} {
+				snap.Servers = append(snap.Servers, sysobs.Server{Name: name, Version: running[name][0], JetStream: true,
+					Metadata: map[string]string{MetadataConfigRevision: running[name][1]}})
+				members = append(members, sysobs.Member{Server: name, Current: true})
+			}
+			snap.Groups = []sysobs.Group{{Kind: sysobs.KindMeta, Leader: "demo-0", Members: members}}
+			robs.set(snap)
+		}
+		// podUp plays the StatefulSet controller and kubelet: the pod of sts's
+		// current template is Ready, its server running what the template
+		// and ConfigMap name.
+		podUp := func(t *testing.T, sts *appsv1.StatefulSet) {
+			t.Helper()
+			sts.Status.ObservedGeneration = sts.Generation
+			sts.Status.Replicas, sts.Status.UpdatedReplicas, sts.Status.ReadyReplicas = 1, 1, 1
+			require.NoError(t, c.Status().Update(ctx, sts))
+			running[sts.Name] = [2]string{runningVersion(sts), sts.Spec.Template.Annotations[AnnotationConfigRevision]}
+		}
+		changed := func(t *testing.T, before map[string]string) []string {
+			t.Helper()
+			var out []string
+			for name, sts := range statefulSets(t, ns) {
+				if sts.Spec.Template.Annotations[AnnotationConfigRevision] != before[name] {
+					out = append(out, name)
+				}
+			}
+			return out
+		}
+		templates := func(t *testing.T) map[string]string {
+			t.Helper()
+			out := map[string]string{}
+			for name, sts := range statefulSets(t, ns) {
+				out[name] = sts.Spec.Template.Annotations[AnnotationConfigRevision]
+			}
+			return out
+		}
+
+		nc := newCluster(t, ns, func(*clusterv1beta1.NatsCluster) {})
+		got := reconcileWith(t, nc)
+		first := got.Status.Config.Revision
+		for _, sts := range statefulSets(t, ns) {
+			podUp(t, sts)
+		}
+		observe()
+		got = reconcileWith(t, got)
+		condition(t, got, ConditionProgressing, metav1.ConditionFalse, ReasonUpToDate)
+		require.Nil(t, got.Status.Rollout)
+
+		got.Spec.Version = "2.15.1"
+		require.NoError(t, c.Update(ctx, got))
+
+		var order []string
+		for step := 1; step <= 3; step++ {
+			before := templates(t)
+			if step == 2 {
+				got.Spec.Rollout = &clusterv1beta1.Rollout{Paused: true}
+				require.NoError(t, c.Update(ctx, got))
+				got = reconcileWith(t, got)
+				condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonRolloutPaused)
+				require.Empty(t, changed(t, before), "stepped while paused")
+
+				got.Annotations = map[string]string{clusterv1beta1.AnnotationForceStep: "demo-1"}
+				require.NoError(t, c.Update(ctx, got))
+			}
+			got = reconcileWith(t, got)
+			stepped := changed(t, before)
+			require.Len(t, stepped, 1, "step %d", step)
+			name := stepped[0]
+			order = append(order, name)
+			target := got.Status.Config.Revision
+			require.NotEqual(t, first, target)
+			condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonRollingRestart)
+			require.Equal(t, name, got.Status.Rollout.Current)
+			require.Len(t, got.Status.Rollout.Updated, step-1)
+			require.Len(t, got.Status.Rollout.Pending, 3-step)
+			require.Equal(t, GateSettled, got.Status.Rollout.Gate.WaitingFor)
+			require.NotContains(t, got.Annotations, clusterv1beta1.AnnotationForceStep)
+
+			sts := statefulSets(t, ns)[name]
+			require.Equal(t, "nats:2.15.1", sts.Spec.Template.Spec.Containers[0].Image)
+			require.Equal(t, target, sts.Annotations[AnnotationConfigRevision])
+			var cm corev1.ConfigMap
+			require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: ns, Name: name + "-config"}, &cm))
+			require.Equal(t, target, cm.Annotations[AnnotationConfigRevision])
+			require.Equal(t, string(clusterv1beta1.ConfigAppliedByRestart), cm.Annotations[AnnotationConfigApply])
+			require.Contains(t, cm.Data[configFile], `"config_revision": "`+target+`"`)
+
+			got = reconcileWith(t, got)
+			require.Empty(t, changed(t, templates(t)), "stepped again before %s was up", name)
+			require.Equal(t, before[name], running[name][1], "%s restarted before its pod came up", name)
+
+			podUp(t, sts)
+			observe()
+			if step == 2 {
+				got.Spec.Rollout = nil
+				require.NoError(t, c.Update(ctx, got))
+			}
+		}
+		require.Equal(t, []string{"demo-2", "demo-1", "demo-0"}, order)
+
+		got = reconcileWith(t, got)
+		condition(t, got, ConditionProgressing, metav1.ConditionFalse, ReasonUpToDate)
+		require.Nil(t, got.Status.Rollout)
+		require.Equal(t, "2.15.1", got.Status.Version)
+		require.Equal(t, clusterv1beta1.ConfigAppliedByRestart, got.Status.Config.AppliedBy)
+		require.Equal(t, "version 2.15.0 -> 2.15.1 is restart-only", got.Status.Config.RestartReason)
 	})
 
 	t.Run("unsupported fields are refused", func(t *testing.T) {
