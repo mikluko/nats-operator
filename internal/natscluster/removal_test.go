@@ -384,7 +384,7 @@ func TestUnsettledWithout(t *testing.T) {
 // TestDeletingCondition_Story11 pins the status story 11 shows for a
 // deleted NatsCluster whose NATS cluster still holds stream groups.
 func TestDeletingCondition_Story11(t *testing.T) {
-	b, err := os.ReadFile("../../docs/content/stories/11-evacuation/02-status-natscluster-prod-east.yaml")
+	b, err := os.ReadFile("../../docs/content/docs/stories/11-evacuation/02-status-natscluster-prod-east.yaml")
 	require.NoError(t, err)
 	var want clusterv1beta1.NatsCluster
 	require.NoError(t, yaml.UnmarshalStrict(b, &want))

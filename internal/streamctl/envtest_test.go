@@ -31,7 +31,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
-const storiesDir = "../../docs/content/stories"
+const storiesDir = "../../docs/content/docs/stories"
 
 // envResync is the resync period the envtest manager runs with.
 const envResync = 2 * time.Second

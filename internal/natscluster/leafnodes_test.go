@@ -38,7 +38,7 @@ import (
 // 01-<file> into into, refusing fields the type does not have.
 func storyDoc(t *testing.T, file, kind, name string, into any) {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("../../docs/content/stories/10-leafnodes", "01-"+file))
+	b, err := os.ReadFile(filepath.Join("../../docs/content/docs/stories/10-leafnodes", "01-"+file))
 	require.NoError(t, err)
 	dec := utilyaml.NewYAMLOrJSONDecoder(bytes.NewReader(b), 4096)
 	for {

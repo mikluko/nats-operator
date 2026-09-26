@@ -25,7 +25,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/e2e"
 )
 
-const storiesDir = "../docs/content/stories"
+const storiesDir = "../docs/content/docs/stories"
 
 // storyDoc is one YAML document of a story file.
 type storyDoc struct {

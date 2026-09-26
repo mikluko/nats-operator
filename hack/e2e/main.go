@@ -21,7 +21,7 @@ import (
 )
 
 func main() {
-	stories := flag.String("stories", "docs/content/stories", "directory holding the story bundles")
+	stories := flag.String("stories", "docs/content/docs/stories", "directory holding the story bundles")
 	only := flag.String("only", "", "comma-separated story numbers to run; empty runs all")
 	timeout := flag.Duration("timeout", 5*time.Minute, "how long each story waits for its statuses")
 	interval := flag.Duration("interval", 2*time.Second, "how often statuses are read")

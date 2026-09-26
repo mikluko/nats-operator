@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const storiesDir = "../../docs/content/stories"
+const storiesDir = "../../docs/content/docs/stories"
 
 // TestLoadBundles_Stories pins the story bundles to the harness: every
 // expectation names an object its bundle declares, and every story either

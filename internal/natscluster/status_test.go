@@ -61,7 +61,7 @@ func TestComputeStatus_AtRest(t *testing.T) {
 		Snapshot:     settledSnapshot(plan, plan.Revision, "demo-1"),
 	})
 
-	b, err := os.ReadFile("../../docs/content/stories/01-quickstart/01-status-natscluster-at-rest.yaml")
+	b, err := os.ReadFile("../../docs/content/docs/stories/01-quickstart/01-status-natscluster-at-rest.yaml")
 	require.NoError(t, err)
 	var want clusterv1beta1.NatsCluster
 	require.NoError(t, yaml.UnmarshalStrict(b, &want))
@@ -90,7 +90,7 @@ func TestComputeStatus_AtRest(t *testing.T) {
 // TestComputeStatus_MidRollout pins the status story 1 shows in the middle
 // of a version bump, its revisions aside, as the rollout decides it.
 func TestComputeStatus_MidRollout(t *testing.T) {
-	b, err := os.ReadFile("../../docs/content/stories/01-quickstart/02-status-natscluster-mid-rollout.yaml")
+	b, err := os.ReadFile("../../docs/content/docs/stories/01-quickstart/02-status-natscluster-mid-rollout.yaml")
 	require.NoError(t, err)
 	b, err = e2e.StripPlaceholders(b)
 	require.NoError(t, err)

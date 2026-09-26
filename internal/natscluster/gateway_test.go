@@ -32,7 +32,7 @@ import (
 // or west.
 func storySupercluster(t *testing.T, member string) *clusterv1beta1.NatsCluster {
 	t.Helper()
-	b, err := os.ReadFile("../../docs/content/stories/06-supercluster/01-" + member + ".yaml")
+	b, err := os.ReadFile("../../docs/content/docs/stories/06-supercluster/01-" + member + ".yaml")
 	require.NoError(t, err)
 	nc := &clusterv1beta1.NatsCluster{}
 	require.NoError(t, yaml.UnmarshalStrict(b, nc))
@@ -292,7 +292,7 @@ func TestGatewayStatus(t *testing.T) {
 // TestComputeStatus_West pins the gateway part of the status story 6 shows
 // for west: GatewaysConnected, status.gateways and endpoints.gateway.
 func TestComputeStatus_West(t *testing.T) {
-	b, err := os.ReadFile("../../docs/content/stories/06-supercluster/01-status-natscluster-west.yaml")
+	b, err := os.ReadFile("../../docs/content/docs/stories/06-supercluster/01-status-natscluster-west.yaml")
 	require.NoError(t, err)
 	b, err = e2e.StripPlaceholders(b)
 	require.NoError(t, err)
@@ -458,7 +458,7 @@ func gatewaysConnected(st clusterv1beta1.NatsClusterStatus) bool {
 func TestSupercluster_Explicit(t *testing.T) {
 	east, west := supercluster(t, func(_, _ *clusterv1beta1.NatsCluster) {})
 
-	b, err := os.ReadFile("../../docs/content/stories/06-supercluster/01-status-natscluster-west.yaml")
+	b, err := os.ReadFile("../../docs/content/docs/stories/06-supercluster/01-status-natscluster-west.yaml")
 	require.NoError(t, err)
 	b, err = e2e.StripPlaceholders(b)
 	require.NoError(t, err)

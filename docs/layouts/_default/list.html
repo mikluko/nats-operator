@@ -1,3 +1,0 @@
-{{ define "main" }}<h1>{{ .Title }}</h1>{{ .Content }}
-<ol>{{ range .Pages.ByWeight }}<li><a href="{{ .RelPermalink }}">{{ partial "title.html" . }}</a></li>{{ end }}</ol>
-{{ end }}

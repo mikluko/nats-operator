@@ -100,7 +100,7 @@ func (p testPlane) systemCreds(t *testing.T, preset jwtplane.UserPreset) []byte 
 // an in-process server accepts.
 func storyAuthCluster(t *testing.T) *clusterv1beta1.NatsCluster {
 	t.Helper()
-	b, err := os.ReadFile("../../docs/content/stories/02-auth-plane/01-natscluster.yaml")
+	b, err := os.ReadFile("../../docs/content/docs/stories/02-auth-plane/01-natscluster.yaml")
 	require.NoError(t, err)
 	nc := &clusterv1beta1.NatsCluster{}
 	require.NoError(t, yaml.UnmarshalStrict(b, nc))

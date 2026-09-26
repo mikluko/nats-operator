@@ -28,7 +28,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
-const storiesDir = "../../docs/content/stories"
+const storiesDir = "../../docs/content/docs/stories"
 
 // TestEnvtest runs the reconciler in a manager against a real API server
 // over story 7's system balancer, pointed at C1 of a two-cluster

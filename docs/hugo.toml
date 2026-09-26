@@ -1,10 +1,33 @@
 baseURL = "https://mikluko.github.io/nats-operator/"
 title = "nats-operator"
-languageCode = "en"
+locale = "en"
+theme = "github.com/zkreations/hudocs"
 disableKinds = ["taxonomy", "term", "RSS", "sitemap"]
 
+[params]
+  description = "Three Kubernetes controllers that deploy NATS clusters, own their auth plane, and manage and balance JetStream."
+  docs_versions = false
+
+[[menus.main]]
+  pageRef = "/docs"
+  weight = 1
+
+[[menus.main]]
+  name = "GitHub"
+  url = "https://github.com/mikluko/nats-operator"
+  weight = 2
+  [menus.main.params]
+    icon = "github"
+
 [markup.highlight]
-  noClasses = true
+  noClasses = false
+
+[markup.goldmark.renderer]
+  unsafe = true
+
+[markup.tableOfContents]
+  startLevel = 2
+  endLevel = 3
 
 [[module.mounts]]
   source = "content"
@@ -12,8 +35,8 @@ disableKinds = ["taxonomy", "term", "RSS", "sitemap"]
 
 [[module.mounts]]
   source = "design"
-  target = "content/design"
+  target = "content/docs/design"
 
 [[module.mounts]]
   source = "adr"
-  target = "content/adr"
+  target = "content/docs/adr"

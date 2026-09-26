@@ -1,0 +1,8 @@
+{{- /* Hudocs' heading, except a level-one heading on a page with no front-matter title: partials/title.html takes that heading as the title, which the article header already renders. */ -}}
+{{- if and (eq .Level 1) (not .Page.Title) -}}
+{{- else -}}
+<h{{ .Level }} id="{{ .Anchor | safeURL }}">
+  {{ .Text | safeHTML }}
+  <a class="article-anchor" aria-label='{{ printf "%s: %s" (i18n "anchor" | default "Anchor") (.Text | plainify) }}' href="#{{ .Anchor | safeURL }}">#</a>
+</h{{ .Level }}>
+{{- end -}}

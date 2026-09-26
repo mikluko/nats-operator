@@ -1,8 +1,9 @@
 ---
 title: Stories
+weight: 2
 ---
 
-The resource API, told as user stories. Each page is the API section of the design (`docs/design/v1.md`) for the part it covers; no controller reads these manifests yet.
+The resource API, told as user stories. Each page is the API section of the design (`docs/design/v1.md`) for the part it covers.
 
 Each story is a page bundle: this narrative, and beside it the manifests as real YAML files that the page renders.
 

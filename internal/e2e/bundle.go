@@ -1,4 +1,4 @@
-// Package e2e runs the story bundles under docs/content/stories against
+// Package e2e runs the story bundles under docs/content/docs/stories against
 // live Kubernetes clusters: step by step, it applies each step's manifests,
 // deletes what the step deletes, and waits for the live objects to contain
 // every status and live file of the step, each file in the cluster its

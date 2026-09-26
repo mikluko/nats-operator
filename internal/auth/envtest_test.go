@@ -44,7 +44,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
 
-const storiesDir = "../../docs/content/stories"
+const storiesDir = "../../docs/content/docs/stories"
 
 // recorder is a Distributor that keeps every push and hands it to the hook
 // onPush set, if any.
