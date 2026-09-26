@@ -12,6 +12,17 @@ build:
         CGO_ENABLED=0 go build -o "{{ bin }}/$c" "./cmd/$c"
     done
 
+# Build every controller image for platform with ko, pushing nothing, and
+# print their references.
+image platform=("linux/" + if arch() == "aarch64" { "arm64" } else { "amd64" }):
+    #!/usr/bin/env sh
+    set -eu
+    set --
+    for c in {{ controllers }}; do
+        set -- "$@" "./cmd/$c"
+    done
+    KO_DOCKER_REPO=ghcr.io/mikluko/nats-operator ko build --push=false -B --platform "{{ platform }}" "$@"
+
 # The OperatorReload tests skip under -race and run again without it.
 test:
     go test -race ./...

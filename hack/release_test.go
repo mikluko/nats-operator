@@ -88,9 +88,7 @@ func TestReleasePlan(t *testing.T) {
 type workflow struct {
 	Env  map[string]string `json:"env"`
 	Jobs map[string]struct {
-		Strategy struct {
-			Matrix map[string][]string `json:"matrix"`
-		} `json:"strategy"`
+		Env map[string]string `json:"env"`
 	} `json:"jobs"`
 }
 
@@ -128,7 +126,7 @@ func TestRelease_PublishesWhatTheChartPulls(t *testing.T) {
 	registry := wf.Env["REGISTRY"]
 	require.Equal(t, "ghcr.io/mikluko/nats-operator", registry)
 	var pushed []string
-	for _, c := range wf.Jobs["images"].Strategy.Matrix["controller"] {
+	for _, c := range strings.Fields(wf.Jobs["images"].Env["CONTROLLERS"]) {
 		pushed = append(pushed, registry+"/"+c)
 	}
 	require.ElementsMatch(t, pulled, pushed)

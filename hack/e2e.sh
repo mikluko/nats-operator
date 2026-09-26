@@ -53,7 +53,7 @@ done
 
 log() { printf '==> %s\n' "$*" >&2; }
 
-# The cluster provider: cluster_up, image_build and image_load, with the
+# The cluster provider: cluster_up, image_import and image_load, with the
 # helpers they share, are all that knows which one is in use.
 
 # minikube state lives on the machine's own disk: the home mount is
@@ -245,12 +245,13 @@ api_wait() {
 	return 1
 }
 
-# image_build builds image $2 from the directory $1 holding binary $3 with
-# the machine's Docker Engine.
-image_build() {
-	in_machine user M_TAG="$2" M_FILE="$root/hack/controller.Containerfile" \
-		M_CONTROLLER="$3" M_CONTEXT="$1" <<-'EOF' >/dev/null
-		docker build -q -t "$M_TAG" -f "$M_FILE" --build-arg "CONTROLLER=$M_CONTROLLER" "$M_CONTEXT"
+# image_import loads the image tarball $1 into the machine's Docker Engine
+# and tags the image $2 it holds as $3.
+image_import() {
+	in_machine user M_TARBALL="$1" M_SOURCE="$2" M_TAG="$3" <<-'EOF' >/dev/null
+		set -eu
+		docker load -q -i "$M_TARBALL"
+		docker tag "$M_SOURCE" "$M_TAG"
 	EOF
 }
 
@@ -274,20 +275,25 @@ quietly() {
 	fi
 }
 
-# build_images cross-compiles all three controllers, builds each image and
-# loads it, tagged by the binary's digest so an unchanged binary keeps its
-# tag and a changed one rolls the Deployment. It prints one
-# "<key> <repository> <tag>" line per controller.
+# build_images builds all three controller images with ko into tarballs on
+# the host, imports each and loads it, tagged by its image digest so an
+# unchanged image keeps its tag and a changed one rolls the Deployment. It
+# prints one "<key> <repository> <tag>" line per controller.
 build_images() {
-	local key name ctx tag
+	local key name tarball ref tag
+	mkdir -p "$work/images"
 	for key in cluster auth jetstream; do
 		name=$key-controller
-		ctx=$work/images/$name
-		mkdir -p "$ctx"
-		CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -o "$ctx/$name" "$root/cmd/$name"
-		tag=$(shasum -a 256 "$ctx/$name" | cut -c1-12)
+		tarball=$work/images/$name.tar
+		if ! ref=$(cd "$root" && KO_DOCKER_REPO=$image_repo ko build --push=false -B \
+			--platform "linux/$arch" --tags e2e --tarball "$tarball" "./cmd/$name" 2>"$work/ko.log"); then
+			cat "$work/ko.log" >&2
+			return 1
+		fi
+		tag=${ref##*@sha256:}
+		tag=${tag:0:12}
 		log "image $image_repo/$name:$tag"
-		image_build "$ctx" "$image_repo/$name:$tag" "$name"
+		image_import "$tarball" "$image_repo/$name:e2e" "$image_repo/$name:$tag"
 		image_load "$image_repo/$name:$tag"
 		echo "$key $image_repo/$name $tag"
 	done
