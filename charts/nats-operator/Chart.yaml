@@ -1,0 +1,9 @@
+apiVersion: v2
+name: nats-operator
+description: The cluster, auth and JetStream controllers for NATS, each enabled on its own.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://mikluko.github.io/nats-operator/
+sources:
+  - https://github.com/mikluko/nats-operator

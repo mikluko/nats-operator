@@ -1,0 +1,52 @@
+# Each controller is enabled on its own. The CRDs of all four API groups are
+# installed whichever are enabled.
+
+imagePullSecrets: []
+
+leaderElection:
+  enabled: true
+
+cluster:
+  enabled: true
+  replicas: 1
+  image:
+    repository: ghcr.io/mikluko/nats-operator/cluster-controller
+    # Defaults to the chart's appVersion.
+    tag: ""
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+auth:
+  enabled: true
+  replicas: 1
+  image:
+    repository: ghcr.io/mikluko/nats-operator/auth-controller
+    # Defaults to the chart's appVersion.
+    tag: ""
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+jetstream:
+  enabled: true
+  replicas: 1
+  image:
+    repository: ghcr.io/mikluko/nats-operator/jetstream-controller
+    # Defaults to the chart's appVersion.
+    tag: ""
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 256Mi

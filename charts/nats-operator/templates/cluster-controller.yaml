@@ -1,0 +1,29 @@
+{{- if .Values.cluster.enabled }}
+{{- $rules := `
+- apiGroups: [cluster.nats.mikluko.io]
+  resources: [natsclusters]
+  verbs: [get, list, watch, update, patch]
+- apiGroups: [cluster.nats.mikluko.io]
+  resources: [natsclusters/status]
+  verbs: [get, update, patch]
+- apiGroups: [cluster.nats.mikluko.io]
+  resources: [natsclusters/finalizers]
+  verbs: [update]
+- apiGroups: [nats.mikluko.io]
+  resources: [natsoperatortrusts, natsaccounttrusts, natsconnections, natsreferencegrants]
+  verbs: [get, list, watch]
+- apiGroups: [apps]
+  resources: [statefulsets]
+  verbs: [get, list, watch, create, update, patch, delete]
+- apiGroups: [""]
+  resources: [configmaps, services, secrets]
+  verbs: [get, list, watch, create, update, patch, delete]
+- apiGroups: [policy]
+  resources: [poddisruptionbudgets]
+  verbs: [get, list, watch, create, update, patch, delete]
+- apiGroups: [""]
+  resources: [pods]
+  verbs: [get, list, watch]
+` }}
+{{- include "nats-operator.controller" (dict "root" . "name" "cluster-controller" "group" "cluster.nats.mikluko.io" "values" .Values.cluster "rules" (trim $rules)) }}
+{{- end }}

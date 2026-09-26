@@ -1,0 +1,443 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.21.0
+  name: natsaccounts.auth.nats.mikluko.io
+spec:
+  group: auth.nats.mikluko.io
+  names:
+    kind: NatsAccount
+    listKind: NatsAccountList
+    plural: natsaccounts
+    singular: natsaccount
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: NatsAccount is an account, its limits, and its exports and imports.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: NatsAccountSpec is the desired state of an account.
+            properties:
+              exports:
+                description: Exports are what other accounts may import from this
+                  one.
+                items:
+                  description: Export is one export, or a preset expanding to several.
+                  properties:
+                    access:
+                      description: |-
+                        Access is Public when omitted; a Private export is importable only by
+                        its importers.
+                      enum:
+                      - Public
+                      - Private
+                      type: string
+                    importers:
+                      description: Importers of a Private export, each minted an activation
+                        token.
+                      items:
+                        description: AccountReference names a NatsAccount or a NatsSystemAccount.
+                        properties:
+                          kind:
+                            description: Kind of the account.
+                            enum:
+                            - NatsAccount
+                            - NatsSystemAccount
+                            type: string
+                          name:
+                            description: Name of the referenced object.
+                            minLength: 1
+                            type: string
+                          namespace:
+                            description: |-
+                              Namespace of the referenced object, the referrer's own when omitted.
+                              Another namespace is admitted only by a NatsReferenceGrant there.
+                            type: string
+                        required:
+                        - kind
+                        - name
+                        type: object
+                      type: array
+                    name:
+                      description: Name is what imports name the export by.
+                      minLength: 1
+                      type: string
+                    preset:
+                      description: Preset expands to a fixed set of exports.
+                      enum:
+                      - jetstream-stepdown
+                      type: string
+                    responseType:
+                      description: ResponseType of a service export, Singleton when
+                        omitted.
+                      enum:
+                      - Singleton
+                      - Stream
+                      - Chunked
+                      type: string
+                    subject:
+                      description: Subject exported.
+                      minLength: 1
+                      type: string
+                    type:
+                      description: Type of the export.
+                      enum:
+                      - Stream
+                      - Service
+                      type: string
+                  type: object
+                  x-kubernetes-validations:
+                  - message: an export sets either preset alone, or name, type and
+                      subject
+                    rule: 'has(self.preset) ? !has(self.name) && !has(self.type) &&
+                      !has(self.subject) && !has(self.responseType) && !has(self.access)
+                      && !has(self.importers) : has(self.name) && has(self.type) &&
+                      has(self.subject)'
+                  - message: responseType is set only on a Service export
+                    rule: '!has(self.responseType) || (has(self.type) && self.type
+                      == ''Service'')'
+                  - message: importers are listed only on a Private export
+                    rule: '!has(self.importers) || (has(self.access) && self.access
+                      == ''Private'')'
+                maxItems: 1000
+                type: array
+              imports:
+                description: Imports are exports of other accounts this one takes.
+                items:
+                  description: Import takes another account's export by name.
+                  properties:
+                    accountRef:
+                      description: AccountRef names the exporting account.
+                      properties:
+                        kind:
+                          description: Kind of the account.
+                          enum:
+                          - NatsAccount
+                          - NatsSystemAccount
+                          type: string
+                        name:
+                          description: Name of the referenced object.
+                          minLength: 1
+                          type: string
+                        namespace:
+                          description: |-
+                            Namespace of the referenced object, the referrer's own when omitted.
+                            Another namespace is admitted only by a NatsReferenceGrant there.
+                          type: string
+                      required:
+                      - kind
+                      - name
+                      type: object
+                    export:
+                      description: Export is the name of the export taken.
+                      minLength: 1
+                      type: string
+                    localSubject:
+                      description: |-
+                        LocalSubject is where the import appears in this account, the
+                        exported subject when omitted.
+                      minLength: 1
+                      type: string
+                  required:
+                  - accountRef
+                  - export
+                  type: object
+                type: array
+              jwtTTL:
+                default: 48h
+                description: JWTTTL is the account JWT's lifetime; it is re-signed
+                  at half of it.
+                type: string
+              keys:
+                description: Keys adopts existing seeds.
+                properties:
+                  identity:
+                    description: Identity is the identity key's seed.
+                    properties:
+                      secretKeyRef:
+                        description: SecretKeyRef selects the seed.
+                        properties:
+                          key:
+                            description: Key within the Secret.
+                            minLength: 1
+                            type: string
+                          name:
+                            description: Name of the Secret.
+                            minLength: 1
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                    required:
+                    - secretKeyRef
+                    type: object
+                  signing:
+                    description: Signing are the signing keys' seeds.
+                    items:
+                      description: SigningKey is a signing key's seed.
+                      properties:
+                        name:
+                          description: Name identifies the key within the list.
+                          minLength: 1
+                          type: string
+                        retiring:
+                          description: |-
+                            Retiring marks the key for removal once everything it signed has
+                            been re-signed by another.
+                          type: boolean
+                        secretKeyRef:
+                          description: SecretKeyRef selects the seed.
+                          properties:
+                            key:
+                              description: Key within the Secret.
+                              minLength: 1
+                              type: string
+                            name:
+                              description: Name of the Secret.
+                              minLength: 1
+                              type: string
+                          required:
+                          - key
+                          - name
+                          type: object
+                      required:
+                      - name
+                      - secretKeyRef
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                type: object
+              limits:
+                description: |-
+                  Limits are signed into the account JWT; an omitted limit is
+                  unlimited.
+                properties:
+                  connections:
+                    description: Connections is the maximum number of client connections.
+                    format: int64
+                    type: integer
+                  jetstream:
+                    description: JetStream enables JetStream for the account, within
+                      these limits.
+                    properties:
+                      consumers:
+                        description: Consumers is the maximum number of consumers.
+                        format: int64
+                        type: integer
+                      diskStorage:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: DiskStorage is the file store limit.
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      memoryStorage:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: MemoryStorage is the memory store limit.
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      streams:
+                        description: Streams is the maximum number of streams.
+                        format: int64
+                        type: integer
+                    type: object
+                  payload:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: Payload is the maximum message payload.
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  subscriptions:
+                    description: Subscriptions is the maximum number of subscriptions.
+                    format: int64
+                    type: integer
+                type: object
+              operatorRef:
+                description: OperatorRef names the NatsOperator that signs this account.
+                properties:
+                  name:
+                    description: Name of the referenced object.
+                    minLength: 1
+                    type: string
+                  namespace:
+                    description: |-
+                      Namespace of the referenced object, the referrer's own when omitted.
+                      Another namespace is admitted only by a NatsReferenceGrant there.
+                    type: string
+                required:
+                - name
+                type: object
+              publicKey:
+                description: |-
+                  PublicKey is the account's identity, keeping its identity key
+                  offline.
+                minLength: 1
+                type: string
+            required:
+            - operatorRef
+            type: object
+            x-kubernetes-validations:
+            - message: publicKey and keys.identity are mutually exclusive
+              rule: '!has(self.publicKey) || !has(self.keys) || !has(self.keys.identity)'
+            - message: publicKey requires at least one signing key
+              rule: '!has(self.publicKey) || (has(self.keys) && has(self.keys.signing)
+                && size(self.keys.signing) > 0)'
+          status:
+            description: NatsAccountStatus is the observed state of an account.
+            properties:
+              conditions:
+                description: Conditions describe the account's state.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              distribution:
+                description: Distribution is how many servers hold the current JWT.
+                properties:
+                  current:
+                    description: Current is the number of servers holding the current
+                      JWT.
+                    format: int32
+                    type: integer
+                  lastPushTime:
+                    description: LastPushTime is when the JWT was last pushed.
+                    format: date-time
+                    type: string
+                  servers:
+                    description: Servers is the number of servers in the roster.
+                    format: int32
+                    type: integer
+                type: object
+              imports:
+                description: Imports are the resolved imports.
+                items:
+                  description: ImportStatus is a resolved import.
+                  properties:
+                    activation:
+                      description: Activation is the state of the activation token
+                        of a Private export.
+                      type: string
+                    export:
+                      description: Export is the export taken, as account/export.
+                      type: string
+                    localSubject:
+                      description: LocalSubject is where the import appears in this
+                        account.
+                      type: string
+                    subject:
+                      description: Subject is the exported subject.
+                      type: string
+                    type:
+                      description: Type of the export.
+                      enum:
+                      - Stream
+                      - Service
+                      type: string
+                  type: object
+                type: array
+              jwtHash:
+                description: JWTHash identifies the current account JWT.
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the generation the status describes.
+                format: int64
+                type: integer
+              publicKey:
+                description: PublicKey is the account's public key.
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

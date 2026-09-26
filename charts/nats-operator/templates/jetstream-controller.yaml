@@ -1,0 +1,20 @@
+{{- if .Values.jetstream.enabled }}
+{{- $rules := `
+- apiGroups: [jetstream.nats.mikluko.io]
+  resources: [natsstreams, natsconsumers, natskeyvalues, natsobjectstores, natsbalancers, natssystembalancers, natsclusterevacuations]
+  verbs: [get, list, watch, update, patch]
+- apiGroups: [jetstream.nats.mikluko.io]
+  resources: [natsstreams/status, natsconsumers/status, natskeyvalues/status, natsobjectstores/status, natsbalancers/status, natssystembalancers/status, natsclusterevacuations/status]
+  verbs: [get, update, patch]
+- apiGroups: [jetstream.nats.mikluko.io]
+  resources: [natsstreams/finalizers, natsconsumers/finalizers, natskeyvalues/finalizers, natsobjectstores/finalizers, natsbalancers/finalizers, natssystembalancers/finalizers, natsclusterevacuations/finalizers]
+  verbs: [update]
+- apiGroups: [nats.mikluko.io]
+  resources: [natsconnections, natsreferencegrants]
+  verbs: [get, list, watch]
+- apiGroups: [""]
+  resources: [secrets]
+  verbs: [get, list, watch]
+` }}
+{{- include "nats-operator.controller" (dict "root" . "name" "jetstream-controller" "group" "jetstream.nats.mikluko.io" "values" .Values.jetstream "rules" (trim $rules)) }}
+{{- end }}
