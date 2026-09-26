@@ -4,7 +4,9 @@ package main
 
 import (
 	"flag"
+	"net/http"
 	"os"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -14,6 +16,8 @@ import (
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/manager"
+	"github.com/mikluko/nats-operator/internal/natscluster"
+	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
 func main() {
@@ -39,6 +43,14 @@ func main() {
 	mgr, err := manager.New(opts, scheme)
 	if err != nil {
 		log.Error(err, "start")
+		os.Exit(1)
+	}
+	r := &natscluster.Reconciler{
+		Client:   mgr.GetClient(),
+		Observer: natscluster.MonitorObserver{Monitor: sysobs.NewMonitor(&http.Client{Timeout: 5 * time.Second}, 0)},
+	}
+	if err := r.SetupWithManager(mgr); err != nil {
+		log.Error(err, "set up natscluster reconciler")
 		os.Exit(1)
 	}
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

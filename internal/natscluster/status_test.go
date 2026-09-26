@@ -1,0 +1,187 @@
+package natscluster
+
+import (
+	"errors"
+	"os"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/yaml"
+
+	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
+	"github.com/mikluko/nats-operator/internal/sysobs"
+)
+
+func readySets(plan *Plan, ready ...bool) map[string]*appsv1.StatefulSet {
+	out := map[string]*appsv1.StatefulSet{}
+	for i, s := range plan.Servers {
+		sts := s.StatefulSet.DeepCopy()
+		if i < len(ready) && ready[i] {
+			sts.Status.ReadyReplicas = 1
+		}
+		out[s.Name] = sts
+	}
+	return out
+}
+
+// settledSnapshot is a Settled observation of plan's servers on revision,
+// with a meta group led by leader and one R3 stream.
+func settledSnapshot(plan *Plan, revision, leader string) *sysobs.Snapshot {
+	snap := &sysobs.Snapshot{}
+	var members []sysobs.Member
+	for _, s := range plan.Servers {
+		snap.Servers = append(snap.Servers, sysobs.Server{
+			Name: s.Name, Version: "2.15.0", JetStream: true,
+			Metadata: map[string]string{MetadataConfigRevision: revision},
+		})
+		members = append(members, sysobs.Member{Server: s.Name, Current: true})
+	}
+	snap.Groups = []sysobs.Group{
+		{Kind: sysobs.KindMeta, Leader: leader, Members: members},
+		{Kind: sysobs.KindStream, Account: "$G", Stream: "ORDERS", Leader: leader, Members: members},
+	}
+	return snap
+}
+
+// TestComputeStatus_AtRest pins the status story 1 shows at rest, its
+// revision aside.
+func TestComputeStatus_AtRest(t *testing.T) {
+	nc := storyCluster(t)
+	nc.Generation = 1
+	plan, err := Render(nc)
+	require.NoError(t, err)
+
+	got := computeStatus(nc, plan, Observed{
+		StatefulSets: readySets(plan, true, true, true),
+		Snapshot:     settledSnapshot(plan, plan.Revision, "demo-1"),
+	})
+
+	b, err := os.ReadFile("../../docs/content/stories/01-quickstart/status-natscluster-at-rest.yaml")
+	require.NoError(t, err)
+	var want clusterv1beta1.NatsCluster
+	require.NoError(t, yaml.UnmarshalStrict(b, &want))
+	want.Status.Config.Revision = plan.Revision
+	for i := range want.Status.Servers {
+		want.Status.Servers[i].ConfigRevision = plan.Revision
+	}
+
+	require.Len(t, got.Conditions, len(want.Status.Conditions))
+	for _, w := range want.Status.Conditions {
+		c := meta.FindStatusCondition(got.Conditions, w.Type)
+		require.NotNil(t, c, w.Type)
+		require.Equal(t, w.Status, c.Status, w.Type)
+		require.Equal(t, w.Reason, c.Reason, w.Type)
+		if w.Message != "" {
+			require.Equal(t, w.Message, c.Message, w.Type)
+		}
+		require.Equal(t, int64(1), c.ObservedGeneration)
+	}
+	require.Equal(t, want.Status.JetStream.Limits.MaxMemoryStore.String(), got.JetStream.Limits.MaxMemoryStore.String())
+	require.Equal(t, want.Status.JetStream.Limits.MaxFileStore.String(), got.JetStream.Limits.MaxFileStore.String())
+	got.Conditions, want.Status.Conditions = nil, nil
+	require.Equal(t, want.Status, got)
+}
+
+func TestComputeStatus_KeepsUnobservedVersion(t *testing.T) {
+	nc := storyCluster(t)
+	nc.Status.Version = "2.15.0"
+	plan, err := Render(nc)
+	require.NoError(t, err)
+	got := computeStatus(nc, plan, Observed{StatefulSets: readySets(plan), ObserveErr: sysobs.ErrNoServers})
+	require.Equal(t, "2.15.0", got.Version)
+	require.Empty(t, got.JetStream.MetaLeader)
+	for _, s := range got.Servers {
+		require.Empty(t, s.Version)
+		require.Empty(t, s.ConfigRevision)
+	}
+}
+
+func TestReadyCondition(t *testing.T) {
+	tests := []struct {
+		ready, want int32
+		status      metav1.ConditionStatus
+		reason      string
+	}{
+		{3, 3, metav1.ConditionTrue, ReasonAllServersReady},
+		{2, 3, metav1.ConditionTrue, ReasonQuorumAvailable},
+		{1, 3, metav1.ConditionFalse, ReasonQuorumUnavailable},
+		{0, 1, metav1.ConditionFalse, ReasonQuorumUnavailable},
+		{2, 4, metav1.ConditionFalse, ReasonQuorumUnavailable},
+	}
+	for _, tt := range tests {
+		c := readyCondition(tt.ready, tt.want)
+		require.Equal(t, tt.status, c.Status, "%d of %d", tt.ready, tt.want)
+		require.Equal(t, tt.reason, c.Reason, "%d of %d", tt.ready, tt.want)
+	}
+}
+
+func TestSettledCondition(t *testing.T) {
+	stream := func(leader string, members ...sysobs.Member) sysobs.Group {
+		return sysobs.Group{Kind: sysobs.KindStream, Stream: "S" + leader, Leader: leader, Members: members}
+	}
+	tests := []struct {
+		name    string
+		obs     Observed
+		status  metav1.ConditionStatus
+		reason  string
+		message string
+	}{
+		{"no observation", Observed{ObserveErr: errors.New("boom")}, metav1.ConditionUnknown, ReasonObservationFailed, "boom"},
+		{"settled", Observed{Snapshot: &sysobs.Snapshot{}}, metav1.ConditionTrue, ReasonAllGroupsCurrent,
+			"every Raft group has a leader and every member is current"},
+		{"silent outranks the rest", Observed{Snapshot: &sysobs.Snapshot{Silent: []string{"demo-2"}, Groups: []sysobs.Group{{Kind: sysobs.KindStream}}}},
+			metav1.ConditionFalse, ReasonServersSilent, "demo-2 did not answer"},
+		{"leaderless", Observed{Snapshot: &sysobs.Snapshot{Groups: []sysobs.Group{{Kind: sysobs.KindStream}, stream("demo-0", sysobs.Member{Server: "demo-1", Offline: true})}}},
+			metav1.ConditionFalse, ReasonGroupsLeaderless, "1 Raft groups have no leader"},
+		{"offline", Observed{Snapshot: &sysobs.Snapshot{Groups: []sysobs.Group{
+			stream("demo-0", sysobs.Member{Server: "demo-1", Offline: true}),
+			stream("demo-2", sysobs.Member{Server: "demo-0"}),
+		}}}, metav1.ConditionFalse, ReasonMembersOffline, "1 Raft groups have a member offline on demo-1"},
+		{"catching up", Observed{Snapshot: &sysobs.Snapshot{Groups: []sysobs.Group{
+			stream("demo-0", sysobs.Member{Server: "demo-1"}),
+			stream("demo-2", sysobs.Member{Server: "demo-1"}),
+		}}}, metav1.ConditionFalse, ReasonGroupsCatchingUp, "2 Raft groups have a member on demo-1 that is not current"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := settledCondition(tt.obs)
+			require.Equal(t, tt.status, c.Status)
+			require.Equal(t, tt.reason, c.Reason)
+			require.Equal(t, tt.message, c.Message)
+		})
+	}
+}
+
+func TestProgressingCondition(t *testing.T) {
+	nc := storyCluster(t)
+	plan, err := Render(nc)
+	require.NoError(t, err)
+	stale := readySets(plan)
+	stale["demo-1"].Annotations[AnnotationConfigRevision] = "old"
+	extra := readySets(plan)
+	extra["demo-3"] = &appsv1.StatefulSet{}
+
+	tests := []struct {
+		name    string
+		obs     Observed
+		status  metav1.ConditionStatus
+		reason  string
+		message string
+	}{
+		{"up to date", Observed{StatefulSets: readySets(plan)}, metav1.ConditionFalse, ReasonUpToDate, ""},
+		{"creating", Observed{StatefulSets: readySets(plan), Created: []string{"demo-0", "demo-2"}}, metav1.ConditionTrue, ReasonCreating, "creating demo-0, demo-2"},
+		{"stale revision", Observed{StatefulSets: stale}, metav1.ConditionTrue, ReasonRolloutPending, "demo-1 not on revision " + plan.Revision},
+		{"beyond replicas", Observed{StatefulSets: extra}, metav1.ConditionTrue, ReasonScaleDownPending, "demo-3 beyond 3 replicas"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := progressingCondition(nc, plan, tt.obs)
+			require.Equal(t, tt.status, c.Status)
+			require.Equal(t, tt.reason, c.Reason)
+			require.Equal(t, tt.message, c.Message)
+		})
+	}
+}

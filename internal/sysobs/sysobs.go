@@ -83,7 +83,7 @@ func (o *Observer) Roster(ctx context.Context) ([]Server, error) {
 		if err := json.Unmarshal(data, &m); err != nil {
 			return false, fmt.Errorf("decode STATSZ: %w", err)
 		}
-		seen[m.Server.Name] = Server{Name: m.Server.Name, ID: m.Server.ID, Version: m.Server.Version, JetStream: m.Server.JetStream}
+		seen[m.Server.Name] = Server{Name: m.Server.Name, ID: m.Server.ID, Version: m.Server.Version, Metadata: m.Server.Metadata, JetStream: m.Server.JetStream}
 		for _, r := range m.Stats.Routes {
 			if r.Name != "" {
 				routed[r.Name] = true

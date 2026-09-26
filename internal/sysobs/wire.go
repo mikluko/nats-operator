@@ -7,11 +7,12 @@ import "time"
 // (server/events.go, server/monitor.go, server/stream.go).
 
 type wireServerInfo struct {
-	Name      string `json:"name"`
-	ID        string `json:"id"`
-	Cluster   string `json:"cluster"`
-	Version   string `json:"ver"`
-	JetStream bool   `json:"jetstream"`
+	Name      string            `json:"name"`
+	ID        string            `json:"id"`
+	Cluster   string            `json:"cluster"`
+	Version   string            `json:"ver"`
+	Metadata  map[string]string `json:"metadata"`
+	JetStream bool              `json:"jetstream"`
 }
 
 type wireError struct {

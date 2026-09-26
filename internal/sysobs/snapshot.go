@@ -15,11 +15,13 @@ const (
 	KindConsumer Kind = "consumer"
 )
 
-// Server is one member of a NATS cluster's roster.
+// Server is one member of a NATS cluster's roster. Metadata is the
+// server's configured server_metadata.
 type Server struct {
 	Name      string
 	ID        string
 	Version   string
+	Metadata  map[string]string
 	JetStream bool
 }
 
