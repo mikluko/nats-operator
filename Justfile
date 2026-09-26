@@ -66,8 +66,8 @@ envtest:
     KUBEBUILDER_ASSETS="$(go tool setup-envtest use {{ envtest_k8s_version }} --bin-dir "{{ bin }}" -p path)" \
         go test -race ./... -run Envtest
 
-# The story bundles end to end on a Kubernetes cluster from the Apple
-# `container` CLI; hack/e2e.sh lists the E2E_* variables it reads.
+# The story bundles end to end on minikube inside an Apple `container`
+# machine; hack/e2e.sh lists the E2E_* variables it reads.
 e2e:
     hack/e2e.sh
 
