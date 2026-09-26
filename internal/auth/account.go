@@ -43,7 +43,9 @@ const ActivationSigned = "signed"
 // An import that does not resolve is left out of the JWT and reported.
 //
 // The JWT revokes the keys of its NatsUsers being deleted or no longer
-// admitted, and keeps every revocation it already carried. Each newly
+// admitted, and keeps every revocation status.revocations records or it
+// already carried until none of the revocation's issuers is among the
+// account's signing keys. Each newly
 // signed JWT resets status.distribution to no server current; with a
 // Distributor, status.distribution and the Distributed condition then
 // follow the servers holding it.
@@ -131,12 +133,17 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 	if err != nil {
 		return reconcile.Result{}, err
 	}
+	signing, _, err := keys.signingPublicKeys()
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	st.Revocations = accountRevocations(st.Revocations, st.JWT, pub, signing, users)
 	a := jwtplane.Account{
 		Name:        acc.Name,
 		Keys:        keys.Keys,
 		Limits:      accountLimits(acc.Spec.Limits),
 		Imports:     imports.imports,
-		Revocations: accountRevocations(st.JWT, pub, users),
+		Revocations: signedRevocations(st.Revocations),
 	}
 	for _, e := range exports {
 		a.Exports = append(a.Exports, e.Export)

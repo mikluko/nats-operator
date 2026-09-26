@@ -11,6 +11,7 @@ import (
 	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nkeys"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -370,4 +371,125 @@ spec:
 		ac, err := jwt.DecodeAccountClaims(now.Status.JWT)
 		return err != nil || ac.Revocations[pub] == 0
 	}, 2*time.Second, 100*time.Millisecond, "the revocation outlives the user")
+}
+
+// testRevocationRecord pins that an account's revocations are recorded in
+// its status, that the JWT is rebuilt from the record when lost and the
+// record from the JWT, that the system account's survive the loss of the
+// NatsOperator's status.systemAccount once the user is gone, and that rotating out every signing
+// key that may have issued a revoked JWT drops the revocation.
+func (e *env) testRevocationRecord(t *testing.T) {
+	ordersKey := key("nats-system", "orders")
+	var orders authv1beta1.NatsAccount
+	var recorded []authv1beta1.Revocation
+	revokes := func(ct *assert.CollectT, accountJWT string, revs []authv1beta1.Revocation) {
+		ac, err := jwt.DecodeAccountClaims(accountJWT)
+		if !assert.NoError(ct, err) {
+			return
+		}
+		for _, r := range revs {
+			assert.Equal(ct, r.At.Unix(), ac.Revocations[r.PublicKey], r.PublicKey)
+		}
+	}
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, ordersKey, &orders)
+		recorded = orders.Status.Revocations
+		if !assert.NotEmpty(ct, recorded, "UserDeletion left a revocation") {
+			return
+		}
+		ac, err := jwt.DecodeAccountClaims(orders.Status.JWT)
+		if assert.NoError(ct, err) {
+			for _, r := range recorded {
+				assert.ElementsMatch(ct, ac.SigningKeys.Keys(), r.Issuers)
+			}
+		}
+		revokes(ct, orders.Status.JWT, recorded)
+	})
+
+	lose := func(mutate func(*authv1beta1.NatsAccountStatus)) {
+		require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if err := e.c.Get(t.Context(), ordersKey, &orders); err != nil {
+				return err
+			}
+			mutate(&orders.Status)
+			return e.c.Status().Update(t.Context(), &orders)
+		}))
+	}
+	lose(func(st *authv1beta1.NatsAccountStatus) { st.JWT = "" })
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, ordersKey, &orders)
+		revokes(ct, orders.Status.JWT, recorded)
+	})
+	lose(func(st *authv1beta1.NatsAccountStatus) { st.Revocations = nil })
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, ordersKey, &orders)
+		assert.Equal(ct, recorded, orders.Status.Revocations)
+	})
+
+	kp, err := nkeys.CreateUser()
+	require.NoError(t, err)
+	pub, err := kp.PublicKey()
+	require.NoError(t, err)
+	e.apply(t, `
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsUser
+metadata: {name: revoked-system-user, namespace: nats-system}
+spec:
+  accountRef: {kind: NatsSystemAccount, name: sys}
+  publicKey: `+pub+`
+`)
+	sysUserKey := key("nats-system", "revoked-system-user")
+	sysUser := &authv1beta1.NatsUser{}
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, sysUserKey, sysUser)
+		ready(ct, sysUser.Status.Conditions, sysUser.Generation, auth.ReasonSigned)
+	})
+	require.NoError(t, e.c.Delete(t.Context(), sysUser))
+	var op authv1beta1.NatsOperator
+	var sys authv1beta1.NatsSystemAccount
+	sysRevoked := func(ct *assert.CollectT) {
+		e.get(ct, demo, &op)
+		e.get(ct, key("nats-system", "sys"), &sys)
+		if assert.Len(ct, sys.Status.Revocations, 1) {
+			assert.Equal(ct, pub, sys.Status.Revocations[0].PublicKey)
+		}
+		if assert.NotNil(ct, op.Status.SystemAccount) {
+			revokes(ct, op.Status.SystemAccount.JWT, sys.Status.Revocations)
+		}
+	}
+	e.eventually(t, sysRevoked)
+	e.update(t, sysUserKey, &authv1beta1.NatsUser{}, func(o client.Object) { o.SetFinalizers(nil) })
+	e.eventually(t, func(ct *assert.CollectT) {
+		assert.True(ct, apierrors.IsNotFound(e.c.Get(e.ctx, sysUserKey, &authv1beta1.NatsUser{})))
+	})
+	require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := e.c.Get(t.Context(), demo, &op); err != nil {
+			return err
+		}
+		op.Status.SystemAccount = nil
+		return e.c.Status().Update(t.Context(), &op)
+	}))
+	e.eventually(t, sysRevoked)
+
+	rotated := e.seedSecret(t, "nats-system", "orders-rotated", nkeys.PrefixByteAccount)
+	e.update(t, ordersKey, &authv1beta1.NatsAccount{}, func(o client.Object) {
+		o.(*authv1beta1.NatsAccount).Spec.Keys = &authv1beta1.Keys{
+			Identity: &authv1beta1.IdentityKey{SecretKeyRef: authv1beta1.SeedSecretKeySelector{Name: "orders-account-identity", Key: auth.SeedKey}},
+			Signing:  []authv1beta1.SigningKey{{Name: "rotated", SecretKeyRef: authv1beta1.SeedSecretKeySelector{Name: "orders-rotated", Key: auth.SeedKey}}},
+		}
+	})
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, ordersKey, &orders)
+		ac, err := jwt.DecodeAccountClaims(orders.Status.JWT)
+		if !assert.NoError(ct, err) {
+			return
+		}
+		assert.Equal(ct, []string{rotated}, ac.SigningKeys.Keys())
+		for _, r := range recorded {
+			assert.NotContains(ct, ac.Revocations, r.PublicKey)
+			for _, now := range orders.Status.Revocations {
+				assert.NotEqual(ct, r.PublicKey, now.PublicKey)
+			}
+		}
+	})
 }

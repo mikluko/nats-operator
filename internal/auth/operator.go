@@ -28,7 +28,9 @@ import (
 //
 // The system account JWT imports the jetstream-stepdown exports of every
 // NatsAccount the operator signs that carries the preset, and revokes the
-// keys of its NatsUsers as AccountReconciler does an account's.
+// keys of its NatsUsers as AccountReconciler does an account's, the
+// revocations SystemAccountReconciler records in the NatsSystemAccount's
+// status among them.
 //
 // status.deletedAccounts, filled by AccountReconciler, keeps each deleted
 // account until its last JWT expires or its key is signed again; the
@@ -119,11 +121,15 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	if prev != nil && prev.Name == sys.Name {
 		prevJWT = prev.JWT
 	}
+	sysSigning, _, err := sysKeys.signingPublicKeys()
+	if err != nil {
+		return 0, err
+	}
 	sysJWT, err := jwtplane.SignSystemAccount(jwtplane.SystemAccount{
 		Name:             sys.Name,
 		Keys:             sysKeys.Keys,
 		StepdownAccounts: stepdownAccounts(accounts),
-		Revocations:      accountRevocations(prevJWT, sysPub, users),
+		Revocations:      signedRevocations(accountRevocations(sys.Status.Revocations, prevJWT, sysPub, sysSigning, users)),
 	}, keys.Keys, time.Now())
 	if err != nil {
 		notReady(ReasonInvalidKeys, err.Error())

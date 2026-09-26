@@ -42,8 +42,9 @@ const (
 // +kubebuilder:validation:XValidation:rule="!has(self.preset) || !(self.preset in ['cluster-controller', 'jetstream-controller', 'auth-controller']) || self.accountRef.kind == 'NatsSystemAccount'",message="a controller preset is for a NatsSystemAccount user"
 // +kubebuilder:validation:XValidation:rule="!has(self.preset) || self.preset != 'readonly' || self.accountRef.kind == 'NatsAccount'",message="the readonly preset is for a NatsAccount user"
 type NatsUserSpec struct {
-	// AccountRef names the account the user belongs to.
+	// AccountRef names the account the user belongs to; it cannot change.
 	// +required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="accountRef is immutable"
 	AccountRef AccountReference `json:"accountRef"`
 
 	// Permissions are the user's publish and subscribe permissions.

@@ -208,6 +208,12 @@ type NatsAccountStatus struct {
 	// +optional
 	Distribution *Distribution `json:"distribution,omitempty"`
 
+	// Revocations are the user keys the account JWT revokes.
+	// +optional
+	// +listType=map
+	// +listMapKey=publicKey
+	Revocations []Revocation `json:"revocations,omitempty"`
+
 	// Imports are the resolved imports.
 	// +optional
 	Imports []ImportStatus `json:"imports,omitempty"`

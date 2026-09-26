@@ -50,7 +50,8 @@ spec:
             description: NatsUserSpec is the desired state of a user.
             properties:
               accountRef:
-                description: AccountRef names the account the user belongs to.
+                description: AccountRef names the account the user belongs to; it
+                  cannot change.
                 properties:
                   kind:
                     description: Kind of the account.
@@ -71,6 +72,9 @@ spec:
                 - kind
                 - name
                 type: object
+                x-kubernetes-validations:
+                - message: accountRef is immutable
+                  rule: self == oldSelf
               connectionTypes:
                 description: ConnectionTypes restricts how the user may connect; empty
                   allows any.

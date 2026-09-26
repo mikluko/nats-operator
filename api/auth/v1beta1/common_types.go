@@ -91,3 +91,20 @@ type Distribution struct {
 	// +optional
 	LastPushTime *metav1.Time `json:"lastPushTime,omitempty"`
 }
+
+// Revocation is a user key an account revokes.
+type Revocation struct {
+	// PublicKey is the revoked user's key.
+	// +required
+	PublicKey string `json:"publicKey"`
+
+	// At revokes the user's JWTs issued at or before it.
+	// +required
+	At metav1.Time `json:"at"`
+
+	// Issuers are the account's signing keys when the revocation was
+	// recorded, the keys that may have signed a revoked JWT. The revocation
+	// is dropped once none of them is among the account's signing keys.
+	// +optional
+	Issuers []string `json:"issuers,omitempty"`
+}

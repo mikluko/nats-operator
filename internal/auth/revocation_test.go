@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,19 +26,26 @@ func userKey(t *testing.T) string {
 
 func TestAccountRevocations(t *testing.T) {
 	op := testKeys(t, nkeys.PrefixByteOperator, false)
-	acc := testKeys(t, nkeys.PrefixByteAccount, false)
+	acc := testKeys(t, nkeys.PrefixByteAccount, false, false)
 	other := testKeys(t, nkeys.PrefixByteAccount, false)
-	accPub, err := acc.Identity.PublicKey()
-	require.NoError(t, err)
+	accPub := testPub(t, acc.Identity)
+	keyA, keyB := testPub(t, acc.Signing[0].Pair), testPub(t, acc.Signing[1].Pair)
+	keyC := testPub(t, testKeys(t, nkeys.PrefixByteAccount, false).Signing[0].Pair)
 
 	t0 := time.Unix(1_800_000_000, 0)
-	carried, deleting, denied, admitted, unsigned := userKey(t), userKey(t), userKey(t), userKey(t), userKey(t)
+	carried, deleting, denied, admitted := userKey(t), userKey(t), userKey(t), userKey(t)
 	signWith := func(keys jwtplane.Keys, revs ...jwtplane.Revocation) string {
 		token, err := jwtplane.SignAccount(jwtplane.Account{Name: "a", Keys: keys, Revocations: revs}, op, t0)
 		require.NoError(t, err)
 		return token
 	}
-	prev := signWith(acc, jwtplane.Revocation{PublicKey: carried, At: t0}, jwtplane.Revocation{PublicKey: deleting, At: t0.Add(time.Hour)})
+	onlyA := acc
+	onlyA.Signing = acc.Signing[:1]
+	prev := signWith(onlyA, jwtplane.Revocation{PublicKey: carried, At: t0}, jwtplane.Revocation{PublicKey: deleting, At: t0.Add(time.Hour)})
+	rev := func(key string, at time.Time, issuers ...string) authv1beta1.Revocation {
+		slices.Sort(issuers)
+		return authv1beta1.Revocation{PublicKey: key, At: metav1.Time{Time: at}, Issuers: issuers}
+	}
 
 	user := func(pub string, mutate func(*authv1beta1.NatsUser)) authv1beta1.NatsUser {
 		u := authv1beta1.NatsUser{Status: authv1beta1.NatsUserStatus{PublicKey: pub}}
@@ -63,58 +72,106 @@ func TestAccountRevocations(t *testing.T) {
 	}
 
 	tests := []struct {
-		name  string
-		prev  string
-		users []authv1beta1.NatsUser
-		want  map[string]time.Time
+		name     string
+		recorded []authv1beta1.Revocation
+		prev     string
+		signing  []string
+		users    []authv1beta1.NatsUser
+		want     []authv1beta1.Revocation
 	}{
 		{
-			name: "nothing",
-			want: map[string]time.Time{},
+			name:    "nothing",
+			signing: []string{keyA},
+			want:    []authv1beta1.Revocation{},
 		},
 		{
-			name: "carried forward",
-			prev: prev,
-			want: map[string]time.Time{carried: t0, deleting: t0.Add(time.Hour)},
+			name:    "a lost record is rebuilt from the JWT, issued by the keys it lists",
+			prev:    prev,
+			signing: []string{keyA, keyB},
+			want:    []authv1beta1.Revocation{rev(carried, t0, keyA), rev(deleting, t0.Add(time.Hour), keyA)},
 		},
 		{
-			name: "a JWT of another account is not carried",
-			prev: signWith(other, jwtplane.Revocation{PublicKey: carried, At: t0}),
-			want: map[string]time.Time{},
+			name:     "a lost JWT is rebuilt from the record",
+			recorded: []authv1beta1.Revocation{rev(carried, t0, keyA)},
+			signing:  []string{keyA},
+			want:     []authv1beta1.Revocation{rev(carried, t0, keyA)},
 		},
 		{
-			name: "deleted and denied users are revoked; the later time wins",
-			prev: prev,
+			name:    "a JWT of another account is not carried",
+			prev:    signWith(other, jwtplane.Revocation{PublicKey: carried, At: t0}),
+			signing: []string{keyA},
+			want:    []authv1beta1.Revocation{},
+		},
+		{
+			name:     "the JWT does not widen the issuers of a revocation it carries at the same time",
+			recorded: []authv1beta1.Revocation{rev(carried, t0, keyB)},
+			prev:     prev,
+			signing:  []string{keyA, keyB},
+			want:     []authv1beta1.Revocation{rev(carried, t0, keyB), rev(deleting, t0.Add(time.Hour), keyA)},
+		},
+		{
+			name:    "deleted and denied users are revoked by every signing key",
+			prev:    prev,
+			signing: []string{keyA, keyB},
 			users: []authv1beta1.NatsUser{
 				user(deleting, deleted(t0.Add(2*time.Hour), true)),
 				user(denied, noGrant(t0.Add(3*time.Hour))),
 				user(admitted, nil),
 				user("", deleted(t0, true)),
 			},
-			want: map[string]time.Time{carried: t0, deleting: t0.Add(2 * time.Hour), denied: t0.Add(3 * time.Hour)},
+			want: []authv1beta1.Revocation{
+				rev(carried, t0, keyA),
+				rev(deleting, t0.Add(2*time.Hour), keyA, keyB),
+				rev(denied, t0.Add(3*time.Hour), keyA, keyB),
+			},
 		},
 		{
-			name:  "an earlier deletion does not move a revocation back",
-			prev:  prev,
-			users: []authv1beta1.NatsUser{user(deleting, deleted(t0, true))},
-			want:  map[string]time.Time{carried: t0, deleting: t0.Add(time.Hour)},
+			name:     "an earlier deletion neither moves a revocation back nor widens its issuers",
+			recorded: []authv1beta1.Revocation{rev(deleting, t0.Add(time.Hour), keyA)},
+			signing:  []string{keyA, keyB},
+			users:    []authv1beta1.NatsUser{user(deleting, deleted(t0, true))},
+			want:     []authv1beta1.Revocation{rev(deleting, t0.Add(time.Hour), keyA)},
 		},
 		{
-			name:  "a deleted user whose finalizer is gone is not revoked afresh",
-			users: []authv1beta1.NatsUser{user(unsigned, deleted(t0, false))},
-			want:  map[string]time.Time{},
+			name:    "a deleted user whose finalizer is gone is not revoked afresh",
+			signing: []string{keyA},
+			users:   []authv1beta1.NatsUser{user(admitted, deleted(t0, false))},
+			want:    []authv1beta1.Revocation{},
+		},
+		{
+			name:     "a revocation is kept while one of its issuers remains, retiring or not",
+			recorded: []authv1beta1.Revocation{rev(carried, t0, keyA, keyB)},
+			signing:  []string{keyB, keyC},
+			want:     []authv1beta1.Revocation{rev(carried, t0, keyA, keyB)},
+		},
+		{
+			name:     "rotating out every issuer drops the revocation, from the record and from the JWT",
+			recorded: []authv1beta1.Revocation{rev(carried, t0, keyA), rev(denied, t0, keyB)},
+			prev:     prev,
+			signing:  []string{keyB, keyC},
+			want:     []authv1beta1.Revocation{rev(denied, t0, keyB)},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := map[string]time.Time{}
-			for _, r := range accountRevocations(tt.prev, accPub, tt.users) {
-				require.Zero(t, r.Expires, "user JWTs never expire, so no revocation is ever pruned")
-				got[r.PublicKey] = r.At
-			}
-			require.Equal(t, tt.want, got)
+			slices.SortFunc(tt.want, func(a, b authv1beta1.Revocation) int { return strings.Compare(a.PublicKey, b.PublicKey) })
+			require.Equal(t, tt.want, accountRevocations(tt.recorded, tt.prev, accPub, tt.signing, tt.users))
 		})
 	}
+}
+
+func TestSignedRevocations(t *testing.T) {
+	op := testKeys(t, nkeys.PrefixByteOperator, false)
+	acc := testKeys(t, nkeys.PrefixByteAccount, false)
+	pub := userKey(t)
+	at := time.Unix(1_800_000_000, 0)
+	token, err := jwtplane.SignAccount(jwtplane.Account{
+		Name: "a", Keys: acc,
+		Revocations: signedRevocations([]authv1beta1.Revocation{{PublicKey: pub, At: metav1.Time{Time: at}, Issuers: []string{"x"}}}),
+	}, op, at)
+	require.NoError(t, err)
+	require.True(t, revokedSince(token, pub, at))
+	require.False(t, revokedSince(token, pub, at.Add(time.Second)))
 }
 
 func TestRevokedSinceAndUserRevoked(t *testing.T) {

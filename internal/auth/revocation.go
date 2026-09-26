@@ -15,34 +15,63 @@ import (
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
 
-// accountRevocations returns the revocations an account JWT carries: every
-// one prev, the account's current JWT, carries when it names the same
-// account as pub, and one per user among users that has been signed and is
-// being deleted or no longer admitted to the account. A key revoked twice is
-// revoked at the later time. The JWT carried forward is the only record of a
-// revocation whose user is gone; user JWTs never expire, so none is pruned.
-func accountRevocations(prev, pub string, users []authv1beta1.NatsUser) []jwtplane.Revocation {
-	at := map[string]time.Time{}
-	revoke := func(key string, t time.Time) {
-		if t.After(at[key]) {
-			at[key] = t
+// accountRevocations returns the revocations an account with public key pub
+// and signing keys signing records and signs: those recorded, those prev,
+// its current JWT, carries when it names pub, and one per user among users
+// that has been signed and is being deleted or no longer admitted. A
+// revocation new to the record has as issuers the signing keys prev lists,
+// or signing for a user's. A key revoked again later is revoked at the later
+// time, by the issuers of both. A revocation none of whose issuers is in signing
+// is dropped: no JWT it revokes is still valid.
+func accountRevocations(recorded []authv1beta1.Revocation, prev, pub string, signing []string, users []authv1beta1.NatsUser) []authv1beta1.Revocation {
+	byKey := map[string]*authv1beta1.Revocation{}
+	revoke := func(key string, at time.Time, issuers []string) {
+		r, ok := byKey[key]
+		if ok && !at.After(r.At.Time) {
+			return
 		}
+		if !ok {
+			r = &authv1beta1.Revocation{PublicKey: key}
+			byKey[key] = r
+		}
+		r.At = metav1.Time{Time: at}
+		for _, k := range issuers {
+			if !slices.Contains(r.Issuers, k) {
+				r.Issuers = append(r.Issuers, k)
+			}
+		}
+	}
+	for _, r := range recorded {
+		revoke(r.PublicKey, r.At.Time, r.Issuers)
 	}
 	if c, err := jwt.DecodeAccountClaims(prev); err == nil && c.Subject == pub {
 		for key, ts := range c.Revocations {
-			revoke(key, time.Unix(ts, 0))
+			revoke(key, time.Unix(ts, 0), c.SigningKeys.Keys())
 		}
 	}
 	for i := range users {
 		if t, ok := userRevokedAt(&users[i]); ok {
-			revoke(users[i].Status.PublicKey, t)
+			revoke(users[i].Status.PublicKey, t, signing)
 		}
 	}
-	out := make([]jwtplane.Revocation, 0, len(at))
-	for key, t := range at {
-		out = append(out, jwtplane.Revocation{PublicKey: key, At: t})
+	out := make([]authv1beta1.Revocation, 0, len(byKey))
+	for _, r := range byKey {
+		if !slices.ContainsFunc(r.Issuers, func(k string) bool { return slices.Contains(signing, k) }) {
+			continue
+		}
+		slices.Sort(r.Issuers)
+		out = append(out, *r)
 	}
-	slices.SortFunc(out, func(a, b jwtplane.Revocation) int { return cmp.Compare(a.PublicKey, b.PublicKey) })
+	slices.SortFunc(out, func(a, b authv1beta1.Revocation) int { return cmp.Compare(a.PublicKey, b.PublicKey) })
+	return out
+}
+
+// signedRevocations are revs as jwtplane signs them.
+func signedRevocations(revs []authv1beta1.Revocation) []jwtplane.Revocation {
+	out := make([]jwtplane.Revocation, 0, len(revs))
+	for _, r := range revs {
+		out = append(out, jwtplane.Revocation{PublicKey: r.PublicKey, At: r.At.Time})
+	}
 	return out
 }
 

@@ -12,6 +12,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -24,6 +25,8 @@ import (
 // whether it is the live system account. Its JWT is signed by the
 // OperatorReconciler of the NatsOperator whose systemAccountRef names it,
 // and lives in that operator's status; an unreferenced one is not signed.
+// status.revocations records what that JWT revokes, and what the next one
+// is to revoke, as AccountReconciler records an account's.
 // A newly signed JWT resets status.distribution to no server current; with
 // a Distributor, status.distribution and the Distributed condition then
 // follow the servers holding it.
@@ -40,6 +43,7 @@ type SystemAccountReconciler struct {
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natssystemaccounts,verbs=get;list;watch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natssystemaccounts/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=get;list;watch
 
 // Reconcile implements reconcile.Reconciler.
 func (r *SystemAccountReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -95,6 +99,15 @@ func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta
 		notReady(ReasonPending, fmt.Sprintf("NatsOperator %s has not signed this account yet", key))
 		return 0, nil
 	}
+	users, err := listUsers(ctx, r.Client, authv1beta1.AccountKindSystemAccount, client.ObjectKeyFromObject(sys))
+	if err != nil {
+		return 0, err
+	}
+	signing, _, err := keys.signingPublicKeys()
+	if err != nil {
+		return 0, err
+	}
+	st.Revocations = accountRevocations(st.Revocations, signed.JWT, pub, signing, users)
 	if hash := JWTHash(signed.JWT); hash != st.JWTHash {
 		st.JWTHash = hash
 		st.Distribution = pushed(st.Distribution, time.Now(), r.Distributor != nil)
@@ -117,6 +130,13 @@ func (r *SystemAccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Secret{}).
 		Watches(&corev1.Secret{}, enqueueIndexed(c, &authv1beta1.NatsSystemAccountList{}, seedSecretField)).
 		Watches(&authv1beta1.NatsOperator{}, enqueueIndexed(c, &authv1beta1.NatsSystemAccountList{}, operatorField)).
+		Watches(&authv1beta1.NatsUser{}, handler.EnqueueRequestsFromMapFunc(func(_ context.Context, obj client.Object) []reconcile.Request {
+			ref := obj.(*authv1beta1.NatsUser).Spec.AccountRef
+			if ref.Kind != authv1beta1.AccountKindSystemAccount {
+				return nil
+			}
+			return []reconcile.Request{{NamespacedName: refKey(ref.ObjectReference, obj.GetNamespace())}}
+		})).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, schema.GroupKind{Group: authGroup, Kind: "NatsSystemAccount"}, &authv1beta1.NatsSystemAccountList{})).
 		Complete(r)
 }

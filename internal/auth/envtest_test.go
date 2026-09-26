@@ -101,7 +101,7 @@ type env struct {
 }
 
 // TestEnvtest runs the reconcilers against a real API server: stories 2, 4
-// and 5 as their manifests declare them, user deletion against a nats-server, the JWTs served by a nats-server,
+// and 5 as their manifests declare them, user deletion against a nats-server, the revocation record, the JWTs served by a nats-server,
 // cross-namespace imports under grants, signing key rotation, offline
 // identities, jwtTTL: 0, a system account flip and the stepdown preset.
 func TestEnvtest(t *testing.T) {
@@ -163,6 +163,7 @@ func TestEnvtest(t *testing.T) {
 	t.Run("Story2Users", e.testStory2Users)
 	t.Run("Story4", e.testStory4)
 	t.Run("UserDeletion", e.testDeletion)
+	t.Run("RevocationRecord", e.testRevocationRecord)
 }
 
 var demo = types.NamespacedName{Namespace: "nats-system", Name: "demo"}

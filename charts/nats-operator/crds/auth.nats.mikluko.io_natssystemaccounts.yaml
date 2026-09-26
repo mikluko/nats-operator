@@ -231,6 +231,35 @@ spec:
               publicKey:
                 description: PublicKey is the account's public key.
                 type: string
+              revocations:
+                description: Revocations are the user keys the account JWT revokes.
+                items:
+                  description: Revocation is a user key an account revokes.
+                  properties:
+                    at:
+                      description: At revokes the user's JWTs issued at or before
+                        it.
+                      format: date-time
+                      type: string
+                    issuers:
+                      description: |-
+                        Issuers are the account's signing keys when the revocation was
+                        recorded, the keys that may have signed a revoked JWT. The revocation
+                        is dropped once none of them is among the account's signing keys.
+                      items:
+                        type: string
+                      type: array
+                    publicKey:
+                      description: PublicKey is the revoked user's key.
+                      type: string
+                  required:
+                  - at
+                  - publicKey
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - publicKey
+                x-kubernetes-list-type: map
             type: object
         required:
         - spec

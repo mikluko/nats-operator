@@ -179,6 +179,9 @@ func testTransitionRules(t *testing.T, c client.Client) {
 	cluster := func(version string) string {
 		return manifest("NatsCluster", "c", "{version: "+version+", replicas: 1}")
 	}
+	user := func(ref, spec string) string {
+		return manifest("NatsUser", "u", "{accountRef: "+ref+spec+"}")
+	}
 	tests := []struct {
 		name          string
 		before, after string
@@ -191,6 +194,11 @@ func testTransitionRules(t *testing.T, c client.Client) {
 		{"one minor down", cluster("2.16.0"), cluster("2.15.9"), ""},
 		{"two minors down", cluster("2.17.0"), cluster("2.15.9"), "at most one minor at a time"},
 		{"major up", cluster("2.15.0"), cluster("3.0.0"), "at most one minor at a time"},
+
+		{"user moved to another account", user("{kind: NatsAccount, name: a}", ""), user("{kind: NatsAccount, name: b}", ""), "accountRef is immutable"},
+		{"user moved to another namespace", user("{kind: NatsAccount, name: a}", ""), user("{kind: NatsAccount, name: a, namespace: other}", ""), "accountRef is immutable"},
+		{"user moved to the system account", user("{kind: NatsAccount, name: a}", ""), user("{kind: NatsSystemAccount, name: a}", ""), "accountRef is immutable"},
+		{"user permissions changed", user("{kind: NatsAccount, name: a}", ", permissions: {publish: {allow: [a]}}"), user("{kind: NatsAccount, name: a}", ", permissions: {publish: {allow: [b]}}"), ""},
 
 		{"stream renamed", stream("orders", ", name: ORDERS"), stream("orders", ", name: OTHER"), "the stream name is immutable"},
 		{"stream name spelled as metadata.name", stream("orders", ""), stream("orders", ", name: orders"), ""},
