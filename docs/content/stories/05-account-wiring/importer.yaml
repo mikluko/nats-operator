@@ -1,7 +1,7 @@
 # The core account consumes both. An import names the export, not a subject:
 # the subject, type and response type come from the exporting account, so the
 # two sides cannot disagree.
-apiVersion: auth.nats.mikluko.io/v1alpha1
+apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsAccount
 metadata:
   name: core

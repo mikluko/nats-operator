@@ -4,7 +4,7 @@
 # status, and the cluster controller reads them from there, so neither
 # controller reads the other's API group. Elsewhere the same kind carries the
 # JWTs literally (story 6); `operatorRef` and the literal form are exclusive.
-apiVersion: nats.mikluko.io/v1alpha1
+apiVersion: nats.mikluko.io/v1beta1
 kind: NatsOperatorTrust
 metadata:
   name: demo

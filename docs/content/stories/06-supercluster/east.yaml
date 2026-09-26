@@ -1,5 +1,5 @@
 # The home Kubernetes cluster: the auth controller runs here, and here alone.
-apiVersion: cluster.nats.mikluko.io/v1alpha1
+apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:
   name: east   # the gateway name, and the remote name the other members use

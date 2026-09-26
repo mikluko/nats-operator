@@ -2,7 +2,7 @@
 #
 # `stream`: the server-side name, for a stream that has no resource. The
 # consumer's connection has to land in the stream's account.
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsConsumer
 metadata:
   name: ledger-audit
@@ -17,7 +17,7 @@ spec:
 ---
 # `streamRef`: a NatsStream resource. The controller waits for it to be Ready
 # before creating the consumer, and connectionRef defaults to the stream's.
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsConsumer
 metadata:
   name: payments-settlement

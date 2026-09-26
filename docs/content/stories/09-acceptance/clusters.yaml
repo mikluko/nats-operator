@@ -1,6 +1,6 @@
 # One NatsCluster per Kubernetes cluster; each file lives in its own
 # cluster's GitOps tree. Only what differs between them is commented.
-apiVersion: cluster.nats.mikluko.io/v1alpha1
+apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:
   name: prod-east   # home cluster
@@ -56,7 +56,7 @@ spec:
         external-dns.alpha.kubernetes.io/hostname: nats.prod-east.acme.example
     advertise: nats.prod-east.acme.example:7222
 ---
-apiVersion: cluster.nats.mikluko.io/v1alpha1
+apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:
   name: dev-east
@@ -113,7 +113,7 @@ spec:
         external-dns.alpha.kubernetes.io/hostname: nats.dev-east.acme.example
     advertise: nats.dev-east.acme.example:7222
 ---
-apiVersion: cluster.nats.mikluko.io/v1alpha1
+apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:
   name: prod-west

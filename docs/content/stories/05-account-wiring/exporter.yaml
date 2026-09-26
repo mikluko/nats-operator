@@ -1,6 +1,6 @@
 # The monitoring account publishes check results as a stream and answers
 # execute requests as a service. One export is public, one is private.
-apiVersion: auth.nats.mikluko.io/v1alpha1
+apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsAccount
 metadata:
   name: monitoring

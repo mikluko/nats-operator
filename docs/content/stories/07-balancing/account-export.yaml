@@ -3,7 +3,7 @@
 # $JS.API.CONSUMER.LEADER.STEPDOWN.*.*, and the auth controller adds the
 # matching imports to the system account's JWT under a per-account prefix.
 # Proven on nats-server 2.15.0 (Q2135).
-apiVersion: auth.nats.mikluko.io/v1alpha1
+apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsAccount
 metadata:
   name: payments

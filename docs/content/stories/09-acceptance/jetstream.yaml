@@ -1,6 +1,6 @@
 # The monitoring team's JetStream, in prod-east. Its streams were created by
 # the application at runtime before any of this existed, so they are adopted.
-apiVersion: nats.mikluko.io/v1alpha1
+apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:
   name: prod
@@ -11,7 +11,7 @@ spec:
     secretKeyRef:
       name: nats-service-creds
 ---
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata:
   name: requests
@@ -24,7 +24,7 @@ spec:
   adoptionPolicy: Adopt
   name: REQUESTS
 ---
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata:
   name: responses
@@ -37,7 +37,7 @@ spec:
   adoptionPolicy: Adopt
   name: RESPONSES
 ---
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsBalancer
 metadata:
   name: prod
@@ -56,7 +56,7 @@ spec:
           traffic: responses
 ---
 # The platform team's, one per NATS cluster; prod-east shown.
-apiVersion: nats.mikluko.io/v1alpha1
+apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:
   name: prod-east-sys
@@ -67,7 +67,7 @@ spec:
     secretKeyRef:
       name: jetstream-controller-creds
 ---
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsSystemBalancer
 metadata:
   name: prod-east

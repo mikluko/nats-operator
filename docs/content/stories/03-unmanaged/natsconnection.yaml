@@ -4,7 +4,7 @@
 #
 # Identical in shape to stories 1 and 2: the JetStream controller cannot tell
 # a managed NATS cluster from this one, and does not need to.
-apiVersion: nats.mikluko.io/v1alpha1
+apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:
   name: shared-payments

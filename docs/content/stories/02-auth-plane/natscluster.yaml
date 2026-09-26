@@ -1,5 +1,5 @@
 # Story 1's NatsCluster, now under the NATS operator. Only `auth` is new.
-apiVersion: cluster.nats.mikluko.io/v1alpha1
+apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:
   name: demo

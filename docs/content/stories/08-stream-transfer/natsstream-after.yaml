@@ -3,7 +3,7 @@
 # server builds a new group in west, copies the stream and its consumers
 # live, then drops the east copies. What publishers and pull consumers see
 # meanwhile is unverified until Q2073.
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata:
   name: orders

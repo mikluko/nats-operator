@@ -1,6 +1,6 @@
 # Every account carries the same two users, `service` and `readonly`: sixteen
 # NatsUsers for eight accounts. One account's pair is written out.
-apiVersion: auth.nats.mikluko.io/v1alpha1
+apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:
   name: monitoring-prod-service
@@ -23,7 +23,7 @@ spec:
 # JetStream introspection subjects ($JS.API.INFO, STREAM.NAMES, STREAM.LIST,
 # STREAM.INFO.*, CONSUMER.NAMES.*, CONSUMER.LIST.*, CONSUMER.INFO.*.*).
 # `permissions` is refused beside a preset.
-apiVersion: auth.nats.mikluko.io/v1alpha1
+apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:
   name: monitoring-prod-readonly
@@ -39,7 +39,7 @@ spec:
       name: nats-readonly-creds
 ---
 # The remote clusters' controllers, two per remote (story 6).
-apiVersion: auth.nats.mikluko.io/v1alpha1
+apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:
   name: dev-east-cluster-controller
@@ -53,7 +53,7 @@ spec:
     secretKeyRef:
       name: dev-east-cluster-controller-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1alpha1
+apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:
   name: prod-west-cluster-controller
@@ -70,7 +70,7 @@ spec:
 ---
 # What lets the monitoring namespace's users reach the accounts in
 # nats-system.
-apiVersion: nats.mikluko.io/v1alpha1
+apiVersion: nats.mikluko.io/v1beta1
 kind: NatsReferenceGrant
 metadata:
   name: monitoring-users

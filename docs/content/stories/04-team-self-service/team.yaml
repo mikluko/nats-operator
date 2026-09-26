@@ -1,6 +1,6 @@
 # Owned by the payments team, in its own namespace. The team never reads
 # nats-system: its creds Secret lands here.
-apiVersion: auth.nats.mikluko.io/v1alpha1
+apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:
   name: payments-api
@@ -20,7 +20,7 @@ spec:
       name: payments-api-creds
 ---
 # The user the JetStream controller acts as in this account.
-apiVersion: auth.nats.mikluko.io/v1alpha1
+apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:
   name: payments-jetstream
@@ -40,7 +40,7 @@ spec:
       name: payments-jetstream-creds
 ---
 # Everything JetStream stays in the team's namespace: no grant needed.
-apiVersion: nats.mikluko.io/v1alpha1
+apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:
   name: demo
@@ -51,7 +51,7 @@ spec:
     secretKeyRef:
       name: payments-jetstream-creds
 ---
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata:
   name: payments

@@ -1,6 +1,6 @@
 # Adoption follows ACK's adoption-policy (adopt, adopt-or-create), as typed
 # fields.
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata:
   name: payments
@@ -15,7 +15,7 @@ spec:
   adoptionPolicy: Adopt
   name: PAYMENTS
 ---
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata:
   name: refunds
@@ -38,7 +38,7 @@ spec:
 # adoptionPolicy defaults to Never, and a stream of this name already exists
 # that the controller did not create: the resource goes Terminal and nothing
 # on the server changes. See status-natsstream-ledger.yaml.
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata:
   name: ledger

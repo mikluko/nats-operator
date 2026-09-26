@@ -1,6 +1,6 @@
 # The payments NatsStream as `kubectl get -o yaml` shows it after adoption:
 # the controller wrote the server's config into spec.
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata:
   name: payments

@@ -2,7 +2,7 @@
 # the system balancer cannot know about. It yields to the system balancer:
 # no move on a stream the system balancer has pending or just moved, and none
 # while the NATS cluster is not Settled.
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsBalancer
 metadata:
   name: payments
@@ -30,7 +30,7 @@ spec:
     placement: false   # opt-in
 ---
 # What the selectors match.
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata:
   name: req-07

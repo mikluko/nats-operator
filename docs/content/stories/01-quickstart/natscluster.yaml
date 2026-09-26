@@ -1,6 +1,6 @@
 # Story 1: a platform engineer wants a three-server NATS cluster with JetStream
 # in one Kubernetes cluster, and nothing else.
-apiVersion: cluster.nats.mikluko.io/v1alpha1
+apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:
   name: demo

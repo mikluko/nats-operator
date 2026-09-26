@@ -1,6 +1,6 @@
 # The new cluster, prod-east-2, is already a member beside prod-east, with a
 # placement tag no other server carries.
-apiVersion: cluster.nats.mikluko.io/v1alpha1
+apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:
   name: prod-east-2
@@ -16,7 +16,7 @@ spec:
 # every account, with their consumers. System-level and whole-cluster only.
 # Each stream is moved by $JS.API.ACCOUNT.STREAM.MOVE with the target tags
 # (Q2140); there is no bulk primitive, so the controller enumerates.
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsClusterEvacuation
 metadata:
   name: retire-prod-east

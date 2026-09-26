@@ -4,7 +4,7 @@
 #
 # The same NatsOperatorTrust the supercluster members read, copied here by
 # GitOps.
-apiVersion: nats.mikluko.io/v1alpha1
+apiVersion: nats.mikluko.io/v1beta1
 kind: NatsOperatorTrust
 metadata:
   name: acme
@@ -17,7 +17,7 @@ spec:
 # (Q2138): without it the leaf cannot fetch an account it has not cached. The
 # creds are a hub user in the system account; the hub recognises the account
 # by the JWT's issuer, not by name.
-apiVersion: nats.mikluko.io/v1alpha1
+apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:
   name: hub-system
@@ -28,7 +28,7 @@ spec:
     secretKeyRef:
       name: edge-site-2-system-leaf-creds
 ---
-apiVersion: nats.mikluko.io/v1alpha1
+apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:
   name: hub-telemetry
@@ -39,7 +39,7 @@ spec:
     secretKeyRef:
       name: edge-site-2-leaf-creds
 ---
-apiVersion: cluster.nats.mikluko.io/v1alpha1
+apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:
   name: edge-site-2
@@ -74,7 +74,7 @@ spec:
 # this would be `accountRef: {name: telemetry}`, resolved from the live
 # NatsAccount; here, with no auth controller, the literal form, copied by
 # GitOps. `accountRef` and `publicKey` are exclusive.
-apiVersion: nats.mikluko.io/v1alpha1
+apiVersion: nats.mikluko.io/v1beta1
 kind: NatsAccountTrust
 metadata:
   name: telemetry

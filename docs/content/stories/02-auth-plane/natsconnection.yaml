@@ -2,7 +2,7 @@
 # the account every resource using it lands in. One per account the
 # JetStream controller manages, plus one with system credentials for
 # observation (story 7).
-apiVersion: nats.mikluko.io/v1alpha1
+apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:
   name: demo-orders

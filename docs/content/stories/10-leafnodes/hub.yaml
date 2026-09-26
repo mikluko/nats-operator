@@ -1,6 +1,6 @@
 # In the hub's Kubernetes cluster: prod-east from story 9, now accepting leaf
 # connections. Only `leafnodes` is new on the NatsCluster.
-apiVersion: cluster.nats.mikluko.io/v1alpha1
+apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:
   name: prod-east
@@ -33,7 +33,7 @@ spec:
 # What the edge site authenticates as: an ordinary user in the account its
 # traffic lands in, usable only for a leafnode connection. Its Secret is
 # carried to the edge by External Secrets, as the remote controllers' are.
-apiVersion: auth.nats.mikluko.io/v1alpha1
+apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:
   name: edge-site-1
@@ -49,7 +49,7 @@ spec:
 ---
 # For an operator-mode leaf (edge-operator.yaml): the system-account leaf
 # user its account lookups travel over.
-apiVersion: auth.nats.mikluko.io/v1alpha1
+apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:
   name: edge-site-2-system

@@ -1,6 +1,6 @@
 # Owned by the platform team: evenness across the whole NATS cluster, every
 # account included, on system credentials alone.
-apiVersion: nats.mikluko.io/v1alpha1
+apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:
   name: demo-sys
@@ -11,7 +11,7 @@ spec:
     secretKeyRef:
       name: jetstream-controller-creds   # the preset jetstream-controller system user
 ---
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsSystemBalancer
 metadata:
   name: demo

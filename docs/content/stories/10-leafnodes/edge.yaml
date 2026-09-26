@@ -1,7 +1,7 @@
 # In the edge site's own Kubernetes cluster. No auth controller, no NATS
 # operator: the leaf runs with no accounts, and everything its local clients
 # publish reaches the hub in the account the remote's credentials sign into.
-apiVersion: nats.mikluko.io/v1alpha1
+apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:
   name: hub
@@ -12,7 +12,7 @@ spec:
     secretKeyRef:
       name: edge-site-1-leaf-creds
 ---
-apiVersion: cluster.nats.mikluko.io/v1alpha1
+apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:
   name: edge-site-1
@@ -46,7 +46,7 @@ spec:
 # A local buffer that keeps accepting while the link is down, and a source
 # on the hub side is how it drains; that part is ordinary JetStream config
 # in the hub's telemetry account, not shown.
-apiVersion: nats.mikluko.io/v1alpha1
+apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:
   name: local
@@ -54,7 +54,7 @@ metadata:
 spec:
   servers: ["nats://edge-site-1.nats-system.svc:4222"]
 ---
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata:
   name: telemetry-buffer

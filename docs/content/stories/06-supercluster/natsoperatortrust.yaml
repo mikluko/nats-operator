@@ -6,7 +6,7 @@
 # NATS cluster preloads the system account JWT from here, so it boots before
 # its gateways are up. Each member names it in `auth.trustRef`, as a leaf
 # does (story 10).
-apiVersion: nats.mikluko.io/v1alpha1
+apiVersion: nats.mikluko.io/v1beta1
 kind: NatsOperatorTrust
 metadata:
   name: acme

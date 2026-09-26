@@ -3,7 +3,7 @@
 # (v1.54.0, jetstream/kv.go and jetstream/object.go) in camelCase, with the
 # bucket under `name`, defaulting to metadata.name. The lifecycle policies
 # are the streams' own.
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsKeyValue
 metadata:
   name: sessions
@@ -23,7 +23,7 @@ spec:
   storage: File
   replicas: 3
 ---
-apiVersion: jetstream.nats.mikluko.io/v1alpha1
+apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsObjectStore
 metadata:
   name: receipts

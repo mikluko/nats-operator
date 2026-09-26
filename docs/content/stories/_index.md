@@ -6,7 +6,7 @@ The resource API, told as user stories. Each page is the API section of the desi
 
 Each story is a page bundle: this narrative, and beside it the manifests as real YAML files that the page renders.
 
-API groups, all `v1alpha1`, every kind namespaced:
+API groups, all `v1beta1`, every kind namespaced:
 
 | group | kinds |
 |---|---|

@@ -1,7 +1,7 @@
 # Story 2: the platform engineer wants the NATS cluster from story 1 to run
 # under a NATS operator the auth controller owns, with accounts and users
 # declared as resources instead of minted by hand.
-apiVersion: auth.nats.mikluko.io/v1alpha1
+apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsOperator
 metadata:
   name: demo

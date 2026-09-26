@@ -1,6 +1,6 @@
 # A kind of its own so RBAC can grant it to the platform team alone, and so
 # the fields NATS refuses on a system account (JetStream) do not exist here.
-apiVersion: auth.nats.mikluko.io/v1alpha1
+apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsSystemAccount
 metadata:
   name: sys
@@ -11,7 +11,7 @@ spec:
 ---
 # The auth controller stops at JWT claims: these limits are signed into the
 # account JWT and nothing else about JetStream is configured here.
-apiVersion: auth.nats.mikluko.io/v1alpha1
+apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsAccount
 metadata:
   name: orders
