@@ -50,6 +50,8 @@ type Plan struct {
 	// and StatefulSet, the revision itself excluded.
 	Revision string
 	Limits   Limits
+	// LeafRemotes are the resolved remotes the plan was rendered with.
+	LeafRemotes []LeafRemote
 
 	Servers         []Server
 	HeadlessService *corev1.Service
@@ -59,10 +61,11 @@ type Plan struct {
 	PDB            *policyv1.PodDisruptionBudget
 }
 
-// Render renders nc from in. It fails only on a podTemplate that does not
-// merge into the rendered pod.
-func Render(nc *clusterv1beta1.NatsCluster, in Inputs) (*Plan, error) {
+// Render renders nc from in, with remotes, nc's leafRemotes resolved. It
+// fails only on a podTemplate that does not merge into the rendered pod.
+func Render(nc *clusterv1beta1.NatsCluster, in Inputs, remotes ...LeafRemote) (*Plan, error) {
 	p := &Plan{
+		LeafRemotes:     remotes,
 		Limits:          deriveLimits(&nc.Spec),
 		HeadlessService: headlessService(nc),
 		ClientService:   clientService(nc),
@@ -73,7 +76,7 @@ func Render(nc *clusterv1beta1.NatsCluster, in Inputs) (*Plan, error) {
 	h := sha256.New()
 	specDigests := map[string]string{}
 	for _, name := range serverNames(nc) {
-		cfg, err := serverConfig(nc, in, name, layout, "").Render()
+		cfg, err := serverConfig(nc, in, name, layout, "", remotes...).Render()
 		if err != nil {
 			return nil, err
 		}
@@ -94,7 +97,7 @@ func Render(nc *clusterv1beta1.NatsCluster, in Inputs) (*Plan, error) {
 	p.Revision = hex.EncodeToString(h.Sum(nil))[:10]
 	for i := range p.Servers {
 		s := &p.Servers[i]
-		cfg, err := serverConfig(nc, in, s.Name, layout, p.Revision).Render()
+		cfg, err := serverConfig(nc, in, s.Name, layout, p.Revision, remotes...).Render()
 		if err != nil {
 			return nil, err
 		}
@@ -294,6 +297,7 @@ func natsContainer(nc *clusterv1beta1.NatsCluster, limits Limits) corev1.Contain
 	if gatewaySecret(nc) != "" {
 		c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{Name: "gateway-tls", MountPath: gatewayTLSDir, ReadOnly: true})
 	}
+	addLeafnodesListener(nc, &c)
 	return c
 }
 
@@ -316,11 +320,10 @@ func exporterContainer() corev1.Container {
 
 func volumes(nc *clusterv1beta1.NatsCluster, server string) []corev1.Volume {
 	vs := []corev1.Volume{
-		{Name: "config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
-			LocalObjectReference: corev1.LocalObjectReference{Name: configMapName(server)},
-		}}},
+		configVolume(nc, server),
 		{Name: "pid", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 	}
+	vs = append(vs, leafnodesVolumes(nc)...)
 	if s := routesSecret(nc); s != "" {
 		vs = append(vs, corev1.Volume{Name: "routes-tls", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: s}}})
 	}

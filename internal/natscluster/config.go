@@ -26,6 +26,7 @@ type Config struct {
 	Cluster        ClusterConfig     `json:"cluster"`
 	Gateway        *GatewayConfig    `json:"gateway,omitempty"`
 	JetStream      *JetStreamConfig  `json:"jetstream,omitempty"`
+	Leafnodes      *LeafnodesConfig  `json:"leafnodes,omitempty"`
 
 	Operator        string            `json:"operator,omitempty"`
 	SystemAccount   string            `json:"system_account,omitempty"`
@@ -112,7 +113,12 @@ type Layout struct {
 
 	// GatewayTLSDir holds tls.crt and tls.key for gateway TLS, and ca.crt
 	// when Inputs.GatewayCA is set.
-	GatewayTLSDir string
+	GatewayTLSDir   string
+	LeafnodesListen string
+	// LeafnodesTLSDir holds tls.crt and tls.key for the leafnode listener.
+	LeafnodesTLSDir string
+	// LeafRemotesDir holds the files of the leaf remotes Secret.
+	LeafRemotesDir string
 }
 
 // Paths inside a server's pod.
@@ -138,6 +144,10 @@ func podLayout(nc *clusterv1beta1.NatsCluster) Layout {
 		ResolverDir:   resolverDir,
 		TLSDir:        routesTLSDir,
 		GatewayTLSDir: gatewayTLSDir,
+
+		LeafnodesListen: fmt.Sprintf("0.0.0.0:%d", PortLeafnodes),
+		LeafnodesTLSDir: leafnodesTLSDir,
+		LeafRemotesDir:  configDir,
 	}
 	for _, s := range serverNames(nc) {
 		l.Routes = append(l.Routes, fmt.Sprintf("nats-route://%s:%d", podHost(nc, s), PortRoute))
@@ -201,8 +211,9 @@ type Inputs struct {
 }
 
 // serverConfig renders server's config within nc from in under layout l,
-// reporting revision through server_metadata unless revision is empty.
-func serverConfig(nc *clusterv1beta1.NatsCluster, in Inputs, server string, l Layout, revision string) *Config {
+// reporting revision through server_metadata unless revision is empty;
+// remotes are nc's leafRemotes resolved.
+func serverConfig(nc *clusterv1beta1.NatsCluster, in Inputs, server string, l Layout, revision string, remotes ...LeafRemote) *Config {
 	c := &Config{
 		ServerName:    server,
 		Listen:        l.ClientListen,
@@ -241,11 +252,17 @@ func serverConfig(nc *clusterv1beta1.NatsCluster, in Inputs, server string, l La
 			c.JetStream.MaxFileStore = q.Value()
 		}
 	}
+	c.Leafnodes = leafnodesConfig(nc, remotes, l)
 	if trust := in.Trust; trust != nil {
 		c.Operator = trust.OperatorJWT
 		c.SystemAccount = trust.SystemAccount
-		c.Resolver = resolverConfig(nc.Spec.Auth.Resolver, l.ResolverDir)
+		c.Resolver = resolverConfig(resolverType(nc, remotes), l.ResolverDir)
 		c.ResolverPreload = map[string]string{trust.SystemAccount: trust.SystemAccountJWT}
+		for _, r := range remotes {
+			if r.PreloadJWT != "" {
+				c.ResolverPreload[r.LocalAccount] = r.PreloadJWT
+			}
+		}
 	}
 	return c
 }

@@ -65,7 +65,7 @@ spec:
                   resolver:
                     description: |-
                       Resolver is the account resolver; the cluster controller renders Full
-                      when omitted, and Cache for a leaf.
+                      when omitted, and Cache for a leaf that preloads no account.
                     enum:
                     - Full
                     - Cache

@@ -57,9 +57,10 @@ spec:
   auth:
     trustRef:
       name: acme
-    # Cache (default for a leaf) | Full. Memory cannot fetch, so it is not
-    # offered where accounts arrive over a leaf.
-    resolver: Cache
+    # resolver is omitted: a leaf that preloads accounts runs Full, on the
+    # JetStream volume, so that syncing with the hub replaces a stale
+    # preload and a restart keeps what it synced. A leaf that preloads
+    # nothing runs Cache. Memory cannot fetch, so it is not offered.
   leafRemotes:
     - connectionRef:
         name: hub-system
@@ -82,6 +83,8 @@ metadata:
 spec:
   publicKey: ATELEMETRY...
   # Preloaded, so the account's clients authenticate while the leaf link is
-  # down or before it first connects. Whether the resolver then prefers a
-  # newer JWT fetched over the system remote is unverified.
+  # down or before it first connects. It is a copy: a fetch never replaces
+  # it, only the Full resolver's sync with the hub or a claims push does,
+  # and it expires with the account's jwtTTL (48h by default) unless the
+  # NatsAccount sets `jwtTTL: 0`, as one copied here should.
   jwt: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...

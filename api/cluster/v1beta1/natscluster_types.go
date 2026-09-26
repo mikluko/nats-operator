@@ -223,7 +223,7 @@ type Auth struct {
 	SystemCredentials *natsv1beta1.Credentials `json:"systemCredentials,omitempty"`
 
 	// Resolver is the account resolver; the cluster controller renders Full
-	// when omitted, and Cache for a leaf.
+	// when omitted, and Cache for a leaf that preloads no account.
 	// +optional
 	Resolver ResolverType `json:"resolver,omitempty"`
 }

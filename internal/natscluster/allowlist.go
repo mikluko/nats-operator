@@ -19,15 +19,19 @@ const (
 	reloadAlways reloadRule = iota
 	// reloadRaiseOnly reloads a number set before and after that rises.
 	reloadRaiseOnly
+	// reloadChildren reloads when the objects at the key, an absent one
+	// counting as empty, differ only under the key's Children.
+	reloadChildren
 )
 
 // reloadKey is a config key nats-server applies on reload. Path is the
 // key's dotted path in the rendered config and covers every key beneath
 // it; Case is the diffOptions switch case that applies it.
 type reloadKey struct {
-	Path string
-	Case string
-	Rule reloadRule
+	Path     string
+	Case     string
+	Rule     reloadRule
+	Children []string
 }
 
 // reloadAllowLists are the reloadable config keys by nats-server
@@ -49,6 +53,7 @@ var reloadAllowLists = map[string][]reloadKey{
 		{Path: "cluster.tls", Case: "cluster", Rule: reloadAlways},
 		{Path: "jetstream.max_memory_store", Case: "jetstreammaxmemory", Rule: reloadRaiseOnly},
 		{Path: "jetstream.max_file_store", Case: "jetstreammaxstore", Rule: reloadRaiseOnly},
+		{Path: "leafnodes", Case: "leafnode", Rule: reloadChildren, Children: []string{"remotes"}},
 	},
 }
 
@@ -146,9 +151,24 @@ func reloads(allow []reloadKey, path string, old, next map[string]any) bool {
 		a, aok := lookup(old, key.Path).(float64)
 		b, bok := lookup(next, key.Path).(float64)
 		return aok && bok && b > a
+	case reloadChildren:
+		a, _ := lookup(old, key.Path).(map[string]any)
+		b, _ := lookup(next, key.Path).(map[string]any)
+		return reflect.DeepEqual(without(a, key.Children), without(b, key.Children))
 	default:
 		return true
 	}
+}
+
+// without returns a copy of m less keys, never nil.
+func without(m map[string]any, keys []string) map[string]any {
+	out := map[string]any{}
+	for k, v := range m {
+		if !slices.Contains(keys, k) {
+			out[k] = v
+		}
+	}
+	return out
 }
 
 // lookup returns the value at a dotted path in m, or nil.

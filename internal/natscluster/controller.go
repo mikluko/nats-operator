@@ -85,8 +85,9 @@ type Reconciler struct {
 // the namespace/name of the NatsOperatorTrust auth.trustRef names.
 const TrustField = "cluster.nats.mikluko.io/trust"
 
-// SetupWithManager registers TrustField and the grant index on mgr's cache
-// and registers r with mgr, watching the NatsOperatorTrusts and
+// SetupWithManager registers TrustField, the leaf reference indexes and the
+// grant index on mgr's cache and registers r with mgr, watching the
+// NatsOperatorTrusts, NatsConnections, NatsAccountTrusts, Secrets and
 // NatsReferenceGrants NatsClusters read.
 func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	idx := mgr.GetFieldIndexer()
@@ -99,14 +100,19 @@ func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) err
 		return fmt.Errorf("index NatsCluster trust: %w", err)
 	}
 	if err := grant.IndexReferrers(ctx, idx, &clusterv1beta1.NatsCluster{}, func(o client.Object) []string {
-		if a := o.(*clusterv1beta1.NatsCluster).Spec.Auth; a != nil {
-			return []string{a.TrustRef.Namespace}
+		nc := o.(*clusterv1beta1.NatsCluster)
+		out := leafRefNamespaces(nc)
+		if a := nc.Spec.Auth; a != nil {
+			out = append(out, a.TrustRef.Namespace)
 		}
-		return nil
+		return out
 	}); err != nil {
 		return fmt.Errorf("index NatsCluster grants: %w", err)
 	}
-	return ctrl.NewControllerManagedBy(mgr).
+	if err := indexLeafRefs(ctx, idx); err != nil {
+		return err
+	}
+	return r.watchLeafRefs(ctrl.NewControllerManagedBy(mgr)).
 		For(&clusterv1beta1.NatsCluster{}).
 		Watches(&natsv1beta1.NatsOperatorTrust{}, handler.EnqueueRequestsFromMapFunc(r.clustersTrusting)).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(mgr.GetClient(),
@@ -182,11 +188,19 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		setCondition(&nc.Status, *cond, nc.Generation)
 		return ctrl.Result{RequeueAfter: resyncUnsettled}, r.patchStatus(ctx, orig, nc)
 	}
+	remotes, cond, err := readLeafRemotes(ctx, r.Client, nc, trust)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if cond != nil {
+		setCondition(&nc.Status, *cond, nc.Generation)
+		return ctrl.Result{RequeueAfter: resyncUnsettled}, r.patchStatus(ctx, orig, nc)
+	}
 	gatewayWait, gatewayCA, err := r.ensureGatewayCert(ctx, nc)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	plan, err := Render(nc, Inputs{Trust: trust, GatewayCA: gatewayCA})
+	plan, err := Render(nc, Inputs{Trust: trust, GatewayCA: gatewayCA}, remotes...)
 	if err != nil {
 		setCondition(&nc.Status, metav1.Condition{
 			Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: ReasonUnsupportedSpec, Message: err.Error(),
@@ -204,6 +218,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	certWait, certReason := routeWait, ReasonRouteCertNotReady
 	if certWait == "" {
 		certWait, certReason = gatewayWait, ReasonGatewayCertNotReady
+	}
+	leafWait, err := r.applyLeafnodes(ctx, nc, plan)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if certWait == "" && leafWait != "" {
+		certWait, certReason = leafWait, ReasonLeafnodesCertNotReady
 	}
 
 	stsByName, err := r.statefulSets(ctx, nc)
@@ -235,6 +256,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	nc.Status = computeStatus(nc, plan, obs)
+	r.observeLeafs(ctx, nc, plan, &nc.Status)
 	if certWait != "" {
 		setCondition(&nc.Status, metav1.Condition{
 			Type: ConditionProgressing, Status: metav1.ConditionTrue, Reason: certReason, Message: certWait,
@@ -251,14 +273,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 // unsupportedFields names the spec fields this controller does not render.
 func unsupportedFields(spec *clusterv1beta1.NatsClusterSpec) []string {
-	var out []string
-	if spec.Leafnodes != nil {
-		out = append(out, "leafnodes")
-	}
-	if len(spec.LeafRemotes) > 0 {
-		out = append(out, "leafRemotes")
-	}
-	return out
+	return unsupportedLeafFields(spec)
 }
 
 func (r *Reconciler) patchStatus(ctx context.Context, orig, nc *clusterv1beta1.NatsCluster) error {
