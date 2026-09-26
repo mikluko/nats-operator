@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
@@ -37,6 +38,10 @@ const ActivationSigned = "signed"
 // cross-namespace reference, and a private export lists the importer, in
 // which case an activation token is minted with the exporter's signing key.
 // An import that does not resolve is left out of the JWT and reported.
+//
+// The JWT revokes the keys of its NatsUsers being deleted or no longer
+// admitted, and keeps every revocation it already carried. Each newly
+// signed JWT resets status.distribution to no server current.
 type AccountReconciler struct {
 	client.Client
 	// Distributor receives every newly signed account JWT; nil pushes
@@ -47,6 +52,7 @@ type AccountReconciler struct {
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts,verbs=get;list;watch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=get;list;watch
 
 // Reconcile implements reconcile.Reconciler.
 func (r *AccountReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -95,11 +101,16 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 	}
 	st.Imports = imports.statuses
 
+	users, err := listUsers(ctx, r.Client, authv1beta1.AccountKindAccount, client.ObjectKeyFromObject(acc))
+	if err != nil {
+		return reconcile.Result{}, err
+	}
 	a := jwtplane.Account{
-		Name:    acc.Name,
-		Keys:    keys.Keys,
-		Limits:  accountLimits(acc.Spec.Limits),
-		Imports: imports.imports,
+		Name:        acc.Name,
+		Keys:        keys.Keys,
+		Limits:      accountLimits(acc.Spec.Limits),
+		Imports:     imports.imports,
+		Revocations: accountRevocations(st.JWT, pub, users),
 	}
 	for _, e := range exports {
 		a.Exports = append(a.Exports, e.Export)
@@ -120,6 +131,7 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 		}
 		st.JWT = token
 		st.JWTHash = JWTHash(token)
+		st.Distribution = pushed(st.Distribution, now)
 	}
 
 	if len(imports.unresolved) > 0 {
@@ -135,6 +147,25 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 		setCondition(&st.Conditions, acc.Generation, ConditionReady, metav1.ConditionTrue, ReasonSigned, "")
 	}
 	return requeueAtRenewal(st.JWT, now), nil
+}
+
+// listUsers lists the NatsUsers of the account of kind at key.
+func listUsers(ctx context.Context, c client.Reader, kind authv1beta1.AccountKind, key types.NamespacedName) ([]authv1beta1.NatsUser, error) {
+	var list authv1beta1.NatsUserList
+	if err := c.List(ctx, &list, client.MatchingFields{userAccountField: accountValue(kind, key)}); err != nil {
+		return nil, fmt.Errorf("list NatsUsers: %w", err)
+	}
+	return list.Items, nil
+}
+
+// pushed is d once a new JWT was pushed at now: no server is known to hold
+// it yet.
+func pushed(d *authv1beta1.Distribution, now time.Time) *authv1beta1.Distribution {
+	out := &authv1beta1.Distribution{LastPushTime: &metav1.Time{Time: now}}
+	if d != nil {
+		out.Servers = d.Servers
+	}
+	return out
 }
 
 // accountTTL is the lifetime jwtplane signs for ttl.
@@ -404,6 +435,13 @@ func (r *AccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&corev1.Secret{}, enqueueIndexed(c, &authv1beta1.NatsAccountList{}, seedSecretField)).
 		Watches(&authv1beta1.NatsOperator{}, enqueueIndexed(c, &authv1beta1.NatsAccountList{}, operatorField)).
 		Watches(&authv1beta1.NatsAccount{}, enqueueIndexed(c, &authv1beta1.NatsAccountList{}, exporterField)).
+		Watches(&authv1beta1.NatsUser{}, handler.EnqueueRequestsFromMapFunc(func(_ context.Context, obj client.Object) []reconcile.Request {
+			ref := obj.(*authv1beta1.NatsUser).Spec.AccountRef
+			if ref.Kind != authv1beta1.AccountKindAccount {
+				return nil
+			}
+			return []reconcile.Request{{NamespacedName: refKey(ref.ObjectReference, obj.GetNamespace())}}
+		})).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, schema.GroupKind{Group: authGroup, Kind: "NatsAccount"}, &authv1beta1.NatsAccountList{})).
 		Complete(r)
 }

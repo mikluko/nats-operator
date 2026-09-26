@@ -8,8 +8,9 @@ import (
 )
 
 // Setup registers the field indexes and every reconciler of this package
-// with mgr. d receives newly signed account JWTs; nil pushes nothing.
-func Setup(ctx context.Context, mgr ctrl.Manager, d Distributor) error {
+// with mgr. d receives newly signed account JWTs; nil pushes nothing. s
+// closes deleted users' connections; nil reaches no NATS server.
+func Setup(ctx context.Context, mgr ctrl.Manager, d Distributor, s Sessions) error {
 	if err := indexes(ctx, mgr.GetFieldIndexer()); err != nil {
 		return fmt.Errorf("register indexes: %w", err)
 	}
@@ -20,6 +21,7 @@ func Setup(ctx context.Context, mgr ctrl.Manager, d Distributor) error {
 		&AccountReconciler{Client: c, Distributor: d},
 		&OperatorTrustReconciler{Client: c},
 		&AccountTrustReconciler{Client: c},
+		&UserReconciler{Client: c, Sessions: s},
 	} {
 		if err := r.SetupWithManager(mgr); err != nil {
 			return err

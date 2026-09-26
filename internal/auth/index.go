@@ -30,7 +30,15 @@ const (
 	// seedSecretField indexes NatsOperator, NatsSystemAccount and
 	// NatsAccount by the seed Secrets their keys name.
 	seedSecretField = "auth.nats.mikluko.io/seed-secret"
+	// userAccountField indexes NatsUser by its account, valued by
+	// accountValue.
+	userAccountField = "auth.nats.mikluko.io/user-account"
 )
+
+// accountValue is the userAccountField value of the account of kind at k.
+func accountValue(kind authv1beta1.AccountKind, k types.NamespacedName) string {
+	return string(kind) + ":" + keyValue(k)
+}
 
 // refKey returns ref's key, in namespace when ref names none.
 func refKey(ref natsv1beta1.ObjectReference, namespace string) types.NamespacedName {
@@ -92,6 +100,10 @@ func indexes(ctx context.Context, idx client.FieldIndexer) error {
 			}
 			return out
 		}},
+		{&authv1beta1.NatsUser{}, userAccountField, func(o client.Object) []string {
+			ref := o.(*authv1beta1.NatsUser).Spec.AccountRef
+			return []string{accountValue(ref.Kind, refKey(ref.ObjectReference, o.GetNamespace()))}
+		}},
 		{&authv1beta1.NatsOperator{}, seedSecretField, func(o client.Object) []string {
 			return secrets(o, o.(*authv1beta1.NatsOperator).Spec.Keys)
 		}},
@@ -124,6 +136,9 @@ func indexes(ctx context.Context, idx client.FieldIndexer) error {
 				out = append(out, imp.AccountRef.Namespace)
 			}
 			return out
+		}},
+		{&authv1beta1.NatsUser{}, func(o client.Object) []string {
+			return []string{o.(*authv1beta1.NatsUser).Spec.AccountRef.Namespace}
 		}},
 		{&natsv1beta1.NatsOperatorTrust{}, func(o client.Object) []string {
 			if ref := o.(*natsv1beta1.NatsOperatorTrust).Spec.OperatorRef; ref != nil {

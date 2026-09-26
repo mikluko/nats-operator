@@ -30,6 +30,10 @@ const (
 	ReasonImportsUnresolved  = "ImportsUnresolved"
 	ReasonInUse              = "InUse"
 	ReasonNoneInUse          = "NoneInUse"
+	ReasonSecretConflict     = "SecretConflict"
+	ReasonRevoking           = "Revoking"
+	ReasonDistributing       = "Distributing"
+	ReasonKicking            = "Kicking"
 )
 
 // setCondition sets a condition of generation gen on conds.

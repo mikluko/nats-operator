@@ -20,5 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Signing keys marked `retiring` stay listed while every account is re-signed with another; the `NatsOperator` condition `RetiringKeysInUse` says when one can be removed.
 - `NatsAccount.status.jwt` carries the account JWT, and `jwtTTL: 0s` signs one that never expires.
 - The JetStream controller creates, updates and deletes the streams and consumers `NatsStream` and `NatsConsumer` declare, through their `NatsConnection`: it adopts existing ones under `adoptionPolicy`, goes Terminal on one it does not own, keeps or deletes them on resource deletion per `deletionPolicy`, and corrects drift every `--resync-period` (default 10m).
+- The auth controller signs `NatsUser`s: creds land in the Secret `credentials` names, or `<name>-creds`, under `user.creds`; a user with `publicKey` gets its JWT in `status.jwt` and no Secret; `preset` signs the named permission set.
+- A `NatsUser` whose `NatsReferenceGrant` is deleted is revoked in its account's JWT, and re-signed once a grant admits it again.
+- Deleting a `NatsUser` holds it until its account's JWT revokes its key, then removes its creds Secret.
 
 [Unreleased]: https://github.com/mikluko/nats-operator/commits/main

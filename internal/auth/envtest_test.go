@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -45,10 +46,12 @@ import (
 
 const storiesDir = "../../docs/content/stories"
 
-// recorder is a Distributor that keeps every push.
+// recorder is a Distributor that keeps every push and hands it to the hook
+// onPush set, if any.
 type recorder struct {
 	mu     sync.Mutex
 	pushes map[types.NamespacedName][]string
+	hook   func(accountJWT string)
 }
 
 func (r *recorder) Push(_ context.Context, operator types.NamespacedName, accountJWT string) error {
@@ -58,7 +61,17 @@ func (r *recorder) Push(_ context.Context, operator types.NamespacedName, accoun
 		r.pushes = map[types.NamespacedName][]string{}
 	}
 	r.pushes[operator] = append(r.pushes[operator], accountJWT)
+	if r.hook != nil {
+		r.hook(accountJWT)
+	}
 	return nil
+}
+
+// onPush sets the hook every later push is handed to; nil clears it.
+func (r *recorder) onPush(hook func(accountJWT string)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.hook = hook
 }
 
 // pushed reports whether token was pushed for operator.
@@ -73,10 +86,12 @@ type env struct {
 	ctx context.Context
 	c   client.Client
 	d   *recorder
+	// sys is the system connection the env's Sessions kick through.
+	sys atomic.Pointer[nats.Conn]
 }
 
-// TestEnvtest runs the reconcilers against a real API server: stories 2 and
-// 5 as their manifests declare them, the JWTs served by a nats-server,
+// TestEnvtest runs the reconcilers against a real API server: stories 2, 4
+// and 5 as their manifests declare them, user deletion against a nats-server, the JWTs served by a nats-server,
 // cross-namespace imports under grants, signing key rotation, offline
 // identities, jwtTTL: 0, a system account flip and the stepdown preset.
 func TestEnvtest(t *testing.T) {
@@ -102,16 +117,17 @@ func TestEnvtest(t *testing.T) {
 		HealthProbeBindAddress: "0",
 	})
 	require.NoError(t, err)
-	d := &recorder{}
-	require.NoError(t, auth.Setup(t.Context(), mgr, d))
+	e := &env{ctx: t.Context(), d: &recorder{}}
+	sessions := auth.ConnSessions{Conn: e.systemConn, Wait: 500 * time.Millisecond}
+	require.NoError(t, auth.Setup(t.Context(), mgr, e.d, sessions))
 	done := make(chan error, 1)
 	go func() { done <- mgr.Start(t.Context()) }()
 	t.Cleanup(func() { require.NoError(t, <-done) })
 
 	c, err := client.New(cfg, client.Options{Scheme: s})
 	require.NoError(t, err)
-	e := &env{ctx: t.Context(), c: c, d: d}
-	for _, ns := range []string{"nats-system", "team-a", "rot", "offline", "flip"} {
+	e.c = c
+	for _, ns := range []string{"nats-system", "team-a", "rot", "offline", "flip", "payments", "orders"} {
 		require.NoError(t, c.Create(t.Context(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}))
 	}
 	for _, f := range []string{
@@ -134,6 +150,9 @@ func TestEnvtest(t *testing.T) {
 	t.Run("Rotation", e.testRotation)
 	t.Run("OfflineIdentities", e.testOfflineIdentities)
 	t.Run("SystemAccountFlipAndStepdown", e.testFlipAndStepdown)
+	t.Run("Story2Users", e.testStory2Users)
+	t.Run("Story4", e.testStory4)
+	t.Run("UserDeletion", e.testDeletion)
 }
 
 var demo = types.NamespacedName{Namespace: "nats-system", Name: "demo"}

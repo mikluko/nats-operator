@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -21,6 +22,7 @@ import (
 // whether it is the live system account. Its JWT is signed by the
 // OperatorReconciler of the NatsOperator whose systemAccountRef names it,
 // and lives in that operator's status; an unreferenced one is not signed.
+// A newly signed JWT resets status.distribution to no server current.
 type SystemAccountReconciler struct {
 	client.Client
 }
@@ -82,7 +84,10 @@ func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta
 		notReady(ReasonPending, fmt.Sprintf("NatsOperator %s has not signed this account yet", key))
 		return nil
 	}
-	st.JWTHash = JWTHash(signed.JWT)
+	if hash := JWTHash(signed.JWT); hash != st.JWTHash {
+		st.JWTHash = hash
+		st.Distribution = pushed(st.Distribution, time.Now())
+	}
 	setCondition(&st.Conditions, sys.Generation, ConditionReady, metav1.ConditionTrue, ReasonSigned, "")
 	return nil
 }

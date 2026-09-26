@@ -42,7 +42,7 @@ func main() {
 		os.Exit(1)
 	}
 	ctx := ctrl.SetupSignalHandler()
-	if err := auth.Setup(ctx, mgr, nil); err != nil {
+	if err := auth.Setup(ctx, mgr, nil, nil); err != nil {
 		log.Error(err, "set up reconcilers")
 		os.Exit(1)
 	}

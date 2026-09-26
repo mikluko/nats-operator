@@ -27,7 +27,8 @@ import (
 // status. It generates the keys spec omits.
 //
 // The system account JWT imports the jetstream-stepdown exports of every
-// NatsAccount the operator signs that carries the preset.
+// NatsAccount the operator signs that carries the preset, and revokes the
+// keys of its NatsUsers as AccountReconciler does an account's.
 type OperatorReconciler struct {
 	client.Client
 	// Distributor receives the system account JWT whenever it is newly
@@ -37,7 +38,7 @@ type OperatorReconciler struct {
 
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natssystemaccounts;natsaccounts,verbs=get;list;watch
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natssystemaccounts;natsaccounts;natsusers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create
 
@@ -104,16 +105,25 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	if err != nil {
 		return err
 	}
+	users, err := listUsers(ctx, r.Client, authv1beta1.AccountKindSystemAccount, client.ObjectKeyFromObject(sys))
+	if err != nil {
+		return err
+	}
+	prev := st.SystemAccount
+	var prevJWT string
+	if prev != nil && prev.Name == sys.Name {
+		prevJWT = prev.JWT
+	}
 	sysJWT, err := jwtplane.SignSystemAccount(jwtplane.SystemAccount{
 		Name:             sys.Name,
 		Keys:             sysKeys.Keys,
 		StepdownAccounts: stepdownAccounts(accounts),
+		Revocations:      accountRevocations(prevJWT, sysPub, users),
 	}, keys.Keys, time.Now())
 	if err != nil {
 		notReady(ReasonInvalidKeys, err.Error())
 		return nil
 	}
-	prev := st.SystemAccount
 	if prev == nil || prev.Name != sys.Name || !sameAccountClaims(prev.JWT, sysJWT) {
 		if err := push(ctx, r.Distributor, client.ObjectKeyFromObject(op), sysJWT); err != nil {
 			return fmt.Errorf("push system account JWT: %w", err)
@@ -260,6 +270,13 @@ func (r *OperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&authv1beta1.NatsAccount{}, handler.EnqueueRequestsFromMapFunc(func(_ context.Context, obj client.Object) []reconcile.Request {
 			acc := obj.(*authv1beta1.NatsAccount)
 			return []reconcile.Request{{NamespacedName: refKey(acc.Spec.OperatorRef, acc.Namespace)}}
+		})).
+		Watches(&authv1beta1.NatsUser{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+			ref := obj.(*authv1beta1.NatsUser).Spec.AccountRef
+			if ref.Kind != authv1beta1.AccountKindSystemAccount {
+				return nil
+			}
+			return systemAccountOperators(ctx, c, []reconcile.Request{{NamespacedName: refKey(ref.ObjectReference, obj.GetNamespace())}})
 		})).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, schema.GroupKind{Group: authGroup, Kind: "NatsOperator"}, &authv1beta1.NatsOperatorList{})).
 		Complete(r)

@@ -1,6 +1,7 @@
 // Package auth holds the auth controller's reconcilers: NatsOperator,
 // NatsSystemAccount and NatsAccount, which mint or adopt keys and sign their
-// JWTs, and the reference forms of NatsOperatorTrust and NatsAccountTrust,
+// JWTs, NatsUser, which signs users and revokes them on deletion, and the
+// reference forms of NatsOperatorTrust and NatsAccountTrust,
 // whose status mirrors the JWTs they name.
 //
 // Seeds are read from and generated into Secrets only; status carries public
