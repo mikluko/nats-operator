@@ -48,6 +48,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `cluster.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources. |
 | `auth.enabled` | `true` | Installs the auth controller. |
 | `auth.replicas` | `1` | Replicas of its Deployment. |
+| `auth.systemConnection` | `""` | `--system-connection` of the auth controller, as `namespace/name`; empty, the flag is not passed. |
 | `auth.image.repository` | `ghcr.io/mikluko/nats-operator/auth-controller` | Its image. |
 | `auth.image.tag` | `""` | Its image tag; empty is the chart's `appVersion`. |
 | `auth.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
@@ -63,15 +64,13 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 
 The chart runs every controller with `--leader-elect` set from `leaderElection.enabled`, `--leader-election-id` set to its own API group, metrics on `:8080` (container port `metrics`) and health probes on `:8081` (`/healthz`, `/readyz`). It creates no Service for the metrics port.
 
-The flags below are the binaries' own, and the chart sets none of them:
+The flags below are the binaries' own. The chart sets only `--system-connection`, from `auth.systemConnection`:
 
 | Flag | Controller | Default | What it does |
 |---|---|---|---|
 | `--system-connection` | auth | unset | `namespace/name` of a `NatsConnection` whose creds are a user of a `NatsOperator`'s system account holding the `auth-controller` preset. Through it, account JWTs are pushed to the servers' resolvers and deleted from them, and a deleted user's connections are kicked. Unset, JWTs are signed and written to status, and nothing reaches the servers. |
 | `--resync-period` | JetStream | `10m` | How often a JetStream resource is compared to its server object. |
 | `--zap-log-level`, `--zap-encoder`, `--zap-devel`, `--zap-stacktrace-level`, `--zap-time-encoding` | all | production logging, JSON at `info` | Logging. |
-
-The chart has no value for these flags, so an auth controller installed from it runs without `--system-connection`.
 
 ## RBAC
 

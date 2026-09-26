@@ -24,6 +24,10 @@ cluster:
 auth:
   enabled: true
   replicas: 1
+  # namespace/name of the NatsConnection passed as --system-connection: a user
+  # of a NatsOperator's system account holding the auth-controller preset.
+  # Empty, account JWTs are signed but never pushed to the servers.
+  systemConnection: ""
   image:
     repository: ghcr.io/mikluko/nats-operator/auth-controller
     # Defaults to the chart's appVersion.

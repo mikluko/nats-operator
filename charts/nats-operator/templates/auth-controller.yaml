@@ -19,5 +19,9 @@
   resources: [secrets]
   verbs: [get, list, watch, create, update, patch, delete]
 ` }}
-{{- include "nats-operator.controller" (dict "root" . "name" "auth-controller" "group" "auth.nats.mikluko.io" "values" .Values.auth "rules" (trim $rules)) }}
+{{- $args := list }}
+{{- with .Values.auth.systemConnection }}
+{{- $args = append $args (printf "--system-connection=%s" .) }}
+{{- end }}
+{{- include "nats-operator.controller" (dict "root" . "name" "auth-controller" "group" "auth.nats.mikluko.io" "values" .Values.auth "rules" (trim $rules) "args" $args) }}
 {{- end }}

@@ -197,6 +197,43 @@ func TestChart_Values(t *testing.T) {
 	require.Equal(t, "ghcr.io/mikluko/nats-operator/cluster-controller:v9", d.Spec.Template.Spec.Containers[0].Image)
 }
 
+// TestChart_SystemConnection pins that auth.systemConnection becomes the auth
+// controller's --system-connection, and that no controller gets the flag
+// while it is unset.
+func TestChart_SystemConnection(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		sets []string
+		want map[string]string
+	}{
+		{name: "unset", want: map[string]string{}},
+		{
+			name: "set",
+			sets: []string{"auth.systemConnection=nats/auth-controller"},
+			want: map[string]string{"auth": "--system-connection=nats/auth-controller"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			objs := render(t, tc.sets...)
+			for _, c := range controllers {
+				var d appsv1.Deployment
+				convert(t, objs["Deployment/rel-"+c+"-controller"], &d)
+				var got []string
+				for _, a := range d.Spec.Template.Spec.Containers[0].Args {
+					if strings.HasPrefix(a, "--system-connection") {
+						got = append(got, a)
+					}
+				}
+				if want, ok := tc.want[c]; ok {
+					require.Equal(t, []string{want}, got, c)
+				} else {
+					require.Empty(t, got, c)
+				}
+			}
+		})
+	}
+}
+
 func enabledSets(enabled []string) []string {
 	sets := make([]string, 0, len(controllers))
 	for _, c := range controllers {

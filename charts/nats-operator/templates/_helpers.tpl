@@ -23,8 +23,9 @@ app.kubernetes.io/component: {{ .name }}
 nats-operator.controller renders one controller's ServiceAccount, RBAC and
 Deployment. It takes a dict of root (the chart context), name (the
 controller's name, which is also its binary and image), group (its API group,
-which is also its leader election lease), values (its block of values) and
-rules (its ClusterRole rules as YAML).
+which is also its leader election lease), values (its block of values),
+rules (its ClusterRole rules as YAML) and, optionally, args (flags appended to
+the controller's own).
 */}}
 {{- define "nats-operator.controller" -}}
 {{- $fullname := include "nats-operator.fullname" . -}}
@@ -131,6 +132,9 @@ spec:
             - --leader-election-id={{ .group }}
             - --metrics-bind-address=:8080
             - --health-probe-bind-address=:8081
+            {{- range .args }}
+            - {{ . | quote }}
+            {{- end }}
           ports:
             - name: metrics
               containerPort: 8080
