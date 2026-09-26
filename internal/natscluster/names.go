@@ -21,6 +21,15 @@ const (
 	// spec it was rendered with; a change to it restarts the server.
 	AnnotationSpecDigest = "cluster.nats.mikluko.io/spec-digest"
 
+	// AnnotationVolumeDigest on a server's StatefulSet is a digest of the
+	// volume claim templates it was created with; a change to it replaces
+	// the server.
+	AnnotationVolumeDigest = "cluster.nats.mikluko.io/volume-digest"
+
+	// AnnotationRemoval on a server's StatefulSet is how far its removal
+	// has gone, one of the removalPhase values.
+	AnnotationRemoval = "cluster.nats.mikluko.io/removal"
+
 	// AnnotationConfigApply on a server's ConfigMap is how the revision it
 	// holds is applied: Reload while the cluster controller reloads it,
 	// Restart once the reload failed. A ConfigMap written for a restart
@@ -113,3 +122,7 @@ func clusterSelector(nc *clusterv1beta1.NatsCluster) map[string]string {
 func serverSelector(nc *clusterv1beta1.NatsCluster, server string) map[string]string {
 	return map[string]string{LabelCluster: nc.Name, LabelServer: server}
 }
+
+// dataClaimName is the PersistentVolumeClaim a server's StatefulSet creates
+// from its data volume claim template.
+func dataClaimName(server string) string { return "data-" + server + "-0" }

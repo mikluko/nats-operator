@@ -47,7 +47,8 @@ type Server struct {
 // except route certificates.
 type Plan struct {
 	// Revision is the config revision: a digest of every server's config
-	// and StatefulSet, the revision itself excluded.
+	// and StatefulSet, the revision itself and the volume claim templates
+	// excluded.
 	Revision string
 	Limits   Limits
 	// LeafRemotes are the resolved remotes the plan was rendered with.
@@ -74,7 +75,7 @@ func Render(nc *clusterv1beta1.NatsCluster, in Inputs, remotes ...LeafRemote) (*
 	}
 	layout := podLayout(nc)
 	h := sha256.New()
-	specDigests := map[string]string{}
+	specDigests, volumeDigests := map[string]string{}, map[string]string{}
 	for _, name := range serverNames(nc) {
 		cfg, err := serverConfig(nc, in, name, layout, "", remotes...).Render()
 		if err != nil {
@@ -84,7 +85,9 @@ func Render(nc *clusterv1beta1.NatsCluster, in Inputs, remotes ...LeafRemote) (*
 		if err != nil {
 			return nil, err
 		}
-		stsJSON, err := json.Marshal(sts.Spec)
+		spec := sts.Spec
+		spec.VolumeClaimTemplates = nil
+		stsJSON, err := json.Marshal(spec)
 		if err != nil {
 			return nil, err
 		}
@@ -92,6 +95,9 @@ func Render(nc *clusterv1beta1.NatsCluster, in Inputs, remotes ...LeafRemote) (*
 		h.Write(stsJSON)
 		sum := sha256.Sum256(stsJSON)
 		specDigests[name] = hex.EncodeToString(sum[:])[:10]
+		if volumeDigests[name], err = volumeDigest(sts); err != nil {
+			return nil, err
+		}
 		p.Servers = append(p.Servers, Server{Name: name, StatefulSet: sts})
 	}
 	p.Revision = hex.EncodeToString(h.Sum(nil))[:10]
@@ -105,11 +111,26 @@ func Render(nc *clusterv1beta1.NatsCluster, in Inputs, remotes ...LeafRemote) (*
 		s.StatefulSet.Annotations = map[string]string{
 			AnnotationConfigRevision: p.Revision,
 			AnnotationSpecDigest:     specDigests[s.Name],
+			AnnotationVolumeDigest:   volumeDigests[s.Name],
 		}
 		tmpl := &s.StatefulSet.Spec.Template
 		tmpl.Annotations = merged(tmpl.Annotations, map[string]string{AnnotationConfigRevision: p.Revision})
 	}
 	return p, nil
+}
+
+// volumeDigest is a digest of sts's volume claim templates, "" when it has
+// none.
+func volumeDigest(sts *appsv1.StatefulSet) (string, error) {
+	if len(sts.Spec.VolumeClaimTemplates) == 0 {
+		return "", nil
+	}
+	b, err := json.Marshal(sts.Spec.VolumeClaimTemplates)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])[:10], nil
 }
 
 func configMap(nc *clusterv1beta1.NatsCluster, server string, cfg []byte, revision string) *corev1.ConfigMap {

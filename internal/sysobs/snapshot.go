@@ -56,11 +56,13 @@ type Placement struct {
 // account's ID, its public key under a NATS operator; it is empty for the
 // meta group, and Consumer is empty for a stream group.
 type Group struct {
-	Kind      Kind
-	Account   string
-	Stream    string
-	Consumer  string
-	RaftGroup string
+	Kind    Kind
+	Account string
+	// AccountName is the account's name tag, its ID when it has none.
+	AccountName string
+	Stream      string
+	Consumer    string
+	RaftGroup   string
 
 	// Leader is the server that reports itself the group's leader, or ""
 	// when none of the servers that answered does.
@@ -226,11 +228,11 @@ func merge(roster []Server, reports map[string]*wireJSInfo) *Snapshot {
 	}
 
 	groups := map[groupKey]*groupAcc{}
-	see := func(k groupKey, server, raftGroup string, c *wireCluster, cfg *wireStreamConfig) {
+	see := func(k groupKey, accountName, server, raftGroup string, c *wireCluster, cfg *wireStreamConfig) {
 		a := groups[k]
 		if a == nil {
 			a = &groupAcc{group: Group{
-				Kind: k.kind, Account: k.account, Stream: k.stream, Consumer: k.consumer,
+				Kind: k.kind, Account: k.account, AccountName: accountName, Stream: k.stream, Consumer: k.consumer,
 				RaftGroup: raftGroup, Placement: placementOf(cfg),
 			}}
 			if cfg != nil {
@@ -270,11 +272,11 @@ func merge(roster []Server, reports map[string]*wireJSInfo) *Snapshot {
 		for _, acc := range info.Accounts {
 			for _, st := range acc.Streams {
 				if st.Cluster != nil {
-					see(groupKey{KindStream, acc.ID, st.Name, ""}, server, st.Cluster.RaftGroup, st.Cluster, st.Config)
+					see(groupKey{KindStream, acc.ID, st.Name, ""}, acc.Name, server, st.Cluster.RaftGroup, st.Cluster, st.Config)
 				}
 				for _, co := range st.Consumers {
 					if co.Cluster != nil {
-						see(groupKey{KindConsumer, acc.ID, st.Name, co.Name}, server, co.Cluster.RaftGroup, co.Cluster, st.Config)
+						see(groupKey{KindConsumer, acc.ID, st.Name, co.Name}, acc.Name, server, co.Cluster.RaftGroup, co.Cluster, st.Config)
 					}
 				}
 			}

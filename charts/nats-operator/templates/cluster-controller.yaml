@@ -24,6 +24,9 @@
 - apiGroups: [""]
   resources: [pods]
   verbs: [get, list, watch]
+- apiGroups: [""]
+  resources: [persistentvolumeclaims]
+  verbs: [get, list, watch, delete]
 ` }}
 {{- include "nats-operator.controller" (dict "root" . "name" "cluster-controller" "group" "cluster.nats.mikluko.io" "values" .Values.cluster "rules" (trim $rules)) }}
 {{- end }}

@@ -86,6 +86,7 @@ var wantRules = map[string]grants{
 			"policy/poddisruptionbudgets":         crud,
 			"/secrets":                            crud,
 			"/pods":                               read,
+			"/persistentvolumeclaims":             {"delete", "get", "list", "watch"},
 		},
 		events,
 	),

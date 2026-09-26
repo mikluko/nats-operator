@@ -67,16 +67,22 @@ type Reconciler struct {
 	// Reloader reaches a NATS cluster's system account to reload its
 	// servers; nil restarts every config change.
 	Reloader ReloaderFunc
+	// Admin reaches a NATS cluster's system account to evacuate and
+	// remove servers; nil blocks scale-down and replacement of servers
+	// running JetStream.
+	Admin AdminFunc
 	// Forget, when set, is called with the key of a NatsCluster that is
 	// gone or being deleted.
 	Forget func(types.NamespacedName)
 	Now    func() time.Time
 }
 
-// +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters,verbs=get;list;watch
+// +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters/finalizers,verbs=update
 // +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services;configmaps;secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;delete
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsoperatortrusts;natsreferencegrants,verbs=get;list;watch
@@ -154,9 +160,11 @@ func (r *Reconciler) clustersTrusting(ctx context.Context, t client.Object) []re
 }
 
 // Reconcile creates what a NatsCluster renders and reports its status. A
-// server's ConfigMap and StatefulSet are created when absent; a changed
-// revision is reloaded where the change reloads, and is otherwise rolled
-// out one restart at a time.
+// server's ConfigMap and StatefulSet are created when absent, once the
+// data volume claim of any earlier StatefulSet of that server is gone; a
+// changed revision is reloaded where the change reloads, and is otherwise
+// rolled out one restart at a time, beside scale-down and server
+// replacement. Deletion is guarded by finalize.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	nc := &clusterv1beta1.NatsCluster{}
 	if err := r.Client.Get(ctx, req.NamespacedName, nc); err != nil {
@@ -166,10 +174,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	if !nc.DeletionTimestamp.IsZero() {
-		if r.Forget != nil {
-			r.Forget(req.NamespacedName)
-		}
-		return ctrl.Result{}, nil
+		return r.finalize(ctx, nc)
+	}
+	if err := r.guardDeletion(ctx, nc); err != nil {
+		return ctrl.Result{}, err
 	}
 	orig := nc.DeepCopy()
 
@@ -236,6 +244,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		for _, s := range plan.Servers {
 			if stsByName[s.Name] != nil {
 				continue
+			}
+			if released, err := r.dataReleased(ctx, nc, s.Name); err != nil || !released {
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+				obs.Created = append(obs.Created, s.Name)
+				continue
+			}
+			if ro := nc.Status.Rollout; ro != nil && ro.Current == s.Name {
+				s.StatefulSet = s.StatefulSet.DeepCopy()
+				s.StatefulSet.Annotations[AnnotationRemoval] = string(phaseRejoining)
 			}
 			sts, err := r.createServer(ctx, nc, s)
 			if err != nil {

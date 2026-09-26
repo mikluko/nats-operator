@@ -47,6 +47,10 @@ const (
 	ReasonRolloutPaused       = "RolloutPaused"
 	ReasonReloadPending       = "ReloadPending"
 	ReasonScaleDownPending    = "ScaleDownPending"
+	ReasonScalingDown         = "ScalingDown"
+	ReasonReplacingServer     = "ReplacingServer"
+	ReasonScaleDownBlocked    = "ScaleDownBlocked"
+	ReasonReplacementBlocked  = "ReplacementBlocked"
 	ReasonUnsupportedSpec     = "UnsupportedSpec"
 	ReasonRouteCertNotReady   = "RouteCertificateNotReady"
 	ReasonGatewayCertNotReady = "GatewayCertificateNotReady"
@@ -325,7 +329,8 @@ func serversOf(us []sysobs.Unsettled) []string {
 
 // progressingCondition is True while the StatefulSets differ from the
 // plan: servers being created, a rollout, servers reloading to the
-// revision, or servers beyond spec.replicas.
+// revision, or servers beyond spec.replicas; it is False with the blocked
+// reason while only a scale-down or replacement that cannot start is left.
 func progressingCondition(nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed) metav1.Condition {
 	c := metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionTrue}
 	if len(o.Created) > 0 {
@@ -346,6 +351,9 @@ func progressingCondition(nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed
 		c.Reason = ReasonReloadPending
 		c.Message = fmt.Sprintf("reloading %s to revision %s", strings.Join(stale, ", "), plan.Revision)
 		return c
+	}
+	if o.Rollout.Blocked != nil {
+		return *o.Rollout.Blocked
 	}
 	var extra []string
 	for name := range o.StatefulSets {

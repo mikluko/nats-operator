@@ -60,6 +60,7 @@ func main() {
 		Client:   mgr.GetClient(),
 		Observer: sys,
 		Reloader: sys.Reloader,
+		Admin:    sys.Admin,
 		Forget:   sys.Forget,
 	}
 	ctx := ctrl.SetupSignalHandler()

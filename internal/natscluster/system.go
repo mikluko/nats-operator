@@ -58,6 +58,15 @@ func (s *SystemConnections) Reloader(ctx context.Context, nc *clusterv1beta1.Nat
 	return s.observer(ctx, nc)
 }
 
+// Admin is an AdminFunc: it evacuates and removes nc's servers over $SYS,
+// and returns ErrNoSystemUser when nc names no system user.
+func (s *SystemConnections) Admin(ctx context.Context, nc *clusterv1beta1.NatsCluster) (ServerAdmin, error) {
+	if !hasSystemUser(nc) {
+		return nil, ErrNoSystemUser
+	}
+	return s.observer(ctx, nc)
+}
+
 // Forget closes the connection of the NatsCluster named key.
 func (s *SystemConnections) Forget(key types.NamespacedName) {
 	s.Pool.Forget(natsconn.Key{Kind: PoolKind, NamespacedName: key})

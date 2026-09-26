@@ -23,6 +23,7 @@ const (
 	GateReady          = "Ready"
 	GateTargetRevision = "TargetRevision"
 	GateSettled        = "Settled"
+	GateEvacuated      = "Evacuated"
 )
 
 // gateBlockedAfter is how long a closed gate reads as RollingRestart before
@@ -43,6 +44,9 @@ type rolloutServer struct {
 	Restart bool
 	// Ready is true when its pod is Ready at its StatefulSet's template.
 	Ready bool
+	// Missing is true when it has no StatefulSet, as a replaced server
+	// has between its deletion and its recreation.
+	Missing bool
 	// Revision is the config revision the server reports, "" when it did
 	// not answer.
 	Revision string
@@ -50,11 +54,16 @@ type rolloutServer struct {
 
 // rolloutState is everything one rollout decision reads. Servers are in
 // ordinal order; Verdict is nil when the NATS cluster was not observed.
+// NotInMeta are the servers that answered but are not members of the meta
+// group, as a server readmitted after a removal is not until its tombstone
+// lapses.
 type rolloutState struct {
 	Target     string
 	Servers    []rolloutServer
 	MetaLeader string
 	Verdict    *sysobs.Verdict
+	NotInMeta  []string
+	Removal    removalState
 	Paused     bool
 	ForceStep  string
 	Prev       *clusterv1beta1.RolloutStatus
@@ -65,6 +74,11 @@ type rolloutState struct {
 type rolloutDecision struct {
 	// Step is the server to restart now, or "".
 	Step string
+	// Remove is the removal action to take now, or nil.
+	Remove *removalStep
+	// Blocked is the Progressing condition of a scale-down or replacement
+	// that cannot start, nil when none is blocked.
+	Blocked *metav1.Condition
 	// ClearForceStep is true when a force-step annotation was read; it is
 	// cleared whether or not it named a server that could be stepped.
 	ClearForceStep bool
@@ -83,24 +97,46 @@ type gateState struct {
 
 func (g gateState) open() bool { return g.waitingFor == "" }
 
-// decide takes one rollout decision. It restarts at most one server: the
-// highest ordinal waiting for a restart, the meta leader's server last, and
-// only once every server is Ready, every server on the target revision
-// reports it, and the NATS cluster is Settled. A closed gate holds with no
-// timeout. Paused holds before the next step; a force-step naming a server
-// waiting for a restart steps it through a closed gate and through Paused.
+// decide takes one rollout decision. It takes at most one step: removing
+// a server beyond spec.replicas, highest ordinal first; then restarting a
+// server waiting for one; then replacing a server whose volume is to be
+// replaced; restarts and replacements highest ordinal first, the meta
+// leader's server last. A step starts only once every server is Ready,
+// every server on the target revision reports it, every server is a member
+// of the meta group, and the NATS cluster is Settled; a closed gate holds
+// with no timeout. Paused holds before the next step; a force-step naming a
+// server waiting for a restart restarts it through a closed gate and
+// through Paused. A removal once begun is carried through, paused or not.
 func decide(st rolloutState) rolloutDecision {
 	d := rolloutDecision{ClearForceStep: st.ForceStep != ""}
-	var pending, onTarget []string
+	rm := st.Removal
+	var restarts, onTarget, missing []string
 	for _, s := range st.Servers {
 		switch {
+		case s.Name == rm.Removing || slices.Contains(rm.Replace, s.Name):
 		case s.Restart:
-			pending = append(pending, s.Name)
+			restarts = append(restarts, s.Name)
 		case s.OnTarget:
 			onTarget = append(onTarget, s.Name)
+		case s.Missing:
+			missing = append(missing, s.Name)
 		}
 	}
-	pending = rolloutOrder(pending, st.MetaLeader)
+	notRemoving := func(s string) bool { return s == rm.Removing }
+	surplus := slices.DeleteFunc(slices.Clone(rm.Surplus), notRemoving)
+	slices.Reverse(surplus)
+	replace := rolloutOrder(slices.DeleteFunc(slices.Clone(rm.Replace), notRemoving), st.MetaLeader)
+	if why := scaleDownBlocked(rm); why != "" && len(surplus) > 0 {
+		d.Blocked = &metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: ReasonScaleDownBlocked,
+			Message: fmt.Sprintf("cannot remove %s: %s", strings.Join(surplus, ", "), why)}
+		surplus = nil
+	}
+	if rm.JetStream && rm.NoAdmin != "" && len(replace) > 0 {
+		d.Blocked = &metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: ReasonReplacementBlocked,
+			Message: fmt.Sprintf("cannot replace %s: cannot evacuate servers: %s", strings.Join(replace, ", "), rm.NoAdmin)}
+		replace = nil
+	}
+	pending := slices.Concat(surplus, rolloutOrder(restarts, st.MetaLeader), replace)
 
 	gate := judgeGate(st)
 	current := ""
@@ -108,7 +144,10 @@ func decide(st rolloutState) rolloutDecision {
 	if prev != nil && prev.TargetRevision != st.Target {
 		prev = nil
 	}
-	if prev != nil && !gate.open() && slices.Contains(onTarget, prev.Current) {
+	switch {
+	case rm.Removing != "":
+		current = rm.Removing
+	case prev != nil && !gate.open() && (slices.Contains(onTarget, prev.Current) || slices.Contains(missing, prev.Current)):
 		current = prev.Current
 	}
 	if len(pending) == 0 && current == "" {
@@ -120,17 +159,27 @@ func decide(st rolloutState) rolloutDecision {
 		since = prev.Gate.Since.Time
 	}
 	switch {
-	case st.ForceStep != "" && slices.Contains(pending, st.ForceStep):
+	case rm.Removing != "":
+		if d.Remove, gate = continueRemoval(rm, st.MetaLeader); d.Remove != nil {
+			since = st.Now
+		}
+	case st.ForceStep != "" && slices.Contains(restarts, st.ForceStep):
 		d.Step = st.ForceStep
 	case gate.open() && !st.Paused && len(pending) > 0:
-		d.Step = pending[0]
+		if next := pending[0]; st.kindOf(next) == kindRestart {
+			d.Step = next
+		} else {
+			step := startRemoval(rm, next)
+			d.Remove = &step
+			current, gate, since = next, removalGate(step), st.Now
+		}
 	}
 	if d.Step != "" {
 		current = d.Step
-		pending = slices.DeleteFunc(pending, func(s string) bool { return s == d.Step })
 		gate = gateState{waitingFor: GateSettled, detail: d.Step + " is restarting"}
 		since = st.Now
 	}
+	pending = slices.DeleteFunc(pending, func(s string) bool { return s == current })
 
 	updated := slices.DeleteFunc(slices.Clone(onTarget), func(s string) bool { return s == current })
 	d.Status = &clusterv1beta1.RolloutStatus{
@@ -142,30 +191,44 @@ func decide(st rolloutState) rolloutDecision {
 	if !gate.open() {
 		d.Status.Gate = &clusterv1beta1.RolloutGate{WaitingFor: gate.waitingFor, Since: &metav1.Time{Time: since}}
 	}
-	d.Progressing = rolloutCondition(d.Status, gate, st.Paused, st.Now.Sub(since))
+	d.Progressing = rolloutCondition(d.Status, gate, st.Paused, st.Now.Sub(since), st.kindOf)
 	return d
 }
 
-// rolloutCondition is the Progressing condition of rollout rs: RollingRestart
-// while a server restarts or the gate is closed, GateBlocked once it has
-// been closed for gateBlockedAfter, RolloutPaused while paused between
-// steps.
-func rolloutCondition(rs *clusterv1beta1.RolloutStatus, gate gateState, paused bool, closedFor time.Duration) metav1.Condition {
-	c := metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionTrue, Reason: ReasonRollingRestart}
+// rolloutCondition is the Progressing condition of rollout rs: while a
+// server is being worked on or the gate is closed, RollingRestart,
+// ScalingDown or ReplacingServer after what that server's step does;
+// GateBlocked once the gate has been closed for gateBlockedAfter;
+// RolloutPaused while paused between steps.
+func rolloutCondition(rs *clusterv1beta1.RolloutStatus, gate gateState, paused bool, closedFor time.Duration, kindOf func(string) stepKind) metav1.Condition {
+	c := metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionTrue}
 	total := len(rs.Updated) + len(rs.Pending)
 	if rs.Current != "" {
 		total++
 	}
 	step := fmt.Sprintf("(%d of %d)", len(rs.Updated)+1, total)
+	server := rs.Current
+	if server == "" {
+		server = rs.Pending[0]
+	}
+	var verb string
+	switch kindOf(server) {
+	case kindScaleDown:
+		c.Reason, verb = ReasonScalingDown, "removing"
+	case kindReplace:
+		c.Reason, verb = ReasonReplacingServer, "replacing"
+	default:
+		c.Reason, verb = ReasonRollingRestart, "restarting"
+	}
 	switch {
 	case rs.Current != "":
-		c.Message = fmt.Sprintf("restarting %s %s", rs.Current, step)
+		c.Message = fmt.Sprintf("%s %s %s", verb, server, step)
 	case paused:
 		c.Reason = ReasonRolloutPaused
-		c.Message = fmt.Sprintf("paused before restarting %s %s", rs.Pending[0], step)
+		c.Message = fmt.Sprintf("paused before %s %s %s", verb, server, step)
 		return c
 	default:
-		c.Message = fmt.Sprintf("before restarting %s %s", rs.Pending[0], step)
+		c.Message = fmt.Sprintf("before %s %s %s", verb, server, step)
 	}
 	if gate.open() {
 		return c
@@ -179,7 +242,8 @@ func rolloutCondition(rs *clusterv1beta1.RolloutStatus, gate gateState, paused b
 }
 
 // judgeGate reports what holds the gate to the next step, in order: the
-// NATS cluster not Settled, a server not Ready, a server on the target
+// NATS cluster not Settled, a server outside the meta group, a server not
+// Ready, a server on the target
 // revision not reporting it.
 func judgeGate(st rolloutState) gateState {
 	var notReady, behind []string
@@ -196,6 +260,8 @@ func judgeGate(st rolloutState) gateState {
 		return gateState{GateSettled, "the NATS cluster is not observed"}
 	case !st.Verdict.Settled():
 		return gateState{GateSettled, describeUnsettled(*st.Verdict)}
+	case len(st.NotInMeta) > 0:
+		return gateState{GateSettled, strings.Join(st.NotInMeta, ", ") + " not in the meta group"}
 	case len(notReady) > 0:
 		return gateState{GateReady, strings.Join(notReady, ", ") + " not ready"}
 	case len(behind) > 0:
@@ -274,6 +340,14 @@ func (r *Reconciler) rolloutState(nc *clusterv1beta1.NatsCluster, plan *Plan, o 
 			}
 		}
 	}
+	st.Removal = removalOf(nc, plan, o.StatefulSets, o.Snapshot)
+	if snap := o.Snapshot; snap != nil && st.Removal.JetStream && st.MetaLeader != "" {
+		for _, s := range plan.Servers {
+			if _, ok := reported[s.Name]; ok && !inMetaGroup(snap, s.Name) {
+				st.NotInMeta = append(st.NotInMeta, s.Name)
+			}
+		}
+	}
 	for _, s := range plan.Servers {
 		sts := o.StatefulSets[s.Name]
 		_, restart := o.Apply.Restart[s.Name]
@@ -282,16 +356,39 @@ func (r *Reconciler) rolloutState(nc *clusterv1beta1.NatsCluster, plan *Plan, o 
 			OnTarget: sts != nil && sts.Annotations[AnnotationConfigRevision] == plan.Revision,
 			Restart:  restart,
 			Ready:    podReady(sts),
+			Missing:  sts == nil,
 			Revision: reported[s.Name],
 		})
 	}
 	return st
 }
 
-// rollout takes one rollout decision and carries it out: it restarts the
-// server decided on and clears a force-step annotation it read.
+// rollout takes one rollout decision and carries it out: it restarts or
+// removes the server decided on, marks the server a replace-server
+// annotation names, and clears the force-step and replace-server
+// annotations it read.
 func (r *Reconciler) rollout(ctx context.Context, nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed) (rolloutDecision, error) {
-	d := decide(r.rolloutState(nc, plan, o))
+	if err := r.requestReplacement(ctx, nc, plan, o.StatefulSets); err != nil {
+		return rolloutDecision{}, err
+	}
+	admin, noAdmin := r.admin(ctx, nc)
+	st := r.rolloutState(nc, plan, o)
+	st.Removal.NoAdmin = noAdmin
+	d := decide(st)
+	if judgeGate(st).open() {
+		if err := r.rejoined(ctx, st.Removal.Rejoining, o.StatefulSets); err != nil {
+			return d, err
+		}
+	}
+	if d.Remove != nil {
+		surplus := st.kindOf(d.Remove.Server) == kindScaleDown
+		if err := r.remove(ctx, nc, admin, noAdmin, *d.Remove, o.StatefulSets, surplus); err != nil {
+			return d, err
+		}
+		if d.Remove.Action == actionDelete {
+			delete(o.StatefulSets, d.Remove.Server)
+		}
+	}
 	if d.Step != "" {
 		i := slices.IndexFunc(plan.Servers, func(s Server) bool { return s.Name == d.Step })
 		sts, err := r.restartServer(ctx, nc, plan.Servers[i], o.StatefulSets[d.Step], o.Apply.Restart[d.Step])
@@ -330,6 +427,7 @@ func (r *Reconciler) restartServer(ctx context.Context, nc *clusterv1beta1.NatsC
 	sts := cur.DeepCopy()
 	sts.Labels = merged(sts.Labels, s.StatefulSet.Labels)
 	sts.Annotations = merged(sts.Annotations, s.StatefulSet.Annotations)
+	sts.Annotations[AnnotationVolumeDigest] = cur.Annotations[AnnotationVolumeDigest]
 	sts.Spec.Template = *s.StatefulSet.Spec.Template.DeepCopy()
 	if err := r.Client.Update(ctx, sts); err != nil {
 		return nil, fmt.Errorf("restart statefulset %s: %w", sts.Name, err)
