@@ -67,6 +67,16 @@ func (r *recorder) Push(_ context.Context, operator types.NamespacedName, accoun
 	return nil
 }
 
+// Current implements auth.Distributor; a recorder reaches no server.
+func (r *recorder) Current(context.Context, types.NamespacedName, string) (authv1beta1.Distribution, error) {
+	return authv1beta1.Distribution{}, auth.ErrUnreachable
+}
+
+// Delete implements auth.Distributor.
+func (r *recorder) Delete(context.Context, types.NamespacedName, string) error {
+	return nil
+}
+
 // onPush sets the hook every later push is handed to; nil clears it.
 func (r *recorder) onPush(hook func(accountJWT string)) {
 	r.mu.Lock()

@@ -56,6 +56,26 @@ type NatsOperatorStatus struct {
 	// SystemAccount is the system account the operator JWT names.
 	// +optional
 	SystemAccount *SystemAccountStatus `json:"systemAccount,omitempty"`
+
+	// DeletedAccounts are the accounts deleted while a server may still
+	// hold a valid JWT for one; the delete is re-sent to every server that
+	// joins, until that JWT would have expired.
+	// +optional
+	// +listType=map
+	// +listMapKey=publicKey
+	DeletedAccounts []DeletedAccount `json:"deletedAccounts,omitempty"`
+}
+
+// DeletedAccount is an account deleted from the resolvers.
+type DeletedAccount struct {
+	// PublicKey of the account.
+	// +required
+	PublicKey string `json:"publicKey"`
+
+	// Expires is when the account's last JWT expires; omitted, it never
+	// does.
+	// +optional
+	Expires *metav1.Time `json:"expires,omitempty"`
 }
 
 // SeedSecrets name the Secrets holding generated seeds.

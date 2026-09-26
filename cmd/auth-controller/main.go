@@ -2,10 +2,14 @@
 package main
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"os"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -14,10 +18,14 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/auth"
 	"github.com/mikluko/nats-operator/internal/manager"
+	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
 func main() {
 	opts := manager.Flags(flag.CommandLine, authv1beta1.GroupVersion.Group)
+	systemConnection := flag.String("system-connection", "",
+		"namespace/name of the NatsConnection the auth controller reaches NATS through, whose creds are a user of a NatsOperator's "+
+			"system account holding the auth-controller preset; unset, JWTs are signed but neither pushed nor deleted, and no connection is kicked")
 	zapOpts := zap.Options{}
 	zapOpts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -41,8 +49,29 @@ func main() {
 		log.Error(err, "start")
 		os.Exit(1)
 	}
+	var d auth.Distributor
+	var s auth.Sessions
+	if *systemConnection != "" {
+		name, err := namespacedName(*systemConnection)
+		if err != nil {
+			log.Error(err, "parse --system-connection")
+			os.Exit(1)
+		}
+		pool := natsconn.NewPool()
+		conn := &auth.SystemConnection{Reader: mgr.GetClient(), Pool: pool, Name: name}
+		resolvers := &auth.Resolvers{Conn: conn.Conn, Log: ctrl.Log.WithName("resolvers")}
+		for _, r := range []interface {
+			Start(ctx context.Context) error
+		}{pool, resolvers} {
+			if err := mgr.Add(r); err != nil {
+				log.Error(err, "add runnable")
+				os.Exit(1)
+			}
+		}
+		d, s = resolvers, auth.ConnSessions{Conn: conn.Conn}
+	}
 	ctx := ctrl.SetupSignalHandler()
-	if err := auth.Setup(ctx, mgr, nil, nil); err != nil {
+	if err := auth.Setup(ctx, mgr, d, s); err != nil {
 		log.Error(err, "set up reconcilers")
 		os.Exit(1)
 	}
@@ -50,4 +79,13 @@ func main() {
 		log.Error(err, "run")
 		os.Exit(1)
 	}
+}
+
+// namespacedName parses namespace/name.
+func namespacedName(s string) (types.NamespacedName, error) {
+	ns, name, ok := strings.Cut(s, "/")
+	if !ok || ns == "" || name == "" {
+		return types.NamespacedName{}, fmt.Errorf("%q is not namespace/name", s)
+	}
+	return types.NamespacedName{Namespace: ns, Name: name}, nil
 }

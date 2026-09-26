@@ -11,7 +11,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
@@ -22,9 +24,17 @@ import (
 // whether it is the live system account. Its JWT is signed by the
 // OperatorReconciler of the NatsOperator whose systemAccountRef names it,
 // and lives in that operator's status; an unreferenced one is not signed.
-// A newly signed JWT resets status.distribution to no server current.
+// A newly signed JWT resets status.distribution to no server current; with
+// a Distributor, status.distribution and the Distributed condition then
+// follow the servers holding it.
 type SystemAccountReconciler struct {
 	client.Client
+	// Distributor pushes the JWT again to servers without it; nil pushes
+	// nothing.
+	Distributor Distributor
+	// RosterChanges receives a NatsOperator whose servers changed; the
+	// system accounts naming it are reconciled. Nil receives nothing.
+	RosterChanges <-chan event.GenericEvent
 }
 
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natssystemaccounts,verbs=get;list;watch
@@ -38,12 +48,13 @@ func (r *SystemAccountReconciler) Reconcile(ctx context.Context, req reconcile.R
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 	before := sys.Status.DeepCopy()
-	err := r.reconcile(ctx, &sys)
+	again, err := r.reconcile(ctx, &sys)
 	sys.Status.ObservedGeneration = sys.Generation
-	return reconcile.Result{}, updateStatus(ctx, r.Client, &sys, before, &sys.Status, err)
+	return reconcile.Result{RequeueAfter: again}, updateStatus(ctx, r.Client, &sys, before, &sys.Status, err)
 }
 
-func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta1.NatsSystemAccount) error {
+// reconcile returns how soon to look at sys again.
+func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta1.NatsSystemAccount) (time.Duration, error) {
 	st := &sys.Status
 	notReady := func(reason, msg string) {
 		st.JWTHash = ""
@@ -51,52 +62,56 @@ func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta
 	}
 	keys, err := resolveKeys(ctx, r.Client, systemAccountKeySource(sys), true)
 	if err != nil {
-		return keysFailed(err, notReady)
+		return 0, keysFailed(err, notReady)
 	}
 	pub, err := keys.identityPublicKey()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	st.PublicKey = pub
 
 	key := refKey(sys.Spec.OperatorRef, sys.Namespace)
 	cond, err := admit(ctx, r.Client, authGroup, "NatsSystemAccount", sys, "NatsOperator", key)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if !referenceAdmitted(&st.Conditions, sys.Generation, cond, notReady) {
-		return nil
+		return 0, nil
 	}
 	var op authv1beta1.NatsOperator
 	if err := r.Get(ctx, key, &op); err != nil {
 		if apierrors.IsNotFound(err) {
 			notReady(ReasonNotFound, fmt.Sprintf("NatsOperator %s does not exist", key))
-			return nil
+			return 0, nil
 		}
-		return err
+		return 0, err
 	}
 	if refKey(op.Spec.SystemAccountRef, op.Namespace) != client.ObjectKeyFromObject(sys) {
 		notReady(ReasonNotReferenced, fmt.Sprintf("NatsOperator %s names another system account", key))
-		return nil
+		return 0, nil
 	}
 	signed := op.Status.SystemAccount
 	if signed == nil || signed.Name != sys.Name || signed.PublicKey != pub {
 		notReady(ReasonPending, fmt.Sprintf("NatsOperator %s has not signed this account yet", key))
-		return nil
+		return 0, nil
 	}
 	if hash := JWTHash(signed.JWT); hash != st.JWTHash {
 		st.JWTHash = hash
-		st.Distribution = pushed(st.Distribution, time.Now())
+		st.Distribution = pushed(st.Distribution, time.Now(), r.Distributor != nil)
 	}
 	setCondition(&st.Conditions, sys.Generation, ConditionReady, metav1.ConditionTrue, ReasonSigned, "")
-	return nil
+	return distribute(ctx, r.Distributor, key, signed.JWT, accountDistribution{&st.Distribution, &st.Conditions, sys.Generation})
 }
 
 // SetupWithManager registers the reconciler with mgr. The indexes Setup
 // registers must be in place.
 func (r *SystemAccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c := mgr.GetClient()
-	return ctrl.NewControllerManagedBy(mgr).
+	b := ctrl.NewControllerManagedBy(mgr)
+	if r.RosterChanges != nil {
+		b = b.WatchesRawSource(source.Channel(r.RosterChanges, enqueueIndexed(c, &authv1beta1.NatsSystemAccountList{}, operatorField)))
+	}
+	return b.
 		Named("natssystemaccount").
 		For(&authv1beta1.NatsSystemAccount{}).
 		Owns(&corev1.Secret{}).

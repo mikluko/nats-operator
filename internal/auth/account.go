@@ -16,8 +16,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
@@ -41,17 +44,32 @@ const ActivationSigned = "signed"
 //
 // The JWT revokes the keys of its NatsUsers being deleted or no longer
 // admitted, and keeps every revocation it already carried. Each newly
-// signed JWT resets status.distribution to no server current.
+// signed JWT resets status.distribution to no server current; with a
+// Distributor, status.distribution and the Distributed condition then
+// follow the servers holding it.
+//
+// Deletion is held by AccountFinalizer until the account's public key is
+// in its NatsOperator's status.deletedAccounts, from which the operator's
+// reconciler has it deleted from the resolvers.
 type AccountReconciler struct {
 	client.Client
 	// Distributor receives every newly signed account JWT; nil pushes
 	// nothing.
 	Distributor Distributor
+	// RosterChanges receives a NatsOperator whose servers changed; the
+	// accounts it signs are reconciled. Nil receives nothing.
+	RosterChanges <-chan event.GenericEvent
 }
 
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts,verbs=get;list;watch
+// AccountFinalizer holds a deleted NatsAccount until its NatsOperator
+// records the deletion.
+const AccountFinalizer = "auth.nats.mikluko.io/delete"
+
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts/finalizers,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=get;list;watch
 
 // Reconcile implements reconcile.Reconciler.
@@ -59,6 +77,14 @@ func (r *AccountReconciler) Reconcile(ctx context.Context, req reconcile.Request
 	var acc authv1beta1.NatsAccount
 	if err := r.Get(ctx, req.NamespacedName, &acc); err != nil {
 		return reconcile.Result{}, client.IgnoreNotFound(err)
+	}
+	if acc.DeletionTimestamp != nil {
+		return reconcile.Result{}, r.finalize(ctx, &acc)
+	}
+	if controllerutil.AddFinalizer(&acc, AccountFinalizer) {
+		if err := r.Update(ctx, &acc); err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 	before := acc.Status.DeepCopy()
 	res, err := r.reconcile(ctx, &acc)
@@ -126,12 +152,13 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 		return reconcile.Result{}, nil
 	}
 	if !sameAccountClaims(st.JWT, token) || due(st.JWT, now) || (!a.NoExpiry && lifetimeDiffers(st.JWT, accountTTL(a.TTL))) {
-		if err := push(ctx, r.Distributor, opKey, token); err != nil {
+		err := push(ctx, r.Distributor, opKey, token)
+		if err := pushErr(err); err != nil {
 			return reconcile.Result{}, fmt.Errorf("push account JWT: %w", err)
 		}
 		st.JWT = token
 		st.JWTHash = JWTHash(token)
-		st.Distribution = pushed(st.Distribution, now)
+		st.Distribution = pushed(st.Distribution, now, r.Distributor != nil && err == nil)
 	}
 
 	if len(imports.unresolved) > 0 {
@@ -146,7 +173,29 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 		setCondition(&st.Conditions, acc.Generation, grant.ConditionReferencesResolved, metav1.ConditionTrue, ReasonAllImportsResolved, "")
 		setCondition(&st.Conditions, acc.Generation, ConditionReady, metav1.ConditionTrue, ReasonSigned, "")
 	}
-	return requeueAtRenewal(st.JWT, now), nil
+	again, err := distribute(ctx, r.Distributor, opKey, st.JWT, accountDistribution{&st.Distribution, &st.Conditions, acc.Generation})
+	res := requeueAtRenewal(st.JWT, now)
+	res.RequeueAfter = soonest(res.RequeueAfter, again)
+	return res, err
+}
+
+// finalize records acc's deletion in its NatsOperator's status, where it
+// has a JWT to delete, and removes AccountFinalizer.
+func (r *AccountReconciler) finalize(ctx context.Context, acc *authv1beta1.NatsAccount) error {
+	if !controllerutil.ContainsFinalizer(acc, AccountFinalizer) {
+		return nil
+	}
+	if acc.Status.PublicKey != "" && acc.Status.JWT != "" {
+		deleted, err := deletedAccount(acc.Status.PublicKey, acc.Status.JWT)
+		if err != nil {
+			return err
+		}
+		if err := recordDeleted(ctx, r.Client, refKey(acc.Spec.OperatorRef, acc.Namespace), deleted); err != nil {
+			return err
+		}
+	}
+	controllerutil.RemoveFinalizer(acc, AccountFinalizer)
+	return r.Update(ctx, acc)
 }
 
 // listUsers lists the NatsUsers of the account of kind at key.
@@ -158,10 +207,13 @@ func listUsers(ctx context.Context, c client.Reader, kind authv1beta1.AccountKin
 	return list.Items, nil
 }
 
-// pushed is d once a new JWT was pushed at now: no server is known to hold
-// it yet.
-func pushed(d *authv1beta1.Distribution, now time.Time) *authv1beta1.Distribution {
-	out := &authv1beta1.Distribution{LastPushTime: &metav1.Time{Time: now}}
+// pushed is d once a new JWT was signed at now, and pushed if sent: no
+// server is known to hold it yet.
+func pushed(d *authv1beta1.Distribution, now time.Time, sent bool) *authv1beta1.Distribution {
+	out := &authv1beta1.Distribution{}
+	if sent {
+		out.LastPushTime = &metav1.Time{Time: now}
+	}
 	if d != nil {
 		out.Servers = d.Servers
 	}
@@ -428,7 +480,11 @@ func listsImporter(importers []authv1beta1.AccountReference, namespace string, a
 // registers must be in place.
 func (r *AccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c := mgr.GetClient()
-	return ctrl.NewControllerManagedBy(mgr).
+	b := ctrl.NewControllerManagedBy(mgr)
+	if r.RosterChanges != nil {
+		b = b.WatchesRawSource(source.Channel(r.RosterChanges, enqueueIndexed(c, &authv1beta1.NatsAccountList{}, operatorField)))
+	}
+	return b.
 		Named("natsaccount").
 		For(&authv1beta1.NatsAccount{}).
 		Owns(&corev1.Secret{}).

@@ -21,7 +21,7 @@ import (
 // the keys to sign users of either.
 type plane struct {
 	opJWT, sysJWT, accJWT string
-	sys, acc              jwtplane.Keys
+	op, sys, acc          jwtplane.Keys
 	sysPub, accPub        string
 }
 
@@ -35,7 +35,7 @@ func newPlane(t *testing.T) plane {
 		return jwtplane.Keys{Identity: id, Signing: []jwtplane.SigningKey{{Name: "s", Pair: sk}}}
 	}
 	op, sys, acc := keys(nkeys.PrefixByteOperator), keys(nkeys.PrefixByteAccount), keys(nkeys.PrefixByteAccount)
-	p := plane{sys: sys, acc: acc}
+	p := plane{op: op, sys: sys, acc: acc}
 	var err error
 	p.sysPub, err = sys.Identity.PublicKey()
 	require.NoError(t, err)

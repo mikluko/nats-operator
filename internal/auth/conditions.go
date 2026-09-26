@@ -12,6 +12,9 @@ const (
 	// JWT it manages is still signed by a signing key marked retiring, so
 	// removing that key would invalidate it.
 	ConditionRetiringKeysInUse = "RetiringKeysInUse"
+	// ConditionDistributed is True on an account while every server
+	// trusting its operator holds its current JWT.
+	ConditionDistributed = "Distributed"
 )
 
 // Condition reasons.
@@ -34,6 +37,11 @@ const (
 	ReasonRevoking           = "Revoking"
 	ReasonDistributing       = "Distributing"
 	ReasonKicking            = "Kicking"
+	ReasonDistributed        = "Distributed"
+	ReasonAllServersCurrent  = "AllServersCurrent"
+	ReasonServersBehind      = "ServersBehind"
+	ReasonUnreachable        = "Unreachable"
+	ReasonUnobserved         = "Unobserved"
 )
 
 // setCondition sets a condition of generation gen on conds.

@@ -202,6 +202,30 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              deletedAccounts:
+                description: |-
+                  DeletedAccounts are the accounts deleted while a server may still
+                  hold a valid JWT for one; the delete is re-sent to every server that
+                  joins, until that JWT would have expired.
+                items:
+                  description: DeletedAccount is an account deleted from the resolvers.
+                  properties:
+                    expires:
+                      description: |-
+                        Expires is when the account's last JWT expires; omitted, it never
+                        does.
+                      format: date-time
+                      type: string
+                    publicKey:
+                      description: PublicKey of the account.
+                      type: string
+                  required:
+                  - publicKey
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - publicKey
+                x-kubernetes-list-type: map
               jwt:
                 description: JWT is the operator JWT.
                 type: string

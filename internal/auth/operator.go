@@ -29,6 +29,10 @@ import (
 // The system account JWT imports the jetstream-stepdown exports of every
 // NatsAccount the operator signs that carries the preset, and revokes the
 // keys of its NatsUsers as AccountReconciler does an account's.
+//
+// status.deletedAccounts, filled by AccountReconciler, keeps each deleted
+// account until its last JWT expires or its key is signed again; the
+// Distributor is handed the request deleting them.
 type OperatorReconciler struct {
 	client.Client
 	// Distributor receives the system account JWT whenever it is newly
@@ -49,12 +53,13 @@ func (r *OperatorReconciler) Reconcile(ctx context.Context, req reconcile.Reques
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 	before := op.Status.DeepCopy()
-	err := r.reconcile(ctx, &op)
+	again, err := r.reconcile(ctx, &op)
 	op.Status.ObservedGeneration = op.Generation
-	return reconcile.Result{}, updateStatus(ctx, r.Client, &op, before, &op.Status, err)
+	return reconcile.Result{RequeueAfter: again}, updateStatus(ctx, r.Client, &op, before, &op.Status, err)
 }
 
-func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.NatsOperator) error {
+// reconcile returns how soon to look at op again.
+func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.NatsOperator) (time.Duration, error) {
 	st := &op.Status
 	notReady := func(reason, msg string) {
 		setCondition(&st.Conditions, op.Generation, ConditionReady, metav1.ConditionFalse, reason, msg)
@@ -62,19 +67,19 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	src, err := operatorKeySource(op)
 	if err != nil {
 		notReady(ReasonInvalidJWT, err.Error())
-		return nil
+		return 0, nil
 	}
 	keys, err := resolveKeys(ctx, r.Client, src, true)
 	if err != nil {
-		return keysFailed(err, notReady)
+		return 0, keysFailed(err, notReady)
 	}
 	pub, err := keys.identityPublicKey()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	signing, retiring, err := keys.signingPublicKeys()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	st.PublicKey = pub
 	st.SigningKeys = signing
@@ -85,17 +90,17 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 
 	sys, sysKeys, ok, err := r.systemAccount(ctx, op, notReady)
 	if !ok || err != nil {
-		return err
+		return 0, err
 	}
 	sysPub, err := sysKeys.identityPublicKey()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	opJWT, err := jwtplane.SignOperator(jwtplane.Operator{Name: op.Name, Keys: keys.Keys, SystemAccount: sysPub, JWT: op.Spec.JWT})
 	if err != nil {
 		notReady(ReasonInvalidJWT, err.Error())
-		return nil
+		return 0, nil
 	}
 	if !sameOperatorClaims(st.JWT, opJWT) {
 		st.JWT = opJWT
@@ -103,11 +108,11 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 
 	accounts, err := r.signedAccounts(ctx, op)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	users, err := listUsers(ctx, r.Client, authv1beta1.AccountKindSystemAccount, client.ObjectKeyFromObject(sys))
 	if err != nil {
-		return err
+		return 0, err
 	}
 	prev := st.SystemAccount
 	var prevJWT string
@@ -122,18 +127,55 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	}, keys.Keys, time.Now())
 	if err != nil {
 		notReady(ReasonInvalidKeys, err.Error())
-		return nil
+		return 0, nil
 	}
 	if prev == nil || prev.Name != sys.Name || !sameAccountClaims(prev.JWT, sysJWT) {
-		if err := push(ctx, r.Distributor, client.ObjectKeyFromObject(op), sysJWT); err != nil {
-			return fmt.Errorf("push system account JWT: %w", err)
+		if err := pushErr(push(ctx, r.Distributor, client.ObjectKeyFromObject(op), sysJWT)); err != nil {
+			return 0, fmt.Errorf("push system account JWT: %w", err)
 		}
 		st.SystemAccount = &authv1beta1.SystemAccountStatus{Name: sys.Name, PublicKey: sysPub, JWT: sysJWT}
 	}
 
 	setRetiringCondition(op, retiring, append([]string{st.SystemAccount.JWT}, accountJWTs(accounts)...))
+	next, err := r.deletes(ctx, op, keys.Keys, sysPub)
+	if err != nil {
+		return 0, err
+	}
 	setCondition(&st.Conditions, op.Generation, ConditionReady, metav1.ConditionTrue, ReasonSigned, "")
-	return nil
+	if next.IsZero() {
+		return 0, nil
+	}
+	return max(time.Until(next), time.Second), nil
+}
+
+// deletes prunes op's deleted accounts of those whose JWTs have expired
+// and those whose keys an account signed by op, or the system account
+// sysPub, holds again, and hands the Distributor the request deleting the
+// rest. It returns when the next of them expires, the zero time for never.
+func (r *OperatorReconciler) deletes(ctx context.Context, op *authv1beta1.NatsOperator, keys jwtplane.Keys, sysPub string) (time.Time, error) {
+	var list authv1beta1.NatsAccountList
+	if err := r.List(ctx, &list, client.MatchingFields{operatorField: keyValue(client.ObjectKeyFromObject(op))}); err != nil {
+		return time.Time{}, fmt.Errorf("list NatsAccounts: %w", err)
+	}
+	live := map[string]bool{sysPub: true}
+	for i := range list.Items {
+		if acc := &list.Items[i]; acc.DeletionTimestamp == nil && acc.Status.PublicKey != "" {
+			live[acc.Status.PublicKey] = true
+		}
+	}
+	pruned, next := pruneDeleted(op.Status.DeletedAccounts, live, time.Now())
+	op.Status.DeletedAccounts = pruned
+	if r.Distributor == nil {
+		return next, nil
+	}
+	request, err := deleteRequest(keys, pruned)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("sign delete request: %w", err)
+	}
+	if err := deleteErr(r.Distributor.Delete(ctx, client.ObjectKeyFromObject(op), request)); err != nil {
+		return time.Time{}, fmt.Errorf("delete accounts: %w", err)
+	}
+	return next, nil
 }
 
 // keysFailed reports a key that cannot be read: a missing seed is waited
