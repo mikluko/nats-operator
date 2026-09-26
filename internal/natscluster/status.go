@@ -42,6 +42,9 @@ const (
 	ReasonScaleDownPending  = "ScaleDownPending"
 	ReasonUnsupportedSpec   = "UnsupportedSpec"
 	ReasonRouteCertNotReady = "RouteCertificateNotReady"
+	ReasonTrustNotFound     = "TrustNotFound"
+	ReasonTrustNotReady     = "TrustNotReady"
+	ReasonTrustInvalid      = "TrustInvalid"
 )
 
 // Observed is what one reconcile saw and did: the servers' StatefulSets by

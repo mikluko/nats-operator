@@ -17,11 +17,17 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
+	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
@@ -61,7 +67,10 @@ type Reconciler struct {
 	// Reloader reaches a NATS cluster's system account to reload its
 	// servers; nil restarts every config change.
 	Reloader ReloaderFunc
-	Now      func() time.Time
+	// Forget, when set, is called with the key of a NatsCluster that is
+	// gone or being deleted.
+	Forget func(types.NamespacedName)
+	Now    func() time.Time
 }
 
 // +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters,verbs=get;list;watch
@@ -70,11 +79,38 @@ type Reconciler struct {
 // +kubebuilder:rbac:groups="",resources=services;configmaps;secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsoperatortrusts;natsreferencegrants,verbs=get;list;watch
 
-// SetupWithManager registers r with mgr.
-func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+// TrustField is the field index SetupWithManager registers on NatsClusters:
+// the namespace/name of the NatsOperatorTrust auth.trustRef names.
+const TrustField = "cluster.nats.mikluko.io/trust"
+
+// SetupWithManager registers TrustField and the grant index on mgr's cache
+// and registers r with mgr, watching the NatsOperatorTrusts and
+// NatsReferenceGrants NatsClusters read.
+func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
+	idx := mgr.GetFieldIndexer()
+	if err := idx.IndexField(ctx, &clusterv1beta1.NatsCluster{}, TrustField, func(o client.Object) []string {
+		if key := trustKey(o.(*clusterv1beta1.NatsCluster)); key != "" {
+			return []string{key}
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("index NatsCluster trust: %w", err)
+	}
+	if err := grant.IndexReferrers(ctx, idx, &clusterv1beta1.NatsCluster{}, func(o client.Object) []string {
+		if a := o.(*clusterv1beta1.NatsCluster).Spec.Auth; a != nil {
+			return []string{a.TrustRef.Namespace}
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("index NatsCluster grants: %w", err)
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&clusterv1beta1.NatsCluster{}).
+		Watches(&natsv1beta1.NatsOperatorTrust{}, handler.EnqueueRequestsFromMapFunc(r.clustersTrusting)).
+		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(mgr.GetClient(),
+			schema.GroupKind{Group: clusterv1beta1.GroupVersion.Group, Kind: "NatsCluster"}, &clusterv1beta1.NatsClusterList{})).
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.Service{}).
@@ -84,6 +120,33 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+// trustKey is the namespace/name of the NatsOperatorTrust nc reads, or "".
+func trustKey(nc *clusterv1beta1.NatsCluster) string {
+	if nc.Spec.Auth == nil {
+		return ""
+	}
+	ns := nc.Spec.Auth.TrustRef.Namespace
+	if ns == "" {
+		ns = nc.Namespace
+	}
+	return ns + "/" + nc.Spec.Auth.TrustRef.Name
+}
+
+// clustersTrusting maps a NatsOperatorTrust to the NatsClusters that read
+// it.
+func (r *Reconciler) clustersTrusting(ctx context.Context, t client.Object) []reconcile.Request {
+	var list clusterv1beta1.NatsClusterList
+	if err := r.Client.List(ctx, &list, client.MatchingFields{TrustField: t.GetNamespace() + "/" + t.GetName()}); err != nil {
+		ctrl.LoggerFrom(ctx).Error(err, "list NatsClusters reading NatsOperatorTrust", "trust", client.ObjectKeyFromObject(t))
+		return nil
+	}
+	out := make([]reconcile.Request, 0, len(list.Items))
+	for i := range list.Items {
+		out = append(out, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&list.Items[i])})
+	}
+	return out
+}
+
 // Reconcile creates what a NatsCluster renders and reports its status. A
 // server's ConfigMap and StatefulSet are created when absent; a changed
 // revision is reloaded where the change reloads, and is otherwise rolled
@@ -91,9 +154,15 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	nc := &clusterv1beta1.NatsCluster{}
 	if err := r.Client.Get(ctx, req.NamespacedName, nc); err != nil {
+		if apierrors.IsNotFound(err) && r.Forget != nil {
+			r.Forget(req.NamespacedName)
+		}
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	if !nc.DeletionTimestamp.IsZero() {
+		if r.Forget != nil {
+			r.Forget(req.NamespacedName)
+		}
 		return ctrl.Result{}, nil
 	}
 	orig := nc.DeepCopy()
@@ -105,7 +174,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}, nc.Generation)
 		return ctrl.Result{}, r.patchStatus(ctx, orig, nc)
 	}
-	plan, err := Render(nc)
+	trust, cond, err := readTrust(ctx, r.Client, nc)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if cond != nil {
+		setCondition(&nc.Status, *cond, nc.Generation)
+		return ctrl.Result{RequeueAfter: resyncUnsettled}, r.patchStatus(ctx, orig, nc)
+	}
+	plan, err := Render(nc, trust)
 	if err != nil {
 		setCondition(&nc.Status, metav1.Condition{
 			Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: ReasonUnsupportedSpec, Message: err.Error(),
@@ -167,9 +244,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 // unsupportedFields names the spec fields this controller does not render.
 func unsupportedFields(spec *clusterv1beta1.NatsClusterSpec) []string {
 	var out []string
-	if spec.Auth != nil {
-		out = append(out, "auth")
-	}
 	if spec.Gateway != nil {
 		out = append(out, "gateway")
 	}

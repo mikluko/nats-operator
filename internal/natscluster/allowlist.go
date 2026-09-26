@@ -19,9 +19,6 @@ const (
 	reloadAlways reloadRule = iota
 	// reloadRaiseOnly reloads a number set before and after that rises.
 	reloadRaiseOnly
-	// reloadWhilePresent reloads a change to a key present before and
-	// after; adding or removing the key restarts.
-	reloadWhilePresent
 )
 
 // reloadKey is a config key nats-server applies on reload. Path is the
@@ -36,7 +33,10 @@ type reloadKey struct {
 // reloadAllowLists are the reloadable config keys by nats-server
 // major.minor, read off that version's diffOptions in server/reload.go. A
 // key absent from a version's list restarts: diffOptions rejects it, or
-// silently keeps the old value, as it does for resolver_preload.
+// silently keeps the old value, as it does for resolver_preload. resolver
+// is absent although diffOptions accepts it: 2.15's reload replaces the
+// running resolver with one it never starts, which keeps answering claim
+// updates into the old directory while lookups read the new one.
 var reloadAllowLists = map[string][]reloadKey{
 	"2.15": {
 		{Path: "pid_file", Case: "pidfile", Rule: reloadAlways},
@@ -45,7 +45,6 @@ var reloadAllowLists = map[string][]reloadKey{
 		{Path: "max_payload", Case: "maxpayload", Rule: reloadAlways},
 		{Path: "authorization", Case: "authorization", Rule: reloadAlways},
 		{Path: "accounts", Case: "accounts", Rule: reloadAlways},
-		{Path: "resolver", Case: "accountresolver", Rule: reloadWhilePresent},
 		{Path: "cluster.routes", Case: "routes", Rule: reloadAlways},
 		{Path: "cluster.tls", Case: "cluster", Rule: reloadAlways},
 		{Path: "jetstream.max_memory_store", Case: "jetstreammaxmemory", Rule: reloadRaiseOnly},
@@ -147,8 +146,6 @@ func reloads(allow []reloadKey, path string, old, next map[string]any) bool {
 		a, aok := lookup(old, key.Path).(float64)
 		b, bok := lookup(next, key.Path).(float64)
 		return aok && bok && b > a
-	case reloadWhilePresent:
-		return lookup(old, key.Path) != nil && lookup(next, key.Path) != nil
 	default:
 		return true
 	}

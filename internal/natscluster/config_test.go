@@ -139,18 +139,18 @@ func TestServerConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			nc := story.DeepCopy()
 			tt.mutate(nc)
-			b, err := serverConfig(nc, "demo-1", podLayout(nc), "r1").Render()
+			b, err := serverConfig(nc, nil, "demo-1", podLayout(nc), "r1").Render()
 			require.NoError(t, err)
 			require.JSONEq(t, tt.want, string(b))
 		})
 	}
 }
 
-// startRendered boots every server of nc from its rendered config, on
-// loopback ports and temporary directories, with each of override applied
-// to the parsed options, and returns their monitoring endpoints, the
-// servers and the first server's client URL.
-func startRendered(t *testing.T, nc *clusterv1beta1.NatsCluster, revision string, override ...func(*server.Options)) ([]sysobs.Endpoint, []*server.Server, string) {
+// startRendered boots every server of nc from its config rendered under
+// trust, on loopback ports and temporary directories, with each of override
+// applied to the parsed options, and returns their monitoring endpoints,
+// the servers, the first server's client URL and each server's config file.
+func startRendered(t *testing.T, nc *clusterv1beta1.NatsCluster, trust *Trust, revision string, override ...func(*server.Options)) ([]sysobs.Endpoint, []*server.Server, string, []string) {
 	t.Helper()
 	free := func() int {
 		l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -175,6 +175,7 @@ func startRendered(t *testing.T, nc *clusterv1beta1.NatsCluster, revision string
 
 	var eps []sysobs.Endpoint
 	var srvs []*server.Server
+	var files []string
 	for i, name := range names {
 		dir := t.TempDir()
 		l := Layout{
@@ -183,13 +184,15 @@ func startRendered(t *testing.T, nc *clusterv1beta1.NatsCluster, revision string
 			MonitorListen: fmt.Sprintf("127.0.0.1:%d", monitor[i]),
 			PidFile:       filepath.Join(dir, "nats.pid"),
 			StoreDir:      filepath.Join(dir, "jetstream"),
+			ResolverDir:   filepath.Join(dir, "resolver"),
 			Routes:        routes,
 			TLSDir:        tlsDir,
 		}
-		cfg, err := serverConfig(nc, name, l, revision).Render()
+		cfg, err := serverConfig(nc, trust, name, l, revision).Render()
 		require.NoError(t, err)
 		f := filepath.Join(dir, "nats.conf")
 		require.NoError(t, os.WriteFile(f, cfg, 0o600))
+		files = append(files, f)
 		o, err := server.ProcessConfigFile(f)
 		require.NoError(t, err)
 		require.NotNil(t, o.Cluster.TLSConfig, "route TLS not parsed")
@@ -215,7 +218,7 @@ func startRendered(t *testing.T, nc *clusterv1beta1.NatsCluster, revision string
 		}
 		return true
 	}, 15*time.Second, 100*time.Millisecond, "routes over self-signed TLS did not form")
-	return eps, srvs, fmt.Sprintf("nats://127.0.0.1:%d", client[0])
+	return eps, srvs, fmt.Sprintf("nats://127.0.0.1:%d", client[0]), files
 }
 
 // TestRenderedConfigRunsCluster pins that story 1's rendered config is one
@@ -226,7 +229,7 @@ func startRendered(t *testing.T, nc *clusterv1beta1.NatsCluster, revision string
 func TestRenderedConfigRunsCluster(t *testing.T) {
 	nc := storyCluster(t)
 	nc.Spec.JetStream.Limits = &clusterv1beta1.JetStreamLimits{MaxMemoryStore: quantity("256Mi"), MaxFileStore: quantity("1Gi")}
-	eps, srvs, url := startRendered(t, nc, "r1")
+	eps, srvs, url, _ := startRendered(t, nc, nil, "r1")
 	for _, s := range srvs {
 		cfg := s.JetStreamConfig()
 		require.NotNil(t, cfg)

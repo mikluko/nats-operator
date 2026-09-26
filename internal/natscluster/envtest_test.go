@@ -2,6 +2,7 @@ package natscluster
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"slices"
@@ -9,10 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nats-io/nkeys"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -24,6 +27,8 @@ import (
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/grant"
+	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
@@ -212,7 +217,7 @@ func TestEnvtestReconcile(t *testing.T) {
 				sts.Status.Replicas, sts.Status.ReadyReplicas = 1, 1
 				require.NoError(t, c.Status().Update(ctx, sts))
 			}
-			plan, err := Render(got)
+			plan, err := Render(got, nil)
 			require.NoError(t, err)
 			obs.set(settledSnapshot(plan, revision, "demo-1"))
 			res, ready := reconcile(t, got)
@@ -273,7 +278,7 @@ func TestEnvtestReconcile(t *testing.T) {
 				sts.Status.Replicas, sts.Status.ReadyReplicas = 1, 1
 				require.NoError(t, c.Status().Update(ctx, sts))
 			}
-			plan, err := Render(got)
+			plan, err := Render(got, nil)
 			require.NoError(t, err)
 			snap := settledSnapshot(plan, first, "demo-0")
 			for i := range snap.Servers {
@@ -550,5 +555,162 @@ func TestEnvtestReconcile(t *testing.T) {
 		condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonRouteCertNotReady)
 		require.Contains(t, meta.FindStatusCondition(got.Status.Conditions, ConditionProgressing).Message, "cert-manager is not installed")
 		require.Empty(t, statefulSets(t, "certmanager"))
+	})
+
+	t.Run("auth plane", func(t *testing.T) {
+		p := mintPlane(t)
+		fake := &fakeReloader{c: c}
+		aobs := &fakeObserver{}
+		ar := &Reconciler{Client: c, Observer: aobs,
+			Reloader: func(context.Context, *clusterv1beta1.NatsCluster) (ServerReloader, error) { return fake, nil }}
+		reconcileAuth := func(t *testing.T, nc *clusterv1beta1.NatsCluster) *clusterv1beta1.NatsCluster {
+			t.Helper()
+			_, err := ar.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(nc)})
+			require.NoError(t, err)
+			got := &clusterv1beta1.NatsCluster{}
+			require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(nc), got))
+			return got
+		}
+		story2 := storyAuthCluster(t)
+		newAuthCluster := func(t *testing.T, ns string, mutate func(*clusterv1beta1.Auth)) *clusterv1beta1.NatsCluster {
+			t.Helper()
+			return newCluster(t, ns, func(nc *clusterv1beta1.NatsCluster) {
+				nc.Spec.Auth = story2.Spec.Auth.DeepCopy()
+				mutate(nc.Spec.Auth)
+			})
+		}
+		literal := func(ns string, trust *Trust) *natsv1beta1.NatsOperatorTrust {
+			return &natsv1beta1.NatsOperatorTrust{
+				ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "demo"},
+				Spec:       natsv1beta1.NatsOperatorTrustSpec{OperatorJWT: trust.OperatorJWT, SystemAccountJWT: trust.SystemAccountJWT},
+			}
+		}
+		requireTrustRendered := func(t *testing.T, ns string, trust *Trust) {
+			t.Helper()
+			sets := statefulSets(t, ns)
+			require.Len(t, sets, 3)
+			for name := range sets {
+				cm := &corev1.ConfigMap{}
+				require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: ns, Name: name + "-config"}, cm))
+				var m map[string]any
+				require.NoError(t, json.Unmarshal([]byte(cm.Data[configFile]), &m))
+				require.Equal(t, trust.OperatorJWT, m["operator"], name)
+				require.Equal(t, trust.SystemAccount, m["system_account"], name)
+				require.Equal(t, map[string]any{trust.SystemAccount: trust.SystemAccountJWT}, m["resolver_preload"], name)
+				require.Equal(t, "full", m["resolver"].(map[string]any)["type"], name)
+			}
+		}
+
+		t.Run("literal trust renders the trust roots", func(t *testing.T) {
+			const ns = "auth-literal"
+			nc := newAuthCluster(t, ns, func(*clusterv1beta1.Auth) {})
+			require.NoError(t, c.Create(ctx, literal(ns, p.trust)))
+			got := reconcileAuth(t, nc)
+			condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonCreating)
+			requireTrustRendered(t, ns, p.trust)
+
+			t.Run("a trust change is restart-only", func(t *testing.T) {
+				first := got.Status.Config.Revision
+				for _, sts := range statefulSets(t, ns) {
+					sts.Status.Replicas, sts.Status.ReadyReplicas = 1, 1
+					require.NoError(t, c.Status().Update(ctx, sts))
+				}
+				plan, err := Render(got, p.trust)
+				require.NoError(t, err)
+				snap := settledSnapshot(plan, first, "demo-0")
+				for i := range snap.Servers {
+					snap.Servers[i].ID = snap.Servers[i].Name
+				}
+				aobs.set(snap)
+				fake.reset(ns)
+				settled := reconcileAuth(t, got)
+				condition(t, settled, ConditionSettled, metav1.ConditionTrue, ReasonAllGroupsCurrent)
+				condition(t, settled, ConditionProgressing, metav1.ConditionFalse, ReasonUpToDate)
+
+				resigned := p.op
+				resigned.Signing = append(slices.Clone(p.op.Signing), jwtplane.SigningKey{Name: "next", Pair: newTestPair(t, nkeys.PrefixByteOperator)})
+				next := p.sign(t, resigned, jwtplane.SystemAccount{Name: "SYS", Keys: p.sys})
+				trust := &natsv1beta1.NatsOperatorTrust{}
+				require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: ns, Name: "demo"}, trust))
+				trust.Spec.OperatorJWT = next.OperatorJWT
+				require.NoError(t, c.Update(ctx, trust))
+
+				changed := reconcileAuth(t, settled)
+				condition(t, changed, ConditionProgressing, metav1.ConditionTrue, ReasonRollingRestart)
+				require.NotEqual(t, first, changed.Status.Config.Revision)
+				require.Equal(t, clusterv1beta1.ConfigAppliedByRestart, changed.Status.Config.AppliedBy)
+				require.Equal(t, "operator is restart-only", changed.Status.Config.RestartReason)
+				require.Empty(t, fake.reloaded())
+			})
+		})
+
+		t.Run("reference form waits for the auth controller", func(t *testing.T) {
+			const ns = "auth-ref"
+			nc := newAuthCluster(t, ns, func(*clusterv1beta1.Auth) {})
+			trust := &natsv1beta1.NatsOperatorTrust{
+				ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "demo"},
+				Spec:       natsv1beta1.NatsOperatorTrustSpec{OperatorRef: &natsv1beta1.ObjectReference{Name: "demo"}},
+			}
+			require.NoError(t, c.Create(ctx, trust))
+			got := reconcileAuth(t, nc)
+			condition(t, got, ConditionProgressing, metav1.ConditionFalse, ReasonTrustNotReady)
+			require.Empty(t, statefulSets(t, ns))
+
+			trust.Status.OperatorJWT, trust.Status.SystemAccountJWT = p.trust.OperatorJWT, p.trust.SystemAccountJWT
+			require.NoError(t, c.Status().Update(ctx, trust))
+			got = reconcileAuth(t, got)
+			condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonCreating)
+			requireTrustRendered(t, ns, p.trust)
+		})
+
+		t.Run("missing trust", func(t *testing.T) {
+			nc := newAuthCluster(t, "auth-missing", func(*clusterv1beta1.Auth) {})
+			got := reconcileAuth(t, nc)
+			condition(t, got, ConditionProgressing, metav1.ConditionFalse, ReasonTrustNotFound)
+			require.Empty(t, statefulSets(t, "auth-missing"))
+		})
+
+		t.Run("invalid trust", func(t *testing.T) {
+			const ns = "auth-invalid"
+			nc := newAuthCluster(t, ns, func(*clusterv1beta1.Auth) {})
+			bad := literal(ns, p.trust)
+			bad.Spec.SystemAccountJWT = mintPlane(t).trust.SystemAccountJWT
+			require.NoError(t, c.Create(ctx, bad))
+			got := reconcileAuth(t, nc)
+			condition(t, got, ConditionProgressing, metav1.ConditionFalse, ReasonTrustInvalid)
+			require.Contains(t, meta.FindStatusCondition(got.Status.Conditions, ConditionProgressing).Message, "is signed by")
+			require.Empty(t, statefulSets(t, ns))
+		})
+
+		t.Run("a trust in another namespace needs a grant", func(t *testing.T) {
+			const ns, trustNS = "auth-cross", "auth-trusts"
+			require.NoError(t, c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: trustNS}}))
+			require.NoError(t, c.Create(ctx, literal(trustNS, p.trust)))
+			nc := newAuthCluster(t, ns, func(a *clusterv1beta1.Auth) { a.TrustRef.Namespace = trustNS })
+			got := reconcileAuth(t, nc)
+			condition(t, got, ConditionProgressing, metav1.ConditionFalse, grant.ReasonNoGrant)
+			require.Empty(t, statefulSets(t, ns))
+
+			require.NoError(t, c.Create(ctx, &natsv1beta1.NatsReferenceGrant{
+				ObjectMeta: metav1.ObjectMeta{Namespace: trustNS, Name: "clusters"},
+				Spec: natsv1beta1.NatsReferenceGrantSpec{
+					From: []natsv1beta1.ReferenceGrantFrom{{Group: clusterv1beta1.GroupVersion.Group, Kind: "NatsCluster", Namespace: ns}},
+					To:   []natsv1beta1.ReferenceGrantTo{{Group: natsv1beta1.GroupVersion.Group, Kind: "NatsOperatorTrust"}},
+				},
+			}))
+			got = reconcileAuth(t, got)
+			condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonCreating)
+			requireTrustRendered(t, ns, p.trust)
+		})
+
+		t.Run("the Memory resolver is refused at apply", func(t *testing.T) {
+			require.NoError(t, c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "auth-memory"}}))
+			nc := storyAuthCluster(t)
+			nc.Namespace = "auth-memory"
+			nc.Spec.Auth.Resolver = "Memory"
+			err := c.Create(ctx, nc)
+			require.True(t, apierrors.IsInvalid(err), "%v", err)
+			require.ErrorContains(t, err, "spec.auth.resolver")
+		})
 	})
 }

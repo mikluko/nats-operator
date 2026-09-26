@@ -25,6 +25,18 @@ type Config struct {
 	ServerMetadata map[string]string `json:"server_metadata,omitempty"`
 	Cluster        ClusterConfig     `json:"cluster"`
 	JetStream      *JetStreamConfig  `json:"jetstream,omitempty"`
+
+	Operator        string            `json:"operator,omitempty"`
+	SystemAccount   string            `json:"system_account,omitempty"`
+	Resolver        *ResolverConfig   `json:"resolver,omitempty"`
+	ResolverPreload map[string]string `json:"resolver_preload,omitempty"`
+}
+
+// ResolverConfig is the account resolver, a directory of account JWTs.
+type ResolverConfig struct {
+	Type        string `json:"type"`
+	Dir         string `json:"dir"`
+	AllowDelete bool   `json:"allow_delete,omitempty"`
 }
 
 // ClusterConfig is the route listener and the routes to every server.
@@ -70,6 +82,7 @@ type Layout struct {
 	MonitorListen string
 	PidFile       string
 	StoreDir      string
+	ResolverDir   string
 
 	// Routes are route URLs of every server, the server's own included.
 	Routes []string
@@ -84,6 +97,7 @@ const (
 	configFile   = "nats.conf"
 	pidDir       = "/var/run/nats"
 	dataDir      = "/data"
+	resolverDir  = dataDir + "/resolver"
 	routesTLSDir = "/etc/nats-routes-tls"
 )
 
@@ -95,6 +109,7 @@ func podLayout(nc *clusterv1beta1.NatsCluster) Layout {
 		MonitorListen: fmt.Sprintf("0.0.0.0:%d", PortMonitor),
 		PidFile:       pidDir + "/nats.pid",
 		StoreDir:      dataDir + "/jetstream",
+		ResolverDir:   resolverDir,
 		TLSDir:        routesTLSDir,
 	}
 	for _, s := range serverNames(nc) {
@@ -150,8 +165,9 @@ func routeTLSEnabled(spec *clusterv1beta1.NatsClusterSpec) bool {
 }
 
 // serverConfig renders server's config within nc under layout l, reporting
-// revision through server_metadata unless revision is empty.
-func serverConfig(nc *clusterv1beta1.NatsCluster, server string, l Layout, revision string) *Config {
+// revision through server_metadata unless revision is empty. trust is nil
+// exactly when nc has no auth plane.
+func serverConfig(nc *clusterv1beta1.NatsCluster, trust *Trust, server string, l Layout, revision string) *Config {
 	c := &Config{
 		ServerName:    server,
 		Listen:        l.ClientListen,
@@ -187,7 +203,23 @@ func serverConfig(nc *clusterv1beta1.NatsCluster, server string, l Layout, revis
 			c.JetStream.MaxFileStore = q.Value()
 		}
 	}
+	if trust != nil {
+		c.Operator = trust.OperatorJWT
+		c.SystemAccount = trust.SystemAccount
+		c.Resolver = resolverConfig(nc.Spec.Auth.Resolver, l.ResolverDir)
+		c.ResolverPreload = map[string]string{trust.SystemAccount: trust.SystemAccountJWT}
+	}
 	return c
+}
+
+// resolverConfig renders resolver type t, Full when empty, over dir. A
+// Full resolver allows deletes, so that an account deleted at home is
+// removed from every server.
+func resolverConfig(t clusterv1beta1.ResolverType, dir string) *ResolverConfig {
+	if t == clusterv1beta1.ResolverCache {
+		return &ResolverConfig{Type: "cache", Dir: dir}
+	}
+	return &ResolverConfig{Type: "full", Dir: dir, AllowDelete: true}
 }
 
 // serverTags renders tags as key:value, sorted by key.

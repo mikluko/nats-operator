@@ -12,8 +12,10 @@ build:
         CGO_ENABLED=0 go build -o "{{ bin }}/$c" "./cmd/$c"
     done
 
+# The OperatorReload tests skip under -race and run again without it.
 test:
     go test -race ./...
+    go test -run OperatorReload ./internal/natscluster
 
 lint:
     golangci-lint run

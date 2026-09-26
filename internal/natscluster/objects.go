@@ -57,9 +57,10 @@ type Plan struct {
 	PDB             *policyv1.PodDisruptionBudget
 }
 
-// Render renders nc. It fails only on a podTemplate that does not merge
-// into the rendered pod.
-func Render(nc *clusterv1beta1.NatsCluster) (*Plan, error) {
+// Render renders nc under trust, which is nil exactly when nc has no auth
+// plane. It fails only on a podTemplate that does not merge into the
+// rendered pod.
+func Render(nc *clusterv1beta1.NatsCluster, trust *Trust) (*Plan, error) {
 	p := &Plan{
 		Limits:          deriveLimits(&nc.Spec),
 		HeadlessService: headlessService(nc),
@@ -70,7 +71,7 @@ func Render(nc *clusterv1beta1.NatsCluster) (*Plan, error) {
 	h := sha256.New()
 	specDigests := map[string]string{}
 	for _, name := range serverNames(nc) {
-		cfg, err := serverConfig(nc, name, layout, "").Render()
+		cfg, err := serverConfig(nc, trust, name, layout, "").Render()
 		if err != nil {
 			return nil, err
 		}
@@ -91,7 +92,7 @@ func Render(nc *clusterv1beta1.NatsCluster) (*Plan, error) {
 	p.Revision = hex.EncodeToString(h.Sum(nil))[:10]
 	for i := range p.Servers {
 		s := &p.Servers[i]
-		cfg, err := serverConfig(nc, s.Name, layout, p.Revision).Render()
+		cfg, err := serverConfig(nc, trust, s.Name, layout, p.Revision).Render()
 		if err != nil {
 			return nil, err
 		}
@@ -279,7 +280,7 @@ func natsContainer(nc *clusterv1beta1.NatsCluster, limits Limits) corev1.Contain
 	if limits.GoMemLimit > 0 {
 		c.Env = append(c.Env, corev1.EnvVar{Name: "GOMEMLIMIT", Value: strconv.FormatInt(limits.GoMemLimit, 10)})
 	}
-	if nc.Spec.JetStream != nil {
+	if hasData(nc) {
 		c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{Name: "data", MountPath: dataDir})
 	}
 	if routesSecret(nc) != "" {
@@ -315,10 +316,17 @@ func volumes(nc *clusterv1beta1.NatsCluster, server string) []corev1.Volume {
 	if s := routesSecret(nc); s != "" {
 		vs = append(vs, corev1.Volume{Name: "routes-tls", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: s}}})
 	}
-	if js := nc.Spec.JetStream; js != nil && js.VolumeClaimTemplate == nil {
+	if hasData(nc) && (nc.Spec.JetStream == nil || nc.Spec.JetStream.VolumeClaimTemplate == nil) {
 		vs = append(vs, corev1.Volume{Name: "data", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}})
 	}
 	return vs
+}
+
+// hasData reports whether a server mounts the data volume, which holds the
+// JetStream store and the account resolver's directory: an emptyDir unless
+// jetstream.volumeClaimTemplate is given.
+func hasData(nc *clusterv1beta1.NatsCluster) bool {
+	return nc.Spec.JetStream != nil || nc.Spec.Auth != nil
 }
 
 func headlessService(nc *clusterv1beta1.NatsCluster) *corev1.Service {

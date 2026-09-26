@@ -164,6 +164,11 @@ func configCases(t *testing.T, nc *clusterv1beta1.NatsCluster) []configCase {
 // renderedMap renders server demo-0 of nc under a loopback layout with
 // route TLS from tlsDir, as a decoded config.
 func renderedMap(t *testing.T, nc *clusterv1beta1.NatsCluster, tlsDir string) map[string]any {
+	return renderedTrustMap(t, nc, nil, tlsDir)
+}
+
+// renderedTrustMap is renderedMap under trust.
+func renderedTrustMap(t *testing.T, nc *clusterv1beta1.NatsCluster, trust *Trust, tlsDir string) map[string]any {
 	t.Helper()
 	dir := t.TempDir()
 	route := freePort(t)
@@ -173,10 +178,11 @@ func renderedMap(t *testing.T, nc *clusterv1beta1.NatsCluster, tlsDir string) ma
 		MonitorListen: fmt.Sprintf("127.0.0.1:%d", freePort(t)),
 		PidFile:       filepath.Join(dir, "nats.pid"),
 		StoreDir:      filepath.Join(dir, "jetstream"),
+		ResolverDir:   filepath.Join(dir, "resolver"),
 		Routes:        []string{fmt.Sprintf("nats-route://127.0.0.1:%d", route)},
 		TLSDir:        tlsDir,
 	}
-	b, err := serverConfig(nc, "demo-0", l, "r1").Render()
+	b, err := serverConfig(nc, trust, "demo-0", l, "r1").Render()
 	require.NoError(t, err)
 	var m map[string]any
 	require.NoError(t, json.Unmarshal(b, &m))
@@ -217,7 +223,7 @@ func TestRestartReason(t *testing.T) {
 		changed := map[string]any{"server_name": "a", "resolver": map[string]any{"type": "full", "dir": "/data/jwt", "allow_delete": true}}
 		require.Equal(t, "resolver is restart-only", restartReason("2.15.1", encode(t, base), encode(t, withResolver)))
 		require.Equal(t, "resolver is restart-only", restartReason("2.15.1", encode(t, withResolver), encode(t, base)))
-		require.Empty(t, restartReason("2.15.1", encode(t, withResolver), encode(t, changed)))
+		require.Equal(t, "resolver.allow_delete is restart-only", restartReason("2.15.1", encode(t, withResolver), encode(t, changed)))
 	})
 	t.Run("resolver_preload", func(t *testing.T) {
 		from := map[string]any{"resolver_preload": map[string]any{"A": "jwt1"}}

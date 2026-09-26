@@ -24,7 +24,7 @@ import (
 func TestLameDuckFitsTerminationGrace(t *testing.T) {
 	nc := storyCluster(t)
 	nc.Spec.Routes = &clusterv1beta1.Routes{TLS: &clusterv1beta1.RoutesTLS{Enabled: ptr.To(false)}}
-	plan, err := Render(nc)
+	plan, err := Render(nc, nil)
 	require.NoError(t, err)
 	s := plan.Servers[0]
 	pod := s.StatefulSet.Spec.Template.Spec
@@ -50,7 +50,7 @@ func TestLameDuckFitsTerminationGrace(t *testing.T) {
 // rollout moves no leader before a restart.
 func TestLameDuckHandsOffLeaders(t *testing.T) {
 	nc := storyCluster(t)
-	_, srvs, url := startRendered(t, nc, "r1", func(o *server.Options) {
+	_, srvs, url, _ := startRendered(t, nc, nil, "r1", func(o *server.Options) {
 		o.LameDuckDuration, o.LameDuckGracePeriod = 4*time.Second, 2*time.Second
 	})
 	const account, stream, consumer = "$G", "ORDERS", "C"
