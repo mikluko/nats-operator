@@ -20,10 +20,10 @@ status:
     client: nats://demo.nats-system.svc:4222
     monitor: http://demo.nats-system.svc:8222
   config:
-    revision: 3f9a1c
+    revision: !any 3f9a1c
     appliedBy: Restart
   jetstream:
-    metaLeader: demo-1
+    metaLeader: !any demo-1
     limits:
       maxMemoryStore: 3Gi
       maxFileStore: 19Gi
@@ -31,12 +31,12 @@ status:
     - name: demo-0
       version: 2.15.0
       ready: true
-      configRevision: 3f9a1c
+      configRevision: !any 3f9a1c
     - name: demo-1
       version: 2.15.0
       ready: true
-      configRevision: 3f9a1c
+      configRevision: !any 3f9a1c
     - name: demo-2
       version: 2.15.0
       ready: true
-      configRevision: 3f9a1c
+      configRevision: !any 3f9a1c

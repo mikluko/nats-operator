@@ -29,13 +29,18 @@ func (m Mismatch) String() string {
 // conditions is matched by each entry's type, and only type and status are
 // compared. Any other list must have want's length, each item compared in
 // turn. Scalars are compared by their JSON encoding, so 3 and 3.0 are equal.
-// A field want states and got lacks yields one mismatch per scalar under it.
+// An absent field equals the zero scalar, as omitempty encodes it; a field
+// want states otherwise and got lacks yields one mismatch per scalar under
+// it. A placeholder matches anything, absence included, and a condition
+// whose status is a placeholder need only be present.
 func Diff(want, got map[string]any) []Mismatch {
 	return diffValue("", want, got, true)
 }
 
 func diffValue(path string, want, got any, present bool) []Mismatch {
 	switch w := want.(type) {
+	case placeholder:
+		return nil
 	case map[string]any:
 		g, _ := got.(map[string]any)
 		if present && g == nil {
@@ -70,6 +75,9 @@ func diffValue(path string, want, got any, present bool) []Mismatch {
 		return out
 	default:
 		if !present {
+			if isZero(want) {
+				return nil
+			}
 			return []Mismatch{{Path: path, Want: encode(want)}}
 		}
 		if encode(want) != encode(got) {
@@ -101,6 +109,7 @@ func diffConditions(path string, want, got any, present bool) []Mismatch {
 		switch {
 		case !ok:
 			out = append(out, Mismatch{Path: p, Want: encode(m["status"])})
+		case m["status"] == (placeholder{}):
 		case encode(m["status"]) != encode(lc["status"]):
 			out = append(out, Mismatch{Path: p, Want: encode(m["status"]), Got: encode(lc["status"])})
 		}
@@ -108,7 +117,29 @@ func diffConditions(path string, want, got any, present bool) []Mismatch {
 	return out
 }
 
+func isZero(v any) bool {
+	switch v := v.(type) {
+	case nil:
+		return true
+	case bool:
+		return !v
+	case string:
+		return v == ""
+	case int:
+		return v == 0
+	case int64:
+		return v == 0
+	case float64:
+		return v == 0
+	}
+	return false
+}
+
 func encode(v any) string {
+	if v == (placeholder{}) {
+		return "any value"
+	}
+
 	var b strings.Builder
 	enc := json.NewEncoder(&b)
 	enc.SetEscapeHTML(false)

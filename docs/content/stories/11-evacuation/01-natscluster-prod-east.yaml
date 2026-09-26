@@ -1,0 +1,14 @@
+# The cluster being retired, a member of the story 9 supercluster.
+apiVersion: cluster.nats.mikluko.io/v1beta1
+kind: NatsCluster
+metadata:
+  name: prod-east
+  namespace: nats-system
+spec:
+  version: 2.15.1
+  replicas: 5
+  serverTags:
+    cluster: prod-east
+    region: us-east-2
+  # ...resources, JetStream storage, gateway remotes and auth as story 9
+  # declares them.

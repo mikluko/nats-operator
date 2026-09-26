@@ -8,15 +8,15 @@ status:
       status: "True"
       reason: FoundUnowned
       message: adopted existing stream PAYMENTS; spec written from the server
-      lastTransitionTime: "2026-09-26T09:12:05Z"
+      lastTransitionTime: !any "2026-09-26T09:12:05Z"
     - type: Synced
       status: "True"
       reason: MatchesSpec
-  lastSyncedTime: "2026-09-26T09:42:05Z"
+  lastSyncedTime: !any "2026-09-26T09:42:05Z"
   ownership:
     origin: Adopted
-    uid: 0f7c1a92-8e44-4a0b-b3a5-6c2de0f19b77
+    uid: !any 0f7c1a92-8e44-4a0b-b3a5-6c2de0f19b77
   server:
-    leader: nats-1
-    messages: 3810442
-    bytes: 2Gi
+    leader: !any nats-1
+    messages: !any 3810442
+    bytes: !any 2Gi

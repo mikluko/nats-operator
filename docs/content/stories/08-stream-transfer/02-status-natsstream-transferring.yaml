@@ -12,17 +12,17 @@ status:
   transfer:
     from: east
     to: west
-    started: "2026-09-26T12:04:10Z"
+    started: !any "2026-09-26T12:04:10Z"
     replicas:
       - name: west-0
-        current: true
+        current: !any true
       - name: west-1
-        current: true
+        current: !any true
       - name: west-2
-        current: false
-        lag: 18231
+        current: !any false
+        lag: !any 18231
     consumers:
-      migrated: 3
-      total: 4
+      migrated: !any 3
+      total: !any 4
   server:
-    leader: east-1
+    leader: !any east-1

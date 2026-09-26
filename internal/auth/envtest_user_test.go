@@ -69,7 +69,7 @@ func (e *env) creds(ct assert.TestingT, k types.NamespacedName) (token, seed str
 // user gets its JWT in status and no Secret; the controller presets sign
 // into the system account.
 func (e *env) testStory2Users(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join(storiesDir, "02-auth-plane/natsusers.yaml"))
+	raw, err := os.ReadFile(filepath.Join(storiesDir, "02-auth-plane/01-natsusers.yaml"))
 	require.NoError(t, err)
 	e.apply(t, string(raw))
 
@@ -155,7 +155,7 @@ func (e *env) testStory2Users(t *testing.T) {
 // refused, and deleting the grant revokes the users it had admitted until it
 // is restored.
 func (e *env) testStory4(t *testing.T) {
-	for _, f := range []string{"04-team-self-service/platform.yaml", "04-team-self-service/team.yaml"} {
+	for _, f := range []string{"04-team-self-service/01-platform.yaml", "04-team-self-service/01-team.yaml"} {
 		raw, err := os.ReadFile(filepath.Join(storiesDir, f))
 		require.NoError(t, err)
 		e.apply(t, string(raw))
@@ -189,7 +189,7 @@ spec:
 		}
 	})
 
-	raw, err := os.ReadFile(filepath.Join(storiesDir, "04-team-self-service/status-natsuser-denied.yaml"))
+	raw, err := os.ReadFile(filepath.Join(storiesDir, "04-team-self-service/01-status-natsuser-payments-reader.yaml"))
 	require.NoError(t, err)
 	var want struct {
 		Status authv1beta1.NatsUserStatus `json:"status"`

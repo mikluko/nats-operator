@@ -1,0 +1,23 @@
+# The same NatsCluster with spec.version raised from 2.15.0; nothing else
+# changes.
+apiVersion: cluster.nats.mikluko.io/v1beta1
+kind: NatsCluster
+metadata:
+  name: demo
+  namespace: nats-system
+spec:
+  version: 2.15.1
+  replicas: 3
+  resources:
+    requests:
+      cpu: "1"
+      memory: 4Gi
+    limits:
+      memory: 4Gi
+  jetstream:
+    volumeClaimTemplate:
+      spec:
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 20Gi

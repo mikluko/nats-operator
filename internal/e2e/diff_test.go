@@ -82,6 +82,27 @@ func TestDiff(t *testing.T) {
 			diff: []string{`.updated: want 1 items, got 2 items`},
 		},
 		{
+			name: "absent field equals the zero scalar",
+			want: `{inFlight: 0, ready: false, reason: "", pending: []}`,
+			got:  `{}`,
+		},
+		{
+			name: "placeholder matches any value, absence included",
+			want: `{uid: !any abc, messages: !any 18204, updated: !any [a], rollout: !any {current: a}}`,
+			got:  `{uid: xyz, updated: [b, c], rollout: none}`,
+		},
+		{
+			name: "placeholder inside a list item",
+			want: `{servers: [{name: a, configRevision: !any r1}]}`,
+			got:  `{servers: [{name: a, configRevision: r9}]}`,
+		},
+		{
+			name: "condition with placeholder status need only be present",
+			want: `{conditions: [{type: Ready, status: !any "True"}, {type: Settled, status: !any "True"}]}`,
+			got:  `{conditions: [{type: Ready, status: "False"}]}`,
+			diff: []string{`.conditions[type=Settled].status: want any value, got <absent>`},
+		},
+		{
 			name: "object where a scalar stands",
 			want: `{jetstream: {metaLeader: a}}`,
 			got:  `{jetstream: none}`,
@@ -91,7 +112,9 @@ func TestDiff(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var got []string
-			for _, m := range Diff(parseMap(t, tt.want), parseMap(t, tt.got)) {
+			want, err := decodeExpected([]byte(tt.want))
+			require.NoError(t, err)
+			for _, m := range Diff(want, parseMap(t, tt.got)) {
 				got = append(got, m.String())
 			}
 			require.Equal(t, tt.diff, got)

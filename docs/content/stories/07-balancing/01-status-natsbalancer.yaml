@@ -15,10 +15,10 @@ status:
   pools:
     - name: requests
       streams: 12
-      leaderSkew: 2
+      leaderSkew: !any 2
     - name: responses
       streams: 12
-      leaderSkew: 0
+      leaderSkew: !any 0
     - name: (default)
       streams: 3
-      leaderSkew: 1
+      leaderSkew: !any 1

@@ -14,6 +14,6 @@ status:
   leafRemotes:
     - connectionRef: hub
       connected: 3
-      account: ATELEMETRY...   # the hub account the credentials sign into
+      account: !any ATELEMETRY...   # the hub account the credentials sign into
   endpoints:
     client: nats://edge-site-1.nats-system.svc:4222

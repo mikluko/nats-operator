@@ -3,6 +3,7 @@ package e2e
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -10,29 +11,82 @@ import (
 
 const storiesDir = "../../docs/content/stories"
 
+// TestLoadBundles_Stories pins the story bundles to the harness: every
+// expectation names an object its bundle declares, and every story either
+// runs or states why not.
 func TestLoadBundles_Stories(t *testing.T) {
 	bundles, err := LoadBundles(storiesDir)
 	require.NoError(t, err)
 	require.Len(t, bundles, 11)
+	skipped := map[string]string{}
 	for i, b := range bundles {
 		require.Equal(t, i+1, b.Number, b.Name)
-		require.NotEmpty(t, b.Objects, b.Name)
+		require.NotEmpty(t, b.Steps, b.Name)
+		for _, s := range b.Steps {
+			for _, e := range s.Expectations {
+				_, err := b.Target(s.Number, e)
+				require.NoError(t, err, "%s/%s", b.Name, e.File)
+			}
+		}
+		if r := b.SkipReason(); r != "" {
+			skipped[b.Name] = r
+		}
 	}
+	require.Equal(t, map[string]string{
+		"03-unmanaged":       "needs a NATS cluster the controllers did not deploy, holding streams created at runtime",
+		"06-supercluster":    "needs more than one Kubernetes cluster",
+		"07-balancing":       "its statuses describe moves made and pending across many streams, which its manifests alone do not produce",
+		"08-stream-transfer": "runs in the story 6 supercluster, which spans Kubernetes clusters",
+		"09-acceptance":      "needs more than one Kubernetes cluster",
+		"10-leafnodes":       "needs more than one Kubernetes cluster",
+		"11-evacuation":      "runs in the story 9 supercluster, which spans Kubernetes clusters",
+	}, skipped)
+
+	chains := map[string][]string{}
+	for _, b := range bundles {
+		for _, c := range b.Chain() {
+			chains[b.Name] = append(chains[b.Name], c.Name)
+		}
+	}
+	require.Equal(t, []string{"02-auth-plane", "04-team-self-service"}, chains["04-team-self-service"])
+	require.Equal(t, []string{"02-auth-plane", "05-account-wiring"}, chains["05-account-wiring"])
+	require.Equal(t, []string{"02-auth-plane", "04-team-self-service", "07-balancing"}, chains["07-balancing"])
+	require.Equal(t, []string{"nats-system", "orders", "payments"}, bundles[3].Namespaces())
 
 	quickstart := bundles[0]
 	require.Equal(t, "01-quickstart", quickstart.Name)
 	require.Equal(t, []string{"nats-system"}, quickstart.Namespaces())
-	targets := map[string]string{}
-	for _, e := range quickstart.Expectations {
-		obj, err := quickstart.Target(e)
-		require.NoError(t, err, e.File)
-		targets[e.File] = obj.GetKind() + " " + key(obj)
+	type stepSummary struct {
+		Number  int
+		Apply   []string
+		Targets map[string]string
 	}
-	require.Equal(t, map[string]string{
-		"status-natscluster-at-rest.yaml":     "NatsCluster nats-system/demo",
-		"status-natscluster-mid-rollout.yaml": "NatsCluster nats-system/demo",
-		"status-natsstream.yaml":              "NatsStream nats-system/orders",
-	}, targets)
+	var steps []stepSummary
+	for _, s := range quickstart.Steps {
+		sum := stepSummary{Number: s.Number, Targets: map[string]string{}}
+		for _, o := range s.Apply {
+			sum.Apply = append(sum.Apply, o.GetKind()+" "+key(o))
+		}
+		for _, e := range s.Expectations {
+			obj, err := quickstart.Target(s.Number, e)
+			require.NoError(t, err)
+			sum.Targets[e.File] = obj.GetKind() + " " + key(obj)
+		}
+		steps = append(steps, sum)
+	}
+	require.Equal(t, []stepSummary{
+		{1, []string{"NatsCluster nats-system/demo"}, map[string]string{
+			"01-status-natscluster-at-rest.yaml": "NatsCluster nats-system/demo",
+		}},
+		{2, []string{"NatsCluster nats-system/demo"}, map[string]string{
+			"02-status-natscluster-mid-rollout.yaml": "NatsCluster nats-system/demo",
+		}},
+		{3, []string{"NatsConnection nats-system/demo", "NatsStream nats-system/orders"}, map[string]string{
+			"03-status-natsstream.yaml": "NatsStream nats-system/orders",
+		}},
+	}, steps)
+	require.Equal(t, "2.15.0", quickstart.Steps[0].Apply[0].Object["spec"].(map[string]any)["version"])
+	require.Equal(t, "2.15.1", quickstart.Steps[1].Apply[0].Object["spec"].(map[string]any)["version"])
 }
 
 func writeBundle(t *testing.T, files map[string]string) string {
@@ -44,6 +98,36 @@ func writeBundle(t *testing.T, files map[string]string) string {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600))
 	}
 	return root
+}
+
+func TestParseFileName(t *testing.T) {
+	tests := []struct {
+		base string
+		want FileName
+		err  string
+	}{
+		{base: "01-natscluster.yaml", want: FileName{Step: 1, Role: RoleApply}},
+		{base: "02-natscluster-2.15.1.yaml", want: FileName{Step: 2, Role: RoleApply}},
+		{base: "02-delete-natscluster-prod-east.yaml", want: FileName{Step: 2, Role: RoleDelete}},
+		{base: "03-status-natsstream.yaml", want: FileName{Step: 3, Role: RoleStatus, Kind: "natsstream"}},
+		{base: "01-status-natsuser-orders-batch.yaml", want: FileName{Step: 1, Role: RoleStatus, Kind: "natsuser", Qualifier: "orders-batch"}},
+		{base: "01-live-natsstream-payments.yaml", want: FileName{Step: 1, Role: RoleLive, Kind: "natsstream", Qualifier: "payments"}},
+		{base: "natscluster.yaml", err: "starts with its step number"},
+		{base: "status-natscluster.yaml", err: "starts with its step number"},
+		{base: "01.yaml", err: "starts with its step number"},
+		{base: "01-status.yaml", err: "names no kind"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.base, func(t *testing.T) {
+			got, err := ParseFileName(tt.base)
+			if tt.err != "" {
+				require.ErrorContains(t, err, tt.err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
 }
 
 const twoUsers = `apiVersion: auth.nats.mikluko.io/v1beta1
@@ -62,34 +146,33 @@ func TestTarget(t *testing.T) {
 		want   string
 		err    string
 	}{
-		{name: "qualifier names the object", status: "status-natsuser-orders-batch.yaml", want: "a/orders-batch"},
-		{name: "only object of its kind", status: "status-natsstream-transferring.yaml", want: "a/orders"},
-		{name: "no object of that name", status: "status-natsuser-denied.yaml", err: `none named "denied"`},
-		{name: "no object of that kind", status: "status-natscluster.yaml", err: `0 objects of kind "natscluster"`},
+		{name: "qualifier names the object", status: "01-status-natsuser-orders-batch.yaml", want: "a/orders-batch"},
+		{name: "only object of its kind", status: "02-status-natsstream-transferring.yaml", want: "a/orders"},
+		{name: "deleted object", status: "03-status-natscluster.yaml", want: "a/old"},
+		{name: "no object of that name", status: "01-status-natsuser-denied.yaml", err: `none named "denied"`},
+		{name: "object declared only in a later step", status: "01-status-natsstream.yaml", err: `0 objects of kind "natsstream"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := writeBundle(t, map[string]string{
-				"users.yaml": twoUsers,
-				"stream-before.yaml": `apiVersion: jetstream.nats.mikluko.io/v1beta1
+				"01-users.yaml": twoUsers,
+				"02-stream.yaml": `apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata: {name: orders, namespace: a}
 spec: {replicas: 1}
 `,
-				"stream-after.yaml": `apiVersion: jetstream.nats.mikluko.io/v1beta1
-kind: NatsStream
-metadata: {name: orders, namespace: a}
-spec: {replicas: 3}
-`,
-				tt.status: "status:\n  observedGeneration: 1\n",
+				"03-delete-old.yaml": "apiVersion: cluster.nats.mikluko.io/v1beta1\nkind: NatsCluster\nmetadata: {name: old, namespace: a}\n",
+				tt.status:            "status:\n  observedGeneration: 1\n",
 			})
 			bundles, err := LoadBundles(root)
 			require.NoError(t, err)
 			require.Len(t, bundles, 1)
 			b := bundles[0]
-			require.Len(t, b.Objects, 3, "a redeclared object replaces the earlier one")
 			require.Equal(t, []string{"a", "b"}, b.Namespaces())
-			obj, err := b.Target(b.Expectations[0])
+			name, err := ParseFileName(tt.status)
+			require.NoError(t, err)
+			i := slices.IndexFunc(b.Steps, func(s Step) bool { return s.Number == name.Step })
+			obj, err := b.Target(name.Step, b.Steps[i].Expectations[0])
 			if tt.err != "" {
 				require.ErrorContains(t, err, tt.err)
 				return
@@ -100,19 +183,54 @@ spec: {replicas: 3}
 	}
 }
 
-func TestLoadBundles_RedeclaredObjectKeepsLastSpec(t *testing.T) {
+func TestLoadBundles_StepsInOrder(t *testing.T) {
 	root := writeBundle(t, map[string]string{
-		"a-before.yaml": "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x, namespace: a}\ndata: {v: before}\n",
-		"b-after.yaml":  "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x, namespace: a}\ndata: {v: after}\n",
+		"10-after.yaml":          "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x, namespace: a}\ndata: {v: after}\n",
+		"2-before.yaml":          "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x, namespace: a}\ndata: {v: before}\n",
+		"2-delete-gone.yaml":     "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: gone, namespace: a}\n",
+		"10-live-configmap.yaml": "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x, namespace: a}\ndata: {v: !any after}\n",
 	})
 	bundles, err := LoadBundles(root)
 	require.NoError(t, err)
-	require.Len(t, bundles[0].Objects, 1)
-	require.Equal(t, map[string]any{"v": "after"}, bundles[0].Objects[0].Object["data"])
+	b := bundles[0]
+	require.Len(t, b.Steps, 2)
+	require.Equal(t, 2, b.Steps[0].Number)
+	require.Equal(t, map[string]any{"v": "before"}, b.Steps[0].Apply[0].Object["data"])
+	require.Equal(t, "gone", b.Steps[0].Delete[0].GetName())
+	require.Equal(t, 10, b.Steps[1].Number)
+	require.Equal(t, map[string]any{"v": "after"}, b.Steps[1].Apply[0].Object["data"])
+	require.Equal(t, map[string]any{
+		"apiVersion": "v1", "kind": "ConfigMap",
+		"metadata": map[string]any{"name": "x", "namespace": "a"},
+		"data":     map[string]any{"v": placeholder{}},
+	}, b.Steps[1].Expectations[0].Want, "a live file is expected whole")
+	require.Len(t, b.Objects(2), 2)
+	require.Equal(t, map[string]any{"v": "after"}, b.Objects(10)[0].Object["data"], "a redeclared object is as last declared")
 }
 
-func TestLoadBundles_StatusFileWithoutStatus(t *testing.T) {
-	root := writeBundle(t, map[string]string{"status-natsstream.yaml": "spec: {}\n"})
-	_, err := LoadBundles(root)
-	require.ErrorContains(t, err, "no status block")
+func TestLoadBundles_Rejects(t *testing.T) {
+	tests := []struct {
+		name  string
+		files map[string]string
+		err   string
+	}{
+		{name: "status file without status", files: map[string]string{"01-status-natsstream.yaml": "spec: {}\n"}, err: "no status block"},
+		{name: "file without step number", files: map[string]string{"natsstream.yaml": "kind: X\n"}, err: "starts with its step number"},
+		{name: "unclosed front matter", files: map[string]string{"index.md": "---\ntitle: x\n"}, err: "front matter is not closed"},
+		{name: "after names no earlier story", files: map[string]string{"index.md": "---\nparams:\n  e2e:\n    after: 1\n---\n"}, err: "not an earlier story"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := LoadBundles(writeBundle(t, tt.files))
+			require.ErrorContains(t, err, tt.err)
+		})
+	}
+}
+
+func TestSkipReason(t *testing.T) {
+	base := &Bundle{Name: "02-base", Skip: "needs more than one Kubernetes cluster"}
+	require.Equal(t, "starts from 02-base, which is skipped: needs more than one Kubernetes cluster",
+		(&Bundle{Base: base}).SkipReason())
+	require.Equal(t, "own", (&Bundle{Base: base, Skip: "own"}).SkipReason())
+	require.Empty(t, (&Bundle{Base: &Bundle{}}).SkipReason())
 }

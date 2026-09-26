@@ -1,0 +1,20 @@
+# The orders account with its connection limit raised from 500; nothing else
+# changes.
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsAccount
+metadata:
+  name: orders
+  namespace: nats-system
+spec:
+  operatorRef:
+    name: demo
+  jwtTTL: 48h
+  limits:
+    connections: 1000
+    subscriptions: 10000
+    payload: 1Mi
+    jetstream:
+      memoryStorage: 1Gi
+      diskStorage: 50Gi
+      streams: 20
+      consumers: 200

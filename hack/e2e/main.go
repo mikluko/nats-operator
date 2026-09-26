@@ -20,9 +20,6 @@ import (
 	"github.com/mikluko/nats-operator/internal/e2e"
 )
 
-// multiCluster are the stories that need more than one Kubernetes cluster.
-var multiCluster = []int{6, 9, 10}
-
 func main() {
 	stories := flag.String("stories", "docs/content/stories", "directory holding the story bundles")
 	only := flag.String("only", "", "comma-separated story numbers to run; empty runs all")
@@ -53,11 +50,7 @@ func run(dir, only string, timeout, interval time.Duration) error {
 	if err != nil {
 		return err
 	}
-	skip := map[int]string{}
-	for _, n := range multiCluster {
-		skip[n] = "needs more than one Kubernetes cluster"
-	}
-	r := &e2e.Runner{Client: c, Timeout: timeout, Interval: interval, Skip: skip, Log: os.Stderr}
+	r := &e2e.Runner{Client: c, Timeout: timeout, Interval: interval, Log: os.Stderr}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()

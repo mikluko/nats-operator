@@ -131,11 +131,11 @@ func TestEnvtest(t *testing.T) {
 		require.NoError(t, c.Create(t.Context(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}))
 	}
 	for _, f := range []string{
-		"02-auth-plane/natsoperator.yaml",
-		"02-auth-plane/natsaccounts.yaml",
-		"02-auth-plane/natsoperatortrust.yaml",
-		"05-account-wiring/exporter.yaml",
-		"05-account-wiring/importer.yaml",
+		"02-auth-plane/01-natsoperator.yaml",
+		"02-auth-plane/01-natsaccounts.yaml",
+		"02-auth-plane/01-natsoperatortrust.yaml",
+		"05-account-wiring/01-exporter.yaml",
+		"05-account-wiring/01-importer.yaml",
 	} {
 		raw, err := os.ReadFile(filepath.Join(storiesDir, f))
 		require.NoError(t, err)

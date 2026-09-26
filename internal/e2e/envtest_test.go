@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,27 +39,29 @@ func TestEnvtest_Runner(t *testing.T) {
 		r := &Runner{Client: c, Timeout: 2 * time.Second, Interval: 200 * time.Millisecond, Log: &log}
 		res := r.Run(t.Context(), bundles[0])
 		require.Equal(t, Fail, res.Outcome)
-		require.Contains(t, log.String(), "01-quickstart: polling 3 status files")
-		require.Contains(t, res.Detail, "timed out after 2s")
-		require.Contains(t, res.Detail, "status-natscluster-at-rest.yaml -> NatsCluster nats-system/demo\n")
+		require.Contains(t, log.String(), "01-quickstart step 1: polling 1 files")
+		require.NotContains(t, log.String(), "step 2")
+		require.Contains(t, res.Detail, "01-quickstart step 1: timed out after 2s")
+		require.Contains(t, res.Detail, "01-status-natscluster-at-rest.yaml -> NatsCluster nats-system/demo\n")
 		require.Contains(t, res.Detail, `.status.conditions[type=Ready].status: want "True", got <absent>`)
 		require.Contains(t, res.Detail, `.status.replicas: want 3, got <absent>`)
 	})
 
 	t.Run("Skipped story applies nothing", func(t *testing.T) {
-		r := &Runner{Client: c, Timeout: time.Second, Interval: time.Second, Skip: map[int]string{1: "reason"}}
-		res := r.Run(t.Context(), Bundle{Name: "01-x", Number: 1})
+		r := &Runner{Client: c, Timeout: time.Second, Interval: time.Second}
+		res := r.Run(t.Context(), &Bundle{Name: "01-x", Number: 1, Skip: "reason"})
 		require.Equal(t, Result{Story: "01-x", Outcome: Skip, Detail: "reason"}, res)
 	})
 
-	t.Run("Status arriving passes", func(t *testing.T) {
+	t.Run("Status arriving passes, then a step deletes", func(t *testing.T) {
 		root := writeBundle(t, map[string]string{
-			"conn.yaml": `apiVersion: nats.mikluko.io/v1beta1
+			"02-delete-conn.yaml": "apiVersion: nats.mikluko.io/v1beta1\nkind: NatsConnection\nmetadata: {name: demo, namespace: arrives}\n",
+			"01-conn.yaml": `apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata: {name: demo, namespace: arrives}
 spec: {servers: ["nats://demo:4222"]}
 `,
-			"status-natsconnection.yaml": "status:\n  observedGeneration: 1\n  conditions:\n  - {type: Ready, status: \"True\", reason: Anything}\n",
+			"01-status-natsconnection.yaml": "status:\n  observedGeneration: 1\n  conditions:\n  - {type: Ready, status: \"True\", reason: Anything}\n  servers: !any 3\n",
 		})
 		bundles, err := LoadBundles(root)
 		require.NoError(t, err)
@@ -66,6 +69,11 @@ spec: {servers: ["nats://demo:4222"]}
 		r := &Runner{Client: c, Timeout: 20 * time.Second, Interval: 100 * time.Millisecond}
 		res := r.Run(t.Context(), bundles[0])
 		require.Equal(t, Pass, res.Outcome, res.Detail)
+		u := &unstructured.Unstructured{}
+		u.SetAPIVersion("nats.mikluko.io/v1beta1")
+		u.SetKind("NatsConnection")
+		err = c.Get(t.Context(), client.ObjectKey{Namespace: "arrives", Name: "demo"}, u)
+		require.True(t, apierrors.IsNotFound(err), "step 2 deleted the connection: %v", err)
 	})
 }
 

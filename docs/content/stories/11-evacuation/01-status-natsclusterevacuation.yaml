@@ -11,7 +11,7 @@ status:
     - type: Progressing
       status: "False"
       reason: NothingMovable
-  moved: 41
+  moved: !any 41
   inFlight: 0
   pinned:
     - kind: NatsStream

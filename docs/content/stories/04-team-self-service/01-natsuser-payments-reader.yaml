@@ -1,0 +1,16 @@
+# Declared in the orders namespace, which no grant covers, against the
+# payments account.
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsUser
+metadata:
+  name: payments-reader
+  namespace: orders
+spec:
+  accountRef:
+    kind: NatsAccount
+    namespace: nats-system
+    name: payments
+  preset: readonly
+  credentials:
+    secretKeyRef:
+      name: payments-reader-creds

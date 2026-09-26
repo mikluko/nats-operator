@@ -22,6 +22,7 @@ import (
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	jetstreamv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/e2e"
 )
 
 const storiesDir = "../docs/content/stories"
@@ -48,17 +49,23 @@ func apiScheme(t *testing.T) *runtime.Scheme {
 	return s
 }
 
-// storyFiles returns the story YAML files, split into manifests and
-// status-*.yaml files.
+// storyFiles returns the story YAML files but the delete files, split into
+// status files and the rest, whose documents are whole objects.
 func storyFiles(t *testing.T) (manifests, statuses []string) {
 	t.Helper()
 	err := filepath.WalkDir(storiesDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || filepath.Ext(path) != ".yaml" {
 			return err
 		}
-		if strings.HasPrefix(d.Name(), "status-") {
+		name, err := e2e.ParseFileName(d.Name())
+		if err != nil {
+			return err
+		}
+		switch name.Role {
+		case e2e.RoleDelete:
+		case e2e.RoleStatus:
 			statuses = append(statuses, path)
-		} else {
+		default:
 			manifests = append(manifests, path)
 		}
 		return nil
@@ -69,16 +76,20 @@ func storyFiles(t *testing.T) (manifests, statuses []string) {
 	return manifests, statuses
 }
 
-// storyManifests returns every object in every story manifest file, each
-// named by its file and position.
+// storyManifests returns every object in every story file but the status
+// files, each named by its file and position, with placeholders stripped.
 func storyManifests(t *testing.T) []storyDoc {
 	t.Helper()
 	files, _ := storyFiles(t)
 	var docs []storyDoc
 	for _, path := range files {
-		f, err := os.Open(path)
+		raw, err := os.ReadFile(path)
 		require.NoError(t, err)
-		r := utilyaml.NewYAMLReader(bufio.NewReader(f))
+		if name, _ := e2e.ParseFileName(filepath.Base(path)); name.Role == e2e.RoleLive {
+			raw, err = e2e.StripPlaceholders(raw)
+			require.NoError(t, err, path)
+		}
+		r := utilyaml.NewYAMLReader(bufio.NewReader(bytes.NewReader(raw)))
 		for i := 0; ; i++ {
 			raw, err := r.Read()
 			if errors.Is(err, io.EOF) {
@@ -99,7 +110,6 @@ func storyManifests(t *testing.T) []storyDoc {
 				obj:  obj,
 			})
 		}
-		require.NoError(t, f.Close())
 	}
 	return docs
 }
@@ -117,23 +127,23 @@ func TestStoryManifestsDecodeStrictly(t *testing.T) {
 	}
 }
 
-// statusKind maps the kind a status-<kind>-*.yaml file names to its
-// GroupVersionKind.
+// statusKind maps the kind a status file names to its GroupVersionKind.
 func statusKind(t *testing.T, s *runtime.Scheme, path string) schema.GroupVersionKind {
 	t.Helper()
-	name := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(path), "status-"), ".yaml")
-	lower, _, _ := strings.Cut(name, "-")
+	name, err := e2e.ParseFileName(filepath.Base(path))
+	require.NoError(t, err)
 	for gvk := range s.AllKnownTypes() {
-		if strings.ToLower(gvk.Kind) == lower {
+		if strings.ToLower(gvk.Kind) == name.Kind {
 			return gvk
 		}
 	}
-	require.Failf(t, "no kind for status file", "%s names %q", path, lower)
+	require.Failf(t, "no kind for status file", "%s names %q", path, name.Kind)
 	return schema.GroupVersionKind{}
 }
 
 // TestStoryStatusesDecodeStrictly pins every block and field of every story
-// status to a field of the Go status types.
+// status, placeholders' example values included, to a field of the Go status
+// types.
 func TestStoryStatusesDecodeStrictly(t *testing.T) {
 	s := apiScheme(t)
 	_, statuses := storyFiles(t)
@@ -142,6 +152,8 @@ func TestStoryStatusesDecodeStrictly(t *testing.T) {
 		require.NoError(t, err)
 		t.Run(rel, func(t *testing.T) {
 			raw, err := os.ReadFile(path)
+			require.NoError(t, err)
+			raw, err = e2e.StripPlaceholders(raw)
 			require.NoError(t, err)
 			obj, err := s.New(statusKind(t, s, path))
 			require.NoError(t, err)

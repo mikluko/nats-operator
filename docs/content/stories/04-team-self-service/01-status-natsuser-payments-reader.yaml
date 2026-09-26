@@ -1,6 +1,6 @@
-# A NatsUser in the orders namespace pointing at the same account, with no
-# grant covering it. Checked on every reconcile, so deleting a grant later
-# turns an admitted user into this one and revokes its JWT.
+# payments-reader, with no grant covering it. Grants are checked on every
+# reconcile, so deleting one later turns an admitted user into this one and
+# revokes its JWT.
 status:
   observedGeneration: 1
   conditions:

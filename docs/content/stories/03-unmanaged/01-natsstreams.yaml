@@ -11,7 +11,7 @@ spec:
   # The stream must already exist; if it does not, the resource waits
   # (Adopted=False, reason NotFound) and never creates it. On adoption the
   # controller writes the server's config into this spec, so the spec needs
-  # only what identifies the stream. See natsstream-payments-adopted.yaml.
+  # only what identifies the stream. See 01-live-natsstream-payments.yaml.
   adoptionPolicy: Adopt
   name: PAYMENTS
 ---
@@ -37,7 +37,7 @@ spec:
 ---
 # adoptionPolicy defaults to Never, and a stream of this name already exists
 # that the controller did not create: the resource goes Terminal and nothing
-# on the server changes. See status-natsstream-ledger.yaml.
+# on the server changes. See 01-status-natsstream-ledger.yaml.
 apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata:

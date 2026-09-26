@@ -78,10 +78,10 @@ func startManager(t *testing.T, cfg *rest.Config) {
 }
 
 func testStory1(t *testing.T, c client.Client, n *testNATS) {
-	applyStory(t, c, n, "01-quickstart/natsconnection.yaml", "01-quickstart/natsstream.yaml")
+	applyStory(t, c, n, "01-quickstart/03-natsconnection.yaml", "01-quickstart/03-natsstream.yaml")
 
 	s := eventuallyStream(t, c, "nats-system", "orders", func(ct *assert.CollectT, s *js.NatsStream) {
-		assertConditions(ct, s.Status.Conditions, "01-quickstart/status-natsstream.yaml")
+		assertConditions(ct, s.Status.Conditions, "01-quickstart/03-status-natsstream.yaml")
 		if assert.NotNil(ct, s.Status.Server) {
 			assert.NotEmpty(ct, s.Status.Server.Leader)
 			assert.Len(ct, s.Status.Server.Replicas, 2)
@@ -112,14 +112,14 @@ func testStory3(t *testing.T, c client.Client, n *testNATS) {
 	} {
 		require.NoError(t, c.Create(t.Context(), s))
 	}
-	applyStory(t, c, n, "03-unmanaged/natsconnection.yaml", "03-unmanaged/natsstreams.yaml", "03-unmanaged/natsconsumer.yaml")
+	applyStory(t, c, n, "03-unmanaged/01-natsconnection.yaml", "03-unmanaged/01-natsstreams.yaml", "03-unmanaged/01-natsconsumer.yaml")
 
 	t.Run("Adopt", func(t *testing.T) {
 		s := eventuallyStream(t, c, "payments", "payments", func(ct *assert.CollectT, s *js.NatsStream) {
-			assertConditions(ct, s.Status.Conditions, "03-unmanaged/status-natsstream-payments.yaml")
+			assertConditions(ct, s.Status.Conditions, "03-unmanaged/01-status-natsstream-payments.yaml")
 		})
 		require.Equal(t, &js.Ownership{Origin: js.OwnershipAdopted, UID: s.UID}, s.Status.Ownership)
-		requireSpecHolds(t, s, "03-unmanaged/natsstream-payments-adopted.yaml")
+		requireSpecHolds(t, s, "03-unmanaged/01-live-natsstream-payments.yaml")
 		require.Equal(t, string(s.UID), streamInfo(t, j, "PAYMENTS").Config.Metadata[lifecycle.OwnerKey])
 	})
 
@@ -147,7 +147,7 @@ func testStory3(t *testing.T, c client.Client, n *testNATS) {
 
 	t.Run("TerminalRetry", func(t *testing.T) {
 		s := eventuallyStream(t, c, "payments", "ledger", func(ct *assert.CollectT, s *js.NatsStream) {
-			assertConditions(ct, s.Status.Conditions, "03-unmanaged/status-natsstream-ledger.yaml")
+			assertConditions(ct, s.Status.Conditions, "03-unmanaged/01-status-natsstream-ledger.yaml")
 		})
 		require.NotNil(t, s.Status.NextCheckTime, "Retry schedules a recheck")
 		require.NoError(t, j.DeleteStream(t.Context(), "LEDGER"))

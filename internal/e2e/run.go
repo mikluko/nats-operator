@@ -35,42 +35,53 @@ type Result struct {
 	Detail  string
 }
 
-// Runner applies story bundles through Client and waits for their statuses.
+// Runner runs story bundles through Client.
 type Runner struct {
 	Client client.Client
-	// Timeout bounds the wait for a story's statuses, and separately the
-	// wait for a previous story's namespace to finish deleting.
+	// Timeout bounds the wait for each step's expectations, and separately
+	// the wait for a previous story's namespace to finish deleting.
 	Timeout  time.Duration
 	Interval time.Duration
-	// Skip maps a story number to the reason it is not run.
-	Skip map[int]string
 	// Log receives one line per phase of each story.
 	Log io.Writer
 }
 
 const fieldOwner = "nats-operator-e2e"
 
-// Run runs one bundle: it deletes and recreates every namespace the bundle
-// declares objects in, server-side applies the objects, and polls until each
-// expectation's target object has a status containing it or Timeout passes.
-// A status file that names no object of the bundle fails the story before
-// anything is applied.
-func (r *Runner) Run(ctx context.Context, b Bundle) Result {
+// Run runs one bundle, after every bundle it starts from: it deletes and
+// recreates every namespace their objects are declared in, then, bundle by
+// bundle and step by step, server-side applies the step's manifests, deletes
+// the objects it deletes, and polls until each of its expectations' target
+// objects contains it or Timeout passes. An expectation that names no object
+// fails the story before anything is applied, and a bundle whose
+// SkipReason is not "" is skipped.
+func (r *Runner) Run(ctx context.Context, b *Bundle) Result {
 	start := time.Now()
 	res := func(o Outcome, detail string) Result {
 		return Result{Story: b.Name, Outcome: o, Elapsed: time.Since(start).Round(time.Second), Detail: detail}
 	}
-	if reason, ok := r.Skip[b.Number]; ok {
+	if reason := b.SkipReason(); reason != "" {
 		r.logf("%s: skipped: %s", b.Name, reason)
 		return res(Skip, reason)
 	}
-	targets := make([]*unstructured.Unstructured, len(b.Expectations))
-	for i, e := range b.Expectations {
-		t, err := b.Target(e)
-		if err != nil {
-			return res(Fail, err.Error())
+	type stage struct {
+		bundle  *Bundle
+		step    Step
+		targets []*unstructured.Unstructured
+	}
+	var stages []stage
+	for _, c := range b.Chain() {
+		for _, s := range c.Steps {
+			st := stage{bundle: c, step: s}
+			for _, e := range s.Expectations {
+				t, err := c.Target(s.Number, e)
+				if err != nil {
+					return res(Fail, fmt.Sprintf("%s: %v", c.Name, err))
+				}
+				st.targets = append(st.targets, t)
+			}
+			stages = append(stages, st)
 		}
-		targets[i] = t
 	}
 	for _, ns := range b.Namespaces() {
 		r.logf("%s: fresh namespace %s", b.Name, ns)
@@ -78,19 +89,31 @@ func (r *Runner) Run(ctx context.Context, b Bundle) Result {
 			return res(Fail, err.Error())
 		}
 	}
-	for _, o := range b.Objects {
-		r.logf("%s: apply %s %s", b.Name, o.GetKind(), key(o))
-		if err := r.Client.Apply(ctx, client.ApplyConfigurationFromUnstructured(o.DeepCopy()), client.FieldOwner(fieldOwner), client.ForceOwnership); err != nil {
-			return res(Fail, fmt.Sprintf("apply %s %s: %v", o.GetKind(), key(o), err))
+	for _, st := range stages {
+		at := fmt.Sprintf("%s step %d", st.bundle.Name, st.step.Number)
+		for _, o := range st.step.Apply {
+			r.logf("%s: apply %s %s", at, o.GetKind(), key(o))
+			if err := r.Client.Apply(ctx, client.ApplyConfigurationFromUnstructured(o.DeepCopy()), client.FieldOwner(fieldOwner), client.ForceOwnership); err != nil {
+				return res(Fail, fmt.Sprintf("%s: apply %s %s: %v", at, o.GetKind(), key(o), err))
+			}
 		}
-	}
-	r.logf("%s: polling %d status files, timeout %s", b.Name, len(b.Expectations), r.Timeout)
-	diff, err := r.poll(ctx, b.Expectations, targets)
-	if err != nil {
-		return res(Fail, err.Error())
-	}
-	if diff != "" {
-		return res(Fail, fmt.Sprintf("timed out after %s\n%s", r.Timeout, diff))
+		for _, o := range st.step.Delete {
+			r.logf("%s: delete %s %s", at, o.GetKind(), key(o))
+			if err := r.Client.Delete(ctx, o.DeepCopy()); client.IgnoreNotFound(err) != nil {
+				return res(Fail, fmt.Sprintf("%s: delete %s %s: %v", at, o.GetKind(), key(o), err))
+			}
+		}
+		if len(st.step.Expectations) == 0 {
+			continue
+		}
+		r.logf("%s: polling %d files, timeout %s", at, len(st.step.Expectations), r.Timeout)
+		diff, err := r.poll(ctx, st.step.Expectations, st.targets)
+		if err != nil {
+			return res(Fail, fmt.Sprintf("%s: %v", at, err))
+		}
+		if diff != "" {
+			return res(Fail, fmt.Sprintf("%s: timed out after %s\n%s", at, r.Timeout, diff))
+		}
 	}
 	return res(Pass, "")
 }
@@ -141,7 +164,7 @@ func (r *Runner) check(ctx context.Context, exps []Expectation, targets []*unstr
 		case err != nil:
 			return "", fmt.Errorf("get %s %s: %w", t.GetKind(), key(t), err)
 		}
-		if ms := Diff(map[string]any{"status": e.Status}, live.Object); len(ms) > 0 {
+		if ms := Diff(e.Want, live.Object); len(ms) > 0 {
 			b.WriteString(head + FormatMismatches(ms, "    "))
 		}
 	}

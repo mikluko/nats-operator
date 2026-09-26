@@ -27,7 +27,7 @@ import (
 // storyCluster reads story 1's NatsCluster manifest.
 func storyCluster(t *testing.T) *clusterv1beta1.NatsCluster {
 	t.Helper()
-	b, err := os.ReadFile("../../docs/content/stories/01-quickstart/natscluster.yaml")
+	b, err := os.ReadFile("../../docs/content/stories/01-quickstart/01-natscluster.yaml")
 	require.NoError(t, err)
 	nc := &clusterv1beta1.NatsCluster{}
 	require.NoError(t, yaml.UnmarshalStrict(b, nc))

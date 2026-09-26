@@ -19,31 +19,31 @@ status:
       reason: RollingRestart
       message: restarting demo-1 (2 of 3); waiting for Settled
   config:
-    revision: 8b27e0
+    revision: !any 8b27e0
     appliedBy: Restart
     restartReason: version 2.15.0 -> 2.15.1 is restart-only
   rollout:
-    targetRevision: 8b27e0
-    updated: [demo-2]
-    current: demo-1
-    pending: [demo-0]
+    targetRevision: !any 8b27e0
+    updated: !any [demo-2]
+    current: !any demo-1
+    pending: !any [demo-0]
     gate:
       waitingFor: Settled
-      since: "2026-09-25T16:02:11Z"
+      since: !any "2026-09-25T16:02:11Z"
       # A gate that stays shut holds here with no timeout; after ten
       # minutes Progressing reads GateBlocked, naming the lagging groups.
   jetstream:
-    metaLeader: demo-0
+    metaLeader: !any demo-0
   servers:
     - name: demo-0
-      version: 2.15.0
-      ready: true
-      configRevision: 3f9a1c
+      version: !any 2.15.0
+      ready: !any true
+      configRevision: !any 3f9a1c
     - name: demo-1
-      version: 2.15.1
-      ready: false
-      configRevision: 8b27e0
+      version: !any 2.15.1
+      ready: !any false
+      configRevision: !any 8b27e0
     - name: demo-2
-      version: 2.15.1
-      ready: true
-      configRevision: 8b27e0
+      version: !any 2.15.1
+      ready: !any true
+      configRevision: !any 8b27e0
