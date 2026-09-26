@@ -3,6 +3,8 @@ package jwtplane
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nkeys"
@@ -139,6 +141,37 @@ type userPreset struct {
 	anyAccount      bool
 	pub, sub        []string
 	connectionTypes []string
+}
+
+// UserPresets lists every user preset, sorted.
+func UserPresets() []UserPreset {
+	return slices.Sorted(maps.Keys(userPresets))
+}
+
+// PresetGrant is what a user preset puts in a user's claims.
+type PresetGrant struct {
+	// SystemAccount and AnyAccount say which users may hold the preset:
+	// system account users, ordinary account users, or, with AnyAccount,
+	// either.
+	SystemAccount, AnyAccount bool
+	Publish, Subscribe        []string
+	ConnectionTypes           []string
+}
+
+// UserPresetGrant returns what preset grants, and false for an unknown
+// preset. The slices are the caller's own.
+func UserPresetGrant(preset UserPreset) (PresetGrant, bool) {
+	p, ok := userPresets[preset]
+	if !ok {
+		return PresetGrant{}, false
+	}
+	return PresetGrant{
+		SystemAccount:   p.system,
+		AnyAccount:      p.anyAccount,
+		Publish:         slices.Clone(p.pub),
+		Subscribe:       slices.Clone(p.sub),
+		ConnectionTypes: slices.Clone(p.connectionTypes),
+	}, true
 }
 
 var stepdownImportSubjects = []string{

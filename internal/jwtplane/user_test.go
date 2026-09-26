@@ -172,3 +172,26 @@ func TestSignUserKeys(t *testing.T) {
 	_, err = jwtplane.SignUser(jwtplane.User{PublicKey: pub(t, newPair(t, nkeys.PrefixByteUser))}, mismatched)
 	require.ErrorIs(t, err, jwtplane.ErrIdentityConflict)
 }
+
+func TestUserPresetGrant(t *testing.T) {
+	acc := newKeys(t, nkeys.PrefixByteAccount, "s")
+	for _, preset := range jwtplane.UserPresets() {
+		t.Run(string(preset), func(t *testing.T) {
+			g, ok := jwtplane.UserPresetGrant(preset)
+			require.True(t, ok)
+			tok, err := jwtplane.SignUser(jwtplane.User{
+				Name: "u", PublicKey: pub(t, newPair(t, nkeys.PrefixByteUser)), SystemAccount: g.SystemAccount, Preset: preset,
+			}, acc)
+			require.NoError(t, err)
+			c, err := jwt.DecodeUserClaims(tok)
+			require.NoError(t, err)
+			require.ElementsMatch(t, g.Publish, c.Pub.Allow)
+			require.ElementsMatch(t, g.Subscribe, c.Sub.Allow)
+			require.ElementsMatch(t, g.ConnectionTypes, c.AllowedConnectionTypes)
+			require.Empty(t, c.Pub.Deny)
+			require.Empty(t, c.Sub.Deny)
+		})
+	}
+	_, ok := jwtplane.UserPresetGrant("unknown")
+	require.False(t, ok)
+}
