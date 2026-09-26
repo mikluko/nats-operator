@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,6 +34,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 	"github.com/mikluko/nats-operator/internal/sysobs"
+	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 // SystemBalancerKind is the kind of a NatsSystemBalancer.
@@ -90,6 +92,10 @@ type SystemBalancerReconciler struct {
 	// PendingPoll is how soon a balancer with a move pending is reconciled
 	// again; zero is DefaultPendingPoll.
 	PendingPoll time.Duration
+	// Recorder records moves started and done; nil records none.
+	Recorder events.EventRecorder
+	// Telemetry counts held passes; nil counts none.
+	Telemetry *telemetry.JetStream
 
 	mu      sync.Mutex
 	keepers map[types.NamespacedName]keeperOf
@@ -106,6 +112,7 @@ func (r *SystemBalancerReconciler) Reconcile(ctx context.Context, req reconcile.
 	}
 	base := b.DeepCopy()
 	res, err := r.balance(ctx, &b)
+	r.Telemetry.BalancerPass(ctx, SystemBalancerKind, &b, b.Status.Conditions)
 	if perr := lifecycle.PatchStatus(ctx, r.Client, base, &b, base.Status, b.Status); perr != nil {
 		return reconcile.Result{}, errors.Join(err, perr)
 	}
@@ -160,7 +167,13 @@ func (r *SystemBalancerReconciler) balance(ctx context.Context, b *js.NatsSystem
 
 	passed, passErr := k.Pass(ctx)
 	if last := obs.Last(); last != nil {
+		before := st.Pending
 		st.Pending = stillPending(st.Pending, *last)
+		for _, m := range before {
+			if !slices.ContainsFunc(st.Pending, sameMove(m)) {
+				telemetry.Emit(r.Recorder, b, telemetry.MoveDone, "%s", describeMove(m))
+			}
+		}
 		st.Capabilities = capabilities(*last, reach)
 	}
 	if passErr == nil && reach.err != nil {
@@ -171,6 +184,9 @@ func (r *SystemBalancerReconciler) balance(ctx context.Context, b *js.NatsSystem
 		return after, nil
 	}
 	record(st, passed, now)
+	if m := moveOf(passed, now); m != nil {
+		telemetry.Emit(r.Recorder, b, telemetry.MoveStarted, "%s", describeMove(*m))
+	}
 	switch {
 	case passed.Held != "":
 		r.setHolding(b, true, ReasonUnsettled, passed.Held)
@@ -318,18 +334,37 @@ func record(st *js.NatsSystemBalancerStatus, p balance.Passed, now time.Time) {
 		st.Servers = append(st.Servers, js.ServerLoad{Name: l.Server, Leaders: int32(l.Leaders), Replicas: int32(l.Copies)})
 	}
 	st.Skew = &js.Skew{Leaders: int32(p.LeaderSkew), Replicas: int32(p.CopySkew)}
-	at := metav1.NewTime(now)
-	var m *js.Move
-	switch {
-	case p.Moved != nil:
-		m = &js.Move{Kind: js.MoveLeader, Stream: p.Moved.Group.String(), From: p.Moved.Group.Leader, To: p.Moved.To, Time: &at}
-	case p.Placed != nil:
-		m = &js.Move{Kind: js.MovePlacement, Stream: p.Placed.Group.ID().String(), From: p.Placed.From, Time: &at}
-	}
-	if m != nil {
+	if m := moveOf(p, now); m != nil {
 		st.LastMove = m
 		st.Pending = append(st.Pending, *m)
 	}
+}
+
+// moveOf is the move pass p made at now, or nil.
+func moveOf(p balance.Passed, now time.Time) *js.Move {
+	at := metav1.NewTime(now)
+	switch {
+	case p.Moved != nil:
+		return &js.Move{Kind: js.MoveLeader, Stream: p.Moved.Group.String(), From: p.Moved.Group.Leader, To: p.Moved.To, Time: &at}
+	case p.Placed != nil:
+		return &js.Move{Kind: js.MovePlacement, Stream: p.Placed.Group.ID().String(), From: p.Placed.From, Time: &at}
+	}
+	return nil
+}
+
+// sameMove matches a move of the same kind, stream and servers as m.
+func sameMove(m js.Move) func(js.Move) bool {
+	return func(o js.Move) bool {
+		return o.Kind == m.Kind && o.Stream == m.Stream && o.From == m.From && o.To == m.To
+	}
+}
+
+// describeMove is m as an event's note.
+func describeMove(m js.Move) string {
+	if m.Kind == js.MoveLeader {
+		return fmt.Sprintf("leader of %s from %s to %s", m.Stream, m.From, m.To)
+	}
+	return fmt.Sprintf("%s off %s", m.Stream, m.From)
 }
 
 // stillPending is the moves of pending that obs does not show complete. A
@@ -477,5 +512,5 @@ func (r *SystemBalancerReconciler) SetupWithManager(ctx context.Context, mgr ctr
 		Watches(&natsv1beta1.NatsConnection{}, lifecycle.EnqueueByField(mgr.GetClient(), &js.NatsSystemBalancerList{}, lifecycle.ConnectionField)).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(mgr.GetClient(), js.GroupVersion.WithKind(SystemBalancerKind).GroupKind(), &js.NatsSystemBalancerList{})).
 		Watches(&js.NatsClusterEvacuation{}, all).
-		Complete(r)
+		Complete(telemetry.Traced(SystemBalancerKind, r))
 }

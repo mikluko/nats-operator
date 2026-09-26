@@ -16,6 +16,7 @@ import (
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/grant"
+	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 // OperatorTrustReconciler mirrors into a reference-form NatsOperatorTrust's
@@ -85,7 +86,7 @@ func (r *OperatorTrustReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&natsv1beta1.NatsOperatorTrust{}).
 		Watches(&authv1beta1.NatsOperator{}, enqueueIndexed(c, &natsv1beta1.NatsOperatorTrustList{}, operatorField)).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, schema.GroupKind{Group: natsGroup, Kind: "NatsOperatorTrust"}, &natsv1beta1.NatsOperatorTrustList{})).
-		Complete(r)
+		Complete(telemetry.Traced("NatsOperatorTrust", r))
 }
 
 // AccountTrustReconciler mirrors into a reference-form NatsAccountTrust's
@@ -155,7 +156,7 @@ func (r *AccountTrustReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&natsv1beta1.NatsAccountTrust{}).
 		Watches(&authv1beta1.NatsAccount{}, enqueueIndexed(c, &natsv1beta1.NatsAccountTrustList{}, accountField)).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, schema.GroupKind{Group: natsGroup, Kind: "NatsAccountTrust"}, &natsv1beta1.NatsAccountTrustList{})).
-		Complete(r)
+		Complete(telemetry.Traced("NatsAccountTrust", r))
 }
 
 // referenceAdmitted records on conds whether cond, from admit, admitted a

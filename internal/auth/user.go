@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -23,6 +24,7 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 // UserFinalizer holds a deleted NatsUser until its key is revoked, the
@@ -55,6 +57,8 @@ type UserReconciler struct {
 	// Sessions closes a deleted user's connections; nil reaches no NATS
 	// server, and deletion then waits only for the revocation to be signed.
 	Sessions Sessions
+	// Recorder records users kicked; nil records none.
+	Recorder events.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=get;list;watch;update;patch
@@ -420,6 +424,7 @@ func (r *UserReconciler) drain(ctx context.Context, u *authv1beta1.NatsUser) (bo
 		return false, reconcile.Result{}, fmt.Errorf("kick %s: %w", pub, err)
 	}
 	if n > 0 {
+		telemetry.Emit(r.Recorder, u, telemetry.UserKicked, "closed %d connections of %s", n, pub)
 		waiting(ReasonKicking, fmt.Sprintf("closed %d connections; checking none remain", n))
 		return false, reconcile.Result{RequeueAfter: kickInterval}, nil
 	}
@@ -462,5 +467,5 @@ func (r *UserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return listIndexed(ctx, c, &authv1beta1.NatsUserList{}, userAccountField, accountValue(authv1beta1.AccountKindSystemAccount, sys))
 		})).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, schema.GroupKind{Group: authGroup, Kind: "NatsUser"}, &authv1beta1.NatsUserList{})).
-		Complete(r)
+		Complete(telemetry.Traced("NatsUser", r))
 }

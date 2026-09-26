@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,6 +28,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
+	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 // BalancerKind is the kind of a NatsBalancer.
@@ -64,6 +66,10 @@ type BalancerReconciler struct {
 	// PendingPoll is how soon a balancer yielding to a system balancer is
 	// reconciled again; zero is DefaultPendingPoll.
 	PendingPoll time.Duration
+	// Recorder records moves started; nil records none.
+	Recorder events.EventRecorder
+	// Telemetry counts held passes; nil counts none.
+	Telemetry *telemetry.JetStream
 
 	mu      sync.Mutex
 	keepers map[types.NamespacedName]*accountKeeper
@@ -88,6 +94,7 @@ func (r *BalancerReconciler) Reconcile(ctx context.Context, req reconcile.Reques
 	}
 	base := b.DeepCopy()
 	res, err := r.balance(ctx, &b)
+	r.Telemetry.BalancerPass(ctx, BalancerKind, &b, b.Status.Conditions)
 	if perr := lifecycle.PatchStatus(ctx, r.Client, base, &b, base.Status, b.Status); perr != nil {
 		return reconcile.Result{}, errors.Join(err, perr)
 	}
@@ -170,8 +177,9 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 	if passed.Held == "" {
 		st.Pools = poolStatus(b.Spec.Pools, passed.Pools)
 	}
-	if passed.Moved != nil || passed.Placed != nil {
+	if m := moveOf(passed, now); m != nil {
 		state.moved = now
+		telemetry.Emit(r.Recorder, b, telemetry.MoveStarted, "%s", describeMove(*m))
 	}
 	switch {
 	case evac != "":
@@ -374,5 +382,5 @@ func (r *BalancerReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Mana
 		Watches(&js.NatsObjectStore{}, balancers(true)).
 		Watches(&js.NatsSystemBalancer{}, balancers(false)).
 		Watches(&js.NatsClusterEvacuation{}, balancers(false)).
-		Complete(r)
+		Complete(telemetry.Traced(BalancerKind, r))
 }

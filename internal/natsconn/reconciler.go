@@ -21,6 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 // Ready condition vocabulary on a NatsConnection.
@@ -180,7 +181,7 @@ func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) err
 			r.queue.Store(&q)
 			return nil
 		})).
-		Complete(r)
+		Complete(telemetry.Traced("NatsConnection", r))
 }
 
 // connectionsReading maps a Secret to the NatsConnections in its namespace

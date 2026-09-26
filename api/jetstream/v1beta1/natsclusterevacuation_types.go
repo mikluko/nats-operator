@@ -73,6 +73,12 @@ type NatsClusterEvacuationStatus struct {
 	// +optional
 	InFlight int32 `json:"inFlight,omitempty"`
 
+	// Remaining is the number of streams still to leave the source cluster:
+	// in flight, waiting for a slot, or refused by the server in the last
+	// pass. Pinned streams and streams left for their owners are not counted.
+	// +optional
+	Remaining int32 `json:"remaining,omitempty"`
+
 	// Pinned are the resources left in place; the evacuation is not Ready
 	// while any remains.
 	// +optional

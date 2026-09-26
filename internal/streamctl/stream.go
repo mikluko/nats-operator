@@ -19,6 +19,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
+	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 // StreamKind is the kind a NatsStream is referred to by.
@@ -109,7 +110,7 @@ func (r *StreamReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manage
 		For(&js.NatsStream{}, builder.WithPredicates(lifecycle.SpecOrDeletion())).
 		Watches(&natsv1beta1.NatsConnection{}, lifecycle.EnqueueByField(mgr.GetClient(), &js.NatsStreamList{}, lifecycle.ConnectionField)).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(mgr.GetClient(), js.GroupVersion.WithKind(StreamKind).GroupKind(), &js.NatsStreamList{})).
-		Complete(r)
+		Complete(telemetry.Traced("NatsStream", r))
 }
 
 func streamReferrer(namespace string) grant.Referrer {

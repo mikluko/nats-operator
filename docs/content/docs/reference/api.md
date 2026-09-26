@@ -848,6 +848,7 @@ Appears on: [NatsClusterEvacuation](#NatsClusterEvacuation).
 | `conditions` | [{{< type "[]Condition" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Condition) | No | Conditions: Ready, Progressing. |
 | `moved` | {{< type "int32" >}} | No | Moved is the number of streams moved. |
 | `inFlight` | {{< type "int32" >}} | No | InFlight is the number of moves in progress. |
+| `remaining` | {{< type "int32" >}} | No | Remaining is the number of streams still to leave the source cluster: in flight, waiting for a slot, or refused by the server in the last pass. Pinned streams and streams left for their owners are not counted. |
 | `pinned` | [{{< type "[]PinnedObject" >}}](#PinnedObject) | No | Pinned are the resources left in place; the evacuation is not Ready while any remains. |
 | `stalePlacement` | [{{< type "[]ServerStream" >}}](#ServerStream) | No | StalePlacement are the streams moved that no resource owns and whose config still names the source cluster: while it exists, an update that changes their placement returns them to it. |
 ### NatsConsumer {#NatsConsumer}

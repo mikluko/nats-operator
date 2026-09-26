@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"go.opentelemetry.io/otel"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -19,6 +20,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/natscluster"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 	"github.com/mikluko/nats-operator/internal/sysobs"
+	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 func main() {
@@ -46,6 +48,15 @@ func main() {
 		log.Error(err, "start")
 		os.Exit(1)
 	}
+	ctx := ctrl.SetupSignalHandler()
+	if err := telemetry.Install(ctx, mgr, telemetry.ClusterController); err != nil {
+		log.Error(err, "set up telemetry")
+		os.Exit(1)
+	}
+	if err := telemetry.RegisterCluster(otel.Meter(telemetry.ClusterController), mgr.GetClient()); err != nil {
+		log.Error(err, "register instruments")
+		os.Exit(1)
+	}
 	pool := natsconn.NewPool()
 	if err := mgr.Add(pool); err != nil {
 		log.Error(err, "add connection pool")
@@ -62,8 +73,8 @@ func main() {
 		Reloader: sys.Reloader,
 		Admin:    sys.Admin,
 		Forget:   sys.Forget,
+		Recorder: mgr.GetEventRecorder(telemetry.ClusterController),
 	}
-	ctx := ctrl.SetupSignalHandler()
 	if err := r.SetupWithManager(ctx, mgr); err != nil {
 		log.Error(err, "set up natscluster reconciler")
 		os.Exit(1)

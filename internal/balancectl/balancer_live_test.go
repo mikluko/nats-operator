@@ -3,6 +3,7 @@ package balancectl
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -101,7 +103,8 @@ func TestBalancer_Pools(t *testing.T) {
 		Build()
 	conns := natsconn.NewPool()
 	t.Cleanup(conns.Close)
-	r := &BalancerReconciler{Client: c, Dialer: &natsconn.Dialer{Reader: c, Pool: conns}, PendingPoll: time.Millisecond}
+	rec := events.NewFakeRecorder(1000)
+	r := &BalancerReconciler{Client: c, Dialer: &natsconn.Dialer{Reader: c, Pool: conns}, PendingPoll: time.Millisecond, Recorder: rec}
 
 	even := []js.PoolStatus{
 		{Name: "requests", Streams: 3},
@@ -122,6 +125,11 @@ func TestBalancer_Pools(t *testing.T) {
 				leaders[streamLeader(t, ctx, jsA, s)] = true
 			}
 			require.Len(t, leaders, 3, "%v is led by one server each", pool)
+		}
+		started := notes(recorded(rec), "Normal", "MoveStarted")
+		require.NotEmpty(t, started, "no move was recorded")
+		for _, note := range started {
+			require.True(t, strings.HasPrefix(note, "leader of "+p.aPub+"/"), note)
 		}
 	})
 

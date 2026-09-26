@@ -11,6 +11,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -20,6 +21,7 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 // OperatorReconciler signs a NatsOperator's JWT and the JWT of the
@@ -47,6 +49,9 @@ type OperatorReconciler struct {
 	// Distributor receives the system account JWT whenever it is newly
 	// signed; nil pushes nothing.
 	Distributor Distributor
+	// Recorder records system account JWTs pushed and held; nil records
+	// none.
+	Recorder events.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
@@ -140,6 +145,7 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	sd, err := seededRevocations(ctx, lookup, client.ObjectKeyFromObject(op), sys.Status.Revocations, prevJWT, sysPub, sysSigning, users,
 		unrecovered(st.Conditions), everDistributed(sys.Status.Distribution))
 	if err != nil {
+		recordHeld(r.Recorder, op, st.Conditions, err)
 		return recoveryFailed(err, notReady)
 	}
 	recordSeed(&st.Conditions, op.Generation, sd)
@@ -155,8 +161,12 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	}
 	if prev == nil || prev.Name != sys.Name || !sameAccountClaims(prev.JWT, sysJWT) ||
 		!unrecovered(st.Conditions) && superseded(ctx, r.Distributor, client.ObjectKeyFromObject(op), prev.JWT) {
-		if err := pushErr(push(ctx, r.Distributor, client.ObjectKeyFromObject(op), sysJWT)); err != nil {
+		err := push(ctx, r.Distributor, client.ObjectKeyFromObject(op), sysJWT)
+		if err := pushErr(err); err != nil {
 			return 0, fmt.Errorf("push system account JWT: %w", err)
+		}
+		if r.Distributor != nil && err == nil {
+			telemetry.Emit(r.Recorder, op, telemetry.JWTPushed, "system account JWT of %s pushed", sysPub)
 		}
 		st.SystemAccount = &authv1beta1.SystemAccountStatus{Name: sys.Name, PublicKey: sysPub, JWT: sysJWT}
 	}
@@ -346,7 +356,7 @@ func (r *OperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return systemAccountOperators(ctx, c, []reconcile.Request{{NamespacedName: refKey(ref.ObjectReference, obj.GetNamespace())}})
 		})).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, schema.GroupKind{Group: authGroup, Kind: "NatsOperator"}, &authv1beta1.NatsOperatorList{})).
-		Complete(r)
+		Complete(telemetry.Traced("NatsOperator", r))
 }
 
 // systemAccountOperators maps requests for NatsSystemAccounts to requests

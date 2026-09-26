@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,6 +28,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 	"github.com/mikluko/nats-operator/internal/sysobs"
+	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 // EvacuationKind is the kind of a NatsClusterEvacuation.
@@ -84,6 +86,9 @@ type EvacuationReconciler struct {
 	// PendingPoll is how soon an evacuation with moves in flight is
 	// reconciled again; zero is DefaultPendingPoll.
 	PendingPoll time.Duration
+	// Recorder records moves started, done, refused and cancelled, and a
+	// refused evacuation; nil records none.
+	Recorder events.EventRecorder
 
 	mu   sync.Mutex
 	runs map[types.UID]map[balance.StreamID]time.Time
@@ -138,6 +143,9 @@ func (r *EvacuationReconciler) evacuate(ctx context.Context, e *js.NatsClusterEv
 	}
 	if s := carrier(snap.Servers, e.Spec.To.ServerTags); s != "" {
 		msg := fmt.Sprintf("server %s of %s carries %s", s, from, strings.Join(e.Spec.To.ServerTags, ", "))
+		if c := meta.FindStatusCondition(st.Conditions, ConditionReady); c == nil || c.Reason != ReasonTargetTagsInSource {
+			telemetry.Emit(r.Recorder, e, telemetry.EvacuationRefused, "%s", msg)
+		}
 		setEvacuation(e, ConditionReady, false, ReasonTargetTagsInSource, msg)
 		setEvacuation(e, ConditionProgressing, false, ReasonTargetTagsInSource, msg)
 		return after, nil
@@ -149,6 +157,7 @@ func (r *EvacuationReconciler) evacuate(ctx context.Context, e *js.NatsClusterEv
 	for _, id := range p.completed {
 		delete(requested, id)
 		st.Moved++
+		telemetry.Emit(r.Recorder, e, telemetry.MoveDone, "%s left %s", id, from)
 	}
 	for _, id := range p.inFlight {
 		if _, ok := requested[id]; !ok {
@@ -162,8 +171,10 @@ func (r *EvacuationReconciler) evacuate(ctx context.Context, e *js.NatsClusterEv
 		id := streamID(g)
 		if err := mover.Evacuate(ctx, id, e.Spec.To.ServerTags); err != nil {
 			refused = append(refused, err)
+			telemetry.Emit(r.Recorder, e, telemetry.MoveRefused, "%s: %v", id, err)
 			continue
 		}
+		telemetry.Emit(r.Recorder, e, telemetry.MoveStarted, "%s off %s to servers tagged %s", id, from, strings.Join(e.Spec.To.ServerTags, ", "))
 		requested[id] = now
 		inFlight++
 		if stale(g, from, owners) {
@@ -173,6 +184,7 @@ func (r *EvacuationReconciler) evacuate(ctx context.Context, e *js.NatsClusterEv
 	st.InFlight = int32(inFlight)
 
 	leaving := inFlight + p.waiting + len(refused)
+	st.Remaining = int32(leaving)
 	switch {
 	case len(refused) > 0:
 		setEvacuation(e, ConditionReady, false, ReasonMoveRefused, fmt.Sprintf("%s refused: %v", count(len(refused), "move"), refused[0]))
@@ -257,7 +269,10 @@ func (r *EvacuationReconciler) cancel(ctx context.Context, e *js.NatsClusterEvac
 	mover := balance.StreamMove{Conn: nc}
 	var errs []error
 	for _, id := range pending {
-		if err := mover.CancelMove(ctx, id); err != nil && !noMove(err) {
+		switch err := mover.CancelMove(ctx, id); {
+		case err == nil:
+			telemetry.Emit(r.Recorder, e, telemetry.MoveCancelled, "move of %s off %s cancelled", id, from)
+		case !noMove(err):
 			errs = append(errs, err)
 		}
 	}
@@ -522,5 +537,5 @@ func (r *EvacuationReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Ma
 		Watches(&js.NatsStream{}, all, builder.WithPredicates(lifecycle.SpecOrDeletion())).
 		Watches(&js.NatsKeyValue{}, all, builder.WithPredicates(lifecycle.SpecOrDeletion())).
 		Watches(&js.NatsObjectStore{}, all, builder.WithPredicates(lifecycle.SpecOrDeletion())).
-		Complete(r)
+		Complete(telemetry.Traced(EvacuationKind, r))
 }

@@ -9,12 +9,15 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	"github.com/mikluko/nats-operator/internal/sysobs"
+	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 // What a rollout's gate waits for, as status.rollout.gate.waitingFor names
@@ -382,6 +385,13 @@ func (r *Reconciler) rollout(ctx context.Context, nc *clusterv1beta1.NatsCluster
 	}
 	if d.Remove != nil {
 		surplus := st.kindOf(d.Remove.Server) == kindScaleDown
+		if st.Removal.Removing == "" {
+			verb := "replacing"
+			if surplus {
+				verb = "removing"
+			}
+			telemetry.Emit(r.Recorder, nc, telemetry.RolloutStep, "%s %s", verb, d.Remove.Server)
+		}
 		if err := r.remove(ctx, nc, admin, noAdmin, *d.Remove, o.StatefulSets, surplus); err != nil {
 			return d, err
 		}
@@ -396,6 +406,7 @@ func (r *Reconciler) rollout(ctx context.Context, nc *clusterv1beta1.NatsCluster
 			return d, err
 		}
 		o.StatefulSets[d.Step] = sts
+		telemetry.Emit(r.Recorder, nc, telemetry.RolloutStep, "restarting %s", d.Step)
 	}
 	if d.ClearForceStep {
 		orig := nc.DeepCopy()
@@ -433,4 +444,17 @@ func (r *Reconciler) restartServer(ctx context.Context, nc *clusterv1beta1.NatsC
 		return nil, fmt.Errorf("restart statefulset %s: %w", sts.Name, err)
 	}
 	return sts, nil
+}
+
+// recordGateBlocked records GateBlocked on nc when its Progressing reads
+// GateBlocked and before, the conditions it had, did not.
+func recordGateBlocked(rec events.EventRecorder, nc *clusterv1beta1.NatsCluster, before []metav1.Condition) {
+	now := meta.FindStatusCondition(nc.Status.Conditions, ConditionProgressing)
+	if now == nil || now.Reason != ReasonGateBlocked {
+		return
+	}
+	if was := meta.FindStatusCondition(before, ConditionProgressing); was != nil && was.Reason == ReasonGateBlocked {
+		return
+	}
+	telemetry.Emit(rec, nc, telemetry.GateBlocked, "%s", now.Message)
 }

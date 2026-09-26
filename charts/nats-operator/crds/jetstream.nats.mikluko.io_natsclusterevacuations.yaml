@@ -196,6 +196,13 @@ spec:
                   - namespace
                   type: object
                 type: array
+              remaining:
+                description: |-
+                  Remaining is the number of streams still to leave the source cluster:
+                  in flight, waiting for a slot, or refused by the server in the last
+                  pass. Pinned streams and streams left for their owners are not counted.
+                format: int32
+                type: integer
               stalePlacement:
                 description: |-
                   StalePlacement are the streams moved that no resource owns and whose

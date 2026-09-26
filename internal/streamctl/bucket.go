@@ -17,6 +17,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
+	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 // bucketKind adapts NatsKeyValue or NatsObjectStore, P, to the reconcile
@@ -136,7 +137,7 @@ func (k bucketKind[P]) setup(ctx context.Context, mgr ctrl.Manager, r reconcile.
 		For(k.new(), builder.WithPredicates(lifecycle.SpecOrDeletion())).
 		Watches(&natsv1beta1.NatsConnection{}, lifecycle.EnqueueByField(mgr.GetClient(), k.list(), lifecycle.ConnectionField)).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(mgr.GetClient(), js.GroupVersion.WithKind(k.kind).GroupKind(), k.list())).
-		Complete(r)
+		Complete(telemetry.Traced(k.kind, r))
 }
 
 func (k bucketKind[P]) referrer(namespace string) grant.Referrer {

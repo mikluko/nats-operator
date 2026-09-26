@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"go.opentelemetry.io/otel"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -19,6 +20,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/auth"
 	"github.com/mikluko/nats-operator/internal/manager"
 	"github.com/mikluko/nats-operator/internal/natsconn"
+	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 func main() {
@@ -49,6 +51,15 @@ func main() {
 		log.Error(err, "start")
 		os.Exit(1)
 	}
+	ctx := ctrl.SetupSignalHandler()
+	if err := telemetry.Install(ctx, mgr, telemetry.AuthController); err != nil {
+		log.Error(err, "set up telemetry")
+		os.Exit(1)
+	}
+	if err := telemetry.RegisterAuth(otel.Meter(telemetry.AuthController), mgr.GetClient()); err != nil {
+		log.Error(err, "register instruments")
+		os.Exit(1)
+	}
 	var d auth.Distributor
 	var s auth.Sessions
 	if *systemConnection != "" {
@@ -70,8 +81,7 @@ func main() {
 		}
 		d, s = resolvers, auth.ConnSessions{Conn: conn.Conn}
 	}
-	ctx := ctrl.SetupSignalHandler()
-	if err := auth.Setup(ctx, mgr, d, s); err != nil {
+	if err := auth.Setup(ctx, mgr, d, s, mgr.GetEventRecorder(telemetry.AuthController)); err != nil {
 		log.Error(err, "set up reconcilers")
 		os.Exit(1)
 	}

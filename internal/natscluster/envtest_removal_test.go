@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -182,7 +183,8 @@ func TestEnvtestRemoval(t *testing.T) {
 		w.streams["ORDERS"] = slices.Clone(w.meta[:3])
 		reloader := &fakeReloader{c: c}
 		reloader.reset(ns)
-		h := &removalHarness{c: c, w: w, key: client.ObjectKeyFromObject(nc), r: &Reconciler{Client: c, Observer: w.obs,
+		rec := events.NewFakeRecorder(100)
+		h := &removalHarness{c: c, w: w, rec: rec, key: client.ObjectKeyFromObject(nc), r: &Reconciler{Client: c, Observer: w.obs, Recorder: rec,
 			Reloader: func(context.Context, *clusterv1beta1.NatsCluster) (ServerReloader, error) { return reloader, nil },
 			Admin:    func(context.Context, *clusterv1beta1.NatsCluster) (ServerAdmin, error) { return w, nil }}}
 		h.reconcile(t)
@@ -215,6 +217,7 @@ func TestEnvtestRemoval(t *testing.T) {
 		h.w.sync(t, ctx)
 		reasons := h.settle(t)
 		require.Contains(t, reasons, ReasonScalingDown)
+		require.Equal(t, []string{"Normal RolloutStep removing demo-4", "Normal RolloutStep removing demo-3"}, recorded(h.rec))
 		require.Equal(t, []string{
 			"Evacuate demo-4", "RemovePeer demo-4",
 			"Evacuate demo-3", "RemovePeer demo-3",
@@ -240,6 +243,7 @@ func TestEnvtestRemoval(t *testing.T) {
 		h.reconcile(t)
 		got := h.get(t)
 		require.NotContains(t, got.Annotations, clusterv1beta1.AnnotationReplaceServer)
+		require.Equal(t, []string{"Normal RolloutStep replacing demo-1"}, recorded(h.rec))
 		require.Equal(t, string(phaseEvacuating), h.sts(t, "demo-1").Annotations[AnnotationRemoval])
 		requireCondition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonReplacingServer)
 
@@ -324,7 +328,21 @@ type removalHarness struct {
 	c   client.Client
 	w   *world
 	r   *Reconciler
+	rec *events.FakeRecorder
 	key types.NamespacedName
+}
+
+// recorded drains the events rec holds.
+func recorded(rec *events.FakeRecorder) []string {
+	var out []string
+	for {
+		select {
+		case e := <-rec.Events:
+			out = append(out, e)
+		default:
+			return out
+		}
+	}
 }
 
 func (h *removalHarness) reconcile(t *testing.T) {

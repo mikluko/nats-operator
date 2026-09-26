@@ -10,12 +10,15 @@ import (
 	"github.com/nats-io/jwt/v2"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 // accountRevocations returns the revocations an account with public key pub
@@ -137,6 +140,16 @@ func recoveryFailed(err error, notReady func(reason, msg string)) (time.Duration
 		return distributionRecheck, nil
 	}
 	return 0, err
+}
+
+// recordHeld records JWTHeld on obj for err from seededRevocations, unless
+// conds, its conditions before, already hold it with Ready's reason
+// RecoveringRevocations.
+func recordHeld(rec events.EventRecorder, obj runtime.Object, conds []metav1.Condition, err error) {
+	if c := meta.FindStatusCondition(conds, ConditionReady); c != nil && c.Reason == ReasonRecovering {
+		return
+	}
+	telemetry.Emit(rec, obj, telemetry.JWTHeld, "revocations cannot be recovered: %v", err)
 }
 
 // signedRevocations are revs as jwtplane signs them.

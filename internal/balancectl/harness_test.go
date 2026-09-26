@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nats-io/nkeys"
 	"github.com/stretchr/testify/require"
+	"k8s.io/client-go/tools/events"
 
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
@@ -232,4 +234,28 @@ func skewedStreams(t *testing.T, ctx context.Context, j jetstream.JetStream, pre
 		}, time.Minute, 300*time.Millisecond, "%s did not move to %s", name, leader)
 	}
 	return names
+}
+
+// recorded drains the events rec holds.
+func recorded(rec *events.FakeRecorder) []string {
+	var out []string
+	for {
+		select {
+		case e := <-rec.Events:
+			out = append(out, e)
+		default:
+			return out
+		}
+	}
+}
+
+// notes are the notes of the events of typ and reason among evs.
+func notes(evs []string, typ, reason string) []string {
+	var out []string
+	for _, e := range evs {
+		if note, ok := strings.CutPrefix(e, typ+" "+reason+" "); ok {
+			out = append(out, note)
+		}
+	}
+	return out
 }

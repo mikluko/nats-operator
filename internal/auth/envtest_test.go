@@ -107,11 +107,33 @@ func (r *recorder) pushed(operator types.NamespacedName, token string) bool {
 	return slices.Contains(r.pushes[operator], token)
 }
 
+// eventLog is an events.EventRecorder keeping each event as its type,
+// reason and note.
+type eventLog struct {
+	mu     sync.Mutex
+	events []string
+}
+
+// Eventf implements events.EventRecorder.
+func (l *eventLog) Eventf(_, _ runtime.Object, eventtype, reason, _, note string, args ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.events = append(l.events, eventtype+" "+reason+" "+fmt.Sprintf(note, args...))
+}
+
+// has reports whether an event reads e.
+func (l *eventLog) has(e string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Contains(l.events, e)
+}
+
 // env is a running API server with the auth reconcilers against it.
 type env struct {
 	ctx context.Context
 	c   client.Client
 	d   *recorder
+	log *eventLog
 	// sys is the system connection the env's Sessions kick through.
 	sys atomic.Pointer[nats.Conn]
 }
@@ -143,9 +165,9 @@ func TestEnvtest(t *testing.T) {
 		HealthProbeBindAddress: "0",
 	})
 	require.NoError(t, err)
-	e := &env{ctx: t.Context(), d: &recorder{}}
+	e := &env{ctx: t.Context(), d: &recorder{}, log: &eventLog{}}
 	sessions := auth.ConnSessions{Conn: e.systemConn, Wait: 500 * time.Millisecond}
-	require.NoError(t, auth.Setup(t.Context(), mgr, e.d, sessions))
+	require.NoError(t, auth.Setup(t.Context(), mgr, e.d, sessions, e.log))
 	done := make(chan error, 1)
 	go func() { done <- mgr.Start(t.Context()) }()
 	t.Cleanup(func() { require.NoError(t, <-done) })
@@ -242,6 +264,8 @@ func (e *env) testStory2(t *testing.T) {
 
 	require.True(t, e.d.pushed(demo, orders.Status.JWT), "account JWT handed to the distributor")
 	require.True(t, e.d.pushed(demo, op.Status.SystemAccount.JWT), "system account JWT handed to the distributor")
+	require.True(t, e.log.has("Normal JWTPushed account JWT of "+orders.Status.PublicKey+" pushed"), "no JWTPushed for the account")
+	require.True(t, e.log.has("Normal JWTPushed system account JWT of "+sys.Status.PublicKey+" pushed"), "no JWTPushed for the system account")
 
 	signed := orders.Status.JWT
 	require.Never(t, func() bool {

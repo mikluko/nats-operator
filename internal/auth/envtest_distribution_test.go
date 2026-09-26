@@ -66,7 +66,7 @@ func TestEnvtestDistribution(t *testing.T) {
 	resolvers := &auth.Resolvers{Conn: conn.Conn, Wait: time.Second, Interval: 300 * time.Millisecond}
 	require.NoError(t, mgr.Add(pool))
 	require.NoError(t, mgr.Add(resolvers))
-	require.NoError(t, auth.Setup(t.Context(), mgr, resolvers, auth.ConnSessions{Conn: conn.Conn, Wait: 300 * time.Millisecond}))
+	require.NoError(t, auth.Setup(t.Context(), mgr, resolvers, auth.ConnSessions{Conn: conn.Conn, Wait: 300 * time.Millisecond}, nil))
 	done := make(chan error, 1)
 	go func() { done <- mgr.Start(t.Context()) }()
 	t.Cleanup(func() { require.NoError(t, <-done) })

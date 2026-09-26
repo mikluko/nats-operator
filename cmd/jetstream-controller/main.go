@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"go.opentelemetry.io/otel"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -21,6 +22,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/manager"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 	"github.com/mikluko/nats-operator/internal/streamctl"
+	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 func main() {
@@ -50,6 +52,10 @@ func main() {
 		os.Exit(1)
 	}
 	ctx := ctrl.SetupSignalHandler()
+	if err := telemetry.Install(ctx, mgr, telemetry.JetStreamController); err != nil {
+		log.Error(err, "set up telemetry")
+		os.Exit(1)
+	}
 	if err := setup(ctx, mgr, *resync); err != nil {
 		log.Error(err, "set up controllers")
 		os.Exit(1)
@@ -60,10 +66,16 @@ func main() {
 	}
 }
 
-// setup adds the connection pool, the NatsConnection reconciler, the
-// stream, consumer, key-value and object store reconcilers, the system and
-// account balancer reconcilers and the evacuation reconciler to mgr.
+// setup registers the JetStream controller's instruments and adds the
+// connection pool, the NatsConnection reconciler, the stream, consumer,
+// key-value and object store reconcilers, the system and account balancer
+// reconcilers and the evacuation reconciler to mgr.
 func setup(ctx context.Context, mgr ctrl.Manager, resync time.Duration) error {
+	metrics, err := telemetry.RegisterJetStream(otel.Meter(telemetry.JetStreamController), mgr.GetClient())
+	if err != nil {
+		return fmt.Errorf("register instruments: %w", err)
+	}
+	rec := mgr.GetEventRecorder(telemetry.JetStreamController)
 	pool := natsconn.NewPool()
 	if err := mgr.Add(pool); err != nil {
 		return fmt.Errorf("add connection pool: %w", err)
@@ -90,15 +102,15 @@ func setup(ctx context.Context, mgr ctrl.Manager, resync time.Duration) error {
 	if err := stores.SetupWithManager(ctx, mgr); err != nil {
 		return fmt.Errorf("set up NatsObjectStore reconciler: %w", err)
 	}
-	balancers := &balancectl.SystemBalancerReconciler{Client: mgr.GetClient(), Dialer: dialer}
+	balancers := &balancectl.SystemBalancerReconciler{Client: mgr.GetClient(), Dialer: dialer, Recorder: rec, Telemetry: metrics}
 	if err := balancers.SetupWithManager(ctx, mgr); err != nil {
 		return fmt.Errorf("set up NatsSystemBalancer reconciler: %w", err)
 	}
-	accounts := &balancectl.BalancerReconciler{Client: mgr.GetClient(), Dialer: dialer}
+	accounts := &balancectl.BalancerReconciler{Client: mgr.GetClient(), Dialer: dialer, Recorder: rec, Telemetry: metrics}
 	if err := accounts.SetupWithManager(ctx, mgr); err != nil {
 		return fmt.Errorf("set up NatsBalancer reconciler: %w", err)
 	}
-	evacuations := &balancectl.EvacuationReconciler{Client: mgr.GetClient(), Dialer: dialer}
+	evacuations := &balancectl.EvacuationReconciler{Client: mgr.GetClient(), Dialer: dialer, Recorder: rec}
 	if err := evacuations.SetupWithManager(ctx, mgr); err != nil {
 		return fmt.Errorf("set up NatsClusterEvacuation reconciler: %w", err)
 	}

@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -29,6 +30,7 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/sysobs"
+	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 // Observer observes the NATS cluster a NatsCluster deployed.
@@ -75,6 +77,8 @@ type Reconciler struct {
 	// gone or being deleted.
 	Forget func(types.NamespacedName)
 	Now    func() time.Time
+	// Recorder records the rollout's events; nil records none.
+	Recorder events.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters,verbs=get;list;watch;update;patch
@@ -129,7 +133,7 @@ func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) err
 		Owns(&corev1.Secret{}).
 		Owns(&policyv1.PodDisruptionBudget{}).
 		Named("natscluster").
-		Complete(r)
+		Complete(telemetry.Traced("NatsCluster", r))
 }
 
 // trustKey is the namespace/name of the NatsOperatorTrust nc reads, or "".
@@ -281,6 +285,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			Type: ConditionProgressing, Status: metav1.ConditionTrue, Reason: certReason, Message: certWait,
 		}, nc.Generation)
 	}
+	recordGateBlocked(r.Recorder, nc, orig.Status.Conditions)
 	if err := r.patchStatus(ctx, orig, nc); err != nil {
 		return ctrl.Result{}, err
 	}

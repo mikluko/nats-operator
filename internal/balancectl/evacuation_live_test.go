@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -183,7 +184,8 @@ func TestEvacuation_Supercluster(t *testing.T) {
 	pool := natsconn.NewPool()
 	t.Cleanup(pool.Close)
 	dialer := &natsconn.Dialer{Reader: c, Pool: pool}
-	r := &EvacuationReconciler{Client: c, Dialer: dialer, MaxInFlight: 2, PendingPoll: time.Millisecond}
+	rec := events.NewFakeRecorder(1000)
+	r := &EvacuationReconciler{Client: c, Dialer: dialer, MaxInFlight: 2, PendingPoll: time.Millisecond, Recorder: rec}
 	br := &SystemBalancerReconciler{Client: c, Dialer: dialer, PendingPoll: time.Millisecond}
 
 	t.Run("RefusesTargetTagsInSource", func(t *testing.T) {
@@ -195,6 +197,8 @@ func TestEvacuation_Supercluster(t *testing.T) {
 		require.Equal(t, "server C1-0 of C1 carries old", meta.FindStatusCondition(e.Status.Conditions, ConditionReady).Message)
 		require.Zero(t, e.Status.Moved)
 		require.Zero(t, e.Status.InFlight)
+		require.Zero(t, e.Status.Remaining)
+		require.Equal(t, []string{"server C1-0 of C1 carries old"}, notes(recorded(rec), "Warning", "EvacuationRefused"))
 		require.Contains(t, e.Finalizers, lifecycle.Finalizer)
 		require.Never(t, func() bool { return !placedAll("C1") }, 2*time.Second, 100*time.Millisecond, "a refused evacuation moved a stream")
 		deleteEvacuation(t, ctx, r, "wrong")
@@ -215,6 +219,16 @@ func TestEvacuation_Supercluster(t *testing.T) {
 		require.True(t, sawInFlight, "no move was ever seen in flight")
 		require.Equal(t, int32(5), e.Status.Moved)
 		require.Zero(t, e.Status.InFlight)
+		require.Zero(t, e.Status.Remaining)
+		moved := []string{p.aPub + "/PLAIN", p.aPub + "/STALE", p.bPub + "/LOG", p.bPub + "/KV_sessions", p.bPub + "/OBJ_blobs"}
+		evs := recorded(rec)
+		var started, done []string
+		for _, id := range moved {
+			started = append(started, id+" off C1 to servers tagged new")
+			done = append(done, id+" left C1")
+		}
+		require.Subset(t, notes(evs, "Normal", "MoveStarted"), started)
+		require.ElementsMatch(t, done, notes(evs, "Normal", "MoveDone"))
 		require.Equal(t, "1 resource pins placement.cluster C1", meta.FindStatusCondition(e.Status.Conditions, ConditionReady).Message)
 		require.Equal(t, []js.PinnedObject{{Kind: "NatsStream", Namespace: "orders", Name: "orders"}}, e.Status.Pinned)
 		require.Equal(t, []js.ServerStream{{Account: p.aPub, Name: "STALE"}}, e.Status.StalePlacement)
@@ -269,6 +283,7 @@ func TestEvacuation_Supercluster(t *testing.T) {
 			}
 			require.Eventually(t, func() bool { return placedIn(ctx, jsA, name) == "C1" }, time.Minute, 100*time.Millisecond)
 
+			recorded(rec)
 			evac := fmt.Sprintf("interrupted-%d", i)
 			require.NoError(t, c.Create(ctx, evacuation(evac, "c2", "new")))
 			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: client.ObjectKey{Namespace: ns, Name: evac}})
@@ -281,6 +296,7 @@ func TestEvacuation_Supercluster(t *testing.T) {
 			var landed string
 			require.Eventually(t, func() bool { landed = placedIn(ctx, jsA, name); return landed != "" }, time.Minute, 100*time.Millisecond, "%s never settled", name)
 			if landed == "C1" {
+				require.Contains(t, notes(recorded(rec), "Normal", "MoveCancelled"), fmt.Sprintf("move of %s/%s off C1 cancelled", p.aPub, name))
 				s, err := jsA.Stream(ctx, name)
 				require.NoError(t, err)
 				require.Equal(t, uint64(200), s.CachedInfo().State.Msgs)

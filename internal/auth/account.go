@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -26,6 +27,7 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 // ActivationSigned is an ImportStatus activation whose token was minted.
@@ -64,6 +66,8 @@ type AccountReconciler struct {
 	// Distributor receives every newly signed account JWT; nil pushes
 	// nothing.
 	Distributor Distributor
+	// Recorder records JWTs pushed and held; nil records none.
+	Recorder events.EventRecorder
 	// RosterChanges receives a NatsOperator whose servers changed; the
 	// accounts it signs are reconciled. Nil receives nothing.
 	RosterChanges <-chan event.GenericEvent
@@ -146,6 +150,7 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 	sd, err := seededRevocations(ctx, r.Distributor, opKey, st.Revocations, st.JWT, pub, signing, users,
 		unrecovered(st.Conditions), everDistributed(st.Distribution))
 	if err != nil {
+		recordHeld(r.Recorder, acc, st.Conditions, err)
 		again, err := recoveryFailed(err, notReady)
 		return reconcile.Result{RequeueAfter: again}, err
 	}
@@ -179,6 +184,9 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 		st.JWT = token
 		st.JWTHash = JWTHash(token)
 		st.Distribution = pushed(st.Distribution, now, r.Distributor != nil && err == nil)
+		if r.Distributor != nil && err == nil {
+			telemetry.Emit(r.Recorder, acc, telemetry.JWTPushed, "account JWT of %s pushed", pub)
+		}
 		return nil
 	}
 	if !sameAccountClaims(st.JWT, token) || due(st.JWT, now) || (!a.NoExpiry && lifetimeDiffers(st.JWT, accountTTL(a.TTL))) {
@@ -532,5 +540,5 @@ func (r *AccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return []reconcile.Request{{NamespacedName: refKey(ref.ObjectReference, obj.GetNamespace())}}
 		})).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, schema.GroupKind{Group: authGroup, Kind: "NatsAccount"}, &authv1beta1.NatsAccountList{})).
-		Complete(r)
+		Complete(telemetry.Traced("NatsAccount", r))
 }

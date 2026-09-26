@@ -2,6 +2,7 @@ package balancectl
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -106,7 +108,8 @@ func TestSystemBalancer_Supercluster(t *testing.T) {
 		Build()
 	pool := natsconn.NewPool()
 	t.Cleanup(pool.Close)
-	r := &SystemBalancerReconciler{Client: c, Dialer: &natsconn.Dialer{Reader: c, Pool: pool}, PendingPoll: time.Millisecond}
+	rec := events.NewFakeRecorder(1000)
+	r := &SystemBalancerReconciler{Client: c, Dialer: &natsconn.Dialer{Reader: c, Pool: pool}, PendingPoll: time.Millisecond, Recorder: rec}
 
 	t.Run("EvensLeadersItCanMove", func(t *testing.T) {
 		b := reconciled(t, ctx, r, "demo", func(ct *assert.CollectT, b *js.NatsSystemBalancer) {
@@ -135,6 +138,11 @@ func TestSystemBalancer_Supercluster(t *testing.T) {
 		for _, name := range bStreams {
 			require.Equal(t, "C1-0", streamLeader(t, ctx, jsB, name), "%s belongs to an account without the export", name)
 		}
+		evs := recorded(rec)
+		started := notes(evs, "Normal", "MoveStarted")
+		require.NotEmpty(t, started)
+		require.Equal(t, fmt.Sprintf("leader of %s from %s to %s", b.Status.LastMove.Stream, b.Status.LastMove.From, b.Status.LastMove.To), started[len(started)-1])
+		require.ElementsMatch(t, started, notes(evs, "Normal", "MoveDone"), "a move started was not seen done")
 	})
 
 	t.Run("OnePerNATSCluster", func(t *testing.T) {

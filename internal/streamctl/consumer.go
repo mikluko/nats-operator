@@ -21,6 +21,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
+	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 // ConsumerKind is the kind a NatsConsumer is referred to by.
@@ -246,7 +247,7 @@ func (r *ConsumerReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Mana
 		Watches(&js.NatsStream{}, lifecycle.EnqueueByField(mgr.GetClient(), &js.NatsConsumerList{}, StreamRefField)).
 		Watches(&natsv1beta1.NatsConnection{}, lifecycle.EnqueueByField(mgr.GetClient(), &js.NatsConsumerList{}, lifecycle.ConnectionField)).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(mgr.GetClient(), js.GroupVersion.WithKind(ConsumerKind).GroupKind(), &js.NatsConsumerList{})).
-		Complete(r)
+		Complete(telemetry.Traced("NatsConsumer", r))
 }
 
 func consumerReferrer(namespace string) grant.Referrer {

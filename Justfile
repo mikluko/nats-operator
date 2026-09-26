@@ -85,9 +85,14 @@ api-docs:
 perm-docs:
     go run ./hack/permdocs
 
+# The documentation site's telemetry page, from hack/telemetrydocs and the
+# instruments and events in internal/telemetry.
+telemetry-docs:
+    go run ./hack/telemetrydocs
+
 # Fails when generated files, tracked or not, are stale relative to their
 # sources.
-verify: generate chart-crds api-docs perm-docs
+verify: generate chart-crds api-docs perm-docs telemetry-docs
     git diff --exit-code -- api config charts docs/content/docs/reference
     test -z "$(git status --porcelain -- api config charts docs/content/docs/reference)"
 
