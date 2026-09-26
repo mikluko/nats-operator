@@ -1,0 +1,6 @@
+{{- /* The page's title: front matter's, or else its own first level-one heading. */ -}}
+{{- $title := .Title -}}
+{{- if not $title -}}
+  {{- range first 1 (where .Fragments.Headings "Level" 1) -}}{{- $title = .Title | htmlUnescape -}}{{- end -}}
+{{- end -}}
+{{- return $title -}}

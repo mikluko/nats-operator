@@ -7,4 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Documentation site at <https://mikluko.github.io/nats-operator/>: the design, the stories and the ADRs.
+
 [Unreleased]: https://github.com/mikluko/nats-operator/commits/main

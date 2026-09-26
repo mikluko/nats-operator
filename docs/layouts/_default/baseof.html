@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="{{ .Site.LanguageCode }}">
-<head><meta charset="utf-8"><title>{{ .Title }} · {{ .Site.Title }}</title></head>
+<head><meta charset="utf-8"><title>{{ partial "title.html" . }} · {{ .Site.Title }}</title></head>
 <body style="max-width: 60rem; margin: 2rem auto; font-family: sans-serif">
-<p><a href="{{ "stories/" | relURL }}">Stories</a></p>
+<p><a href="{{ "" | relURL }}">Home</a> · <a href="{{ "design/v1/" | relURL }}">Design</a> · <a href="{{ "stories/" | relURL }}">Stories</a> · <a href="{{ "adr/" | relURL }}">ADRs</a></p>
 {{ block "main" . }}{{ end }}
 </body>
 </html>

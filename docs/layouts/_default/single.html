@@ -1,1 +1,1 @@
-{{ define "main" }}<h1>{{ .Title }}</h1>{{ .Content }}{{ end }}
+{{ define "main" }}{{ with .Title }}<h1>{{ . }}</h1>{{ end }}{{ .Content }}{{ end }}

@@ -5,3 +5,15 @@ disableKinds = ["taxonomy", "term", "RSS", "sitemap"]
 
 [markup.highlight]
   noClasses = true
+
+[[module.mounts]]
+  source = "content"
+  target = "content"
+
+[[module.mounts]]
+  source = "design"
+  target = "content/design"
+
+[[module.mounts]]
+  source = "adr"
+  target = "content/adr"
