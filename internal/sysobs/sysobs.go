@@ -83,7 +83,7 @@ func (o *Observer) Roster(ctx context.Context) ([]Server, error) {
 		if err := json.Unmarshal(data, &m); err != nil {
 			return false, fmt.Errorf("decode STATSZ: %w", err)
 		}
-		seen[m.Server.Name] = Server{Name: m.Server.Name, ID: m.Server.ID, Version: m.Server.Version, Metadata: m.Server.Metadata, JetStream: m.Server.JetStream}
+		seen[m.Server.Name] = Server{Name: m.Server.Name, ID: m.Server.ID, Version: m.Server.Version, Metadata: m.Server.Metadata, JetStream: m.Server.JetStream, Tags: m.Server.Tags}
 		for _, r := range m.Stats.Routes {
 			if r.Name != "" {
 				routed[r.Name] = true
@@ -133,7 +133,7 @@ func (o *Observer) jszPage(ctx context.Context, roster []Server, offset int, rep
 	for _, s := range roster {
 		want[s.Name] = true
 	}
-	req := wireJszRequest{wireFilter: o.filter(), Accounts: true, Streams: true, Consumer: true, Offset: offset, Limit: jszPageSize}
+	req := wireJszRequest{wireFilter: o.filter(), Accounts: true, Streams: true, Consumer: true, Config: true, Offset: offset, Limit: jszPageSize}
 	total := 0
 	err := o.gather(ctx, subjPingJsz, req, func(data []byte) (bool, error) {
 		var r wireJszResponse

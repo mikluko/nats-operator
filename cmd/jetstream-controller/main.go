@@ -16,6 +16,7 @@ import (
 
 	jetstreamv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/balancectl"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/manager"
 	"github.com/mikluko/nats-operator/internal/natsconn"
@@ -59,8 +60,8 @@ func main() {
 	}
 }
 
-// setup adds the connection pool, the NatsConnection reconciler and the
-// stream and consumer reconcilers to mgr.
+// setup adds the connection pool, the NatsConnection reconciler, the
+// stream and consumer reconcilers and the system balancer reconciler to mgr.
 func setup(ctx context.Context, mgr ctrl.Manager, resync time.Duration) error {
 	pool := natsconn.NewPool()
 	if err := mgr.Add(pool); err != nil {
@@ -79,6 +80,10 @@ func setup(ctx context.Context, mgr ctrl.Manager, resync time.Duration) error {
 	consumers := &streamctl.ConsumerReconciler{Client: mgr.GetClient(), Dialer: dialer, Syncer: syncer}
 	if err := consumers.SetupWithManager(ctx, mgr); err != nil {
 		return fmt.Errorf("set up NatsConsumer reconciler: %w", err)
+	}
+	balancers := &balancectl.SystemBalancerReconciler{Client: mgr.GetClient(), Dialer: dialer}
+	if err := balancers.SetupWithManager(ctx, mgr); err != nil {
+		return fmt.Errorf("set up NatsSystemBalancer reconciler: %w", err)
 	}
 	return nil
 }

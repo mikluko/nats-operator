@@ -13,6 +13,7 @@ type wireServerInfo struct {
 	Version   string            `json:"ver"`
 	Metadata  map[string]string `json:"metadata"`
 	JetStream bool              `json:"jetstream"`
+	Tags      []string          `json:"tags"`
 }
 
 type wireError struct {
@@ -39,6 +40,7 @@ type wireJszRequest struct {
 	Accounts bool `json:"accounts,omitempty"`
 	Streams  bool `json:"streams,omitempty"`
 	Consumer bool `json:"consumer,omitempty"`
+	Config   bool `json:"config,omitempty"`
 	Offset   int  `json:"offset,omitempty"`
 	Limit    int  `json:"limit,omitempty"`
 }
@@ -67,9 +69,19 @@ type wireAccount struct {
 }
 
 type wireStream struct {
-	Name      string         `json:"name"`
-	Cluster   *wireCluster   `json:"cluster"`
-	Consumers []wireConsumer `json:"consumer_detail"`
+	Name      string            `json:"name"`
+	Cluster   *wireCluster      `json:"cluster"`
+	Config    *wireStreamConfig `json:"config"`
+	Consumers []wireConsumer    `json:"consumer_detail"`
+}
+
+type wireStreamConfig struct {
+	Placement *wirePlacement `json:"placement"`
+}
+
+type wirePlacement struct {
+	Cluster string   `json:"cluster"`
+	Tags    []string `json:"tags"`
 }
 
 type wireConsumer struct {
@@ -87,6 +99,7 @@ type wirePeer struct {
 	Name    string `json:"name"`
 	Current bool   `json:"current"`
 	Offline bool   `json:"offline"`
+	Lag     uint64 `json:"lag"`
 }
 
 type wireVarzResponse struct {

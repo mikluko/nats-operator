@@ -23,6 +23,7 @@ type Server struct {
 	Version   string
 	Metadata  map[string]string
 	JetStream bool
+	Tags      []string
 }
 
 // Member is one server's place in a Raft group, as its leader sees it.
@@ -30,6 +31,14 @@ type Member struct {
 	Server  string
 	Current bool
 	Offline bool
+	// Lag is how many entries behind the leader the member is.
+	Lag uint64
+}
+
+// Placement is where a stream's config declares it may sit.
+type Placement struct {
+	Cluster string
+	Tags    []string
 }
 
 // Group is one Raft group placed in the NATS cluster. Account is the
@@ -53,6 +62,10 @@ type Group struct {
 	// NamedLeader is the leader a follower names when Leader is "": a
 	// server that did not answer, or a stale view.
 	NamedLeader string
+
+	// Placement is the stream's declared placement, nil where it declares
+	// none; a consumer group carries its stream's.
+	Placement *Placement
 }
 
 // Snapshot is one observation of a NATS cluster.
@@ -198,12 +211,12 @@ func merge(roster []Server, reports map[string]*wireJSInfo) *Snapshot {
 	}
 
 	groups := map[groupKey]*groupAcc{}
-	see := func(k groupKey, server, raftGroup string, c *wireCluster) {
+	see := func(k groupKey, server, raftGroup string, c *wireCluster, p *Placement) {
 		a := groups[k]
 		if a == nil {
 			a = &groupAcc{group: Group{
 				Kind: k.kind, Account: k.account, Stream: k.stream, Consumer: k.consumer,
-				RaftGroup: raftGroup,
+				RaftGroup: raftGroup, Placement: p,
 			}}
 			groups[k] = a
 		}
@@ -238,12 +251,13 @@ func merge(roster []Server, reports map[string]*wireJSInfo) *Snapshot {
 		}
 		for _, acc := range info.Accounts {
 			for _, st := range acc.Streams {
+				p := placementOf(st.Config)
 				if st.Cluster != nil {
-					see(groupKey{KindStream, acc.ID, st.Name, ""}, server, st.Cluster.RaftGroup, st.Cluster)
+					see(groupKey{KindStream, acc.ID, st.Name, ""}, server, st.Cluster.RaftGroup, st.Cluster, p)
 				}
 				for _, co := range st.Consumers {
 					if co.Cluster != nil {
-						see(groupKey{KindConsumer, acc.ID, st.Name, co.Name}, server, co.Cluster.RaftGroup, co.Cluster)
+						see(groupKey{KindConsumer, acc.ID, st.Name, co.Name}, server, co.Cluster.RaftGroup, co.Cluster, p)
 					}
 				}
 			}
@@ -274,10 +288,17 @@ func leaderView(leader string, replicas []wirePeer, keep map[string]bool) []Memb
 		if keep != nil && !keep[r.Name] {
 			continue
 		}
-		ms = append(ms, Member{Server: r.Name, Current: r.Current, Offline: r.Offline})
+		ms = append(ms, Member{Server: r.Name, Current: r.Current, Offline: r.Offline, Lag: r.Lag})
 	}
 	slices.SortFunc(ms, func(a, b Member) int { return cmp.Compare(a.Server, b.Server) })
 	return ms
+}
+
+func placementOf(c *wireStreamConfig) *Placement {
+	if c == nil || c.Placement == nil {
+		return nil
+	}
+	return &Placement{Cluster: c.Placement.Cluster, Tags: c.Placement.Tags}
 }
 
 // metaFromFollowers judges the meta group when its leader is not among

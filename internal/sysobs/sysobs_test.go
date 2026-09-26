@@ -94,6 +94,8 @@ func TestObserve_SuperclusterFiltersToOneCluster(t *testing.T) {
 	require.NotEmpty(t, r3.RaftGroup)
 	require.Equal(t, []string{"C1-0", "C1-1", "C1-2"}, memberNames(r3))
 	require.Contains(t, memberNames(r3), r3.Leader)
+	require.Equal(t, &Placement{Cluster: "C1"}, r3.Placement)
+	require.Equal(t, &Placement{Cluster: "C1"}, findGroup(t, snap, KindConsumer, "R3", "D").Placement)
 	require.Len(t, findGroup(t, snap, KindConsumer, "R3", "D").Members, 3)
 	require.Len(t, findGroup(t, snap, KindStream, "R1", "").Members, 1)
 

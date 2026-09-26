@@ -25,5 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The auth controller signs `NatsUser`s: creds land in the Secret `credentials` names, or `<name>-creds`, under `user.creds`; a user with `publicKey` gets its JWT in `status.jwt` and no Secret; `preset` signs the named permission set.
 - A `NatsUser` whose `NatsReferenceGrant` is deleted is revoked in its account's JWT, and re-signed once a grant admits it again.
 - Deleting a `NatsUser` holds it until its account's JWT revokes its key, then removes its creds Secret.
+- The JetStream controller runs `NatsSystemBalancer`: on system credentials it evens stream and consumer leaders, and with `moves.placement` stream copies, across the servers of the NATS cluster its `NatsConnection` reaches, over every account. It makes one move per `interval` (default 1m) and none while that NATS cluster is not Settled or a `NatsClusterEvacuation` empties it; it moves leaders only for accounts carrying the `jetstream-stepdown` export, reporting the rest as `leader: partial` in `status.capabilities`; it never moves a stream whose `placement.cluster` names another NATS cluster; and a second `NatsSystemBalancer` for the same NATS cluster goes `Ready=False` with reason `DuplicateBalancer`.
 
 [Unreleased]: https://github.com/mikluko/nats-operator/commits/main

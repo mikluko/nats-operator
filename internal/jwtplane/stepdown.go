@@ -37,20 +37,26 @@ func StepdownImports(account string) []Import {
 		imports = append(imports, Import{
 			Account:      account,
 			Export:       e,
-			LocalSubject: stepdownPrefix + account + "." + e.Subject,
+			LocalSubject: StepdownPrefix(account) + e.Subject,
 		})
 	}
 	return imports
 }
 
+// StepdownPrefix is the prefix a system user puts before an account's
+// stepdown API subject to reach it through the account's import.
+func StepdownPrefix(account string) string {
+	return stepdownPrefix + account + "."
+}
+
 // StreamStepdownSubject is where a system user requests a leader move of
 // stream in account.
 func StreamStepdownSubject(account, stream string) string {
-	return stepdownPrefix + account + ".$JS.API.STREAM.LEADER.STEPDOWN." + stream
+	return StepdownPrefix(account) + "$JS.API.STREAM.LEADER.STEPDOWN." + stream
 }
 
 // ConsumerStepdownSubject is where a system user requests a leader move of
 // consumer on stream in account.
 func ConsumerStepdownSubject(account, stream, consumer string) string {
-	return stepdownPrefix + account + ".$JS.API.CONSUMER.LEADER.STEPDOWN." + stream + "." + consumer
+	return StepdownPrefix(account) + "$JS.API.CONSUMER.LEADER.STEPDOWN." + stream + "." + consumer
 }
