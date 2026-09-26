@@ -196,6 +196,10 @@ type NatsAccountStatus struct {
 	// +optional
 	PublicKey string `json:"publicKey,omitempty"`
 
+	// JWT is the current account JWT.
+	// +optional
+	JWT string `json:"jwt,omitempty"`
+
 	// JWTHash identifies the current account JWT.
 	// +optional
 	JWTHash string `json:"jwtHash,omitempty"`

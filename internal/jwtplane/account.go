@@ -35,7 +35,9 @@ type Account struct {
 	Name string
 	Keys Keys
 	// TTL is the JWT's lifetime; zero is DefaultAccountTTL.
-	TTL         time.Duration
+	TTL time.Duration
+	// NoExpiry signs a JWT that never expires, whatever TTL says.
+	NoExpiry    bool
 	Limits      Limits
 	Exports     []Export
 	Imports     []Import
@@ -126,7 +128,9 @@ func SignAccount(a Account, operator Keys, now time.Time) (string, error) {
 	if ttl < 0 {
 		return "", fmt.Errorf("account TTL %s is negative", ttl)
 	}
-	c.Expires = now.Add(ttl).Unix()
+	if !a.NoExpiry {
+		c.Expires = now.Add(ttl).Unix()
+	}
 	return signAccountClaims(c, operator)
 }
 

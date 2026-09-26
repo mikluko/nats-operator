@@ -423,6 +423,9 @@ spec:
                       type: string
                   type: object
                 type: array
+              jwt:
+                description: JWT is the current account JWT.
+                type: string
               jwtHash:
                 description: JWTHash identifies the current account JWT.
                 type: string

@@ -43,6 +43,16 @@ func TestSignAccountTTL(t *testing.T) {
 		{name: "explicit", ttl: 2 * time.Hour, want: 2 * time.Hour},
 		{name: "negative", ttl: -time.Hour, wantErr: true},
 	}
+	t.Run("no expiry", func(t *testing.T) {
+		tok, err := jwtplane.SignAccount(jwtplane.Account{Keys: acc, TTL: time.Hour, NoExpiry: true}, op, now)
+		require.NoError(t, err)
+		c, err := jwt.DecodeAccountClaims(tok)
+		require.NoError(t, err)
+		require.Zero(t, c.Expires)
+		renew, err := jwtplane.RenewAt(tok)
+		require.NoError(t, err)
+		require.True(t, renew.IsZero())
+	})
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tok, err := jwtplane.SignAccount(jwtplane.Account{Keys: acc, TTL: tt.ttl}, op, now)

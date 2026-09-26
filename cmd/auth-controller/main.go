@@ -12,6 +12,7 @@ import (
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/auth"
 	"github.com/mikluko/nats-operator/internal/manager"
 )
 
@@ -40,7 +41,12 @@ func main() {
 		log.Error(err, "start")
 		os.Exit(1)
 	}
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	ctx := ctrl.SetupSignalHandler()
+	if err := auth.Setup(ctx, mgr, nil); err != nil {
+		log.Error(err, "set up reconcilers")
+		os.Exit(1)
+	}
+	if err := mgr.Start(ctx); err != nil {
 		log.Error(err, "run")
 		os.Exit(1)
 	}
