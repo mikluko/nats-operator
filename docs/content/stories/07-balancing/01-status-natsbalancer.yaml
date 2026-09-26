@@ -9,9 +9,8 @@ status:
       reason: YieldingToSystemBalancer
       message: REQ_07 has a placement move pending from NatsSystemBalancer demo
     - type: Overlapping
-      status: "True"
-      reason: StreamsInSeveralPools
-      message: REQ_12 matches requests and responses; balanced in requests
+      status: "False"
+      reason: PoolsDisjoint
   pools:
     - name: requests
       streams: 12
