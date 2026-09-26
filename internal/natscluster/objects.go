@@ -59,6 +59,7 @@ func Render(nc *clusterv1beta1.NatsCluster) (*Plan, error) {
 	}
 	layout := podLayout(nc)
 	h := sha256.New()
+	specDigests := map[string]string{}
 	for _, name := range serverNames(nc) {
 		cfg, err := serverConfig(nc, name, layout, "").Render()
 		if err != nil {
@@ -74,6 +75,8 @@ func Render(nc *clusterv1beta1.NatsCluster) (*Plan, error) {
 		}
 		h.Write(cfg)
 		h.Write(stsJSON)
+		sum := sha256.Sum256(stsJSON)
+		specDigests[name] = hex.EncodeToString(sum[:])[:10]
 		p.Servers = append(p.Servers, Server{Name: name, StatefulSet: sts})
 	}
 	p.Revision = hex.EncodeToString(h.Sum(nil))[:10]
@@ -84,7 +87,10 @@ func Render(nc *clusterv1beta1.NatsCluster) (*Plan, error) {
 			return nil, err
 		}
 		s.ConfigMap = configMap(nc, s.Name, cfg, p.Revision)
-		s.StatefulSet.Annotations = map[string]string{AnnotationConfigRevision: p.Revision}
+		s.StatefulSet.Annotations = map[string]string{
+			AnnotationConfigRevision: p.Revision,
+			AnnotationSpecDigest:     specDigests[s.Name],
+		}
 	}
 	return p, nil
 }

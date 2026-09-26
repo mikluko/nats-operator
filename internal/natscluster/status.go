@@ -36,19 +36,21 @@ const (
 	ReasonUpToDate          = "UpToDate"
 	ReasonCreating          = "Creating"
 	ReasonRolloutPending    = "RolloutPending"
+	ReasonReloadPending     = "ReloadPending"
 	ReasonScaleDownPending  = "ScaleDownPending"
 	ReasonUnsupportedSpec   = "UnsupportedSpec"
 	ReasonRouteCertNotReady = "RouteCertificateNotReady"
 )
 
-// Observed is what one reconcile saw: the servers' StatefulSets by name,
-// which of them it created, and the observation of the NATS cluster or why
-// there is none.
+// Observed is what one reconcile saw and did: the servers' StatefulSets by
+// name, which of them it created, the observation of the NATS cluster or
+// why there is none, and how the revision is applied to servers not on it.
 type Observed struct {
 	StatefulSets map[string]*appsv1.StatefulSet
 	Created      []string
 	Snapshot     *sysobs.Snapshot
 	ObserveErr   error
+	Apply        configApply
 }
 
 // computeStatus returns nc's status from plan and what was observed,
@@ -63,7 +65,7 @@ func computeStatus(nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed) clust
 		Client:  fmt.Sprintf("nats://%s.%s.svc:%d", clientServiceName(nc), nc.Namespace, PortClient),
 		Monitor: fmt.Sprintf("http://%s.%s.svc:%d", clientServiceName(nc), nc.Namespace, PortMonitor),
 	}
-	st.Config = &clusterv1beta1.ConfigStatus{Revision: plan.Revision, AppliedBy: clusterv1beta1.ConfigAppliedByRestart}
+	st.Config = configStatus(nc.Status.Config, plan, o.Apply)
 
 	reported := map[string]sysobs.Server{}
 	if o.Snapshot != nil {
@@ -117,6 +119,29 @@ func computeStatus(nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed) clust
 	setCondition(&st, settledCondition(o), gen)
 	setCondition(&st, progressingCondition(nc, plan, o), gen)
 	return st
+}
+
+// configStatus reports how plan's revision is applied: by restart when any
+// server needs one, naming each distinct reason, by reload when servers
+// reload to it, and otherwise as prev reported it for the same revision. A
+// revision the servers were created at is applied by restart.
+func configStatus(prev *clusterv1beta1.ConfigStatus, plan *Plan, a configApply) *clusterv1beta1.ConfigStatus {
+	cs := &clusterv1beta1.ConfigStatus{Revision: plan.Revision, AppliedBy: clusterv1beta1.ConfigAppliedByRestart}
+	switch {
+	case len(a.Restart) > 0:
+		var reasons []string
+		for _, s := range plan.Servers {
+			if r, ok := a.Restart[s.Name]; ok && r != "" && !slices.Contains(reasons, r) {
+				reasons = append(reasons, r)
+			}
+		}
+		cs.RestartReason = strings.Join(reasons, "; ")
+	case len(a.Reloading) > 0 || len(a.Reloaded) > 0:
+		cs.AppliedBy = clusterv1beta1.ConfigAppliedByReload
+	case prev != nil && prev.Revision == plan.Revision:
+		cs.AppliedBy, cs.RestartReason = prev.AppliedBy, prev.RestartReason
+	}
+	return cs
 }
 
 func setCondition(st *clusterv1beta1.NatsClusterStatus, c metav1.Condition, gen int64) {
@@ -202,7 +227,8 @@ func serversOf(us []sysobs.Unsettled) []string {
 
 // progressingCondition is True while the StatefulSets differ from the
 // plan: servers being created, servers on another revision, or servers
-// beyond spec.replicas.
+// beyond spec.replicas. Servers on another revision are RolloutPending
+// unless every one of them is reloading.
 func progressingCondition(nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed) metav1.Condition {
 	c := metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionTrue}
 	if len(o.Created) > 0 {
@@ -219,6 +245,10 @@ func progressingCondition(nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed
 	if len(stale) > 0 {
 		c.Reason = ReasonRolloutPending
 		c.Message = fmt.Sprintf("%s not on revision %s", strings.Join(stale, ", "), plan.Revision)
+		if !slices.ContainsFunc(stale, func(s string) bool { return !slices.Contains(o.Apply.Reloading, s) }) {
+			c.Reason = ReasonReloadPending
+			c.Message = fmt.Sprintf("reloading %s to revision %s", strings.Join(stale, ", "), plan.Revision)
+		}
 		return c
 	}
 	var extra []string

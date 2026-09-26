@@ -15,6 +15,24 @@ const (
 	// the config revision they were rendered at.
 	AnnotationConfigRevision = "cluster.nats.mikluko.io/config-revision"
 
+	// AnnotationSpecDigest on a server's StatefulSet is a digest of the
+	// spec it was rendered with; a change to it restarts the server.
+	AnnotationSpecDigest = "cluster.nats.mikluko.io/spec-digest"
+
+	// AnnotationConfigApply on a server's ConfigMap is how the revision it
+	// holds is applied: Reload while the cluster controller reloads it,
+	// Restart once the reload failed. A ConfigMap written for a restart
+	// carries Restart or nothing; only Reload is ever reloaded.
+	AnnotationConfigApply = "cluster.nats.mikluko.io/config-apply"
+
+	// AnnotationRestartReason on a server's ConfigMap names what made its
+	// revision restart-only.
+	AnnotationRestartReason = "cluster.nats.mikluko.io/restart-reason"
+
+	// AnnotationReloadSince on a server's ConfigMap is when it was written
+	// for a reload, in RFC 3339.
+	AnnotationReloadSince = "cluster.nats.mikluko.io/reload-since"
+
 	// MetadataConfigRevision is the server_metadata key a server reports
 	// its config revision under.
 	MetadataConfigRevision = "config_revision"

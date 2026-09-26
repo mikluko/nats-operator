@@ -161,6 +161,9 @@ func TestProgressingCondition(t *testing.T) {
 	require.NoError(t, err)
 	stale := readySets(plan)
 	stale["demo-1"].Annotations[AnnotationConfigRevision] = "old"
+	twoStale := readySets(plan)
+	twoStale["demo-1"].Annotations[AnnotationConfigRevision] = "old"
+	twoStale["demo-2"].Annotations[AnnotationConfigRevision] = "old"
 	extra := readySets(plan)
 	extra["demo-3"] = &appsv1.StatefulSet{}
 
@@ -174,6 +177,8 @@ func TestProgressingCondition(t *testing.T) {
 		{"up to date", Observed{StatefulSets: readySets(plan)}, metav1.ConditionFalse, ReasonUpToDate, ""},
 		{"creating", Observed{StatefulSets: readySets(plan), Created: []string{"demo-0", "demo-2"}}, metav1.ConditionTrue, ReasonCreating, "creating demo-0, demo-2"},
 		{"stale revision", Observed{StatefulSets: stale}, metav1.ConditionTrue, ReasonRolloutPending, "demo-1 not on revision " + plan.Revision},
+		{"reloading", Observed{StatefulSets: stale, Apply: configApply{Reloading: []string{"demo-1"}}}, metav1.ConditionTrue, ReasonReloadPending, "reloading demo-1 to revision " + plan.Revision},
+		{"reloading one of two stale", Observed{StatefulSets: twoStale, Apply: configApply{Reloading: []string{"demo-1"}, Restart: map[string]string{"demo-2": "x"}}}, metav1.ConditionTrue, ReasonRolloutPending, "demo-1, demo-2 not on revision " + plan.Revision},
 		{"beyond replicas", Observed{StatefulSets: extra}, metav1.ConditionTrue, ReasonScaleDownPending, "demo-3 beyond 3 replicas"},
 	}
 	for _, tt := range tests {
@@ -182,6 +187,34 @@ func TestProgressingCondition(t *testing.T) {
 			require.Equal(t, tt.status, c.Status)
 			require.Equal(t, tt.reason, c.Reason)
 			require.Equal(t, tt.message, c.Message)
+		})
+	}
+}
+
+func TestConfigStatus(t *testing.T) {
+	plan, err := Render(storyCluster(t))
+	require.NoError(t, err)
+	reload, restart := clusterv1beta1.ConfigAppliedByReload, clusterv1beta1.ConfigAppliedByRestart
+	tests := []struct {
+		name      string
+		prev      *clusterv1beta1.ConfigStatus
+		apply     configApply
+		appliedBy clusterv1beta1.ConfigApplyMethod
+		reason    string
+	}{
+		{"created", nil, configApply{}, restart, ""},
+		{"reloading", nil, configApply{Reloading: []string{"demo-0"}}, reload, ""},
+		{"reloaded", nil, configApply{Reloaded: []string{"demo-0"}}, reload, ""},
+		{"restart wins", nil, configApply{Reloaded: []string{"demo-0"}, Restart: map[string]string{"demo-1": "a", "demo-2": "b", "demo-0": "a"}}, restart, "a; b"},
+		{"kept for the same revision", &clusterv1beta1.ConfigStatus{Revision: plan.Revision, AppliedBy: reload}, configApply{}, reload, ""},
+		{"not kept for another revision", &clusterv1beta1.ConfigStatus{Revision: "old", AppliedBy: reload}, configApply{}, restart, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := configStatus(tt.prev, plan, tt.apply)
+			require.Equal(t, plan.Revision, got.Revision)
+			require.Equal(t, tt.appliedBy, got.AppliedBy)
+			require.Equal(t, tt.reason, got.RestartReason)
 		})
 	}
 }

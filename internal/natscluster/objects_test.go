@@ -83,15 +83,16 @@ func TestRender_Revision(t *testing.T) {
 		name    string
 		mutate  func(*clusterv1beta1.NatsCluster)
 		changes bool
+		spec    bool
 	}{
-		{"nothing", func(*clusterv1beta1.NatsCluster) {}, false},
-		{"rollout paused", func(nc *clusterv1beta1.NatsCluster) { nc.Spec.Rollout = &clusterv1beta1.Rollout{Paused: true} }, false},
-		{"version", func(nc *clusterv1beta1.NatsCluster) { nc.Spec.Version = "2.15.1" }, true},
-		{"server tags", func(nc *clusterv1beta1.NatsCluster) { nc.Spec.ServerTags = map[string]string{"az": "a"} }, true},
-		{"replicas", func(nc *clusterv1beta1.NatsCluster) { nc.Spec.Replicas = 5 }, true},
+		{"nothing", func(*clusterv1beta1.NatsCluster) {}, false, false},
+		{"rollout paused", func(nc *clusterv1beta1.NatsCluster) { nc.Spec.Rollout = &clusterv1beta1.Rollout{Paused: true} }, false, false},
+		{"version", func(nc *clusterv1beta1.NatsCluster) { nc.Spec.Version = "2.15.1" }, true, true},
+		{"server tags", func(nc *clusterv1beta1.NatsCluster) { nc.Spec.ServerTags = map[string]string{"az": "a"} }, true, false},
+		{"replicas", func(nc *clusterv1beta1.NatsCluster) { nc.Spec.Replicas = 5 }, true, false},
 		{"pod template", func(nc *clusterv1beta1.NatsCluster) {
 			nc.Spec.PodTemplate = &clusterv1beta1.PodTemplate{Spec: &corev1.PodSpec{PriorityClassName: "high"}}
-		}, true},
+		}, true, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -100,6 +101,9 @@ func TestRender_Revision(t *testing.T) {
 			p, err := Render(nc)
 			require.NoError(t, err)
 			require.Equal(t, tt.changes, p.Revision != base.Revision)
+			digest := p.Servers[0].StatefulSet.Annotations[AnnotationSpecDigest]
+			require.NotEmpty(t, digest)
+			require.Equal(t, tt.spec, digest != base.Servers[0].StatefulSet.Annotations[AnnotationSpecDigest])
 		})
 	}
 }

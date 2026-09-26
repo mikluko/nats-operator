@@ -58,6 +58,9 @@ const (
 type Reconciler struct {
 	Client   client.Client
 	Observer Observer
+	// Reloader reaches a NATS cluster's system account to reload its
+	// servers; nil restarts every config change.
+	Reloader ReloaderFunc
 	Now      func() time.Time
 }
 
@@ -82,8 +85,9 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // Reconcile creates what a NatsCluster renders and reports its status. A
-// server's ConfigMap and StatefulSet are created when absent and never
-// changed afterwards: a changed revision is reported as RolloutPending.
+// server's ConfigMap and StatefulSet are created when absent; a changed
+// revision is reloaded where the change reloads, and is otherwise reported
+// as RolloutPending with the server's StatefulSet left as it is.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	nc := &clusterv1beta1.NatsCluster{}
 	if err := r.Client.Get(ctx, req.NamespacedName, nc); err != nil {
@@ -136,6 +140,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	}
 	obs.Snapshot, obs.ObserveErr = r.Observer.Observe(ctx, nc)
+	if certWait == "" {
+		if obs.Apply, err = r.applyConfig(ctx, nc, plan, stsByName, obs.Snapshot); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 
 	nc.Status = computeStatus(nc, plan, obs)
 	if certWait != "" {
@@ -146,7 +155,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if err := r.patchStatus(ctx, orig, nc); err != nil {
 		return ctrl.Result{}, err
 	}
-	if meta.IsStatusConditionTrue(nc.Status.Conditions, ConditionSettled) && nc.Status.ReadyReplicas == nc.Spec.Replicas {
+	if meta.IsStatusConditionTrue(nc.Status.Conditions, ConditionSettled) && nc.Status.ReadyReplicas == nc.Spec.Replicas && len(obs.Apply.Reloading) == 0 {
 		return ctrl.Result{RequeueAfter: resyncSettled}, nil
 	}
 	return ctrl.Result{RequeueAfter: resyncUnsettled}, nil
