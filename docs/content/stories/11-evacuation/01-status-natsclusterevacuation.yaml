@@ -20,3 +20,9 @@ status:
     - kind: NatsKeyValue
       namespace: payments
       name: sessions
+  # Moved, but no resource owns it and its config still names prod-east:
+  # while prod-east exists, an update that changes its placement returns it
+  # there. Nothing rewrites that config.
+  stalePlacement:
+    - account: ADTWXTPEOI65FGIGO36XGZBDFOYDDPV6XZPRQWDIRXIYCAJD6TBP76JN
+      name: audit

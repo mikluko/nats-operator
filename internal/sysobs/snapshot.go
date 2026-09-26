@@ -66,6 +66,10 @@ type Group struct {
 	// Placement is the stream's declared placement, nil where it declares
 	// none; a consumer group carries its stream's.
 	Placement *Placement
+
+	// Metadata is the stream's config metadata; a consumer group carries
+	// its stream's.
+	Metadata map[string]string
 }
 
 // Snapshot is one observation of a NATS cluster.
@@ -211,13 +215,16 @@ func merge(roster []Server, reports map[string]*wireJSInfo) *Snapshot {
 	}
 
 	groups := map[groupKey]*groupAcc{}
-	see := func(k groupKey, server, raftGroup string, c *wireCluster, p *Placement) {
+	see := func(k groupKey, server, raftGroup string, c *wireCluster, cfg *wireStreamConfig) {
 		a := groups[k]
 		if a == nil {
 			a = &groupAcc{group: Group{
 				Kind: k.kind, Account: k.account, Stream: k.stream, Consumer: k.consumer,
-				RaftGroup: raftGroup, Placement: p,
+				RaftGroup: raftGroup, Placement: placementOf(cfg),
 			}}
+			if cfg != nil {
+				a.group.Metadata = cfg.Metadata
+			}
 			groups[k] = a
 		}
 		a.holders = append(a.holders, server)
@@ -251,13 +258,12 @@ func merge(roster []Server, reports map[string]*wireJSInfo) *Snapshot {
 		}
 		for _, acc := range info.Accounts {
 			for _, st := range acc.Streams {
-				p := placementOf(st.Config)
 				if st.Cluster != nil {
-					see(groupKey{KindStream, acc.ID, st.Name, ""}, server, st.Cluster.RaftGroup, st.Cluster, p)
+					see(groupKey{KindStream, acc.ID, st.Name, ""}, server, st.Cluster.RaftGroup, st.Cluster, st.Config)
 				}
 				for _, co := range st.Consumers {
 					if co.Cluster != nil {
-						see(groupKey{KindConsumer, acc.ID, st.Name, co.Name}, server, co.Cluster.RaftGroup, co.Cluster, p)
+						see(groupKey{KindConsumer, acc.ID, st.Name, co.Name}, server, co.Cluster.RaftGroup, co.Cluster, st.Config)
 					}
 				}
 			}

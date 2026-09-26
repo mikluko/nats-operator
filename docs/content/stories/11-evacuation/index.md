@@ -18,7 +18,7 @@ A new cluster with a tag of its own, and one system-level evacuation of the whol
 
 {{< manifest "01-evacuation.yaml" >}}
 
-Resources whose own spec pins the old cluster are left alone and listed; the evacuation is not Ready until their owners move them.
+Resources whose own spec pins the old cluster are left alone and listed; the evacuation is not Ready until their owners move them. A moved stream that no resource owns keeps a config naming the old cluster, and is listed under `stalePlacement`: while `prod-east` exists, an update that changes that stream's placement moves it back there.
 
 {{< manifest "01-status-natsclusterevacuation.yaml" >}}
 

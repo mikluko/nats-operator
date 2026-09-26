@@ -120,6 +120,13 @@ const clusterSize = 3
 // every port is settled before any server starts.
 func startSupercluster(t *testing.T, p *plane, names ...string) map[string][]*server.Server {
 	t.Helper()
+	return startTaggedSupercluster(t, p, nil, names...)
+}
+
+// startTaggedSupercluster is startSupercluster with every server of a NATS
+// cluster carrying tags[name].
+func startTaggedSupercluster(t *testing.T, p *plane, tags map[string][]string, names ...string) map[string][]*server.Server {
+	t.Helper()
 	listen := func() int {
 		l, err := net.Listen("tcp", "127.0.0.1:0")
 		require.NoError(t, err)
@@ -145,16 +152,19 @@ func startSupercluster(t *testing.T, p *plane, names ...string) map[string][]*se
 	for _, name := range names {
 		for i := range clusterSize {
 			opts := &server.Options{
-				ServerName: fmt.Sprintf("%s-%d", name, i),
-				Host:       "127.0.0.1",
-				Port:       -1,
-				NoLog:      true,
-				NoSigs:     true,
-				JetStream:  true,
-				StoreDir:   t.TempDir(),
-				Cluster:    server.ClusterOpts{Name: name, Host: "127.0.0.1", Port: routePorts[name][i]},
-				Routes:     routes[name],
-				Gateway:    server.GatewayOpts{Name: name, Host: "127.0.0.1", Port: gatewayPorts[name][i], Gateways: remotes},
+				ServerName:         fmt.Sprintf("%s-%d", name, i),
+				Host:               "127.0.0.1",
+				Port:               -1,
+				NoLog:              true,
+				NoSigs:             true,
+				JetStream:          true,
+				JetStreamMaxStore:  256 << 20,
+				JetStreamMaxMemory: 64 << 20,
+				StoreDir:           t.TempDir(),
+				Tags:               jwt.TagList(tags[name]),
+				Cluster:            server.ClusterOpts{Name: name, Host: "127.0.0.1", Port: routePorts[name][i]},
+				Routes:             routes[name],
+				Gateway:            server.GatewayOpts{Name: name, Host: "127.0.0.1", Port: gatewayPorts[name][i], Gateways: remotes},
 			}
 			p.configure(t, opts)
 			srv, err := server.NewServer(opts)

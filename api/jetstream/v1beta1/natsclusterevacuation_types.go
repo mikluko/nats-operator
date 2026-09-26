@@ -77,6 +77,23 @@ type NatsClusterEvacuationStatus struct {
 	// while any remains.
 	// +optional
 	Pinned []PinnedObject `json:"pinned,omitempty"`
+
+	// StalePlacement are the streams moved that no resource owns and whose
+	// config still names the source cluster: while it exists, an update that
+	// changes their placement returns them to it.
+	// +optional
+	StalePlacement []ServerStream `json:"stalePlacement,omitempty"`
+}
+
+// ServerStream names a stream on the server.
+type ServerStream struct {
+	// Account is the account's public key.
+	// +required
+	Account string `json:"account"`
+
+	// Name of the stream.
+	// +required
+	Name string `json:"name"`
 }
 
 // +kubebuilder:object:root=true

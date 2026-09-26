@@ -1,6 +1,8 @@
-// Package balancectl reconciles balancers: a NatsSystemBalancer is a
-// [balance.Keeper] over the NATS cluster its NatsConnection reaches, run on a
-// system connection.
+// Package balancectl reconciles balancers and evacuations: a
+// NatsSystemBalancer is a [balance.Keeper] over the NATS cluster its
+// NatsConnection reaches, and a NatsClusterEvacuation empties one NATS
+// cluster, both on a system connection. A balancer holds while an evacuation
+// of its NATS cluster is not Ready.
 package balancectl
 
 import (
@@ -188,24 +190,49 @@ func (r *SystemBalancerReconciler) balance(ctx context.Context, b *js.NatsSystem
 // connect returns the balancer's connection, or records on b why there is
 // none; the error is one the Kubernetes API server returned.
 func (r *SystemBalancerReconciler) connect(ctx context.Context, b *js.NatsSystemBalancer) (*nats.Conn, error) {
-	nc, denied, err := r.Dialer.Reference(ctx, referrer(b.Namespace), b.Spec.ConnectionRef)
-	switch {
-	case denied != nil:
-		denied.ObservedGeneration = b.Generation
-		meta.SetStatusCondition(&b.Status.Conditions, *denied)
-		r.setReady(b, false, grant.ReasonReferenceNotPermitted, denied.Message)
+	nc, why, err := dial(ctx, r.Dialer, referrer(b.Namespace), b.Spec.ConnectionRef)
+	if why != nil {
+		why.apply(&b.Status.Conditions, b.Generation)
 		return nil, nil
-	case apierrors.IsNotFound(err):
-		r.setReady(b, false, lifecycle.ReasonConnectionNotFound, err.Error())
-		return nil, nil
-	case isAPIStatus(err):
+	}
+	if err != nil {
 		return nil, err
-	case err != nil:
-		r.setReady(b, false, lifecycle.ReasonConnectionFailed, err.Error())
-		return nil, nil
 	}
 	meta.RemoveStatusCondition(&b.Status.Conditions, grant.ConditionReferencesResolved)
 	return nc, nil
+}
+
+// A noConn is why a reference yields no connection: Ready's reason and
+// message, and the condition a grant's refusal sets.
+type noConn struct {
+	reason, message string
+	denied          *metav1.Condition
+}
+
+// apply records n in conds at generation.
+func (n *noConn) apply(conds *[]metav1.Condition, generation int64) {
+	if n.denied != nil {
+		n.denied.ObservedGeneration = generation
+		meta.SetStatusCondition(conds, *n.denied)
+	}
+	setConditionOn(conds, generation, ConditionReady, false, n.reason, n.message)
+}
+
+// dial returns the connection from's ref names, or why there is none; the
+// error is one the Kubernetes API server returned.
+func dial(ctx context.Context, d *natsconn.Dialer, from grant.Referrer, ref natsv1beta1.ObjectReference) (*nats.Conn, *noConn, error) {
+	nc, denied, err := d.Reference(ctx, from, ref)
+	switch {
+	case denied != nil:
+		return nil, &noConn{reason: grant.ReasonReferenceNotPermitted, message: denied.Message, denied: denied}, nil
+	case apierrors.IsNotFound(err):
+		return nil, &noConn{reason: lifecycle.ReasonConnectionNotFound, message: err.Error()}, nil
+	case isAPIStatus(err):
+		return nil, nil, err
+	case err != nil:
+		return nil, &noConn{reason: lifecycle.ReasonConnectionFailed, message: err.Error()}, nil
+	}
+	return nc, nil, nil
 }
 
 func isAPIStatus(err error) bool {
@@ -365,12 +392,16 @@ func (r *SystemBalancerReconciler) setHolding(b *js.NatsSystemBalancer, on bool,
 }
 
 func setCondition(b *js.NatsSystemBalancer, typ string, on bool, reason, message string) {
+	setConditionOn(&b.Status.Conditions, b.Generation, typ, on, reason, message)
+}
+
+func setConditionOn(conds *[]metav1.Condition, generation int64, typ string, on bool, reason, message string) {
 	s := metav1.ConditionFalse
 	if on {
 		s = metav1.ConditionTrue
 	}
-	meta.SetStatusCondition(&b.Status.Conditions, metav1.Condition{
-		Type: typ, Status: s, Reason: reason, Message: message, ObservedGeneration: b.Generation,
+	meta.SetStatusCondition(conds, metav1.Condition{
+		Type: typ, Status: s, Reason: reason, Message: message, ObservedGeneration: generation,
 	})
 }
 

@@ -196,6 +196,25 @@ spec:
                   - namespace
                   type: object
                 type: array
+              stalePlacement:
+                description: |-
+                  StalePlacement are the streams moved that no resource owns and whose
+                  config still names the source cluster: while it exists, an update that
+                  changes their placement returns them to it.
+                items:
+                  description: ServerStream names a stream on the server.
+                  properties:
+                    account:
+                      description: Account is the account's public key.
+                      type: string
+                    name:
+                      description: Name of the stream.
+                      type: string
+                  required:
+                  - account
+                  - name
+                  type: object
+                type: array
             type: object
         required:
         - spec

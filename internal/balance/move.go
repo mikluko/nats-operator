@@ -89,6 +89,35 @@ func (s StreamMove) MovePlacement(ctx context.Context, m PlacementMove) error {
 	return nil
 }
 
+// Evacuate asks the meta leader to move every copy of id to servers carrying
+// tags on top of the stream's own placement tags. Where no server of the
+// stream's NATS cluster carries them, the server picks another NATS cluster
+// that has enough. The tags are not written to the stream's config.
+func (s StreamMove) Evacuate(ctx context.Context, id StreamID, tags []string) error {
+	subject := fmt.Sprintf("$JS.API.ACCOUNT.STREAM.MOVE.%s.%s", id.Account, id.Stream)
+	req := struct {
+		Tags []string `json:"tags"`
+	}{tags}
+	if err := request(ctx, s.Conn, subject, req); err != nil {
+		return fmt.Errorf("move %s to %v: %w", id, tags, err)
+	}
+	return nil
+}
+
+// ErrCodeNoMove is the APIError code CancelMove fails with where id has no
+// move in progress.
+const ErrCodeNoMove = 10129
+
+// CancelMove asks the meta leader to roll back the move of id in progress,
+// back to the servers it started from.
+func (s StreamMove) CancelMove(ctx context.Context, id StreamID) error {
+	subject := fmt.Sprintf("$JS.API.ACCOUNT.STREAM.CANCEL_MOVE.%s.%s", id.Account, id.Stream)
+	if err := request(ctx, s.Conn, subject, struct{}{}); err != nil {
+		return fmt.Errorf("cancel the move of %s: %w", id, err)
+	}
+	return nil
+}
+
 // An APIError is the error a JetStream API response carries.
 type APIError struct {
 	Code        int    `json:"code"`

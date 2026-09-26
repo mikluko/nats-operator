@@ -61,7 +61,8 @@ func main() {
 }
 
 // setup adds the connection pool, the NatsConnection reconciler, the
-// stream and consumer reconcilers and the system balancer reconciler to mgr.
+// stream and consumer reconcilers, the system balancer reconciler and the
+// evacuation reconciler to mgr.
 func setup(ctx context.Context, mgr ctrl.Manager, resync time.Duration) error {
 	pool := natsconn.NewPool()
 	if err := mgr.Add(pool); err != nil {
@@ -84,6 +85,10 @@ func setup(ctx context.Context, mgr ctrl.Manager, resync time.Duration) error {
 	balancers := &balancectl.SystemBalancerReconciler{Client: mgr.GetClient(), Dialer: dialer}
 	if err := balancers.SetupWithManager(ctx, mgr); err != nil {
 		return fmt.Errorf("set up NatsSystemBalancer reconciler: %w", err)
+	}
+	evacuations := &balancectl.EvacuationReconciler{Client: mgr.GetClient(), Dialer: dialer}
+	if err := evacuations.SetupWithManager(ctx, mgr); err != nil {
+		return fmt.Errorf("set up NatsClusterEvacuation reconciler: %w", err)
 	}
 	return nil
 }

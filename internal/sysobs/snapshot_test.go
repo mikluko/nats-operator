@@ -31,7 +31,7 @@ func current(n string) Member { return Member{Server: n, Current: true} }
 
 func TestMerge_PlacementAndLag(t *testing.T) {
 	acct := streamOn("s1", wirePeer{Name: "s2", Lag: 7})
-	acct.Streams[0].Config = &wireStreamConfig{Placement: &wirePlacement{Cluster: "C1", Tags: []string{"ssd"}}}
+	acct.Streams[0].Config = &wireStreamConfig{Placement: &wirePlacement{Cluster: "C1", Tags: []string{"ssd"}}, Metadata: map[string]string{"k": "v"}}
 	acct.Streams[0].Consumers = []wireConsumer{{Name: "C", Cluster: &wireCluster{RaftGroup: "C-rg", Leader: "s1", Replicas: []wirePeer{ok("s2")}}}}
 	snap := merge(roster("s1", "s2"), map[string]*wireJSInfo{"s1": info(nil, acct)})
 
@@ -39,6 +39,7 @@ func TestMerge_PlacementAndLag(t *testing.T) {
 	require.Len(t, snap.Groups, 2)
 	for _, g := range snap.Groups {
 		require.Equal(t, want, g.Placement, "%s %s", g.Kind, g.Consumer)
+		require.Equal(t, map[string]string{"k": "v"}, g.Metadata, "%s %s", g.Kind, g.Consumer)
 	}
 	require.Equal(t, []Member{current("s1"), {Server: "s2", Lag: 7}}, snap.Groups[0].Members)
 }

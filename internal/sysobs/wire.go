@@ -76,7 +76,8 @@ type wireStream struct {
 }
 
 type wireStreamConfig struct {
-	Placement *wirePlacement `json:"placement"`
+	Placement *wirePlacement    `json:"placement"`
+	Metadata  map[string]string `json:"metadata"`
 }
 
 type wirePlacement struct {
