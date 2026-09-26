@@ -82,7 +82,8 @@ type NatsClusterSpec struct {
 	// +optional
 	LeafRemotes []LeafRemote `json:"leafRemotes,omitempty"`
 
-	// Rollout controls rollouts.
+	// Rollout steers the restarts a spec change rolls out one server at a
+	// time.
 	// +optional
 	Rollout *Rollout `json:"rollout,omitempty"`
 }
@@ -341,7 +342,7 @@ type LeafRemote struct {
 	LocalSystemAccount bool `json:"localSystemAccount,omitempty"`
 }
 
-// Rollout controls rollouts.
+// Rollout steers a NATS cluster's one-server-at-a-time restarts.
 type Rollout struct {
 	// Paused stops a rollout before its next step.
 	// +optional

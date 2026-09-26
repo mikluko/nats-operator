@@ -679,7 +679,9 @@ spec:
                     type: object
                 type: object
               rollout:
-                description: Rollout controls rollouts.
+                description: |-
+                  Rollout steers the restarts a spec change rolls out one server at a
+                  time.
                 properties:
                   paused:
                     description: Paused stops a rollout before its next step.

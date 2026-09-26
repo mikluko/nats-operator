@@ -75,22 +75,22 @@ type NatsUserSpec struct {
 
 // Permissions are a user's publish and subscribe permissions.
 type Permissions struct {
-	// Publish permissions.
+	// Publish are the subjects the user may publish to.
 	// +optional
 	Publish *SubjectPermissions `json:"publish,omitempty"`
 
-	// Subscribe permissions.
+	// Subscribe are the subjects the user may subscribe to.
 	// +optional
 	Subscribe *SubjectPermissions `json:"subscribe,omitempty"`
 }
 
 // SubjectPermissions allow and deny subjects.
 type SubjectPermissions struct {
-	// Allow lists subjects allowed.
+	// Allow are the subjects permitted; empty, every subject is.
 	// +optional
 	Allow []string `json:"allow,omitempty"`
 
-	// Deny lists subjects denied.
+	// Deny are the subjects refused, even where Allow matches them.
 	// +optional
 	Deny []string `json:"deny,omitempty"`
 }

@@ -120,29 +120,34 @@ spec:
                 description: Permissions are the user's publish and subscribe permissions.
                 properties:
                   publish:
-                    description: Publish permissions.
+                    description: Publish are the subjects the user may publish to.
                     properties:
                       allow:
-                        description: Allow lists subjects allowed.
+                        description: Allow are the subjects permitted; empty, every
+                          subject is.
                         items:
                           type: string
                         type: array
                       deny:
-                        description: Deny lists subjects denied.
+                        description: Deny are the subjects refused, even where Allow
+                          matches them.
                         items:
                           type: string
                         type: array
                     type: object
                   subscribe:
-                    description: Subscribe permissions.
+                    description: Subscribe are the subjects the user may subscribe
+                      to.
                     properties:
                       allow:
-                        description: Allow lists subjects allowed.
+                        description: Allow are the subjects permitted; empty, every
+                          subject is.
                         items:
                           type: string
                         type: array
                       deny:
-                        description: Deny lists subjects denied.
+                        description: Deny are the subjects refused, even where Allow
+                          matches them.
                         items:
                           type: string
                         type: array

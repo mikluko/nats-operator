@@ -62,6 +62,15 @@ chart:
         helm template nats-operator charts/nats-operator --set "$sets" > /dev/null
     done
 
+# The API reference page, from the Go types under api/ and the templates
+# under hack/api-docs/.
+api-docs:
+    go tool gen-crd-api-reference-docs \
+        -api-dir=github.com/mikluko/nats-operator/api \
+        -config=hack/api-docs/config.json \
+        -template-dir=hack/api-docs/template \
+        -out-file=docs/content/docs/reference/api.md
+
 # The documentation site's NATS permissions page, from hack/permdocs and the
 # presets in internal/jwtplane.
 perm-docs:
@@ -69,9 +78,9 @@ perm-docs:
 
 # Fails when generated files, tracked or not, are stale relative to their
 # sources.
-verify: generate chart-crds perm-docs
-    git diff --exit-code -- api config charts docs/content/docs/reference/nats-permissions.md
-    test -z "$(git status --porcelain -- api config charts docs/content/docs/reference/nats-permissions.md)"
+verify: generate chart-crds api-docs perm-docs
+    git diff --exit-code -- api config charts docs/content/docs/reference
+    test -z "$(git status --porcelain -- api config charts docs/content/docs/reference)"
 
 # envtest binaries for the API-server-backed tests; the tests themselves are
 # ordinary `go test` runs that read KUBEBUILDER_ASSETS.
