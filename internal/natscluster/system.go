@@ -76,7 +76,7 @@ func (s *SystemConnections) observer(ctx context.Context, nc *clusterv1beta1.Nat
 	if err != nil {
 		return nil, err
 	}
-	var opts []sysobs.Option
+	opts := []sysobs.Option{sysobs.WithGateways()}
 	if s.Wait > 0 {
 		opts = append(opts, sysobs.WithWait(s.Wait))
 	}

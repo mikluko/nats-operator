@@ -24,6 +24,7 @@ type Config struct {
 	ServerTags     []string          `json:"server_tags,omitempty"`
 	ServerMetadata map[string]string `json:"server_metadata,omitempty"`
 	Cluster        ClusterConfig     `json:"cluster"`
+	Gateway        *GatewayConfig    `json:"gateway,omitempty"`
 	JetStream      *JetStreamConfig  `json:"jetstream,omitempty"`
 
 	Operator        string            `json:"operator,omitempty"`
@@ -48,12 +49,30 @@ type ClusterConfig struct {
 }
 
 // TLSConfig is a listener's certificate and the CA its peers are verified
-// against.
+// against; without a CA file, peers are verified against the system roots.
 type TLSConfig struct {
 	CertFile string `json:"cert_file"`
 	KeyFile  string `json:"key_file"`
-	CAFile   string `json:"ca_file"`
+	CAFile   string `json:"ca_file,omitempty"`
 	Verify   bool   `json:"verify"`
+}
+
+// GatewayConfig is the gateway listener and the remote gateways a server
+// dials. RejectUnknown refuses a gateway Gateways does not name, and so
+// turns gossip discovery off.
+type GatewayConfig struct {
+	Name          string                `json:"name"`
+	Listen        string                `json:"listen"`
+	Advertise     string                `json:"advertise,omitempty"`
+	RejectUnknown bool                  `json:"reject_unknown"`
+	TLS           *TLSConfig            `json:"tls,omitempty"`
+	Gateways      []RemoteGatewayConfig `json:"gateways,omitempty"`
+}
+
+// RemoteGatewayConfig is one remote gateway a server dials.
+type RemoteGatewayConfig struct {
+	Name string   `json:"name"`
+	URLs []string `json:"urls"`
 }
 
 // JetStreamConfig is a server's JetStream block; a zero limit is left to
@@ -80,6 +99,7 @@ type Layout struct {
 	ClientListen  string
 	RouteListen   string
 	MonitorListen string
+	GatewayListen string
 	PidFile       string
 	StoreDir      string
 	ResolverDir   string
@@ -89,16 +109,21 @@ type Layout struct {
 
 	// TLSDir holds tls.crt, tls.key and ca.crt for route TLS.
 	TLSDir string
+
+	// GatewayTLSDir holds tls.crt and tls.key for gateway TLS, and ca.crt
+	// when Inputs.GatewayCA is set.
+	GatewayTLSDir string
 }
 
 // Paths inside a server's pod.
 const (
-	configDir    = "/etc/nats-config"
-	configFile   = "nats.conf"
-	pidDir       = "/var/run/nats"
-	dataDir      = "/data"
-	resolverDir  = dataDir + "/resolver"
-	routesTLSDir = "/etc/nats-routes-tls"
+	configDir     = "/etc/nats-config"
+	configFile    = "nats.conf"
+	pidDir        = "/var/run/nats"
+	dataDir       = "/data"
+	resolverDir   = dataDir + "/resolver"
+	routesTLSDir  = "/etc/nats-routes-tls"
+	gatewayTLSDir = "/etc/nats-gateway-tls"
 )
 
 // podLayout is the Layout of every server of nc in its pod.
@@ -107,10 +132,12 @@ func podLayout(nc *clusterv1beta1.NatsCluster) Layout {
 		ClientListen:  fmt.Sprintf("0.0.0.0:%d", PortClient),
 		RouteListen:   fmt.Sprintf("0.0.0.0:%d", PortRoute),
 		MonitorListen: fmt.Sprintf("0.0.0.0:%d", PortMonitor),
+		GatewayListen: fmt.Sprintf("0.0.0.0:%d", PortGateway),
 		PidFile:       pidDir + "/nats.pid",
 		StoreDir:      dataDir + "/jetstream",
 		ResolverDir:   resolverDir,
 		TLSDir:        routesTLSDir,
+		GatewayTLSDir: gatewayTLSDir,
 	}
 	for _, s := range serverNames(nc) {
 		l.Routes = append(l.Routes, fmt.Sprintf("nats-route://%s:%d", podHost(nc, s), PortRoute))
@@ -164,10 +191,18 @@ func routeTLSEnabled(spec *clusterv1beta1.NatsClusterSpec) bool {
 	return *spec.Routes.TLS.Enabled
 }
 
-// serverConfig renders server's config within nc under layout l, reporting
-// revision through server_metadata unless revision is empty. trust is nil
-// exactly when nc has no auth plane.
-func serverConfig(nc *clusterv1beta1.NatsCluster, trust *Trust, server string, l Layout, revision string) *Config {
+// Inputs is what a render reads besides the NatsCluster.
+type Inputs struct {
+	// Trust is nil exactly when the NatsCluster has no auth plane.
+	Trust *Trust
+	// GatewayCA reports whether the gateway certificate Secret holds
+	// ca.crt; gateway peers are then verified against it, both ways.
+	GatewayCA bool
+}
+
+// serverConfig renders server's config within nc from in under layout l,
+// reporting revision through server_metadata unless revision is empty.
+func serverConfig(nc *clusterv1beta1.NatsCluster, in Inputs, server string, l Layout, revision string) *Config {
 	c := &Config{
 		ServerName:    server,
 		Listen:        l.ClientListen,
@@ -193,6 +228,9 @@ func serverConfig(nc *clusterv1beta1.NatsCluster, trust *Trust, server string, l
 			Verify:   true,
 		}
 	}
+	if g := nc.Spec.Gateway; g != nil {
+		c.Gateway = gatewayConfig(nc.Name, g, l, in.GatewayCA)
+	}
 	if js := nc.Spec.JetStream; js != nil {
 		limits := deriveLimits(&nc.Spec).JetStream
 		c.JetStream = &JetStreamConfig{StoreDir: l.StoreDir, Domain: js.Domain}
@@ -203,13 +241,40 @@ func serverConfig(nc *clusterv1beta1.NatsCluster, trust *Trust, server string, l
 			c.JetStream.MaxFileStore = q.Value()
 		}
 	}
-	if trust != nil {
+	if trust := in.Trust; trust != nil {
 		c.Operator = trust.OperatorJWT
 		c.SystemAccount = trust.SystemAccount
 		c.Resolver = resolverConfig(nc.Spec.Auth.Resolver, l.ResolverDir)
 		c.ResolverPreload = map[string]string{trust.SystemAccount: trust.SystemAccountJWT}
 	}
 	return c
+}
+
+// gatewayConfig renders the gateway of the NATS cluster named name: every
+// remote but its own entry, reject_unknown on unless discovery is Gossip.
+func gatewayConfig(name string, g *clusterv1beta1.Gateway, l Layout, withCA bool) *GatewayConfig {
+	gc := &GatewayConfig{
+		Name:          name,
+		Listen:        l.GatewayListen,
+		Advertise:     g.Advertise,
+		RejectUnknown: g.Discovery != clusterv1beta1.GatewayDiscoveryGossip,
+	}
+	for _, r := range g.Remotes {
+		if r.Name != name {
+			gc.Gateways = append(gc.Gateways, RemoteGatewayConfig{Name: r.Name, URLs: []string{r.URL}})
+		}
+	}
+	if g.TLS != nil {
+		gc.TLS = &TLSConfig{
+			CertFile: l.GatewayTLSDir + "/" + corev1.TLSCertKey,
+			KeyFile:  l.GatewayTLSDir + "/" + corev1.TLSPrivateKeyKey,
+		}
+		if withCA {
+			gc.TLS.CAFile = l.GatewayTLSDir + "/" + caKey
+			gc.TLS.Verify = true
+		}
+	}
+	return gc
 }
 
 // resolverConfig renders resolver type t, Full when empty, over dir. A

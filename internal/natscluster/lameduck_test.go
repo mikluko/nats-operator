@@ -24,7 +24,7 @@ import (
 func TestLameDuckFitsTerminationGrace(t *testing.T) {
 	nc := storyCluster(t)
 	nc.Spec.Routes = &clusterv1beta1.Routes{TLS: &clusterv1beta1.RoutesTLS{Enabled: ptr.To(false)}}
-	plan, err := Render(nc, nil)
+	plan, err := Render(nc, Inputs{})
 	require.NoError(t, err)
 	s := plan.Servers[0]
 	pod := s.StatefulSet.Spec.Template.Spec

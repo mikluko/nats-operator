@@ -87,6 +87,7 @@ func TestMonitorObserve(t *testing.T) {
 		require.Equal(t, map[string]string{"rev": s.Name}, s.Metadata)
 		require.True(t, s.JetStream)
 		require.NotEmpty(t, s.Version)
+		require.Equal(t, &Gateways{Inbound: map[string]int{}}, s.Gateways)
 	}
 
 	t.Run("wrong server_name is silent", func(t *testing.T) {

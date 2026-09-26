@@ -182,7 +182,7 @@ func renderedTrustMap(t *testing.T, nc *clusterv1beta1.NatsCluster, trust *Trust
 		Routes:        []string{fmt.Sprintf("nats-route://127.0.0.1:%d", route)},
 		TLSDir:        tlsDir,
 	}
-	b, err := serverConfig(nc, trust, "demo-0", l, "r1").Render()
+	b, err := serverConfig(nc, Inputs{Trust: trust}, "demo-0", l, "r1").Render()
 	require.NoError(t, err)
 	var m map[string]any
 	require.NoError(t, json.Unmarshal(b, &m))

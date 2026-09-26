@@ -27,7 +27,7 @@ func container(t *testing.T, sts *appsv1.StatefulSet, name string) corev1.Contai
 
 func TestRender_Story1(t *testing.T) {
 	nc := storyCluster(t)
-	p, err := Render(nc, nil)
+	p, err := Render(nc, Inputs{})
 	require.NoError(t, err)
 	require.Len(t, p.Revision, 10)
 
@@ -77,7 +77,7 @@ func TestRender_Story1(t *testing.T) {
 }
 
 func TestRender_Revision(t *testing.T) {
-	base, err := Render(storyCluster(t), nil)
+	base, err := Render(storyCluster(t), Inputs{})
 	require.NoError(t, err)
 	tests := []struct {
 		name    string
@@ -98,7 +98,7 @@ func TestRender_Revision(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			nc := storyCluster(t)
 			tt.mutate(nc)
-			p, err := Render(nc, nil)
+			p, err := Render(nc, Inputs{})
 			require.NoError(t, err)
 			require.Equal(t, tt.changes, p.Revision != base.Revision)
 			digest := p.Servers[0].StatefulSet.Annotations[AnnotationSpecDigest]
@@ -125,7 +125,7 @@ func TestRender_PodTemplate(t *testing.T) {
 			},
 		},
 	}
-	p, err := Render(nc, nil)
+	p, err := Render(nc, Inputs{})
 	require.NoError(t, err)
 	sts := p.Servers[0].StatefulSet
 	pod := sts.Spec.Template
@@ -171,7 +171,7 @@ func TestRender_Volumes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			nc := storyCluster(t)
 			tt.mutate(nc)
-			p, err := Render(nc, nil)
+			p, err := Render(nc, Inputs{})
 			require.NoError(t, err)
 			sts := p.Servers[0].StatefulSet
 			var vols []string

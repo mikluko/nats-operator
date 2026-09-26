@@ -95,7 +95,7 @@ func TestSignUser(t *testing.T) {
 			user: jwtplane.User{Preset: jwtplane.PresetClusterController, SystemAccount: true},
 			want: want{
 				pubAllow: []string{
-					"$SYS.REQ.SERVER.PING.STATSZ", "$SYS.REQ.SERVER.PING.JSZ",
+					"$SYS.REQ.SERVER.PING.STATSZ", "$SYS.REQ.SERVER.PING.JSZ", "$SYS.REQ.SERVER.PING.GATEWAYZ",
 					"$SYS.REQ.SERVER.*.STATSZ", "$SYS.REQ.SERVER.*.JSZ", "$SYS.REQ.SERVER.*.VARZ",
 					"$SYS.REQ.SERVER.*.HEALTHZ", "$SYS.REQ.SERVER.*.RELOAD",
 					"$JS.API.SERVER.EVACUATE", "$JS.API.SERVER.REMOVE", "$JS.API.META.LEADER.STEPDOWN",

@@ -193,3 +193,29 @@ func TestReload(t *testing.T) {
 		})
 	}
 }
+
+// TestObserve_Gateways pins what each server reports of its gateway
+// connections: an outbound connection to every other NATS cluster, and one
+// inbound connection per server of the other cluster, spread over the
+// observed cluster's servers.
+func TestObserve_Gateways(t *testing.T) {
+	c1 := newTestCluster(t, "C1", 3)
+	c2 := newTestCluster(t, "C2", 2)
+	startSupercluster(t, c1, c2)
+
+	o := New(connect(t, c1.clientPort[0], "sys"), "C1", WithGateways())
+	require.Eventually(t, func() bool {
+		s, err := o.Observe(context.Background())
+		if err != nil || len(s.Servers) != 3 {
+			return false
+		}
+		inbound := 0
+		for _, srv := range s.Servers {
+			if srv.Gateways == nil || !slices.Equal(srv.Gateways.Outbound, []string{"C2"}) {
+				return false
+			}
+			inbound += srv.Gateways.Inbound["C2"]
+		}
+		return inbound == 2
+	}, 30*time.Second, 200*time.Millisecond)
+}

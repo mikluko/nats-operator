@@ -1,7 +1,7 @@
 // Package natscluster is the cluster controller's reconciler: it renders a
 // NatsCluster into one StatefulSet and ConfigMap per server, the Services, a
-// PodDisruptionBudget and the route certificate, and reports Ready, Settled
-// and Progressing.
+// PodDisruptionBudget and the route and gateway certificates, and reports
+// Ready, Settled, Progressing and GatewaysConnected.
 package natscluster
 
 import (
@@ -182,7 +182,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		setCondition(&nc.Status, *cond, nc.Generation)
 		return ctrl.Result{RequeueAfter: resyncUnsettled}, r.patchStatus(ctx, orig, nc)
 	}
-	plan, err := Render(nc, trust)
+	gatewayWait, gatewayCA, err := r.ensureGatewayCert(ctx, nc)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	plan, err := Render(nc, Inputs{Trust: trust, GatewayCA: gatewayCA})
 	if err != nil {
 		setCondition(&nc.Status, metav1.Condition{
 			Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: ReasonUnsupportedSpec, Message: err.Error(),
@@ -193,9 +197,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if err := r.applyShared(ctx, nc, plan); err != nil {
 		return ctrl.Result{}, err
 	}
-	certWait, err := r.ensureRouteCert(ctx, nc)
+	routeWait, err := r.ensureRouteCert(ctx, nc)
 	if err != nil {
 		return ctrl.Result{}, err
+	}
+	certWait, certReason := routeWait, ReasonRouteCertNotReady
+	if certWait == "" {
+		certWait, certReason = gatewayWait, ReasonGatewayCertNotReady
 	}
 
 	stsByName, err := r.statefulSets(ctx, nc)
@@ -229,7 +237,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	nc.Status = computeStatus(nc, plan, obs)
 	if certWait != "" {
 		setCondition(&nc.Status, metav1.Condition{
-			Type: ConditionProgressing, Status: metav1.ConditionTrue, Reason: ReasonRouteCertNotReady, Message: certWait,
+			Type: ConditionProgressing, Status: metav1.ConditionTrue, Reason: certReason, Message: certWait,
 		}, nc.Generation)
 	}
 	if err := r.patchStatus(ctx, orig, nc); err != nil {
@@ -244,9 +252,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 // unsupportedFields names the spec fields this controller does not render.
 func unsupportedFields(spec *clusterv1beta1.NatsClusterSpec) []string {
 	var out []string
-	if spec.Gateway != nil {
-		out = append(out, "gateway")
-	}
 	if spec.Leafnodes != nil {
 		out = append(out, "leafnodes")
 	}
@@ -263,12 +268,20 @@ func (r *Reconciler) patchStatus(ctx context.Context, orig, nc *clusterv1beta1.N
 	return nil
 }
 
-// applyShared creates or updates the Services and the PodDisruptionBudget.
+// applyShared creates or updates the Services and the PodDisruptionBudget,
+// and deletes the gateway Service once gateway.service is unset.
 func (r *Reconciler) applyShared(ctx context.Context, nc *clusterv1beta1.NatsCluster, plan *Plan) error {
-	for _, want := range []*corev1.Service{plan.HeadlessService, plan.ClientService} {
+	services := []*corev1.Service{plan.HeadlessService, plan.ClientService}
+	if plan.GatewayService != nil {
+		services = append(services, plan.GatewayService)
+	} else if err := r.deleteOwned(ctx, nc, &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: gatewayServiceName(nc), Namespace: nc.Namespace}}); err != nil {
+		return err
+	}
+	for _, want := range services {
 		svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: want.Name, Namespace: want.Namespace}}
 		if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, func() error {
 			svc.Labels = merged(svc.Labels, want.Labels)
+			svc.Annotations = merged(svc.Annotations, want.Annotations)
 			if svc.Spec.ClusterIP == "" {
 				svc.Spec.ClusterIP = want.Spec.ClusterIP
 			}
@@ -294,6 +307,75 @@ func (r *Reconciler) applyShared(ctx context.Context, nc *clusterv1beta1.NatsClu
 	return nil
 }
 
+// deleteOwned deletes obj when it exists and nc controls it.
+func (r *Reconciler) deleteOwned(ctx context.Context, nc *clusterv1beta1.NatsCluster, obj client.Object) error {
+	if err := r.Client.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	if !metav1.IsControlledBy(obj, nc) {
+		return nil
+	}
+	if err := r.Client.Delete(ctx, obj); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("delete %s: %w", obj.GetName(), err)
+	}
+	return nil
+}
+
+// ensureGatewayCert requests the gateway certificate from cert-manager when
+// it issues it. It returns what the servers wait for, "" once the Secret
+// holds tls.crt and tls.key, and whether the Secret also holds ca.crt.
+func (r *Reconciler) ensureGatewayCert(ctx context.Context, nc *clusterv1beta1.NatsCluster) (string, bool, error) {
+	name := gatewaySecret(nc)
+	if name == "" {
+		return "", false, nil
+	}
+	if issuer := gatewayIssuer(nc); issuer != nil {
+		hosts := gatewayHosts(nc)
+		if len(hosts) == 0 {
+			return "gateway.tls.certManager has no host to issue for: list this NATS cluster in gateway.remotes or set gateway.advertise", false, nil
+		}
+		wait, err := r.applyCertificate(ctx, nc, gatewayCertificate(nc, issuer, hosts))
+		if wait != "" || err != nil {
+			return wait, false, err
+		}
+	}
+	secret := &corev1.Secret{}
+	err := r.Client.Get(ctx, client.ObjectKey{Namespace: nc.Namespace, Name: name}, secret)
+	switch {
+	case apierrors.IsNotFound(err):
+		return fmt.Sprintf("Secret %s does not exist", name), false, nil
+	case err != nil:
+		return "", false, fmt.Errorf("get gateway secret: %w", err)
+	}
+	for _, k := range []string{corev1.TLSCertKey, corev1.TLSPrivateKeyKey} {
+		if len(secret.Data[k]) == 0 {
+			return fmt.Sprintf("Secret %s has no %s", name, k), false, nil
+		}
+	}
+	return "", len(secret.Data[caKey]) > 0, nil
+}
+
+// applyCertificate creates or updates the cert-manager Certificate want.
+// It returns what the servers wait for when cert-manager is not installed.
+func (r *Reconciler) applyCertificate(ctx context.Context, nc *clusterv1beta1.NatsCluster, want *unstructured.Unstructured) (string, error) {
+	cert := &unstructured.Unstructured{}
+	cert.SetGroupVersionKind(want.GroupVersionKind())
+	cert.SetName(want.GetName())
+	cert.SetNamespace(want.GetNamespace())
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, cert, func() error {
+		cert.SetLabels(merged(cert.GetLabels(), want.GetLabels()))
+		cert.Object["spec"] = want.Object["spec"]
+		return controllerutil.SetControllerReference(nc, cert, r.Client.Scheme())
+	})
+	if meta.IsNoMatchError(err) {
+		return "cert-manager Certificate is not a known kind: cert-manager is not installed", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("apply certificate %s: %w", want.GetName(), err)
+	}
+	return "", nil
+}
+
 // ensureRouteCert makes the route certificate Secret exist: generated when
 // self-signed, requested from cert-manager when it issues it, only read when
 // named. It returns what the servers wait for, or "" once the Secret holds
@@ -306,21 +388,9 @@ func (r *Reconciler) ensureRouteCert(ctx context.Context, nc *clusterv1beta1.Nat
 	selfSigned := name == routesSecretName(nc)
 	if issuer := certManagerIssuer(nc); issuer != nil {
 		selfSigned = false
-		want := routesCertificate(nc, issuer)
-		cert := &unstructured.Unstructured{}
-		cert.SetGroupVersionKind(want.GroupVersionKind())
-		cert.SetName(want.GetName())
-		cert.SetNamespace(want.GetNamespace())
-		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, cert, func() error {
-			cert.SetLabels(merged(cert.GetLabels(), want.GetLabels()))
-			cert.Object["spec"] = want.Object["spec"]
-			return controllerutil.SetControllerReference(nc, cert, r.Client.Scheme())
-		})
-		if meta.IsNoMatchError(err) {
-			return "cert-manager Certificate is not a known kind: cert-manager is not installed", nil
-		}
-		if err != nil {
-			return "", fmt.Errorf("apply route certificate: %w", err)
+		wait, err := r.applyCertificate(ctx, nc, routesCertificate(nc, issuer))
+		if wait != "" || err != nil {
+			return wait, err
 		}
 	}
 

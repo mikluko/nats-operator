@@ -153,6 +153,7 @@ var userPresets = map[UserPreset]userPreset{
 		pub: append([]string{
 			"$SYS.REQ.SERVER.PING.STATSZ",
 			"$SYS.REQ.SERVER.PING.JSZ",
+			"$SYS.REQ.SERVER.PING.GATEWAYZ",
 			"$SYS.REQ.SERVER.*.STATSZ",
 			"$SYS.REQ.SERVER.*.JSZ",
 			"$SYS.REQ.SERVER.*.VARZ",

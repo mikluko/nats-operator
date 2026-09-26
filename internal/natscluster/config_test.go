@@ -139,7 +139,7 @@ func TestServerConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			nc := story.DeepCopy()
 			tt.mutate(nc)
-			b, err := serverConfig(nc, nil, "demo-1", podLayout(nc), "r1").Render()
+			b, err := serverConfig(nc, Inputs{}, "demo-1", podLayout(nc), "r1").Render()
 			require.NoError(t, err)
 			require.JSONEq(t, tt.want, string(b))
 		})
@@ -151,6 +151,13 @@ func TestServerConfig(t *testing.T) {
 // applied to the parsed options, and returns their monitoring endpoints,
 // the servers, the first server's client URL and each server's config file.
 func startRendered(t *testing.T, nc *clusterv1beta1.NatsCluster, trust *Trust, revision string, override ...func(*server.Options)) ([]sysobs.Endpoint, []*server.Server, string, []string) {
+	t.Helper()
+	return startRenderedWith(t, nc, Inputs{Trust: trust}, revision, nil, override...)
+}
+
+// startRenderedWith is startRendered from in, with layout, when not nil,
+// applied to the i-th server's Layout before its config is rendered.
+func startRenderedWith(t *testing.T, nc *clusterv1beta1.NatsCluster, in Inputs, revision string, layout func(i int, l *Layout), override ...func(*server.Options)) ([]sysobs.Endpoint, []*server.Server, string, []string) {
 	t.Helper()
 	free := func() int {
 		l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -188,7 +195,10 @@ func startRendered(t *testing.T, nc *clusterv1beta1.NatsCluster, trust *Trust, r
 			Routes:        routes,
 			TLSDir:        tlsDir,
 		}
-		cfg, err := serverConfig(nc, trust, name, l, revision).Render()
+		if layout != nil {
+			layout(i, &l)
+		}
+		cfg, err := serverConfig(nc, in, name, l, revision).Render()
 		require.NoError(t, err)
 		f := filepath.Join(dir, "nats.conf")
 		require.NoError(t, os.WriteFile(f, cfg, 0o600))

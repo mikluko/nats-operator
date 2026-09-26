@@ -1,6 +1,10 @@
 package sysobs
 
-import "time"
+import (
+	"encoding/json"
+	"slices"
+	"time"
+)
 
 // The wire types decode the subset of nats-server's system API responses
 // this package reads; their JSON names match nats-server v2.15.0
@@ -113,4 +117,27 @@ type wireVarzResponse struct {
 
 type wireReloadResponse struct {
 	Error *wireError `json:"error"`
+}
+
+type wireGatewayz struct {
+	Outbound map[string]json.RawMessage   `json:"outbound_gateways"`
+	Inbound  map[string][]json.RawMessage `json:"inbound_gateways"`
+}
+
+type wireGatewayzResponse struct {
+	Server wireServerInfo `json:"server"`
+	Data   *wireGatewayz  `json:"data"`
+	Error  *wireError     `json:"error"`
+}
+
+func (w *wireGatewayz) gateways() *Gateways {
+	g := &Gateways{Inbound: map[string]int{}}
+	for name := range w.Outbound {
+		g.Outbound = append(g.Outbound, name)
+	}
+	slices.Sort(g.Outbound)
+	for name, conns := range w.Inbound {
+		g.Inbound[name] = len(conns)
+	}
+	return g
 }

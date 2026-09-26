@@ -16,7 +16,8 @@ const (
 )
 
 // Server is one member of a NATS cluster's roster. Metadata is the
-// server's configured server_metadata.
+// server's configured server_metadata; Gateways is nil when the server did
+// not answer GATEWAYZ.
 type Server struct {
 	Name      string
 	ID        string
@@ -24,6 +25,16 @@ type Server struct {
 	Metadata  map[string]string
 	JetStream bool
 	Tags      []string
+	Gateways  *Gateways
+}
+
+// Gateways is one server's gateway connections, by remote gateway name.
+type Gateways struct {
+	// Outbound names, sorted, the gateways the server holds an outbound
+	// connection to.
+	Outbound []string
+	// Inbound counts the server's inbound connections from each gateway.
+	Inbound map[string]int
 }
 
 // Member is one server's place in a Raft group, as its leader sees it.

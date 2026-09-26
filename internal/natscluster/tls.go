@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"net/url"
+	"slices"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -120,6 +122,74 @@ func certManagerIssuer(nc *clusterv1beta1.NatsCluster) *clusterv1beta1.IssuerRef
 // routesCertificate is the cert-manager Certificate that issues the route
 // certificate into the Secret routesSecretName names.
 func routesCertificate(nc *clusterv1beta1.NatsCluster, issuer *clusterv1beta1.IssuerReference) *unstructured.Unstructured {
+	return certificate(nc, nc.Name+"-routes", routesSecretName(nc), issuer, routeDNSNames(nc))
+}
+
+// gatewaySecret names the Secret the gateway certificate is mounted from,
+// or "" when gateways run in the clear.
+func gatewaySecret(nc *clusterv1beta1.NatsCluster) string {
+	g := nc.Spec.Gateway
+	switch {
+	case g == nil || g.TLS == nil:
+		return ""
+	case g.TLS.SecretRef != nil:
+		return g.TLS.SecretRef.Name
+	default:
+		return gatewaySecretName(nc)
+	}
+}
+
+// gatewayIssuer returns the issuer the gateway certificate comes from, or
+// nil when cert-manager does not issue it.
+func gatewayIssuer(nc *clusterv1beta1.NatsCluster) *clusterv1beta1.IssuerReference {
+	if g := nc.Spec.Gateway; g != nil && g.TLS != nil && g.TLS.CertManager != nil {
+		return &g.TLS.CertManager.IssuerRef
+	}
+	return nil
+}
+
+// gatewayHosts are the hosts other members dial this NATS cluster's
+// gateway at: the host of its own entry in gateway.remotes and of
+// gateway.advertise, in that order, each once.
+func gatewayHosts(nc *clusterv1beta1.NatsCluster) []string {
+	g := nc.Spec.Gateway
+	if g == nil {
+		return nil
+	}
+	var out []string
+	add := func(h string) {
+		if h != "" && !slices.Contains(out, h) {
+			out = append(out, h)
+		}
+	}
+	for _, r := range g.Remotes {
+		if r.Name != nc.Name {
+			continue
+		}
+		if u, err := url.Parse(r.URL); err == nil {
+			add(u.Hostname())
+		}
+	}
+	if g.Advertise != "" {
+		if h, _, err := net.SplitHostPort(g.Advertise); err == nil {
+			add(h)
+		} else {
+			add(g.Advertise)
+		}
+	}
+	return out
+}
+
+// gatewayCertificate is the cert-manager Certificate that issues the
+// gateway certificate for hosts into the Secret gatewaySecretName names.
+func gatewayCertificate(nc *clusterv1beta1.NatsCluster, issuer *clusterv1beta1.IssuerReference, hosts []string) *unstructured.Unstructured {
+	return certificate(nc, nc.Name+"-gateway", gatewaySecretName(nc), issuer, hosts)
+}
+
+// certificate is a cert-manager Certificate named name, issued by issuer
+// into Secret secret for hosts, a host that parses as an IP address being
+// an IP SAN.
+func certificate(nc *clusterv1beta1.NatsCluster, name, secret string, issuer *clusterv1beta1.IssuerReference, hosts []string) *unstructured.Unstructured {
 	kind := issuer.Kind
 	if kind == "" {
 		kind = "Issuer"
@@ -128,24 +198,34 @@ func routesCertificate(nc *clusterv1beta1.NatsCluster, issuer *clusterv1beta1.Is
 	if group == "" {
 		group = "cert-manager.io"
 	}
-	var dnsNames []any
-	for _, n := range routeDNSNames(nc) {
-		dnsNames = append(dnsNames, n)
+	var dnsNames, ips []any
+	for _, h := range hosts {
+		if net.ParseIP(h) != nil {
+			ips = append(ips, h)
+		} else {
+			dnsNames = append(dnsNames, h)
+		}
+	}
+	spec := map[string]any{
+		"secretName": secret,
+		"usages":     []any{"server auth", "client auth"},
+		"privateKey": map[string]any{"algorithm": "ECDSA", "size": int64(256)},
+		"issuerRef":  map[string]any{"name": issuer.Name, "kind": kind, "group": group},
+	}
+	if len(dnsNames) > 0 {
+		spec["dnsNames"] = dnsNames
+	}
+	if len(ips) > 0 {
+		spec["ipAddresses"] = ips
 	}
 	u := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "cert-manager.io/v1",
 		"kind":       "Certificate",
 		"metadata": map[string]any{
-			"name":      nc.Name + "-routes",
+			"name":      name,
 			"namespace": nc.Namespace,
 		},
-		"spec": map[string]any{
-			"secretName": routesSecretName(nc),
-			"dnsNames":   dnsNames,
-			"usages":     []any{"server auth", "client auth"},
-			"privateKey": map[string]any{"algorithm": "ECDSA", "size": int64(256)},
-			"issuerRef":  map[string]any{"name": issuer.Name, "kind": kind, "group": group},
-		},
+		"spec": spec,
 	}}
 	u.SetLabels(labels(nc))
 	return u

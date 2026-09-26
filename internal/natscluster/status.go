@@ -2,6 +2,7 @@ package natscluster
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -18,6 +19,9 @@ const (
 	ConditionReady       = "Ready"
 	ConditionSettled     = "Settled"
 	ConditionProgressing = "Progressing"
+	// ConditionGatewaysConnected is set only on a NatsCluster with a
+	// gateway.
+	ConditionGatewaysConnected = "GatewaysConnected"
 )
 
 // Condition reasons.
@@ -33,18 +37,22 @@ const (
 	ReasonGroupsCatchingUp  = "GroupsCatchingUp"
 	ReasonObservationFailed = "ObservationFailed"
 
-	ReasonUpToDate          = "UpToDate"
-	ReasonCreating          = "Creating"
-	ReasonRollingRestart    = "RollingRestart"
-	ReasonGateBlocked       = "GateBlocked"
-	ReasonRolloutPaused     = "RolloutPaused"
-	ReasonReloadPending     = "ReloadPending"
-	ReasonScaleDownPending  = "ScaleDownPending"
-	ReasonUnsupportedSpec   = "UnsupportedSpec"
-	ReasonRouteCertNotReady = "RouteCertificateNotReady"
-	ReasonTrustNotFound     = "TrustNotFound"
-	ReasonTrustNotReady     = "TrustNotReady"
-	ReasonTrustInvalid      = "TrustInvalid"
+	ReasonAllMembersReachable = "AllMembersReachable"
+	ReasonMembersUnreachable  = "MembersUnreachable"
+
+	ReasonUpToDate            = "UpToDate"
+	ReasonCreating            = "Creating"
+	ReasonRollingRestart      = "RollingRestart"
+	ReasonGateBlocked         = "GateBlocked"
+	ReasonRolloutPaused       = "RolloutPaused"
+	ReasonReloadPending       = "ReloadPending"
+	ReasonScaleDownPending    = "ScaleDownPending"
+	ReasonUnsupportedSpec     = "UnsupportedSpec"
+	ReasonRouteCertNotReady   = "RouteCertificateNotReady"
+	ReasonGatewayCertNotReady = "GatewayCertificateNotReady"
+	ReasonTrustNotFound       = "TrustNotFound"
+	ReasonTrustNotReady       = "TrustNotReady"
+	ReasonTrustInvalid        = "TrustInvalid"
 )
 
 // Observed is what one reconcile saw and did: the servers' StatefulSets by
@@ -123,10 +131,92 @@ func computeStatus(nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed) clust
 		st.JetStream = nil
 	}
 
+	if g := nc.Spec.Gateway; g != nil {
+		st.Endpoints.Gateway = g.Advertise
+		if o.Snapshot != nil {
+			st.Gateways = gatewayStatus(nc, o.Snapshot)
+		}
+		setCondition(&st, gatewaysCondition(st.Gateways, o), gen)
+	} else {
+		st.Gateways = nil
+		meta.RemoveStatusCondition(&st.Conditions, ConditionGatewaysConnected)
+	}
+
 	setCondition(&st, readyCondition(st.ReadyReplicas, nc.Spec.Replicas), gen)
 	setCondition(&st, settledCondition(o), gen)
 	setCondition(&st, progressingCondition(nc, plan, o), gen)
 	return st
+}
+
+// gatewayStatus reports every other member of the supercluster: those
+// gateway.remotes names and those a server holds a connection with, sorted
+// by name. Outbound counts the servers holding an outbound connection to a
+// member, Inbound the inbound connections from it across servers; a member
+// is Connected when every server that answered GATEWAYZ dials it.
+func gatewayStatus(nc *clusterv1beta1.NatsCluster, snap *sysobs.Snapshot) []clusterv1beta1.GatewayStatus {
+	byName := map[string]*clusterv1beta1.GatewayStatus{}
+	member := func(name string) *clusterv1beta1.GatewayStatus {
+		if byName[name] == nil {
+			byName[name] = &clusterv1beta1.GatewayStatus{Name: name}
+		}
+		return byName[name]
+	}
+	for _, r := range nc.Spec.Gateway.Remotes {
+		if r.Name != nc.Name {
+			member(r.Name)
+		}
+	}
+	reporting := int32(0)
+	for _, s := range snap.Servers {
+		if s.Gateways == nil {
+			continue
+		}
+		reporting++
+		for _, name := range s.Gateways.Outbound {
+			if name != nc.Name {
+				member(name).Outbound++
+			}
+		}
+		for name, n := range s.Gateways.Inbound {
+			if name != nc.Name {
+				member(name).Inbound += int32(n)
+			}
+		}
+	}
+	out := make([]clusterv1beta1.GatewayStatus, 0, len(byName))
+	for _, name := range slices.Sorted(maps.Keys(byName)) {
+		g := byName[name]
+		g.Connected = reporting > 0 && g.Outbound == reporting
+		out = append(out, *g)
+	}
+	return out
+}
+
+// gatewaysCondition is True when every member in gateways is connected,
+// and Unknown when the NATS cluster was not observed.
+func gatewaysCondition(gateways []clusterv1beta1.GatewayStatus, o Observed) metav1.Condition {
+	c := metav1.Condition{Type: ConditionGatewaysConnected}
+	if o.Snapshot == nil {
+		c.Status, c.Reason = metav1.ConditionUnknown, ReasonObservationFailed
+		if o.ObserveErr != nil {
+			c.Message = o.ObserveErr.Error()
+		}
+		return c
+	}
+	var down []string
+	for _, g := range gateways {
+		if !g.Connected {
+			down = append(down, g.Name)
+		}
+	}
+	c.Message = fmt.Sprintf("%d of %d remote members connected", len(gateways)-len(down), len(gateways))
+	if len(down) > 0 {
+		c.Status, c.Reason = metav1.ConditionFalse, ReasonMembersUnreachable
+		c.Message += ": " + strings.Join(down, ", ") + " unreachable"
+		return c
+	}
+	c.Status, c.Reason = metav1.ConditionTrue, ReasonAllMembersReachable
+	return c
 }
 
 // configStatus reports how plan's revision is applied: by restart when any

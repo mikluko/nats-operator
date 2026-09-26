@@ -161,7 +161,7 @@ func TestServerConfig_Auth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			nc := storyAuthCluster(t)
 			nc.Spec.Auth.Resolver = tt.resolver
-			b, err := serverConfig(nc, p.trust, "demo-0", podLayout(nc), "r1").Render()
+			b, err := serverConfig(nc, Inputs{Trust: p.trust}, "demo-0", podLayout(nc), "r1").Render()
 			require.NoError(t, err)
 			var m map[string]any
 			require.NoError(t, json.Unmarshal(b, &m))
@@ -172,7 +172,7 @@ func TestServerConfig_Auth(t *testing.T) {
 		})
 	}
 	t.Run("no auth plane renders none of it", func(t *testing.T) {
-		b, err := serverConfig(storyCluster(t), nil, "demo-0", podLayout(storyCluster(t)), "r1").Render()
+		b, err := serverConfig(storyCluster(t), Inputs{}, "demo-0", podLayout(storyCluster(t)), "r1").Render()
 		require.NoError(t, err)
 		var m map[string]any
 		require.NoError(t, json.Unmarshal(b, &m))
@@ -186,7 +186,7 @@ func TestRender_AuthDataVolume(t *testing.T) {
 	p := mintPlane(t)
 	dataVolume := func(t *testing.T, nc *clusterv1beta1.NatsCluster) (*corev1.Volume, bool, bool) {
 		t.Helper()
-		plan, err := Render(nc, p.trust)
+		plan, err := Render(nc, Inputs{Trust: p.trust})
 		require.NoError(t, err)
 		sts := plan.Servers[0].StatefulSet
 		mounted := slices.ContainsFunc(container(t, sts, "nats").VolumeMounts, func(m corev1.VolumeMount) bool {

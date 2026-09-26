@@ -45,6 +45,7 @@ const (
 	PortClient  = 4222
 	PortRoute   = 6222
 	PortMonitor = 8222
+	PortGateway = 7222
 	PortMetrics = 7777
 )
 
@@ -70,6 +71,13 @@ func headlessServiceName(nc *clusterv1beta1.NatsCluster) string { return nc.Name
 func configMapName(server string) string { return server + "-config" }
 
 func routesSecretName(nc *clusterv1beta1.NatsCluster) string { return nc.Name + "-routes-tls" }
+
+// gatewayServiceName is the external gateway Service.
+func gatewayServiceName(nc *clusterv1beta1.NatsCluster) string { return nc.Name + "-gateway" }
+
+// gatewaySecretName is the Secret cert-manager issues the gateway
+// certificate into.
+func gatewaySecretName(nc *clusterv1beta1.NatsCluster) string { return nc.Name + "-gateway-tls" }
 
 // podHost is the DNS name of a server's pod under the headless Service.
 func podHost(nc *clusterv1beta1.NatsCluster, server string) string {

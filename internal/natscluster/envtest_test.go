@@ -217,7 +217,7 @@ func TestEnvtestReconcile(t *testing.T) {
 				sts.Status.Replicas, sts.Status.ReadyReplicas = 1, 1
 				require.NoError(t, c.Status().Update(ctx, sts))
 			}
-			plan, err := Render(got, nil)
+			plan, err := Render(got, Inputs{})
 			require.NoError(t, err)
 			obs.set(settledSnapshot(plan, revision, "demo-1"))
 			res, ready := reconcile(t, got)
@@ -278,7 +278,7 @@ func TestEnvtestReconcile(t *testing.T) {
 				sts.Status.Replicas, sts.Status.ReadyReplicas = 1, 1
 				require.NoError(t, c.Status().Update(ctx, sts))
 			}
-			plan, err := Render(got, nil)
+			plan, err := Render(got, Inputs{})
 			require.NoError(t, err)
 			snap := settledSnapshot(plan, first, "demo-0")
 			for i := range snap.Servers {
@@ -509,12 +509,102 @@ func TestEnvtestReconcile(t *testing.T) {
 
 	t.Run("unsupported fields are refused", func(t *testing.T) {
 		nc := newCluster(t, "unsupported", func(nc *clusterv1beta1.NatsCluster) {
-			nc.Spec.Gateway = &clusterv1beta1.Gateway{Discovery: clusterv1beta1.GatewayDiscoveryExplicit, Remotes: []clusterv1beta1.GatewayRemote{{Name: "a", URL: "nats://a"}}}
+			nc.Spec.Leafnodes = &clusterv1beta1.Leafnodes{}
 		})
 		_, got := reconcile(t, nc)
 		condition(t, got, ConditionProgressing, metav1.ConditionFalse, ReasonUnsupportedSpec)
-		require.Contains(t, meta.FindStatusCondition(got.Status.Conditions, ConditionProgressing).Message, "gateway")
+		require.Contains(t, meta.FindStatusCondition(got.Status.Conditions, ConditionProgressing).Message, "leafnodes")
 		require.Empty(t, statefulSets(t, "unsupported"))
+	})
+
+	t.Run("gateway", func(t *testing.T) {
+		west := storySupercluster(t, "west")
+		nc := newCluster(t, "gateway", func(nc *clusterv1beta1.NatsCluster) {
+			nc.Spec.Gateway = west.Spec.Gateway.DeepCopy()
+			nc.Spec.Gateway.Remotes[1].Name = "demo"
+			nc.Spec.Gateway.TLS = &clusterv1beta1.ListenerTLS{CertificateSource: clusterv1beta1.CertificateSource{
+				SecretRef: &natsv1beta1.SecretReference{Name: "gw"},
+			}}
+		})
+		gatewayService := func(t *testing.T) *corev1.Service {
+			t.Helper()
+			svc := &corev1.Service{}
+			require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "gateway", Name: "demo-gateway"}, svc))
+			return svc
+		}
+
+		_, got := reconcile(t, nc)
+		condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonGatewayCertNotReady)
+		require.Contains(t, meta.FindStatusCondition(got.Status.Conditions, ConditionProgressing).Message, "Secret gw does not exist")
+		require.Empty(t, statefulSets(t, "gateway"))
+
+		svc := gatewayService(t)
+		require.True(t, metav1.IsControlledBy(svc, got))
+		require.Equal(t, corev1.ServiceTypeLoadBalancer, svc.Spec.Type)
+		for k, v := range west.Spec.Gateway.Service.Annotations {
+			require.Equal(t, v, svc.Annotations[k], k)
+		}
+		require.Len(t, svc.Spec.Ports, 1)
+		require.Equal(t, int32(PortGateway), svc.Spec.Ports[0].Port)
+		nodePort := svc.Spec.Ports[0].NodePort
+		require.NotZero(t, nodePort)
+
+		own, err := selfSignedRouteSecret(nc, []string{"nats-west.example.net"}, r.now())
+		require.NoError(t, err)
+		own.Name = "gw"
+		delete(own.Data, caKey)
+		require.NoError(t, c.Create(ctx, own))
+		_, got = reconcile(t, got)
+		condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonCreating)
+		require.Len(t, statefulSets(t, "gateway"), 3)
+		cm := &corev1.ConfigMap{}
+		require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "gateway", Name: "demo-0-config"}, cm))
+		var cfg Config
+		require.NoError(t, json.Unmarshal([]byte(cm.Data[configFile]), &cfg))
+		require.Equal(t, &GatewayConfig{
+			Name: "demo", Listen: "0.0.0.0:7222", Advertise: "nats-west.example.net:7222", RejectUnknown: true,
+			TLS:      &TLSConfig{CertFile: gatewayTLSDir + "/tls.crt", KeyFile: gatewayTLSDir + "/tls.key"},
+			Gateways: []RemoteGatewayConfig{{Name: "east", URLs: []string{"tls://nats-east.example.net:7222"}}},
+		}, cfg.Gateway)
+
+		plan, err := Render(got, Inputs{})
+		require.NoError(t, err)
+		snap := settledSnapshot(plan, plan.Revision, "demo-0")
+		for i := range snap.Servers {
+			snap.Servers[i].Gateways = &sysobs.Gateways{Outbound: []string{"east"}, Inbound: map[string]int{"east": 1}}
+		}
+		obs.set(snap)
+		_, got = reconcile(t, got)
+		condition(t, got, ConditionGatewaysConnected, metav1.ConditionTrue, ReasonAllMembersReachable)
+		require.Equal(t, []clusterv1beta1.GatewayStatus{{Name: "east", Connected: true, Inbound: 3, Outbound: 3}}, got.Status.Gateways)
+		require.Equal(t, "nats-west.example.net:7222", got.Status.Endpoints.Gateway)
+		require.Equal(t, nodePort, gatewayService(t).Spec.Ports[0].NodePort, "the node port was reallocated")
+
+		t.Run("a remote change restarts", func(t *testing.T) {
+			got.Spec.Gateway.Remotes = append(got.Spec.Gateway.Remotes, clusterv1beta1.GatewayRemote{Name: "south", URL: "tls://nats-south.example.net:7222"})
+			require.NoError(t, c.Update(ctx, got))
+			_, got = reconcile(t, got)
+			require.Equal(t, clusterv1beta1.ConfigAppliedByRestart, got.Status.Config.AppliedBy)
+			require.Equal(t, "gateway.gateways is restart-only", got.Status.Config.RestartReason)
+			condition(t, got, ConditionGatewaysConnected, metav1.ConditionFalse, ReasonMembersUnreachable)
+		})
+
+		t.Run("unsetting the service deletes it", func(t *testing.T) {
+			got.Spec.Gateway.Service = nil
+			require.NoError(t, c.Update(ctx, got))
+			_, got = reconcile(t, got)
+			err := c.Get(ctx, types.NamespacedName{Namespace: "gateway", Name: "demo-gateway"}, &corev1.Service{})
+			require.True(t, apierrors.IsNotFound(err), "got %v", err)
+		})
+
+		t.Run("unsetting the gateway drops its status", func(t *testing.T) {
+			got.Spec.Gateway = nil
+			require.NoError(t, c.Update(ctx, got))
+			_, got = reconcile(t, got)
+			require.Nil(t, got.Status.Gateways)
+			require.Empty(t, got.Status.Endpoints.Gateway)
+			require.Nil(t, meta.FindStatusCondition(got.Status.Conditions, ConditionGatewaysConnected))
+		})
 	})
 
 	t.Run("named route certificate", func(t *testing.T) {
@@ -615,7 +705,7 @@ func TestEnvtestReconcile(t *testing.T) {
 					sts.Status.Replicas, sts.Status.ReadyReplicas = 1, 1
 					require.NoError(t, c.Status().Update(ctx, sts))
 				}
-				plan, err := Render(got, p.trust)
+				plan, err := Render(got, Inputs{Trust: p.trust})
 				require.NoError(t, err)
 				snap := settledSnapshot(plan, first, "demo-0")
 				for i := range snap.Servers {

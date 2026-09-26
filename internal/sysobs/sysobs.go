@@ -19,6 +19,7 @@ import (
 const (
 	subjPingStatsz = "$SYS.REQ.SERVER.PING.STATSZ"
 	subjPingJsz    = "$SYS.REQ.SERVER.PING.JSZ"
+	subjPingGwz    = "$SYS.REQ.SERVER.PING.GATEWAYZ"
 	subjVarz       = "$SYS.REQ.SERVER.%s.VARZ"
 	subjReload     = "$SYS.REQ.SERVER.%s.RELOAD"
 
@@ -33,9 +34,10 @@ var ErrServer = errors.New("server returned an error")
 
 // Observer observes one NATS cluster. It is safe for concurrent use.
 type Observer struct {
-	nc      *nats.Conn
-	cluster string
-	wait    time.Duration
+	nc       *nats.Conn
+	cluster  string
+	wait     time.Duration
+	gateways bool
 }
 
 // Option configures an Observer.
@@ -46,6 +48,12 @@ type Option func(*Observer)
 // deadline. The default is two seconds.
 func WithWait(d time.Duration) Option {
 	return func(o *Observer) { o.wait = d }
+}
+
+// WithGateways makes Observe read every server's gateways over GATEWAYZ,
+// which the observing user must be allowed to publish.
+func WithGateways() Option {
+	return func(o *Observer) { o.gateways = true }
 }
 
 // New returns an Observer of the NATS cluster named cluster, over nc, which
@@ -105,12 +113,18 @@ func (o *Observer) Roster(ctx context.Context) ([]Server, error) {
 	return out, nil
 }
 
-// Observe reads the roster and then every roster server's JSZ with its
-// accounts, streams and consumers, and merges them into a Snapshot.
+// Observe reads the roster, every roster server's gateways under
+// WithGateways, and every roster server's JSZ with its accounts, streams and
+// consumers, and merges them into a Snapshot.
 func (o *Observer) Observe(ctx context.Context) (*Snapshot, error) {
 	roster, err := o.Roster(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if o.gateways {
+		if err := o.readGateways(ctx, roster); err != nil {
+			return nil, err
+		}
 	}
 	reports := map[string]*wireJSInfo{}
 	for offset := 0; ; offset += jszPageSize {
@@ -123,6 +137,31 @@ func (o *Observer) Observe(ctx context.Context) (*Snapshot, error) {
 		}
 	}
 	return merge(roster, reports), nil
+}
+
+// readGateways sets the Gateways of every roster server that answers GATEWAYZ.
+func (o *Observer) readGateways(ctx context.Context, roster []Server) error {
+	idx := make(map[string]int, len(roster))
+	for i, s := range roster {
+		idx[s.Name] = i
+	}
+	pending := len(roster)
+	return o.gather(ctx, subjPingGwz, o.filter(), func(data []byte) (bool, error) {
+		var r wireGatewayzResponse
+		if err := json.Unmarshal(data, &r); err != nil {
+			return false, fmt.Errorf("decode GATEWAYZ: %w", err)
+		}
+		if r.Error != nil {
+			return false, fmt.Errorf("%w: GATEWAYZ from %s: %d %s", ErrServer, r.Server.Name, r.Error.Code, r.Error.Description)
+		}
+		i, ok := idx[r.Server.Name]
+		if !ok || r.Data == nil || roster[i].Gateways != nil {
+			return false, nil
+		}
+		roster[i].Gateways = r.Data.gateways()
+		pending--
+		return pending == 0, nil
+	})
 }
 
 // jszPage requests one page of accounts from every server, appends each

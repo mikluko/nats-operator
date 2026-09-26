@@ -54,24 +54,26 @@ type Plan struct {
 	Servers         []Server
 	HeadlessService *corev1.Service
 	ClientService   *corev1.Service
-	PDB             *policyv1.PodDisruptionBudget
+	// GatewayService is nil unless gateway.service is set.
+	GatewayService *corev1.Service
+	PDB            *policyv1.PodDisruptionBudget
 }
 
-// Render renders nc under trust, which is nil exactly when nc has no auth
-// plane. It fails only on a podTemplate that does not merge into the
-// rendered pod.
-func Render(nc *clusterv1beta1.NatsCluster, trust *Trust) (*Plan, error) {
+// Render renders nc from in. It fails only on a podTemplate that does not
+// merge into the rendered pod.
+func Render(nc *clusterv1beta1.NatsCluster, in Inputs) (*Plan, error) {
 	p := &Plan{
 		Limits:          deriveLimits(&nc.Spec),
 		HeadlessService: headlessService(nc),
 		ClientService:   clientService(nc),
+		GatewayService:  gatewayService(nc),
 		PDB:             pdb(nc),
 	}
 	layout := podLayout(nc)
 	h := sha256.New()
 	specDigests := map[string]string{}
 	for _, name := range serverNames(nc) {
-		cfg, err := serverConfig(nc, trust, name, layout, "").Render()
+		cfg, err := serverConfig(nc, in, name, layout, "").Render()
 		if err != nil {
 			return nil, err
 		}
@@ -92,7 +94,7 @@ func Render(nc *clusterv1beta1.NatsCluster, trust *Trust) (*Plan, error) {
 	p.Revision = hex.EncodeToString(h.Sum(nil))[:10]
 	for i := range p.Servers {
 		s := &p.Servers[i]
-		cfg, err := serverConfig(nc, trust, s.Name, layout, p.Revision).Render()
+		cfg, err := serverConfig(nc, in, s.Name, layout, p.Revision).Render()
 		if err != nil {
 			return nil, err
 		}
@@ -286,6 +288,12 @@ func natsContainer(nc *clusterv1beta1.NatsCluster, limits Limits) corev1.Contain
 	if routesSecret(nc) != "" {
 		c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{Name: "routes-tls", MountPath: routesTLSDir, ReadOnly: true})
 	}
+	if nc.Spec.Gateway != nil {
+		c.Ports = append(c.Ports, corev1.ContainerPort{Name: "gateway", ContainerPort: PortGateway})
+	}
+	if gatewaySecret(nc) != "" {
+		c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{Name: "gateway-tls", MountPath: gatewayTLSDir, ReadOnly: true})
+	}
 	return c
 }
 
@@ -316,6 +324,9 @@ func volumes(nc *clusterv1beta1.NatsCluster, server string) []corev1.Volume {
 	if s := routesSecret(nc); s != "" {
 		vs = append(vs, corev1.Volume{Name: "routes-tls", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: s}}})
 	}
+	if s := gatewaySecret(nc); s != "" {
+		vs = append(vs, corev1.Volume{Name: "gateway-tls", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: s}}})
+	}
 	if hasData(nc) && (nc.Spec.JetStream == nil || nc.Spec.JetStream.VolumeClaimTemplate == nil) {
 		vs = append(vs, corev1.Volume{Name: "data", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}})
 	}
@@ -330,7 +341,7 @@ func hasData(nc *clusterv1beta1.NatsCluster) bool {
 }
 
 func headlessService(nc *clusterv1beta1.NatsCluster) *corev1.Service {
-	return &corev1.Service{
+	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: headlessServiceName(nc), Namespace: nc.Namespace, Labels: labels(nc)},
 		Spec: corev1.ServiceSpec{
 			ClusterIP:                corev1.ClusterIPNone,
@@ -342,6 +353,33 @@ func headlessService(nc *clusterv1beta1.NatsCluster) *corev1.Service {
 				servicePort("monitor", PortMonitor),
 				servicePort("metrics", PortMetrics),
 			},
+		},
+	}
+	if nc.Spec.Gateway != nil {
+		svc.Spec.Ports = append(svc.Spec.Ports, servicePort("gateway", PortGateway))
+	}
+	return svc
+}
+
+// gatewayService renders gateway.service over every server's gateway
+// port, or nil when it is unset. Its type and annotations are the
+// template's.
+func gatewayService(nc *clusterv1beta1.NatsCluster) *corev1.Service {
+	g := nc.Spec.Gateway
+	if g == nil || g.Service == nil {
+		return nil
+	}
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        gatewayServiceName(nc),
+			Namespace:   nc.Namespace,
+			Labels:      labels(nc),
+			Annotations: maps.Clone(g.Service.Annotations),
+		},
+		Spec: corev1.ServiceSpec{
+			Type:     g.Service.Type,
+			Selector: clusterSelector(nc),
+			Ports:    []corev1.ServicePort{servicePort("gateway", PortGateway)},
 		},
 	}
 }

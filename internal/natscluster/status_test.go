@@ -53,7 +53,7 @@ func settledSnapshot(plan *Plan, revision, leader string) *sysobs.Snapshot {
 func TestComputeStatus_AtRest(t *testing.T) {
 	nc := storyCluster(t)
 	nc.Generation = 1
-	plan, err := Render(nc, nil)
+	plan, err := Render(nc, Inputs{})
 	require.NoError(t, err)
 
 	got := computeStatus(nc, plan, Observed{
@@ -100,7 +100,7 @@ func TestComputeStatus_MidRollout(t *testing.T) {
 	nc := storyCluster(t)
 	nc.Generation = 2
 	nc.Spec.Version = "2.15.1"
-	plan, err := Render(nc, nil)
+	plan, err := Render(nc, Inputs{})
 	require.NoError(t, err)
 	const old = "3f9a1c"
 	storyRevision := want.Status.Rollout.TargetRevision
@@ -167,7 +167,7 @@ func TestComputeStatus_MidRollout(t *testing.T) {
 func TestComputeStatus_KeepsUnobservedVersion(t *testing.T) {
 	nc := storyCluster(t)
 	nc.Status.Version = "2.15.0"
-	plan, err := Render(nc, nil)
+	plan, err := Render(nc, Inputs{})
 	require.NoError(t, err)
 	got := computeStatus(nc, plan, Observed{StatefulSets: readySets(plan), ObserveErr: sysobs.ErrNoServers})
 	require.Equal(t, "2.15.0", got.Version)
@@ -236,7 +236,7 @@ func TestSettledCondition(t *testing.T) {
 
 func TestProgressingCondition(t *testing.T) {
 	nc := storyCluster(t)
-	plan, err := Render(nc, nil)
+	plan, err := Render(nc, Inputs{})
 	require.NoError(t, err)
 	stale := readySets(plan)
 	stale["demo-1"].Annotations[AnnotationConfigRevision] = "old"
@@ -276,7 +276,7 @@ func TestProgressingCondition(t *testing.T) {
 }
 
 func TestConfigStatus(t *testing.T) {
-	plan, err := Render(storyCluster(t), nil)
+	plan, err := Render(storyCluster(t), Inputs{})
 	require.NoError(t, err)
 	reload, restart := clusterv1beta1.ConfigAppliedByReload, clusterv1beta1.ConfigAppliedByRestart
 	tests := []struct {
