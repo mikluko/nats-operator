@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Documentation site at <https://mikluko.github.io/nats-operator/>: the stories, the design and the ADRs under `/docs/`.
+- Every controller's pod runs an OpenTelemetry Collector sidecar, `otel/opentelemetry-collector:0.161.0`, receiving OTLP on `localhost:4317` (gRPC) and `localhost:4318` (HTTP) and discarding it until `telemetry.collector.config` names a backend; `telemetry.collector.enabled: false` removes it.
+- Chart value `telemetry.prometheus.enabled` serves each controller's OpenTelemetry metrics for Prometheus to pull on port `telemetry.prometheus.port` (9464) through the Service `<release>-<controller>-prometheus`, with a ServiceMonitor under `telemetry.prometheus.serviceMonitor.enabled`.
+- Chart value `telemetry.env`, environment variables appended to every controller's container.
 - Chart value `auth.systemConnection`, the `namespace/name` of the `NatsConnection` passed to the auth controller as `--system-connection`.
 - Documentation page `/docs/install/`: prerequisites, installing the chart and its values, the controllers' flags, the RBAC each controller holds, upgrade and uninstall.
 - Documentation page `/docs/reference/api/`: every kind, field and enum value of the four API groups, with each field's type, whether it is required, and its schema default.

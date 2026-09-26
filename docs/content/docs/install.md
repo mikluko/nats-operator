@@ -59,6 +59,17 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `jetstream.image.tag` | `""` | Its image tag; empty is the chart's `appVersion`. |
 | `jetstream.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
 | `jetstream.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources. |
+| `telemetry.env` | `[]` | Environment variables appended to every controller's container, such as the OpenTelemetry SDK's `OTEL_*` settings. |
+| `telemetry.collector.enabled` | `true` | Runs an OpenTelemetry Collector as a native sidecar in every controller's pod; a change to `telemetry.collector.config` rolls the Deployments. |
+| `telemetry.collector.image.repository` | `otel/opentelemetry-collector` | Its image. |
+| `telemetry.collector.image.tag` | `"0.161.0"` | Its image tag. |
+| `telemetry.collector.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
+| `telemetry.collector.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources. |
+| `telemetry.collector.config` | `{receivers: {otlp: {protocols: {grpc: {endpoint: "localhost:4317"}, http: {endpoint: "localhost:4318"}}}}, processors: {batch: {}}, exporters: {nop: {}}, service: {pipelines: {traces: {receivers: [otlp], processors: [batch], exporters: [nop]}, metrics: {receivers: [otlp], processors: [batch], exporters: [nop]}, logs: {receivers: [otlp], processors: [batch], exporters: [nop]}}}}` | The whole collector config, in the ConfigMap `<release>-otel-collector`. The default receives OTLP over gRPC on `localhost:4317` and over HTTP on `localhost:4318`, and discards it; replace its exporters to send it to a backend. |
+| `telemetry.prometheus.enabled` | `false` | Sets `OTEL_METRICS_EXPORTER=prometheus`, `OTEL_EXPORTER_PROMETHEUS_HOST=0.0.0.0` and `OTEL_EXPORTER_PROMETHEUS_PORT` on every controller, which then serves its metrics for Prometheus to pull instead of exporting them over OTLP; adds the container port `prometheus` and the Service `<release>-<controller>-prometheus`. |
+| `telemetry.prometheus.port` | `9464` | The listener's port, on the container and the Service. |
+| `telemetry.prometheus.serviceMonitor.enabled` | `false` | With `telemetry.prometheus.enabled`, a `monitoring.coreos.com/v1` ServiceMonitor `<release>-<controller>` on that Service. |
+| `telemetry.prometheus.serviceMonitor.labels` | `{}` | Labels added to each ServiceMonitor. |
 
 ## Controller flags
 

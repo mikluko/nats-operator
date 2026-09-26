@@ -8,16 +8,20 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
 )
 
@@ -231,6 +235,165 @@ func TestChart_SystemConnection(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestChart_Telemetry pins the collector sidecar, on by default and receiving
+// OTLP on localhost:4317, and the Prometheus listener, off by default.
+func TestChart_Telemetry(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		sets           []string
+		collector      bool
+		prometheus     bool
+		serviceMonitor bool
+	}{
+		{name: "defaults", collector: true},
+		{name: "collector off", sets: []string{"telemetry.collector.enabled=false"}},
+		{
+			name:       "prometheus",
+			sets:       []string{"telemetry.prometheus.enabled=true"},
+			collector:  true,
+			prometheus: true,
+		},
+		{
+			name: "prometheus with ServiceMonitor, collector off",
+			sets: []string{
+				"telemetry.collector.enabled=false",
+				"telemetry.prometheus.enabled=true",
+				"telemetry.prometheus.port=9999",
+				"telemetry.prometheus.serviceMonitor.enabled=true",
+				"telemetry.prometheus.serviceMonitor.labels.release=kps",
+			},
+			prometheus:     true,
+			serviceMonitor: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			objs := render(t, tc.sets...)
+			port := int32(9464)
+			if slices.Contains(tc.sets, "telemetry.prometheus.port=9999") {
+				port = 9999
+			}
+
+			_, ok := objs["ConfigMap/rel-otel-collector"]
+			require.Equal(t, tc.collector, ok)
+			if tc.collector {
+				requireCollectorConfig(t, objs["ConfigMap/rel-otel-collector"])
+			}
+
+			for _, c := range controllers {
+				name := "rel-" + c + "-controller"
+				var d appsv1.Deployment
+				convert(t, objs["Deployment/"+name], &d)
+				pod := d.Spec.Template.Spec
+
+				if tc.collector {
+					require.Len(t, pod.InitContainers, 1, c)
+					sidecar := pod.InitContainers[0]
+					require.Equal(t, "otel/opentelemetry-collector:0.161.0", sidecar.Image)
+					require.Equal(t, ptr.To(corev1.ContainerRestartPolicyAlways), sidecar.RestartPolicy)
+					require.Equal(t, []corev1.Volume{{
+						Name: "otel-collector",
+						VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
+							LocalObjectReference: corev1.LocalObjectReference{Name: "rel-otel-collector"},
+						}},
+					}}, pod.Volumes)
+					require.NotEmpty(t, d.Spec.Template.Annotations["checksum/otel-collector"])
+				} else {
+					require.Empty(t, pod.InitContainers, c)
+					require.Empty(t, pod.Volumes, c)
+				}
+
+				container := pod.Containers[0]
+				promPorts := slices.DeleteFunc(slices.Clone(container.Ports), func(p corev1.ContainerPort) bool {
+					return p.Name != "prometheus"
+				})
+				svc, hasSvc := objs["Service/"+name+"-prometheus"]
+				sm, hasSM := objs["ServiceMonitor/"+name]
+				require.Equal(t, tc.prometheus, hasSvc, c)
+				require.Equal(t, tc.serviceMonitor, hasSM, c)
+				if !tc.prometheus {
+					require.Empty(t, container.Env, c)
+					require.Empty(t, promPorts, c)
+					continue
+				}
+				require.Equal(t, []corev1.EnvVar{
+					{Name: "OTEL_METRICS_EXPORTER", Value: "prometheus"},
+					{Name: "OTEL_EXPORTER_PROMETHEUS_HOST", Value: "0.0.0.0"},
+					{Name: "OTEL_EXPORTER_PROMETHEUS_PORT", Value: strconv.Itoa(int(port))},
+				}, container.Env)
+				require.Equal(t, []corev1.ContainerPort{{Name: "prometheus", ContainerPort: port}}, promPorts)
+
+				var s corev1.Service
+				convert(t, svc, &s)
+				require.Equal(t, d.Spec.Selector.MatchLabels, s.Spec.Selector)
+				require.Equal(t, []corev1.ServicePort{{
+					Name: "prometheus", Port: port, TargetPort: intstr.FromString("prometheus"),
+				}}, s.Spec.Ports)
+
+				if tc.serviceMonitor {
+					require.Equal(t, "kps", sm.GetLabels()["release"])
+					sel, _, err := unstructured.NestedStringMap(sm.Object, "spec", "selector", "matchLabels")
+					require.NoError(t, err)
+					for k, v := range sel {
+						require.Equal(t, v, s.Labels[k], k)
+					}
+					eps, _, err := unstructured.NestedSlice(sm.Object, "spec", "endpoints")
+					require.NoError(t, err)
+					require.Equal(t, []any{map[string]any{"port": "prometheus"}}, eps)
+				}
+			}
+		})
+	}
+}
+
+// requireCollectorConfig pins that the default collector config receives OTLP
+// over gRPC on localhost:4317 and over HTTP on localhost:4318, and exports
+// every signal to nop.
+func requireCollectorConfig(t *testing.T, cm *unstructured.Unstructured) {
+	t.Helper()
+	raw, _, err := unstructured.NestedString(cm.Object, "data", "config.yaml")
+	require.NoError(t, err)
+	var cfg struct {
+		Receivers struct {
+			OTLP struct {
+				Protocols map[string]struct {
+					Endpoint string `json:"endpoint"`
+				} `json:"protocols"`
+			} `json:"otlp"`
+		} `json:"receivers"`
+		Service struct {
+			Pipelines map[string]struct {
+				Receivers []string `json:"receivers"`
+				Exporters []string `json:"exporters"`
+			} `json:"pipelines"`
+		} `json:"service"`
+	}
+	require.NoError(t, yaml.Unmarshal([]byte(raw), &cfg))
+	require.Equal(t, "localhost:4317", cfg.Receivers.OTLP.Protocols["grpc"].Endpoint)
+	require.Equal(t, "localhost:4318", cfg.Receivers.OTLP.Protocols["http"].Endpoint)
+	require.Len(t, cfg.Service.Pipelines, 3)
+	for signal, p := range cfg.Service.Pipelines {
+		require.Equal(t, []string{"otlp"}, p.Receivers, signal)
+		require.Equal(t, []string{"nop"}, p.Exporters, signal)
+	}
+}
+
+// TestChart_TelemetryEnv pins that telemetry.env is appended to every
+// controller's env, after the Prometheus listener's.
+func TestChart_TelemetryEnv(t *testing.T) {
+	objs := render(t,
+		"telemetry.prometheus.enabled=true",
+		"telemetry.env[0].name=OTEL_SERVICE_NAME",
+		"telemetry.env[0].value=nats",
+	)
+	for _, c := range controllers {
+		var d appsv1.Deployment
+		convert(t, objs["Deployment/rel-"+c+"-controller"], &d)
+		env := d.Spec.Template.Spec.Containers[0].Env
+		require.Len(t, env, 4, c)
+		require.Equal(t, corev1.EnvVar{Name: "OTEL_SERVICE_NAME", Value: "nats"}, env[3], c)
 	}
 }
 

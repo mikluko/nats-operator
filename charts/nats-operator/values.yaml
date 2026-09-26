@@ -54,3 +54,59 @@ jetstream:
       memory: 64Mi
     limits:
       memory: 256Mi
+
+# OpenTelemetry for every enabled controller. The controllers' SDK exports
+# over OTLP to localhost, where the collector sidecar receives it.
+telemetry:
+  # Environment variables appended to every controller's env, for the SDK's
+  # OTEL_* settings.
+  env: []
+  collector:
+    enabled: true
+    image:
+      repository: otel/opentelemetry-collector
+      tag: "0.161.0"
+      pullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        memory: 256Mi
+    # The whole collector config. The default receives OTLP on localhost and
+    # discards it; replace the exporters to send it to a backend.
+    config:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: localhost:4317
+            http:
+              endpoint: localhost:4318
+      processors:
+        batch: {}
+      exporters:
+        nop: {}
+      service:
+        pipelines:
+          traces:
+            receivers: [otlp]
+            processors: [batch]
+            exporters: [nop]
+          metrics:
+            receivers: [otlp]
+            processors: [batch]
+            exporters: [nop]
+          logs:
+            receivers: [otlp]
+            processors: [batch]
+            exporters: [nop]
+  # A Prometheus pull listener on every controller in place of OTLP metrics
+  # export.
+  prometheus:
+    enabled: false
+    port: 9464
+    serviceMonitor:
+      enabled: false
+      # Labels added to each ServiceMonitor, for a Prometheus selector.
+      labels: {}

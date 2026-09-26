@@ -1,0 +1,12 @@
+{{- if and .Values.telemetry.collector.enabled (or .Values.cluster.enabled .Values.auth.enabled .Values.jetstream.enabled) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nats-operator.fullname" (dict "root" . "name" "otel-collector") }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nats-operator.labels" (dict "root" . "name" "otel-collector") | nindent 4 }}
+data:
+  config.yaml: |
+    {{- toYaml .Values.telemetry.collector.config | nindent 4 }}
+{{- end }}

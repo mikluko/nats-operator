@@ -20,8 +20,9 @@ app.kubernetes.io/component: {{ .name }}
 {{- end }}
 
 {{/*
-nats-operator.controller renders one controller's ServiceAccount, RBAC and
-Deployment. It takes a dict of root (the chart context), name (the
+nats-operator.controller renders one controller's ServiceAccount, RBAC,
+Deployment and, with telemetry.prometheus.enabled, its Prometheus Service and
+ServiceMonitor. It takes a dict of root (the chart context), name (the
 controller's name, which is also its binary and image), group (its API group,
 which is also its leader election lease), values (its block of values),
 rules (its ClusterRole rules as YAML) and, optionally, args (flags appended to
@@ -29,6 +30,7 @@ the controller's own).
 */}}
 {{- define "nats-operator.controller" -}}
 {{- $fullname := include "nats-operator.fullname" . -}}
+{{- $telemetry := .root.Values.telemetry -}}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -113,6 +115,10 @@ spec:
     metadata:
       labels:
         {{- include "nats-operator.labels" . | nindent 8 }}
+      {{- if $telemetry.collector.enabled }}
+      annotations:
+        checksum/otel-collector: {{ toYaml $telemetry.collector.config | sha256sum }}
+      {{- end }}
     spec:
       serviceAccountName: {{ $fullname }}
       {{- with .root.Values.imagePullSecrets }}
@@ -123,6 +129,32 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+      {{- if $telemetry.collector.enabled }}
+      initContainers:
+        - name: otel-collector
+          image: {{ printf "%s:%s" $telemetry.collector.image.repository $telemetry.collector.image.tag | quote }}
+          imagePullPolicy: {{ $telemetry.collector.image.pullPolicy }}
+          restartPolicy: Always
+          args:
+            - --config=/etc/otel-collector/config.yaml
+          volumeMounts:
+            - name: otel-collector
+              mountPath: /etc/otel-collector
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          {{- with $telemetry.collector.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: otel-collector
+          configMap:
+            name: {{ include "nats-operator.fullname" (dict "root" .root "name" "otel-collector") }}
+      {{- end }}
       containers:
         - name: {{ .name }}
           image: {{ printf "%s:%s" .values.image.repository (.values.image.tag | default .root.Chart.AppVersion) | quote }}
@@ -135,11 +167,29 @@ spec:
             {{- range .args }}
             - {{ . | quote }}
             {{- end }}
+          {{- if or $telemetry.prometheus.enabled $telemetry.env }}
+          env:
+            {{- if $telemetry.prometheus.enabled }}
+            - name: OTEL_METRICS_EXPORTER
+              value: prometheus
+            - name: OTEL_EXPORTER_PROMETHEUS_HOST
+              value: 0.0.0.0
+            - name: OTEL_EXPORTER_PROMETHEUS_PORT
+              value: {{ $telemetry.prometheus.port | quote }}
+            {{- end }}
+            {{- with $telemetry.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
           ports:
             - name: metrics
               containerPort: 8080
             - name: probes
               containerPort: 8081
+            {{- if $telemetry.prometheus.enabled }}
+            - name: prometheus
+              containerPort: {{ $telemetry.prometheus.port }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -157,4 +207,40 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+{{- if $telemetry.prometheus.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-prometheus
+  namespace: {{ .root.Release.Namespace }}
+  labels:
+    {{- include "nats-operator.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "nats-operator.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: prometheus
+      port: {{ $telemetry.prometheus.port }}
+      targetPort: prometheus
+{{- if $telemetry.prometheus.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ $fullname }}
+  namespace: {{ .root.Release.Namespace }}
+  labels:
+    {{- include "nats-operator.labels" . | nindent 4 }}
+    {{- with $telemetry.prometheus.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "nats-operator.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: prometheus
+{{- end }}
+{{- end }}
 {{- end }}

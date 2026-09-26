@@ -49,7 +49,8 @@ chart-crds:
     mkdir -p charts/nats-operator/crds
     cp config/crd/*.yaml charts/nats-operator/crds/
 
-# helm lint, and helm template for each single-controller subset and all three.
+# helm lint, and helm template for each single-controller subset and all
+# three, each under every combination of the telemetry options.
 chart:
     #!/usr/bin/env sh
     set -eu
@@ -59,7 +60,15 @@ chart:
         "cluster.enabled=false,auth.enabled=true,jetstream.enabled=false" \
         "cluster.enabled=false,auth.enabled=false,jetstream.enabled=true" \
         "cluster.enabled=true,auth.enabled=true,jetstream.enabled=true"; do
-        helm template nats-operator charts/nats-operator --set "$sets" > /dev/null
+        for telemetry in \
+            "telemetry.collector.enabled=true,telemetry.prometheus.enabled=false" \
+            "telemetry.collector.enabled=false,telemetry.prometheus.enabled=false" \
+            "telemetry.collector.enabled=true,telemetry.prometheus.enabled=true" \
+            "telemetry.collector.enabled=false,telemetry.prometheus.enabled=true" \
+            "telemetry.collector.enabled=true,telemetry.prometheus.enabled=true,telemetry.prometheus.serviceMonitor.enabled=true" \
+            "telemetry.collector.enabled=false,telemetry.prometheus.enabled=true,telemetry.prometheus.serviceMonitor.enabled=true"; do
+            helm template nats-operator charts/nats-operator --set "$sets,$telemetry" > /dev/null
+        done
     done
 
 # The API reference page, from the Go types under api/ and the templates
