@@ -1,6 +1,7 @@
 package natscluster
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -128,11 +129,19 @@ func (rc *removalCluster) addStream(t *testing.T, name string, replicas, n int) 
 // reconciler would decide on.
 func (rc *removalCluster) observe(t *testing.T) (*sysobs.Snapshot, rolloutState) {
 	t.Helper()
-	snap, err := rc.sys.Observe(t.Context(), rc.nc)
+	snap, st, err := rc.state(t.Context())
 	require.NoError(t, err)
-	r := &Reconciler{}
-	st := r.rolloutState(rc.nc, rc.plan, Observed{StatefulSets: rc.sets, Snapshot: snap})
 	return snap, st
+}
+
+// state is observe for a caller that cannot fail the test.
+func (rc *removalCluster) state(ctx context.Context) (*sysobs.Snapshot, rolloutState, error) {
+	snap, err := rc.sys.Observe(ctx, rc.nc)
+	if err != nil {
+		return nil, rolloutState{}, err
+	}
+	r := &Reconciler{}
+	return snap, r.rolloutState(rc.nc, rc.plan, Observed{StatefulSets: rc.sets, Snapshot: snap}), nil
 }
 
 // step takes one decision and carries out its removal action against the
@@ -251,10 +260,9 @@ func TestReplace_InProcess(t *testing.T) {
 		snap, _ := rc.observe(t)
 		return slices.ContainsFunc(snap.Servers, func(s sysobs.Server) bool { return s.Name == "demo-3" }) && !slices.Contains(snap.Silent, "demo-3")
 	}, 30*time.Second, 200*time.Millisecond, "the replaced server did not answer")
-	for range 5 {
-		_, st := rc.observe(t)
-		require.Equal(t, []string{"demo-3"}, st.NotInMeta)
-		require.Equal(t, gateState{GateSettled, "demo-3 not in the meta group"}, judgeGate(st))
-		time.Sleep(time.Second)
-	}
+	require.Never(t, func() bool {
+		_, st, err := rc.state(t.Context())
+		return err != nil || !slices.Equal([]string{"demo-3"}, st.NotInMeta) ||
+			judgeGate(st) != gateState{GateSettled, "demo-3 not in the meta group"}
+	}, 5*time.Second, time.Second, "the gate did not hold on demo-3 outside the meta group")
 }

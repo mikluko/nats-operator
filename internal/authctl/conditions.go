@@ -1,10 +1,5 @@
 package authctl
 
-import (
-	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
-
 // Condition types.
 const (
 	ConditionReady = "Ready"
@@ -51,14 +46,3 @@ const (
 	// server can be asked for the JWT they are recovered from.
 	ReasonRecovering = "RecoveringRevocations"
 )
-
-// setCondition sets a condition of generation gen on conds.
-func setCondition(conds *[]metav1.Condition, gen int64, typ string, status metav1.ConditionStatus, reason, message string) {
-	meta.SetStatusCondition(conds, metav1.Condition{
-		Type:               typ,
-		Status:             status,
-		Reason:             reason,
-		Message:            message,
-		ObservedGeneration: gen,
-	})
-}

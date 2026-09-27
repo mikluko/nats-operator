@@ -30,6 +30,7 @@ import (
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/balance"
+	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
@@ -223,10 +224,9 @@ type noConn struct {
 // apply records n in conds at generation.
 func (n *noConn) apply(conds *[]metav1.Condition, generation int64) {
 	if n.denied != nil {
-		n.denied.ObservedGeneration = generation
-		meta.SetStatusCondition(conds, *n.denied)
+		conditions.Set(conds, generation, *n.denied)
 	}
-	setConditionOn(conds, generation, ConditionReady, false, n.reason, n.message)
+	conditions.Set(conds, generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: n.reason, Message: n.message})
 }
 
 // dial returns the connection from's ref names, or why there is none; the
@@ -407,25 +407,11 @@ func capabilities(obs balance.Observation, reach *stepdownReach) *js.Capabilitie
 }
 
 func (r *SystemBalancerReconciler) setReady(b *js.NatsSystemBalancer, ok bool, reason, message string) {
-	setCondition(b, ConditionReady, ok, reason, message)
+	conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionReady, Status: conditions.Status(ok), Reason: reason, Message: message})
 }
 
 func (r *SystemBalancerReconciler) setHolding(b *js.NatsSystemBalancer, on bool, reason, message string) {
-	setCondition(b, ConditionHolding, on, reason, message)
-}
-
-func setCondition(b *js.NatsSystemBalancer, typ string, on bool, reason, message string) {
-	setConditionOn(&b.Status.Conditions, b.Generation, typ, on, reason, message)
-}
-
-func setConditionOn(conds *[]metav1.Condition, generation int64, typ string, on bool, reason, message string) {
-	s := metav1.ConditionFalse
-	if on {
-		s = metav1.ConditionTrue
-	}
-	meta.SetStatusCondition(conds, metav1.Condition{
-		Type: typ, Status: s, Reason: reason, Message: message, ObservedGeneration: generation,
-	})
+	conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionHolding, Status: conditions.Status(on), Reason: reason, Message: message})
 }
 
 type keeperOf struct {

@@ -27,31 +27,43 @@ import (
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
-// Observer observes the NATS cluster a NatsCluster deployed.
+// Observer observes the NATS cluster a NatsCluster deployed: its Raft
+// groups, and its leafnode connections by server name.
 type Observer interface {
 	Observe(ctx context.Context, nc *clusterv1beta1.NatsCluster) (*sysobs.Snapshot, error)
+	ObserveLeafs(ctx context.Context, nc *clusterv1beta1.NatsCluster) (map[string][]sysobs.Leaf, error)
 }
 
-// MonitorObserver observes a NatsCluster's servers through each pod's HTTP
-// monitoring port, addressed under the headless Service. It is how a NATS
-// cluster without an auth plane is observed: its system account has no user
-// to connect as.
-type MonitorObserver struct {
+// PodMonitor is the Observer of a NatsCluster through the HTTP monitoring
+// port of each pod spec.replicas names, addressed under the headless
+// Service. It is how a NATS cluster without an auth plane is observed: its
+// system account has no user to connect as.
+type PodMonitor struct {
 	Monitor *sysobs.MonitorObserver
 }
 
-// Observe observes every server spec.replicas names.
-func (m MonitorObserver) Observe(ctx context.Context, nc *clusterv1beta1.NatsCluster) (*sysobs.Snapshot, error) {
+// Observe reads every server's /varz and /jsz.
+func (m PodMonitor) Observe(ctx context.Context, nc *clusterv1beta1.NatsCluster) (*sysobs.Snapshot, error) {
+	return m.Monitor.Observe(ctx, monitorEndpoints(nc))
+}
+
+// ObserveLeafs reads every server's /leafz.
+func (m PodMonitor) ObserveLeafs(ctx context.Context, nc *clusterv1beta1.NatsCluster) (map[string][]sysobs.Leaf, error) {
+	return m.Monitor.Leafz(ctx, monitorEndpoints(nc))
+}
+
+func monitorEndpoints(nc *clusterv1beta1.NatsCluster) []sysobs.Endpoint {
 	var eps []sysobs.Endpoint
 	for _, s := range serverNames(nc) {
 		eps = append(eps, sysobs.Endpoint{Name: s, URL: fmt.Sprintf("http://%s:%d", podHost(nc, s), PortMonitor)})
 	}
-	return m.Monitor.Observe(ctx, eps)
+	return eps
 }
 
 // Requeue intervals: a NATS cluster's state is observed rather than
@@ -150,16 +162,7 @@ func trustKey(nc *clusterv1beta1.NatsCluster) string {
 // clustersTrusting maps a NatsOperatorTrust to the NatsClusters that read
 // it.
 func (r *Reconciler) clustersTrusting(ctx context.Context, t client.Object) []reconcile.Request {
-	var list clusterv1beta1.NatsClusterList
-	if err := r.Client.List(ctx, &list, client.MatchingFields{TrustField: t.GetNamespace() + "/" + t.GetName()}); err != nil {
-		ctrl.LoggerFrom(ctx).Error(err, "list NatsClusters reading NatsOperatorTrust", "trust", client.ObjectKeyFromObject(t))
-		return nil
-	}
-	out := make([]reconcile.Request, 0, len(list.Items))
-	for i := range list.Items {
-		out = append(out, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&list.Items[i])})
-	}
-	return out
+	return r.clustersByField(ctx, TrustField, t.GetNamespace()+"/"+t.GetName())
 }
 
 // Reconcile creates what a NatsCluster renders and reports its status. A
@@ -185,27 +188,21 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	orig := nc.DeepCopy()
 
 	if fields := unsupportedFields(&nc.Spec); len(fields) > 0 {
-		setCondition(&nc.Status, metav1.Condition{
-			Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: ReasonUnsupportedSpec,
-			Message: "not rendered by this cluster controller: " + strings.Join(fields, ", "),
-		}, nc.Generation)
-		return ctrl.Result{}, r.patchStatus(ctx, orig, nc)
+		return ctrl.Result{}, r.hold(ctx, orig, nc, unsupportedSpec("not rendered by this cluster controller: "+strings.Join(fields, ", ")))
 	}
 	trust, cond, err := readTrust(ctx, r.Client, nc)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if cond != nil {
-		setCondition(&nc.Status, *cond, nc.Generation)
-		return ctrl.Result{RequeueAfter: resyncUnsettled}, r.patchStatus(ctx, orig, nc)
+		return ctrl.Result{RequeueAfter: resyncUnsettled}, r.hold(ctx, orig, nc, cond)
 	}
 	remotes, cond, err := readLeafRemotes(ctx, r.Client, nc, trust)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if cond != nil {
-		setCondition(&nc.Status, *cond, nc.Generation)
-		return ctrl.Result{RequeueAfter: resyncUnsettled}, r.patchStatus(ctx, orig, nc)
+		return ctrl.Result{RequeueAfter: resyncUnsettled}, r.hold(ctx, orig, nc, cond)
 	}
 	certs, certWait, certReason, err := r.ensureCerts(ctx, nc)
 	if err != nil {
@@ -213,10 +210,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 	plan, err := Render(nc, Inputs{Trust: trust, GatewayCA: certs.Gateway.CA, Certs: certs}, remotes...)
 	if err != nil {
-		setCondition(&nc.Status, metav1.Condition{
-			Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: ReasonUnsupportedSpec, Message: err.Error(),
-		}, nc.Generation)
-		return ctrl.Result{}, r.patchStatus(ctx, orig, nc)
+		return ctrl.Result{}, r.hold(ctx, orig, nc, unsupportedSpec(err.Error()))
 	}
 
 	if err := r.applyShared(ctx, nc, plan); err != nil {
@@ -230,17 +224,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	obs := Observed{StatefulSets: stsByName}
+	obs := Observed{StatefulSets: stsByName, CertWait: certWait, CertReason: certReason}
 	if certWait == "" {
 		for _, s := range plan.Servers {
 			if stsByName[s.Name] != nil {
 				continue
 			}
-			if released, err := r.dataReleased(ctx, nc, s.Name); err != nil || !released {
-				if err != nil {
-					return ctrl.Result{}, err
-				}
-				obs.Created = append(obs.Created, s.Name)
+			terminating, err := r.claimTerminating(ctx, nc, s.Name)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			if terminating {
+				obs.ClaimTerminating = append(obs.ClaimTerminating, s.Name)
 				continue
 			}
 			if ro := nc.Status.Rollout; ro != nil && ro.Current == s.Name {
@@ -267,11 +262,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	nc.Status = computeStatus(nc, plan, obs)
 	r.observeLeafs(ctx, nc, plan, &nc.Status)
-	if certWait != "" {
-		setCondition(&nc.Status, metav1.Condition{
-			Type: ConditionProgressing, Status: metav1.ConditionTrue, Reason: certReason, Message: certWait,
-		}, nc.Generation)
-	}
 	recordGateBlocked(r.Recorder, nc, orig.Status.Conditions)
 	if err := r.patchStatus(ctx, orig, nc); err != nil {
 		return ctrl.Result{}, err
@@ -285,6 +275,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 // unsupportedFields names the spec fields this controller does not render.
 func unsupportedFields(spec *clusterv1beta1.NatsClusterSpec) []string {
 	return unsupportedLeafFields(spec)
+}
+
+// hold reports held as nc's Progressing condition and patches the status:
+// a spec, trust or leaf remote nothing is rendered past.
+func (r *Reconciler) hold(ctx context.Context, orig, nc *clusterv1beta1.NatsCluster, held *metav1.Condition) error {
+	conditions.Set(&nc.Status.Conditions, nc.Generation, progressingCondition(nc, nil, Observed{Held: held}))
+	return r.patchStatus(ctx, orig, nc)
+}
+
+func unsupportedSpec(msg string) *metav1.Condition {
+	return &metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: ReasonUnsupportedSpec, Message: msg}
 }
 
 func (r *Reconciler) patchStatus(ctx context.Context, orig, nc *clusterv1beta1.NatsCluster) error {

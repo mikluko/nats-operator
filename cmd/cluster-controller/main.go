@@ -39,7 +39,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	mgr, err := manager.New(opts, scheme)
+	mgr, err := manager.New(ctrl.GetConfigOrDie(), opts, scheme)
 	if err != nil {
 		log.Error(err, "start")
 		os.Exit(1)
@@ -87,7 +87,7 @@ func setup(ctx context.Context, mgr ctrl.Manager) error {
 	sys := &natscluster.SystemConnections{
 		Client:   mgr.GetClient(),
 		Pool:     pool,
-		Fallback: natscluster.MonitorObserver{Monitor: sysobs.NewMonitor(&http.Client{Timeout: 5 * time.Second}, 0)},
+		Fallback: natscluster.PodMonitor{Monitor: sysobs.NewMonitor(&http.Client{Timeout: 5 * time.Second}, 0)},
 	}
 	r := &natscluster.Reconciler{
 		Client:   mgr.GetClient(),

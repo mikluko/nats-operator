@@ -1,9 +1,7 @@
 package natscluster
 
 import (
-	"context"
 	"os"
-	"sync"
 	"testing"
 
 	"github.com/nats-io/nkeys"
@@ -23,29 +21,6 @@ import (
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
-// fakeLeafObserver is a fakeObserver that also reports leafnode
-// connections.
-type fakeLeafObserver struct {
-	fakeObserver
-	lmu   sync.Mutex
-	leafs map[string][]sysobs.Leaf
-}
-
-func (f *fakeLeafObserver) ObserveLeafs(context.Context, *clusterv1beta1.NatsCluster) (map[string][]sysobs.Leaf, error) {
-	f.lmu.Lock()
-	defer f.lmu.Unlock()
-	if f.leafs == nil {
-		return nil, sysobs.ErrNoServers
-	}
-	return f.leafs, nil
-}
-
-func (f *fakeLeafObserver) setLeafs(l map[string][]sysobs.Leaf) {
-	f.lmu.Lock()
-	defer f.lmu.Unlock()
-	f.leafs = l
-}
-
 // TestEnvtestLeafnodes drives the reconciler against a real API server for
 // story 10: the CEL rule on jetstream.domain, a leaf's remotes Secret and
 // status, and a hub's leafnode Service and certificate wait.
@@ -60,7 +35,7 @@ func TestEnvtestLeafnodes(t *testing.T) {
 	c, err := client.New(cfg, client.Options{Scheme: leafScheme(t)})
 	require.NoError(t, err)
 	ctx := t.Context()
-	obs := &fakeLeafObserver{}
+	obs := &fakeObserver{}
 	r := &Reconciler{Client: c, Observer: obs}
 
 	namespace := func(t *testing.T, ns string) {

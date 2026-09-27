@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
+	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/telemetry"
@@ -112,9 +113,9 @@ func recoverRevocations(ctx context.Context, d Distributor, operator types.Names
 func recordRecovery(conds *[]metav1.Condition, gen int64, s recoveredRevocations) {
 	switch {
 	case s.unasked != nil:
-		setCondition(conds, gen, ConditionRevocationsUnrecovered, metav1.ConditionTrue, ReasonUnreachable,
-			"status held neither a JWT nor revocations and no server could be asked for the JWT to recover them from; "+
-				"signed with the revocations its users give, and asked again once a server answers: "+s.unasked.Error())
+		conditions.Set(conds, gen, metav1.Condition{Type: ConditionRevocationsUnrecovered, Status: metav1.ConditionTrue, Reason: ReasonUnreachable,
+			Message: "status held neither a JWT nor revocations and no server could be asked for the JWT to recover them from; " +
+				"signed with the revocations its users give, and asked again once a server answers: " + s.unasked.Error()})
 	case s.asked:
 		meta.RemoveStatusCondition(conds, ConditionRevocationsUnrecovered)
 	}

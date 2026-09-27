@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/rest"
 )
 
 func TestFlags(t *testing.T) {
@@ -32,4 +34,14 @@ func TestFlags(t *testing.T) {
 			require.Equal(t, tt.want, *got)
 		})
 	}
+}
+
+// TestNew pins that New builds its manager against the config it is
+// given, reaching no API server until started.
+func TestNew(t *testing.T) {
+	scheme := runtime.NewScheme()
+	mgr, err := New(&rest.Config{Host: "https://127.0.0.1:1"}, &Options{MetricsAddr: "0", ProbeAddr: "0"}, scheme)
+	require.NoError(t, err)
+	require.Same(t, scheme, mgr.GetScheme())
+	require.Equal(t, "https://127.0.0.1:1", mgr.GetConfig().Host)
 }

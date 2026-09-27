@@ -22,6 +22,7 @@ import (
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/natsconn"
@@ -88,7 +89,7 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req reconcile.Request) (
 func (r *UserReconciler) reconcile(ctx context.Context, u *authv1beta1.NatsUser) (reconcile.Result, error) {
 	st := &u.Status
 	notReady := func(reason, msg string) {
-		setCondition(&st.Conditions, u.Generation, ConditionReady, metav1.ConditionFalse, reason, msg)
+		conditions.Set(&st.Conditions, u.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: reason, Message: msg})
 	}
 	acc, ok, err := r.account(ctx, u, notReady)
 	if err != nil {
@@ -130,7 +131,7 @@ func (r *UserReconciler) reconcile(ctx context.Context, u *authv1beta1.NatsUser)
 		}
 		st.PublicKey, st.JWT = pub, ""
 	}
-	setCondition(&st.Conditions, u.Generation, ConditionReady, metav1.ConditionTrue, ReasonSigned, "")
+	conditions.Set(&st.Conditions, u.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionTrue, Reason: ReasonSigned})
 	if userRevoked(acc.jwt, token) {
 		return reconcile.Result{RequeueAfter: time.Second}, nil
 	}
@@ -398,7 +399,7 @@ func (r *UserReconciler) drain(ctx context.Context, u *authv1beta1.NatsUser) (bo
 		return true, reconcile.Result{}, nil
 	}
 	waiting := func(reason, msg string) {
-		setCondition(&u.Status.Conditions, u.Generation, ConditionReady, metav1.ConditionFalse, reason, msg)
+		conditions.Set(&u.Status.Conditions, u.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: reason, Message: msg})
 	}
 	acc, found, err := r.lookupAccount(ctx, u.Spec.AccountRef.Kind, refKey(u.Spec.AccountRef.ObjectReference, u.Namespace))
 	if err != nil {

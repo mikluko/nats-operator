@@ -36,10 +36,12 @@ import (
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
-// fakeObserver returns whatever snapshot it was last given.
+// fakeObserver returns whatever snapshot and leafnode connections it was
+// last given.
 type fakeObserver struct {
-	mu   sync.Mutex
-	snap *sysobs.Snapshot
+	mu    sync.Mutex
+	snap  *sysobs.Snapshot
+	leafs map[string][]sysobs.Leaf
 }
 
 func (f *fakeObserver) Observe(context.Context, *clusterv1beta1.NatsCluster) (*sysobs.Snapshot, error) {
@@ -55,6 +57,21 @@ func (f *fakeObserver) set(s *sysobs.Snapshot) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.snap = s
+}
+
+func (f *fakeObserver) ObserveLeafs(context.Context, *clusterv1beta1.NatsCluster) (map[string][]sysobs.Leaf, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.leafs == nil {
+		return nil, sysobs.ErrNoServers
+	}
+	return f.leafs, nil
+}
+
+func (f *fakeObserver) setLeafs(l map[string][]sysobs.Leaf) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.leafs = l
 }
 
 // fakeReloader reloads a server by digesting its ConfigMap as the API

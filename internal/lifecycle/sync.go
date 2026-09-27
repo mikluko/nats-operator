@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	jetstreamv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
+	"github.com/mikluko/nats-operator/internal/conditions"
 )
 
 // Finalizer holds a JetStream object resource until its deletion policy has
@@ -103,16 +104,16 @@ func (s Syncer) Sync(ctx context.Context, r Resource, o Object) (reconcile.Resul
 		return reconcile.Result{}, info, nil
 	case errors.As(err, &wait):
 		clearTerminal(st)
-		setCondition(st, gen, ConditionReady, metav1.ConditionFalse, wait.Reason, wait.Message)
+		conditions.Set(&st.Conditions, gen, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: wait.Reason, Message: wait.Message})
 		return reconcile.Result{RequeueAfter: s.resync()}, info, nil
 	case err != nil:
 		clearTerminal(st)
-		setCondition(st, gen, ConditionSynced, metav1.ConditionFalse, ReasonSyncFailed, err.Error())
-		setCondition(st, gen, ConditionReady, metav1.ConditionFalse, ReasonSyncFailed, err.Error())
+		conditions.Set(&st.Conditions, gen, metav1.Condition{Type: ConditionSynced, Status: metav1.ConditionFalse, Reason: ReasonSyncFailed, Message: err.Error()})
+		conditions.Set(&st.Conditions, gen, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: ReasonSyncFailed, Message: err.Error()})
 		return reconcile.Result{}, info, err
 	}
 	clearTerminal(st)
-	setCondition(st, gen, ConditionReady, metav1.ConditionTrue, ReasonSynced, "")
+	conditions.Set(&st.Conditions, gen, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionTrue, Reason: ReasonSynced})
 	now := metav1.NewTime(s.now())
 	st.LastSyncedTime = &now
 	return reconcile.Result{RequeueAfter: s.resync()}, info, nil
@@ -146,7 +147,7 @@ func (s Syncer) sync(ctx context.Context, r Resource, o Object) (*Info, error) {
 	if cur == nil {
 		if r.Policies.AdoptionPolicy == jetstreamv1beta1.AdoptionAdopt {
 			msg := fmt.Sprintf("%s does not exist; adoptionPolicy Adopt never creates it", o.Describe())
-			setCondition(st, r.Object.GetGeneration(), ConditionAdopted, metav1.ConditionFalse, ReasonNotFound, msg)
+			conditions.Set(&st.Conditions, r.Object.GetGeneration(), metav1.Condition{Type: ConditionAdopted, Status: metav1.ConditionFalse, Reason: ReasonNotFound, Message: msg})
 			return nil, &WaitError{Reason: ReasonNotFound, Message: msg}
 		}
 		desired, err := o.Desired()
@@ -229,7 +230,7 @@ func (s Syncer) claim(ctx context.Context, r Resource, o Object, cur *Info) (Mar
 		}
 		msg = fmt.Sprintf("adopted existing %s; spec written from the server", o.Describe())
 	}
-	setCondition(r.Status, r.Object.GetGeneration(), ConditionAdopted, metav1.ConditionTrue, ReasonFoundUnowned, msg)
+	conditions.Set(&r.Status.Conditions, r.Object.GetGeneration(), metav1.Condition{Type: ConditionAdopted, Status: metav1.ConditionTrue, Reason: ReasonFoundUnowned, Message: msg})
 	return Marker{UID: uid, Origin: jetstreamv1beta1.OwnershipAdopted}, nil
 }
 
@@ -245,10 +246,10 @@ func (s Syncer) settle(ctx context.Context, r Resource, o Object, info *Info, m 
 	st.Ownership = &jetstreamv1beta1.Ownership{Origin: m.Origin, UID: m.UID}
 	gen := r.Object.GetGeneration()
 	if len(drift) > 0 {
-		setCondition(st, gen, ConditionSynced, metav1.ConditionFalse, ReasonDriftCorrected,
-			fmt.Sprintf("reapplied spec over drift in %s", strings.Join(drift, ", ")))
+		conditions.Set(&st.Conditions, gen, metav1.Condition{Type: ConditionSynced, Status: metav1.ConditionFalse, Reason: ReasonDriftCorrected, Message: fmt.Sprintf("reapplied spec over drift in %s", strings.Join(drift, ", "))})
+
 	} else {
-		setCondition(st, gen, ConditionSynced, metav1.ConditionTrue, ReasonMatchesSpec, messageMatches)
+		conditions.Set(&st.Conditions, gen, metav1.Condition{Type: ConditionSynced, Status: metav1.ConditionTrue, Reason: ReasonMatchesSpec, Message: messageMatches})
 	}
 	return info, nil
 }

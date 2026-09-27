@@ -27,7 +27,7 @@ type CertNotAfter struct {
 }
 
 // Config returns the ConfigState of the server with ID serverID.
-func (o *Observer) Config(ctx context.Context, serverID string) (ConfigState, error) {
+func (o *SystemClient) Config(ctx context.Context, serverID string) (ConfigState, error) {
 	var r wireVarzResponse
 	if err := o.request(ctx, fmt.Sprintf(subjVarz, serverID), o.filter(), &r); err != nil {
 		return ConfigState{}, err
@@ -52,7 +52,7 @@ func (o *Observer) Config(ctx context.Context, serverID string) (ConfigState, er
 // ErrServer and leaves the server on its previous configuration; one the
 // server acknowledges without advancing its config load time returns
 // ErrReloadUnconfirmed.
-func (o *Observer) Reload(ctx context.Context, serverID string) (ConfigState, error) {
+func (o *SystemClient) Reload(ctx context.Context, serverID string) (ConfigState, error) {
 	before, err := o.Config(ctx, serverID)
 	if err != nil {
 		return ConfigState{}, err

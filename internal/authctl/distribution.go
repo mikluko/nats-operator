@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
+	"github.com/mikluko/nats-operator/internal/conditions"
 )
 
 // distributionRecheck is how soon an account that is not on every server
@@ -58,12 +59,12 @@ func recordDistribution(conds *[]metav1.Condition, gen int64, cond metav1.Condit
 	if cond.Type == "" {
 		return
 	}
-	setCondition(conds, gen, cond.Type, cond.Status, cond.Reason, cond.Message)
+	conditions.Set(conds, gen, metav1.Condition{Type: cond.Type, Status: cond.Status, Reason: cond.Reason, Message: cond.Message})
 	if cond.Status != metav1.ConditionTrue {
 		return
 	}
 	if ready := meta.FindStatusCondition(*conds, ConditionReady); ready != nil && ready.Status == metav1.ConditionTrue {
-		setCondition(conds, gen, ConditionReady, metav1.ConditionTrue, ReasonDistributed, "")
+		conditions.Set(conds, gen, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionTrue, Reason: ReasonDistributed})
 	}
 }
 

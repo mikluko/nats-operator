@@ -15,7 +15,7 @@ import (
 //
 // A SystemObserver is not safe for concurrent use.
 type SystemObserver struct {
-	Sys     *sysobs.Observer
+	Sys     *sysobs.SystemClient
 	Cluster string
 
 	last   *balance.Observation

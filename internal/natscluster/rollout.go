@@ -59,7 +59,7 @@ type rolloutServer struct {
 // ordinal order; Verdict is nil when the NATS cluster was not observed.
 // NotInMeta are the servers that answered but are not members of the meta
 // group, as a server readmitted after a removal is not until its tombstone
-// lapses.
+// lapses; none are named while the meta group is FromFollowers.
 type rolloutState struct {
 	Target     string
 	Servers    []rolloutServer
@@ -346,7 +346,10 @@ func (r *Reconciler) rolloutState(nc *clusterv1beta1.NatsCluster, plan *Plan, o 
 	st.Removal = removalOf(nc, plan, o.StatefulSets, o.Snapshot)
 	if snap := o.Snapshot; snap != nil && st.Removal.JetStream && st.MetaLeader != "" {
 		for _, s := range plan.Servers {
-			if _, ok := reported[s.Name]; ok && !inMetaGroup(snap, s.Name) {
+			if _, ok := reported[s.Name]; !ok {
+				continue
+			}
+			if member, known := metaMember(snap, s.Name); known && !member {
 				st.NotInMeta = append(st.NotInMeta, s.Name)
 			}
 		}

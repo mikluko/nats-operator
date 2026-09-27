@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -432,19 +433,14 @@ func (m *member) status() (clusterv1beta1.NatsClusterStatus, error) {
 // timeout it fails with the last status or error.
 func (m *member) eventuallyStatus(t *testing.T, ok func(clusterv1beta1.NatsClusterStatus) bool) clusterv1beta1.NatsClusterStatus {
 	t.Helper()
-	var last any
-	for deadline := time.Now().Add(60 * time.Second); time.Now().Before(deadline); time.Sleep(250 * time.Millisecond) {
+	var got clusterv1beta1.NatsClusterStatus
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		st, err := m.status()
-		if err == nil && ok(st) {
-			return st
-		}
-		last = err
-		if err == nil {
-			last = st
-		}
-	}
-	require.FailNowf(t, "status never passed", "%s: last %+v", m.nc.Name, last)
-	return clusterv1beta1.NatsClusterStatus{}
+		require.NoError(c, err)
+		require.True(c, ok(st), "%s: last %+v", m.nc.Name, st)
+		got = st
+	}, 60*time.Second, 250*time.Millisecond, "status never passed")
+	return got
 }
 
 func gatewaysConnected(st clusterv1beta1.NatsClusterStatus) bool {

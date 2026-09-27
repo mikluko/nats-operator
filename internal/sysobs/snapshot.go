@@ -76,6 +76,11 @@ type Group struct {
 	// server that did not answer, or a stale view.
 	NamedLeader string
 
+	// FromFollowers is true on a meta group whose leader did not answer:
+	// its Members are the servers that did, each current when it names
+	// Leader, whether or not the leader counts it as a peer.
+	FromFollowers bool
+
 	// Placement is the stream's declared placement, nil where it declares
 	// none; a consumer group carries its stream's.
 	Placement *Placement
@@ -299,6 +304,21 @@ func merge(roster []Server, reports map[string]*wireJSInfo) *Snapshot {
 	return snap
 }
 
+// remoteLeaderView is the meta group g, seen from its followers, as its
+// leader in another NATS cluster reports it in meta: the leader's replicas
+// among the servers of roster.
+func remoteLeaderView(g Group, meta *wireMeta, roster []Server) Group {
+	g.FromFollowers = false
+	g.Members = nil
+	for _, r := range meta.Replicas {
+		if slices.ContainsFunc(roster, func(s Server) bool { return s.Name == r.Name }) {
+			g.Members = append(g.Members, Member{Server: r.Name, Current: r.Current, Offline: r.Offline, Lag: r.Lag})
+		}
+	}
+	slices.SortFunc(g.Members, func(a, b Member) int { return cmp.Compare(a.Server, b.Server) })
+	return g
+}
+
 // leaderView lists the leader as current and online, then its replicas,
 // keeping only those in keep when keep is not nil.
 func leaderView(leader string, replicas []wirePeer, keep map[string]bool) []Member {
@@ -326,7 +346,7 @@ func placementOf(c *wireStreamConfig) *Placement {
 // that answered names the same one, and a server is current if it names
 // it.
 func metaFromFollowers(named map[string]string) Group {
-	g := Group{Kind: KindMeta}
+	g := Group{Kind: KindMeta, FromFollowers: true}
 	leader, agreed := "", true
 	for _, l := range named {
 		switch {

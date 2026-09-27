@@ -8,6 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	jetstreamv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
+	"github.com/mikluko/nats-operator/internal/conditions"
 )
 
 // Condition types a JetStream object resource reports.
@@ -56,30 +57,19 @@ const (
 // messageMatches is Synced's message while the server object matches spec.
 const messageMatches = "server config matches spec as of last check"
 
-// setCondition sets c on status at generation.
-func setCondition(status *jetstreamv1beta1.SyncStatus, generation int64, typ string, s metav1.ConditionStatus, reason, message string) {
-	meta.SetStatusCondition(&status.Conditions, metav1.Condition{
-		Type:               typ,
-		Status:             s,
-		Reason:             reason,
-		Message:            message,
-		ObservedGeneration: generation,
-	})
-}
-
 // NotReady records on status that the resource cannot reach its server
 // object for reason, a precondition the kind checks before Sync such as its
 // connection.
 func NotReady(status *jetstreamv1beta1.SyncStatus, generation int64, reason, message string) {
 	status.ObservedGeneration = generation
-	setCondition(status, generation, ConditionReady, metav1.ConditionFalse, reason, message)
+	conditions.Set(&status.Conditions, generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: reason, Message: message})
 }
 
 // setTerminal records a Terminal condition; under Retry it also sets when it
 // is rechecked.
 func setTerminal(status *jetstreamv1beta1.SyncStatus, generation int64, policy jetstreamv1beta1.TerminalPolicy, now time.Time, resync time.Duration, t *TerminalError) {
-	setCondition(status, generation, ConditionTerminal, metav1.ConditionTrue, t.Reason, t.Message)
-	setCondition(status, generation, ConditionReady, metav1.ConditionFalse, ReasonTerminal, t.Message)
+	conditions.Set(&status.Conditions, generation, metav1.Condition{Type: ConditionTerminal, Status: metav1.ConditionTrue, Reason: t.Reason, Message: t.Message})
+	conditions.Set(&status.Conditions, generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: ReasonTerminal, Message: t.Message})
 	meta.RemoveStatusCondition(&status.Conditions, ConditionSynced)
 	status.NextCheckTime = nil
 	if policy == jetstreamv1beta1.TerminalRetry {

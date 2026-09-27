@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -33,10 +34,10 @@ func Flags(fs *flag.FlagSet, id string) *Options {
 	return o
 }
 
-// New builds a manager for scheme with health and readiness probes
-// registered. The caller starts it.
-func New(o *Options, scheme *runtime.Scheme) (ctrl.Manager, error) {
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+// New builds a manager for scheme against the API server cfg reaches, with
+// health and readiness probes registered. The caller starts it.
+func New(cfg *rest.Config, o *Options, scheme *runtime.Scheme) (ctrl.Manager, error) {
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsserver.Options{BindAddress: o.MetricsAddr},
 		HealthProbeBindAddress: o.ProbeAddr,

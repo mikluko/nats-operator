@@ -24,6 +24,7 @@ import (
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/balance"
+	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
@@ -510,7 +511,7 @@ func count(n int, noun string) string {
 }
 
 func setEvacuation(e *js.NatsClusterEvacuation, typ string, on bool, reason, message string) {
-	setConditionOn(&e.Status.Conditions, e.Generation, typ, on, reason, message)
+	conditions.Set(&e.Status.Conditions, e.Generation, metav1.Condition{Type: typ, Status: conditions.Status(on), Reason: reason, Message: message})
 }
 
 func evacuationReferrer(namespace string) grant.Referrer {

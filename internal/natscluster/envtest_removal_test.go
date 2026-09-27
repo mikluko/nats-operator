@@ -252,7 +252,7 @@ func TestEnvtestRemoval(t *testing.T) {
 		requireClaimDeleted(t, c, "replace", "demo-1")
 		h.reconcile(t)
 		requireGone(t, c, &appsv1.StatefulSet{}, "replace", "demo-1")
-		requireCondition(t, h.get(t), ConditionProgressing, metav1.ConditionTrue, ReasonCreating)
+		requireCondition(t, h.get(t), ConditionProgressing, metav1.ConditionTrue, ReasonClaimTerminating)
 
 		releaseClaim(t, c, "replace", "demo-1")
 		h.reconcile(t)

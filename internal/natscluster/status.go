@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
+	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
@@ -42,6 +43,7 @@ const (
 
 	ReasonUpToDate            = "UpToDate"
 	ReasonCreating            = "Creating"
+	ReasonClaimTerminating    = "ClaimTerminating"
 	ReasonRollingRestart      = "RollingRestart"
 	ReasonGateBlocked         = "GateBlocked"
 	ReasonRolloutPaused       = "RolloutPaused"
@@ -59,17 +61,27 @@ const (
 	ReasonTrustInvalid        = "TrustInvalid"
 )
 
-// Observed is what one reconcile saw and did: the servers' StatefulSets by
-// name, which of them it created, the observation of the NATS cluster or
-// why there is none, how the revision is applied to servers not on it, and
-// the rollout decision.
+// Observed is what one reconcile saw and did: what holds it before
+// anything is rendered, the certificate its servers wait for, the servers'
+// StatefulSets by name, which of them it created, the observation of the
+// NATS cluster or why there is none, how the revision is applied to servers
+// not on it, and the rollout decision.
 type Observed struct {
-	StatefulSets map[string]*appsv1.StatefulSet
-	Created      []string
-	Snapshot     *sysobs.Snapshot
-	ObserveErr   error
-	Apply        configApply
-	Rollout      rolloutDecision
+	// Held is the Progressing condition of a spec, trust or leaf remote
+	// that nothing is rendered past, nil when none holds the reconcile.
+	Held *metav1.Condition
+	// CertWait says which certificate the servers wait for, with
+	// CertReason, "" when none.
+	CertWait, CertReason string
+	StatefulSets         map[string]*appsv1.StatefulSet
+	Created              []string
+	// ClaimTerminating are the servers not created because their data
+	// volume claim is being deleted.
+	ClaimTerminating []string
+	Snapshot         *sysobs.Snapshot
+	ObserveErr       error
+	Apply            configApply
+	Rollout          rolloutDecision
 }
 
 // computeStatus returns nc's status from plan and what was observed,
@@ -140,15 +152,15 @@ func computeStatus(nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed) clust
 		if o.Snapshot != nil {
 			st.Gateways = gatewayStatus(nc, o.Snapshot)
 		}
-		setCondition(&st, gatewaysCondition(st.Gateways, o), gen)
+		conditions.Set(&st.Conditions, gen, gatewaysCondition(st.Gateways, o))
 	} else {
 		st.Gateways = nil
 		meta.RemoveStatusCondition(&st.Conditions, ConditionGatewaysConnected)
 	}
 
-	setCondition(&st, readyCondition(st.ReadyReplicas, nc.Spec.Replicas), gen)
-	setCondition(&st, settledCondition(o), gen)
-	setCondition(&st, progressingCondition(nc, plan, o), gen)
+	conditions.Set(&st.Conditions, gen, readyCondition(st.ReadyReplicas, nc.Spec.Replicas))
+	conditions.Set(&st.Conditions, gen, settledCondition(o))
+	conditions.Set(&st.Conditions, gen, progressingCondition(nc, plan, o))
 	return st
 }
 
@@ -246,11 +258,6 @@ func configStatus(prev *clusterv1beta1.ConfigStatus, plan *Plan, a configApply) 
 	return cs
 }
 
-func setCondition(st *clusterv1beta1.NatsClusterStatus, c metav1.Condition, gen int64) {
-	c.ObservedGeneration = gen
-	meta.SetStatusCondition(&st.Conditions, c)
-}
-
 func metaLeader(s *sysobs.Snapshot) string {
 	for _, g := range s.Groups {
 		if g.Kind == sysobs.KindMeta {
@@ -327,15 +334,34 @@ func serversOf(us []sysobs.Unsettled) []string {
 	return slices.Compact(out)
 }
 
-// progressingCondition is True while the StatefulSets differ from the
-// plan: servers being created, a rollout, servers reloading to the
-// revision, or servers beyond spec.replicas; it is False with the blocked
-// reason while only a scale-down or replacement that cannot start is left.
+// progressingCondition is the one Progressing decision. It reports the
+// first of, in rank: o.Held; a certificate the servers wait for; servers
+// being created; servers waiting for their data volume claim to be
+// deleted; a rollout; servers reloading to the revision; a
+// scale-down or replacement that cannot start; servers beyond
+// spec.replicas; and otherwise False with UpToDate. plan is read only when
+// o.Held is nil.
 func progressingCondition(nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed) metav1.Condition {
+	if o.Held != nil {
+		return *o.Held
+	}
 	c := metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionTrue}
+	if o.CertWait != "" {
+		c.Reason, c.Message = o.CertReason, o.CertWait
+		return c
+	}
 	if len(o.Created) > 0 {
 		c.Reason = ReasonCreating
 		c.Message = "creating " + strings.Join(o.Created, ", ")
+		return c
+	}
+	if len(o.ClaimTerminating) > 0 {
+		var claims []string
+		for _, s := range o.ClaimTerminating {
+			claims = append(claims, dataClaimName(s))
+		}
+		c.Reason = ReasonClaimTerminating
+		c.Message = "waiting for the deletion of " + strings.Join(claims, ", ")
 		return c
 	}
 	if o.Rollout.Status != nil {

@@ -430,3 +430,60 @@ func TestDeletingCondition(t *testing.T) {
 		})
 	}
 }
+
+// TestRolloutState_NotInMeta pins that a server that answers outside the
+// meta group is named, and that none is while the meta group is seen only
+// from followers, which list every server that answered.
+func TestRolloutState_NotInMeta(t *testing.T) {
+	nc := storyCluster(t)
+	plan, err := Render(nc, Inputs{})
+	require.NoError(t, err)
+	tests := []struct {
+		name          string
+		members       []string
+		fromFollowers bool
+		want          []string
+	}{
+		{"every server a member", []string{"demo-0", "demo-1", "demo-2"}, false, nil},
+		{"readmitted server", []string{"demo-0", "demo-1"}, false, []string{"demo-2"}},
+		{"leader in another NATS cluster", []string{"demo-0", "demo-1", "demo-2"}, true, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			snap := settledSnapshot(plan, plan.Revision, "prod-west-0")
+			snap.Groups[0].Members, snap.Groups[0].FromFollowers = nil, tt.fromFollowers
+			for _, m := range tt.members {
+				snap.Groups[0].Members = append(snap.Groups[0].Members, sysobs.Member{Server: m, Current: true})
+			}
+			st := (&Reconciler{}).rolloutState(nc, plan, Observed{StatefulSets: readySets(plan, true, true, true), Snapshot: snap})
+			require.Equal(t, tt.want, st.NotInMeta)
+		})
+	}
+}
+
+// TestContinueRemoval_Removed pins that a removed server is deleted only
+// once its meta group's leader no longer lists it.
+func TestContinueRemoval_Removed(t *testing.T) {
+	tests := []struct {
+		name          string
+		members       []string
+		fromFollowers bool
+		want          removalAction
+	}{
+		{"still a member", []string{"demo-0", "demo-3"}, false, actionRemovePeer},
+		{"gone from the meta group", []string{"demo-0"}, false, actionDelete},
+		{"seen only from followers", []string{"demo-0", "demo-3"}, true, actionRemovePeer},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			meta := sysobs.Group{Kind: sysobs.KindMeta, Leader: "prod-west-0", FromFollowers: tt.fromFollowers}
+			for _, m := range tt.members {
+				meta.Members = append(meta.Members, sysobs.Member{Server: m, Current: true})
+			}
+			rm := removalState{Removing: "demo-3", Phase: phaseRemoved, JetStream: true, Snapshot: &sysobs.Snapshot{Groups: []sysobs.Group{meta}}}
+			step, _ := continueRemoval(rm, "prod-west-0")
+			require.NotNil(t, step)
+			require.Equal(t, tt.want, step.Action)
+		})
+	}
+}

@@ -21,6 +21,7 @@ import (
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 	"github.com/mikluko/nats-operator/internal/sysobs"
@@ -496,20 +497,7 @@ func (r *Reconciler) applyLeafnodes(ctx context.Context, nc *clusterv1beta1.Nats
 // update sets; with want nil it deletes obj if nc owns it.
 func (r *Reconciler) applyOwned(ctx context.Context, nc *clusterv1beta1.NatsCluster, obj, want client.Object, update func(have, want client.Object)) error {
 	if want == nil {
-		err := r.Client.Get(ctx, client.ObjectKeyFromObject(obj), obj)
-		if apierrors.IsNotFound(err) {
-			return nil
-		}
-		if err != nil {
-			return fmt.Errorf("get %s: %w", obj.GetName(), err)
-		}
-		if !metav1.IsControlledBy(obj, nc) {
-			return nil
-		}
-		if err := r.Client.Delete(ctx, obj); client.IgnoreNotFound(err) != nil {
-			return fmt.Errorf("delete %s: %w", obj.GetName(), err)
-		}
-		return nil
+		return r.deleteOwned(ctx, nc, obj)
 	}
 	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, obj, func() error {
 		obj.SetLabels(merged(obj.GetLabels(), want.GetLabels()))
@@ -521,36 +509,13 @@ func (r *Reconciler) applyOwned(ctx context.Context, nc *clusterv1beta1.NatsClus
 	return nil
 }
 
-// LeafObserver observes the leafnode connections of the NATS cluster a
-// NatsCluster deployed, by server name.
-type LeafObserver interface {
-	ObserveLeafs(ctx context.Context, nc *clusterv1beta1.NatsCluster) (map[string][]sysobs.Leaf, error)
-}
-
-// ObserveLeafs reads every server's /leafz.
-func (m MonitorObserver) ObserveLeafs(ctx context.Context, nc *clusterv1beta1.NatsCluster) (map[string][]sysobs.Leaf, error) {
-	return m.Monitor.Leafz(ctx, monitorEndpoints(nc))
-}
-
-func monitorEndpoints(nc *clusterv1beta1.NatsCluster) []sysobs.Endpoint {
-	var eps []sysobs.Endpoint
-	for _, s := range serverNames(nc) {
-		eps = append(eps, sysobs.Endpoint{Name: s, URL: fmt.Sprintf("http://%s:%d", podHost(nc, s), PortMonitor)})
-	}
-	return eps
-}
-
 // ObserveLeafs reads LEAFZ over $SYS when nc names a system user, and
 // through Fallback otherwise.
 func (s *SystemConnections) ObserveLeafs(ctx context.Context, nc *clusterv1beta1.NatsCluster) (map[string][]sysobs.Leaf, error) {
 	if !hasSystemUser(nc) {
-		lo, ok := s.Fallback.(LeafObserver)
-		if !ok {
-			return nil, fmt.Errorf("%T does not observe leafnode connections", s.Fallback)
-		}
-		return lo.ObserveLeafs(ctx, nc)
+		return s.Fallback.ObserveLeafs(ctx, nc)
 	}
-	o, err := s.observer(ctx, nc)
+	o, err := s.client(ctx, nc)
 	if err != nil {
 		return nil, err
 	}
@@ -566,13 +531,7 @@ func (r *Reconciler) observeLeafs(ctx context.Context, nc *clusterv1beta1.NatsCl
 		meta.RemoveStatusCondition(&st.Conditions, ConditionLeafnodesConnected)
 		return
 	}
-	var leafs map[string][]sysobs.Leaf
-	var err error
-	if lo, ok := r.Observer.(LeafObserver); ok {
-		leafs, err = lo.ObserveLeafs(ctx, nc)
-	} else {
-		err = fmt.Errorf("%T does not observe leafnode connections", r.Observer)
-	}
+	leafs, err := r.Observer.ObserveLeafs(ctx, nc)
 	leafStatus(st, nc, plan, leafs, err)
 }
 
@@ -651,5 +610,5 @@ func leafStatus(st *clusterv1beta1.NatsClusterStatus, nc *clusterv1beta1.NatsClu
 		c.Status, c.Reason = metav1.ConditionTrue, ReasonAllRemotesConnected
 		c.Message = fmt.Sprintf("%d of %d servers connected to %d %s", replicas, replicas, len(plan.LeafRemotes), noun)
 	}
-	setCondition(st, c, gen)
+	conditions.Set(&st.Conditions, gen, c)
 }

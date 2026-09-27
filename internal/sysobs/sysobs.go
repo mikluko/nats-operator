@@ -1,7 +1,11 @@
-// Package sysobs observes one NATS cluster through a connection authenticated
-// as a user of the system account: its roster, its Raft groups across every
-// account, whether it is Settled, and each server's leader and replica
-// counts. It also reloads a server's configuration.
+// Package sysobs reaches one NATS cluster through a connection authenticated
+// as a user of the system account. It reads the roster, the Raft groups
+// across every account, whether the NATS cluster is Settled, and each
+// server's leader and replica counts; it writes by reloading a server's
+// configuration, evacuating a server, removing it from the meta group and
+// stepping the meta leader down. MonitorObserver reads a Snapshot and the
+// leafnode connections over each server's HTTP monitoring port, and writes
+// nothing.
 package sysobs
 
 import (
@@ -32,50 +36,51 @@ var ErrNoServers = errors.New("no server of the NATS cluster answered")
 // ErrServer wraps an error a server returned in its API response.
 var ErrServer = errors.New("server returned an error")
 
-// Observer observes one NATS cluster. It is safe for concurrent use.
-type Observer struct {
+// SystemClient reads and administers one NATS cluster over its system
+// account. It is safe for concurrent use.
+type SystemClient struct {
 	nc       *nats.Conn
 	cluster  string
 	wait     time.Duration
 	gateways bool
 }
 
-// Option configures an Observer.
-type Option func(*Observer)
+// Option configures a SystemClient.
+type Option func(*SystemClient)
 
 // WithWait sets how long a request waits for servers it expects to answer
 // and have not; it also bounds a single-server request whose context has no
 // deadline. The default is two seconds.
 func WithWait(d time.Duration) Option {
-	return func(o *Observer) { o.wait = d }
+	return func(o *SystemClient) { o.wait = d }
 }
 
 // WithGateways makes Observe read every server's gateways over GATEWAYZ,
 // which the observing user must be allowed to publish.
 func WithGateways() Option {
-	return func(o *Observer) { o.gateways = true }
+	return func(o *SystemClient) { o.gateways = true }
 }
 
-// New returns an Observer of the NATS cluster named cluster, over nc, which
+// New returns a SystemClient of the NATS cluster named cluster, over nc, which
 // must be authenticated as a user of the system account. Only servers whose
 // cluster name equals cluster exactly answer its requests.
-func New(nc *nats.Conn, cluster string, opts ...Option) *Observer {
-	o := &Observer{nc: nc, cluster: cluster, wait: 2 * time.Second}
+func New(nc *nats.Conn, cluster string, opts ...Option) *SystemClient {
+	o := &SystemClient{nc: nc, cluster: cluster, wait: 2 * time.Second}
 	for _, opt := range opts {
 		opt(o)
 	}
 	return o
 }
 
-func (o *Observer) filter() wireFilter {
+func (o *SystemClient) filter() wireFilter {
 	return wireFilter{Cluster: o.cluster, ExactMatch: true}
 }
 
 // Roster returns the servers of the NATS cluster that answer STATSZ, sorted
 // by name. It waits until every server named by another's routes has
-// answered, or for the Observer's wait; a server that is down and routed to
+// answered, or for the SystemClient's wait; a server that is down and routed to
 // by nobody is absent.
-func (o *Observer) Roster(ctx context.Context) ([]Server, error) {
+func (o *SystemClient) Roster(ctx context.Context) ([]Server, error) {
 	seen := map[string]Server{}
 	routed := map[string]bool{}
 	complete := func() bool {
@@ -115,8 +120,11 @@ func (o *Observer) Roster(ctx context.Context) ([]Server, error) {
 
 // Observe reads the roster, every roster server's gateways under
 // WithGateways, and every roster server's JSZ with its accounts, streams and
-// consumers, and merges them into a Snapshot.
-func (o *Observer) Observe(ctx context.Context) (*Snapshot, error) {
+// consumers, and merges them into a Snapshot. A meta leader in another NATS
+// cluster of the supercluster is asked for its peers, and the meta group's
+// members are the roster servers among them; if it does not answer, the
+// meta group is FromFollowers.
+func (o *SystemClient) Observe(ctx context.Context) (*Snapshot, error) {
 	roster, err := o.Roster(ctx)
 	if err != nil {
 		return nil, err
@@ -136,11 +144,46 @@ func (o *Observer) Observe(ctx context.Context) (*Snapshot, error) {
 			break
 		}
 	}
-	return merge(roster, reports), nil
+	snap := merge(roster, reports)
+	if err := o.readRemoteMeta(ctx, snap); err != nil {
+		return nil, err
+	}
+	return snap, nil
+}
+
+// readRemoteMeta replaces a FromFollowers meta group of snap that agrees on
+// a leader with that leader's own view, when the leader answers JSZ within
+// the SystemClient's wait.
+func (o *SystemClient) readRemoteMeta(ctx context.Context, snap *Snapshot) error {
+	i := slices.IndexFunc(snap.Groups, func(g Group) bool { return g.Kind == KindMeta && g.FromFollowers && g.Leader != "" })
+	if i < 0 {
+		return nil
+	}
+	leader := snap.Groups[i].Leader
+	var meta *wireMeta
+	err := o.gather(ctx, subjPingJsz, wireJszRequest{wireFilter: wireFilter{Name: leader, ExactMatch: true}}, func(data []byte) (bool, error) {
+		var r wireJszResponse
+		if err := json.Unmarshal(data, &r); err != nil {
+			return false, fmt.Errorf("decode JSZ: %w", err)
+		}
+		if r.Error != nil {
+			return false, fmt.Errorf("%w: JSZ from %s: %d %s", ErrServer, r.Server.Name, r.Error.Code, r.Error.Description)
+		}
+		if r.Server.Name != leader || r.Data == nil || r.Data.Meta == nil || r.Data.Meta.Leader != leader {
+			return false, nil
+		}
+		meta = r.Data.Meta
+		return true, nil
+	})
+	if err != nil || meta == nil {
+		return err
+	}
+	snap.Groups[i] = remoteLeaderView(snap.Groups[i], meta, snap.Servers)
+	return nil
 }
 
 // readGateways sets the Gateways of every roster server that answers GATEWAYZ.
-func (o *Observer) readGateways(ctx context.Context, roster []Server) error {
+func (o *SystemClient) readGateways(ctx context.Context, roster []Server) error {
 	idx := make(map[string]int, len(roster))
 	for i, s := range roster {
 		idx[s.Name] = i
@@ -167,7 +210,7 @@ func (o *Observer) readGateways(ctx context.Context, roster []Server) error {
 // jszPage requests one page of accounts from every server, appends each
 // answer's accounts to reports, and returns the largest account total any
 // server reported.
-func (o *Observer) jszPage(ctx context.Context, roster []Server, offset int, reports map[string]*wireJSInfo) (int, error) {
+func (o *SystemClient) jszPage(ctx context.Context, roster []Server, offset int, reports map[string]*wireJSInfo) (int, error) {
 	want := make(map[string]bool, len(roster))
 	for _, s := range roster {
 		want[s.Name] = true
@@ -198,9 +241,9 @@ func (o *Observer) jszPage(ctx context.Context, roster []Server, offset int, rep
 }
 
 // gather publishes req to subject and hands each reply to handle until
-// handle reports it has all it expects, the Observer's wait passes, or ctx
+// handle reports it has all it expects, the SystemClient's wait passes, or ctx
 // ends; only the last is an error.
-func (o *Observer) gather(ctx context.Context, subject string, req any, handle func([]byte) (bool, error)) error {
+func (o *SystemClient) gather(ctx context.Context, subject string, req any, handle func([]byte) (bool, error)) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return err
@@ -238,8 +281,8 @@ func (o *Observer) gather(ctx context.Context, subject string, req any, handle f
 }
 
 // request sends req to one server's subject and decodes its one reply
-// into resp, bounded by the Observer's wait when ctx has no deadline.
-func (o *Observer) request(ctx context.Context, subject string, req, resp any) error {
+// into resp, bounded by the SystemClient's wait when ctx has no deadline.
+func (o *SystemClient) request(ctx context.Context, subject string, req, resp any) error {
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, o.wait)

@@ -80,10 +80,12 @@ func (r *Reconciler) watchLeafRefs(b *builder.Builder) *builder.Builder {
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.clustersReadingSecret))
 }
 
+// clustersByField maps key to the NatsClusters whose field index field
+// holds it.
 func (r *Reconciler) clustersByField(ctx context.Context, field, key string) []reconcile.Request {
 	var list clusterv1beta1.NatsClusterList
 	if err := r.Client.List(ctx, &list, client.MatchingFields{field: key}); err != nil {
-		ctrl.LoggerFrom(ctx).Error(err, "list NatsClusters by leaf reference", "field", field, "key", key)
+		ctrl.LoggerFrom(ctx).Error(err, "list NatsClusters by field index", "field", field, "key", key)
 		return nil
 	}
 	out := make([]reconcile.Request, 0, len(list.Items))

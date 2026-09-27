@@ -19,7 +19,7 @@ import (
 )
 
 // ServerAdmin evacuates servers of one NATS cluster and removes them from
-// its meta group, over the system account; *sysobs.Observer is one.
+// its meta group, over the system account; *sysobs.SystemClient is one.
 type ServerAdmin interface {
 	Evacuate(ctx context.Context, server string) error
 	RemovePeer(ctx context.Context, server string) error
@@ -122,14 +122,14 @@ func startRemoval(rm removalState, server string) removalStep {
 // from the meta group once it holds no Raft group and the NATS cluster is
 // Settled apart from it; a meta leader steps down first. A removed server
 // is deleted once the meta group no longer lists it, and is removed again
-// while it does.
+// while it does or while the meta group is FromFollowers.
 func continueRemoval(rm removalState, metaLeader string) (*removalStep, gateState) {
 	x, snap := rm.Removing, rm.Snapshot
 	if snap == nil {
 		return nil, gateState{GateSettled, "the NATS cluster is not observed"}
 	}
 	if rm.Phase == phaseRemoved {
-		if inMetaGroup(snap, x) {
+		if member, known := metaMember(snap, x); member || !known {
 			return &removalStep{Server: x, Action: actionRemovePeer}, gateState{GateSettled, "removing " + x + " from the meta group"}
 		}
 		return &removalStep{Server: x, Action: actionDelete}, gateState{GateSettled, "deleting " + x}
@@ -201,14 +201,16 @@ func groupsHeld(snap *sysobs.Snapshot, server string) int {
 	return n
 }
 
-// inMetaGroup reports whether snap's meta group lists server as a member.
-func inMetaGroup(snap *sysobs.Snapshot, server string) bool {
+// metaMember reports whether snap's meta group lists server as a member,
+// with known false when the meta group is FromFollowers: it then lists
+// every server that answered, peer of its leader or not.
+func metaMember(snap *sysobs.Snapshot, server string) (member, known bool) {
 	for _, g := range snap.Groups {
 		if g.Kind == sysobs.KindMeta {
-			return slices.ContainsFunc(g.Members, func(m sysobs.Member) bool { return m.Server == server })
+			return slices.ContainsFunc(g.Members, func(m sysobs.Member) bool { return m.Server == server }), !g.FromFollowers
 		}
 	}
-	return false
+	return false, true
 }
 
 // unsettledWithout describes what keeps v from Settled once server's own
@@ -380,18 +382,19 @@ func (r *Reconciler) deleteServer(ctx context.Context, nc *clusterv1beta1.NatsCl
 	return nil
 }
 
-// dataReleased reports whether server's data volume claim from an earlier
-// StatefulSet is gone, so that a StatefulSet created now gets a new one.
-func (r *Reconciler) dataReleased(ctx context.Context, nc *clusterv1beta1.NatsCluster, server string) (bool, error) {
+// claimTerminating reports whether server's data volume claim is being
+// deleted. A StatefulSet created for server before the claim is gone would
+// bind it and lose its data with it.
+func (r *Reconciler) claimTerminating(ctx context.Context, nc *clusterv1beta1.NatsCluster, server string) (bool, error) {
 	pvc := &corev1.PersistentVolumeClaim{}
 	err := r.Client.Get(ctx, client.ObjectKey{Namespace: nc.Namespace, Name: dataClaimName(server)}, pvc)
 	switch {
 	case apierrors.IsNotFound(err):
-		return true, nil
+		return false, nil
 	case err != nil:
 		return false, fmt.Errorf("get pvc %s: %w", dataClaimName(server), err)
 	}
-	return pvc.DeletionTimestamp.IsZero(), nil
+	return !pvc.DeletionTimestamp.IsZero(), nil
 }
 
 // streamLabel names a stream group as account/stream, by the account's

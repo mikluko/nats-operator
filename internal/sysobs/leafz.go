@@ -45,9 +45,9 @@ type wireLeafzResponse struct {
 
 // Leafz returns the leafnode connections of every server of the NATS
 // cluster that answers LEAFZ, by server name, waiting until every server in
-// servers has answered or for the Observer's wait. A server that does not
+// servers has answered or for the SystemClient's wait. A server that does not
 // answer is absent.
-func (o *Observer) Leafz(ctx context.Context, servers []string) (map[string][]Leaf, error) {
+func (o *SystemClient) Leafz(ctx context.Context, servers []string) (map[string][]Leaf, error) {
 	want := make(map[string]bool, len(servers))
 	for _, s := range servers {
 		want[s] = true

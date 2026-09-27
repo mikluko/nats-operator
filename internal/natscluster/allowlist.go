@@ -47,8 +47,6 @@ var reloadAllowLists = map[string][]reloadKey{
 		{Path: "server_tags", Case: "tags", Rule: reloadAlways},
 		{Path: "server_metadata", Case: "metadata", Rule: reloadAlways},
 		{Path: "max_payload", Case: "maxpayload", Rule: reloadAlways},
-		{Path: "authorization", Case: "authorization", Rule: reloadAlways},
-		{Path: "accounts", Case: "accounts", Rule: reloadAlways},
 		{Path: "cluster.routes", Case: "routes", Rule: reloadAlways},
 		{Path: "cluster.tls", Case: "cluster", Rule: reloadAlways},
 		{Path: "jetstream.max_memory_store", Case: "jetstreammaxmemory", Rule: reloadRaiseOnly},

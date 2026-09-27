@@ -40,7 +40,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	mgr, err := manager.New(opts, scheme)
+	mgr, err := manager.New(ctrl.GetConfigOrDie(), opts, scheme)
 	if err != nil {
 		log.Error(err, "start")
 		os.Exit(1)

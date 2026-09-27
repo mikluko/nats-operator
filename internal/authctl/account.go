@@ -25,6 +25,7 @@ import (
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/telemetry"
@@ -106,7 +107,7 @@ func (r *AccountReconciler) Reconcile(ctx context.Context, req reconcile.Request
 func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.NatsAccount) (reconcile.Result, error) {
 	st := &acc.Status
 	notReady := func(reason, msg string) {
-		setCondition(&st.Conditions, acc.Generation, ConditionReady, metav1.ConditionFalse, reason, msg)
+		conditions.Set(&st.Conditions, acc.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: reason, Message: msg})
 	}
 	keys, err := resolveKeys(ctx, r.Client, accountKeySource(acc), true)
 	if err != nil {
@@ -197,11 +198,11 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 			reason, readyReason = grant.ReasonNoGrant, grant.ReasonReferenceNotPermitted
 		}
 		msg := strings.Join(imports.unresolved, "; ")
-		setCondition(&st.Conditions, acc.Generation, grant.ConditionReferencesResolved, metav1.ConditionFalse, reason, msg)
+		conditions.Set(&st.Conditions, acc.Generation, metav1.Condition{Type: grant.ConditionReferencesResolved, Status: metav1.ConditionFalse, Reason: reason, Message: msg})
 		notReady(readyReason, msg)
 	} else {
-		setCondition(&st.Conditions, acc.Generation, grant.ConditionReferencesResolved, metav1.ConditionTrue, ReasonAllImportsResolved, "")
-		setCondition(&st.Conditions, acc.Generation, ConditionReady, metav1.ConditionTrue, ReasonSigned, "")
+		conditions.Set(&st.Conditions, acc.Generation, metav1.Condition{Type: grant.ConditionReferencesResolved, Status: metav1.ConditionTrue, Reason: ReasonAllImportsResolved})
+		conditions.Set(&st.Conditions, acc.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionTrue, Reason: ReasonSigned})
 	}
 	dist, cond, again, err := distribute(ctx, r.Distributor, opKey, st.JWT, st.Distribution)
 	if errors.Is(err, ErrStaleJWT) && st.JWT != token {

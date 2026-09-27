@@ -37,7 +37,7 @@ func findGroup(t *testing.T, s *Snapshot, kind Kind, stream, consumer string) Gr
 }
 
 // settledSnapshot polls until the cluster is Settled with want groups.
-func settledSnapshot(t *testing.T, o *Observer, want int) *Snapshot {
+func settledSnapshot(t *testing.T, o *SystemClient, want int) *Snapshot {
 	t.Helper()
 	var snap *Snapshot
 	require.Eventually(t, func() bool {

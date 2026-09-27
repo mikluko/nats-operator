@@ -15,6 +15,7 @@ import (
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
@@ -49,7 +50,7 @@ func (r *OperatorTrustReconciler) reconcile(ctx context.Context, t *natsv1beta1.
 	st := &t.Status
 	notReady := func(reason, msg string) {
 		st.OperatorJWT, st.SystemAccountJWT = "", ""
-		setCondition(&st.Conditions, t.Generation, ConditionReady, metav1.ConditionFalse, reason, msg)
+		conditions.Set(&st.Conditions, t.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: reason, Message: msg})
 	}
 	key := refKey(*t.Spec.OperatorRef, t.Namespace)
 	cond, err := admit(ctx, r.Client, natsGroup, "NatsOperatorTrust", t, "NatsOperator", key)
@@ -73,7 +74,7 @@ func (r *OperatorTrustReconciler) reconcile(ctx context.Context, t *natsv1beta1.
 	}
 	st.OperatorJWT = op.Status.JWT
 	st.SystemAccountJWT = op.Status.SystemAccount.JWT
-	setCondition(&st.Conditions, t.Generation, ConditionReady, metav1.ConditionTrue, ReasonMirrored, "")
+	conditions.Set(&st.Conditions, t.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionTrue, Reason: ReasonMirrored})
 	return nil
 }
 
@@ -119,7 +120,7 @@ func (r *AccountTrustReconciler) reconcile(ctx context.Context, t *natsv1beta1.N
 	st := &t.Status
 	notReady := func(reason, msg string) {
 		st.PublicKey, st.JWT = "", ""
-		setCondition(&st.Conditions, t.Generation, ConditionReady, metav1.ConditionFalse, reason, msg)
+		conditions.Set(&st.Conditions, t.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: reason, Message: msg})
 	}
 	key := refKey(*t.Spec.AccountRef, t.Namespace)
 	cond, err := admit(ctx, r.Client, natsGroup, "NatsAccountTrust", t, "NatsAccount", key)
@@ -143,7 +144,7 @@ func (r *AccountTrustReconciler) reconcile(ctx context.Context, t *natsv1beta1.N
 	}
 	st.PublicKey = acc.Status.PublicKey
 	st.JWT = acc.Status.JWT
-	setCondition(&st.Conditions, t.Generation, ConditionReady, metav1.ConditionTrue, ReasonMirrored, "")
+	conditions.Set(&st.Conditions, t.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionTrue, Reason: ReasonMirrored})
 	return nil
 }
 
@@ -163,12 +164,11 @@ func (r *AccountTrustReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // reference, calling notReady where it did not.
 func referenceAdmitted(conds *[]metav1.Condition, gen int64, cond *metav1.Condition, notReady func(reason, msg string)) bool {
 	if cond != nil {
-		cond.ObservedGeneration = gen
-		setConditionFrom(conds, *cond)
+		conditions.Set(conds, gen, *cond)
 		notReady(grant.ReasonReferenceNotPermitted, cond.Message)
 		return false
 	}
-	setCondition(conds, gen, grant.ConditionReferencesResolved, metav1.ConditionTrue, ReasonResolved, "")
+	conditions.Set(conds, gen, metav1.Condition{Type: grant.ConditionReferencesResolved, Status: metav1.ConditionTrue, Reason: ReasonResolved})
 	return true
 }
 

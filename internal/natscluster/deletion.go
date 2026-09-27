@@ -10,6 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
+	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
@@ -51,7 +52,7 @@ func (r *Reconciler) finalize(ctx context.Context, nc *clusterv1beta1.NatsCluste
 			snap, err := r.Observer.Observe(ctx, nc)
 			if c := deletingCondition(nc.Name, snap, err); c.Status == metav1.ConditionTrue {
 				orig := nc.DeepCopy()
-				setCondition(&nc.Status, c, nc.Generation)
+				conditions.Set(&nc.Status.Conditions, nc.Generation, c)
 				return ctrl.Result{RequeueAfter: resyncUnsettled}, r.patchStatus(ctx, orig, nc)
 			}
 		}

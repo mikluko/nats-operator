@@ -16,7 +16,7 @@ import (
 )
 
 // ServerReloader reads and reloads one server's config over the system
-// account; *sysobs.Observer is one.
+// account; *sysobs.SystemClient is one.
 type ServerReloader interface {
 	Config(ctx context.Context, serverID string) (sysobs.ConfigState, error)
 	Reload(ctx context.Context, serverID string) (sysobs.ConfigState, error)

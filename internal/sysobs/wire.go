@@ -26,6 +26,7 @@ type wireError struct {
 }
 
 type wireFilter struct {
+	Name       string `json:"server_name,omitempty"`
 	Cluster    string `json:"cluster,omitempty"`
 	ExactMatch bool   `json:"exact_match,omitempty"`
 }

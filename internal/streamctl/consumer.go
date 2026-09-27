@@ -18,6 +18,7 @@ import (
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
@@ -182,8 +183,7 @@ func (r *ConsumerReconciler) streamRef(ctx context.Context, c *js.NatsConsumer, 
 		return nil, err
 	}
 	if denied != nil {
-		denied.ObservedGeneration = gen
-		meta.SetStatusCondition(&st.Conditions, *denied)
+		conditions.Set(&st.Conditions, gen, *denied)
 		lifecycle.NotReady(st, gen, grant.ReasonReferenceNotPermitted, denied.Message)
 		return nil, nil
 	}

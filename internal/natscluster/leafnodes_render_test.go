@@ -19,6 +19,7 @@ import (
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
@@ -455,7 +456,7 @@ func TestLeafStatus(t *testing.T) {
 	})
 	t.Run("no remotes clears both", func(t *testing.T) {
 		st := clusterv1beta1.NatsClusterStatus{LeafRemotes: []clusterv1beta1.LeafRemoteStatus{{ConnectionNamespace: "nats-system", ConnectionName: "hub"}}}
-		setCondition(&st, metav1.Condition{Type: ConditionLeafnodesConnected, Status: metav1.ConditionTrue, Reason: ReasonAllRemotesConnected}, 1)
+		conditions.Set(&st.Conditions, 1, metav1.Condition{Type: ConditionLeafnodesConnected, Status: metav1.ConditionTrue, Reason: ReasonAllRemotesConnected})
 		plan := &Plan{}
 		(&Reconciler{Observer: &fakeObserver{}}).observeLeafs(context.Background(), nc, plan, &st)
 		require.Nil(t, st.LeafRemotes)

@@ -251,6 +251,9 @@ func TestProgressingCondition(t *testing.T) {
 			Message: "restarting demo-1 (1 of 1)"},
 	}
 
+	blocked := metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: ReasonScaleDownBlocked, Message: "cannot remove demo-3: x"}
+	held := metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: ReasonTrustNotFound, Message: "NatsOperatorTrust demo/t does not exist"}
+
 	tests := []struct {
 		name    string
 		obs     Observed
@@ -264,6 +267,17 @@ func TestProgressingCondition(t *testing.T) {
 		{"reloading", Observed{StatefulSets: stale, Apply: configApply{Reloading: []string{"demo-1"}}}, metav1.ConditionTrue, ReasonReloadPending, "reloading demo-1 to revision " + plan.Revision},
 		{"a rollout outranks a reload", Observed{StatefulSets: twoStale, Apply: configApply{Reloading: []string{"demo-1"}, Restart: map[string]string{"demo-2": "x"}}, Rollout: rolling}, metav1.ConditionTrue, ReasonRollingRestart, "restarting demo-1 (1 of 1)"},
 		{"beyond replicas", Observed{StatefulSets: extra}, metav1.ConditionTrue, ReasonScaleDownPending, "demo-3 beyond 3 replicas"},
+		{"blocked", Observed{StatefulSets: readySets(plan), Rollout: rolloutDecision{Blocked: &blocked}}, metav1.ConditionFalse, ReasonScaleDownBlocked, blocked.Message},
+		{"a reload outranks a blocked scale-down", Observed{StatefulSets: stale, Rollout: rolloutDecision{Blocked: &blocked}}, metav1.ConditionTrue, ReasonReloadPending, "reloading demo-1 to revision " + plan.Revision},
+		{"a blocked scale-down outranks servers beyond replicas", Observed{StatefulSets: extra, Rollout: rolloutDecision{Blocked: &blocked}}, metav1.ConditionFalse, ReasonScaleDownBlocked, blocked.Message},
+		{"waiting for a claim", Observed{StatefulSets: readySets(plan), ClaimTerminating: []string{"demo-1"}}, metav1.ConditionTrue, ReasonClaimTerminating, "waiting for the deletion of " + dataClaimName("demo-1")},
+		{"creating outranks waiting for a claim", Observed{StatefulSets: readySets(plan), Created: []string{"demo-0"}, ClaimTerminating: []string{"demo-1"}}, metav1.ConditionTrue, ReasonCreating, "creating demo-0"},
+		{"waiting for a claim outranks a rollout", Observed{StatefulSets: stale, ClaimTerminating: []string{"demo-1"}, Rollout: rolling}, metav1.ConditionTrue, ReasonClaimTerminating, "waiting for the deletion of " + dataClaimName("demo-1")},
+		{"creating outranks a rollout", Observed{StatefulSets: stale, Created: []string{"demo-0"}, Rollout: rolling}, metav1.ConditionTrue, ReasonCreating, "creating demo-0"},
+		{"a certificate wait outranks creating", Observed{StatefulSets: stale, CertWait: "waiting for demo-routes", CertReason: ReasonRouteCertNotReady, Created: []string{"demo-0"}, Rollout: rolling},
+			metav1.ConditionTrue, ReasonRouteCertNotReady, "waiting for demo-routes"},
+		{"held outranks everything", Observed{Held: &held, StatefulSets: stale, CertWait: "waiting for demo-routes", CertReason: ReasonRouteCertNotReady, Created: []string{"demo-0"}, Rollout: rolling},
+			metav1.ConditionFalse, ReasonTrustNotFound, held.Message},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -18,6 +18,7 @@ import (
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
@@ -65,7 +66,7 @@ func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta
 	st := &sys.Status
 	notReady := func(reason, msg string) {
 		st.JWTHash = ""
-		setCondition(&st.Conditions, sys.Generation, ConditionReady, metav1.ConditionFalse, reason, msg)
+		conditions.Set(&st.Conditions, sys.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: reason, Message: msg})
 	}
 	keys, err := resolveKeys(ctx, r.Client, systemAccountKeySource(sys), true)
 	if err != nil {
@@ -115,7 +116,7 @@ func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta
 		st.JWTHash = hash
 		st.Distribution = pushed(st.Distribution, time.Now(), r.Distributor != nil)
 	}
-	setCondition(&st.Conditions, sys.Generation, ConditionReady, metav1.ConditionTrue, ReasonSigned, "")
+	conditions.Set(&st.Conditions, sys.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionTrue, Reason: ReasonSigned})
 	if unrecovered(op.Status.Conditions) {
 		return 0, nil
 	}

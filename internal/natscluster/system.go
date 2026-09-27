@@ -32,7 +32,7 @@ type SystemConnections struct {
 	// Servers returns the URLs nc's servers are dialed at; nil dials nc's
 	// client Service.
 	Servers func(nc *clusterv1beta1.NatsCluster) []string
-	// Wait is the sysobs.Observer wait; zero keeps its default.
+	// Wait is the sysobs.SystemClient wait; zero keeps its default.
 	Wait time.Duration
 }
 
@@ -42,7 +42,7 @@ func (s *SystemConnections) Observe(ctx context.Context, nc *clusterv1beta1.Nats
 	if !hasSystemUser(nc) {
 		return s.Fallback.Observe(ctx, nc)
 	}
-	o, err := s.observer(ctx, nc)
+	o, err := s.client(ctx, nc)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func (s *SystemConnections) Reloader(ctx context.Context, nc *clusterv1beta1.Nat
 	if !hasSystemUser(nc) {
 		return nil, ErrNoSystemUser
 	}
-	return s.observer(ctx, nc)
+	return s.client(ctx, nc)
 }
 
 // Admin is an AdminFunc: it evacuates and removes nc's servers over $SYS,
@@ -64,7 +64,7 @@ func (s *SystemConnections) Admin(ctx context.Context, nc *clusterv1beta1.NatsCl
 	if !hasSystemUser(nc) {
 		return nil, ErrNoSystemUser
 	}
-	return s.observer(ctx, nc)
+	return s.client(ctx, nc)
 }
 
 // Forget closes the connection of the NatsCluster named key.
@@ -72,7 +72,7 @@ func (s *SystemConnections) Forget(key types.NamespacedName) {
 	s.Pool.Forget(natsconn.Key{Kind: PoolKind, NamespacedName: key})
 }
 
-func (s *SystemConnections) observer(ctx context.Context, nc *clusterv1beta1.NatsCluster) (*sysobs.Observer, error) {
+func (s *SystemConnections) client(ctx context.Context, nc *clusterv1beta1.NatsCluster) (*sysobs.SystemClient, error) {
 	creds, err := natsconn.ReadCredentials(ctx, s.Client, nc.Namespace, nc.Spec.Auth.SystemCredentials)
 	if err != nil {
 		return nil, fmt.Errorf("read auth.systemCredentials: %w", err)

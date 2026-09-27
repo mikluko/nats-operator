@@ -185,3 +185,18 @@ func TestMerge_LeaderlessGroupListsHolders(t *testing.T) {
 	}}, snap.Groups)
 	require.Equal(t, map[string]Load{"s1": {}, "s2": {}}, snap.Load())
 }
+
+// TestMerge_RemoteMetaLeader pins that a meta group whose leader did not
+// answer is FromFollowers and lists every server that did, and that the
+// leader's own view keeps only its replicas among the roster.
+func TestMerge_RemoteMetaLeader(t *testing.T) {
+	snap := merge(roster("s1", "s2", "s3"), map[string]*wireJSInfo{
+		"s1": info(&wireMeta{Leader: "x0"}),
+		"s2": info(&wireMeta{Leader: "x0"}),
+		"s3": info(&wireMeta{Leader: "x0"}),
+	})
+	require.Equal(t, []Group{{Kind: KindMeta, Leader: "x0", FromFollowers: true, Members: []Member{current("s1"), current("s2"), current("s3")}}}, snap.Groups)
+
+	g := remoteLeaderView(snap.Groups[0], &wireMeta{Leader: "x0", Replicas: []wirePeer{ok("x1"), ok("s2"), {Name: "s1", Lag: 3}}}, snap.Servers)
+	require.Equal(t, Group{Kind: KindMeta, Leader: "x0", Members: []Member{{Server: "s1", Lag: 3}, current("s2")}}, g)
+}

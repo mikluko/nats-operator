@@ -16,6 +16,7 @@ import (
 
 	jetstreamv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
@@ -35,8 +36,7 @@ func Connect(ctx context.Context, d *natsconn.Dialer, from grant.Referrer, ref n
 	nc, denied, err := d.Reference(ctx, from, ref)
 	switch {
 	case denied != nil:
-		denied.ObservedGeneration = generation
-		meta.SetStatusCondition(&status.Conditions, *denied)
+		conditions.Set(&status.Conditions, generation, *denied)
 		NotReady(status, generation, grant.ReasonReferenceNotPermitted, denied.Message)
 		return nil, nil
 	case apierrors.IsNotFound(err):

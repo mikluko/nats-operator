@@ -25,6 +25,7 @@ import (
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/balance"
+	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
@@ -108,12 +109,12 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 	}
 	cluster := nc.ConnectedClusterName()
 	if cluster == "" {
-		setBalancerCondition(b, ConditionReady, false, ReasonNotClustered, "the connection reaches a server in no NATS cluster")
+		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionReady, Status: conditions.Status(false), Reason: ReasonNotClustered, Message: "the connection reaches a server in no NATS cluster"})
 		return after, nil
 	}
 	account, err := accountOf(ctx, nc)
 	if err != nil {
-		setBalancerCondition(b, ConditionReady, false, ReasonPassFailed, err.Error())
+		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionReady, Status: conditions.Status(false), Reason: ReasonPassFailed, Message: err.Error()})
 		return after, nil
 	}
 
@@ -123,13 +124,13 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 	}
 	declared, overlaps, err := assign(account, b.Spec.Pools, ms)
 	if err != nil {
-		setBalancerCondition(b, ConditionReady, false, ReasonInvalidPool, err.Error())
+		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionReady, Status: conditions.Status(false), Reason: ReasonInvalidPool, Message: err.Error()})
 		return after, nil
 	}
 	if len(overlaps) > 0 {
-		setBalancerCondition(b, ConditionOverlapping, true, ReasonOverlapping, strings.Join(overlaps, ". "))
+		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionOverlapping, Status: conditions.Status(true), Reason: ReasonOverlapping, Message: strings.Join(overlaps, ". ")})
 	} else {
-		setBalancerCondition(b, ConditionOverlapping, false, ReasonDisjoint, "")
+		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionOverlapping, Status: conditions.Status(false), Reason: ReasonDisjoint})
 	}
 
 	yield, err := systemPending(ctx, r.Client, account)
@@ -139,7 +140,7 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 
 	j, err := jetstream.New(nc)
 	if err != nil {
-		setBalancerCondition(b, ConditionReady, false, ReasonPassFailed, err.Error())
+		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionReady, Status: conditions.Status(false), Reason: ReasonPassFailed, Message: err.Error()})
 		return after, nil
 	}
 	ev, err := evacueesOf(ctx, r.Client, r.Dialer, nc, balance.AccountObserver{JS: j, Account: account, Cluster: cluster, Expect: expected(ms, cluster)})
@@ -162,7 +163,7 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 
 	passed, err := k.Pass(ctx)
 	if err != nil {
-		setBalancerCondition(b, ConditionReady, false, ReasonPassFailed, err.Error())
+		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionReady, Status: conditions.Status(false), Reason: ReasonPassFailed, Message: err.Error()})
 		return after, nil
 	}
 	if passed.Held == "" {
@@ -174,13 +175,13 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 	}
 	switch {
 	case yield != "":
-		setBalancerCondition(b, ConditionHolding, true, ReasonYielding, yield)
+		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionHolding, Status: conditions.Status(true), Reason: ReasonYielding, Message: yield})
 	case passed.Held != "":
-		setBalancerCondition(b, ConditionHolding, true, ReasonUnsettled, passed.Held)
+		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionHolding, Status: conditions.Status(true), Reason: ReasonUnsettled, Message: passed.Held})
 	default:
-		setBalancerCondition(b, ConditionHolding, false, ReasonSettled, "")
+		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionHolding, Status: conditions.Status(false), Reason: ReasonSettled})
 	}
-	setBalancerCondition(b, ConditionReady, true, ReasonBalancing, "")
+	conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionReady, Status: conditions.Status(true), Reason: ReasonBalancing})
 	if yield != "" {
 		return reconcile.Result{RequeueAfter: r.pendingPoll()}, nil
 	}
@@ -193,17 +194,16 @@ func (r *BalancerReconciler) connect(ctx context.Context, b *js.NatsBalancer) (*
 	nc, denied, err := r.Dialer.Reference(ctx, balancerReferrer(b.Namespace), b.Spec.ConnectionRef)
 	switch {
 	case denied != nil:
-		denied.ObservedGeneration = b.Generation
-		meta.SetStatusCondition(&b.Status.Conditions, *denied)
-		setBalancerCondition(b, ConditionReady, false, grant.ReasonReferenceNotPermitted, denied.Message)
+		conditions.Set(&b.Status.Conditions, b.Generation, *denied)
+		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionReady, Status: conditions.Status(false), Reason: grant.ReasonReferenceNotPermitted, Message: denied.Message})
 		return nil, nil
 	case apierrors.IsNotFound(err):
-		setBalancerCondition(b, ConditionReady, false, lifecycle.ReasonConnectionNotFound, err.Error())
+		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionReady, Status: conditions.Status(false), Reason: lifecycle.ReasonConnectionNotFound, Message: err.Error()})
 		return nil, nil
 	case isAPIStatus(err):
 		return nil, err
 	case err != nil:
-		setBalancerCondition(b, ConditionReady, false, lifecycle.ReasonConnectionFailed, err.Error())
+		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionReady, Status: conditions.Status(false), Reason: lifecycle.ReasonConnectionFailed, Message: err.Error()})
 		return nil, nil
 	}
 	meta.RemoveStatusCondition(&b.Status.Conditions, grant.ConditionReferencesResolved)
@@ -260,16 +260,6 @@ func systemPending(ctx context.Context, c client.Reader, account string) (string
 		}
 	}
 	return "", nil
-}
-
-func setBalancerCondition(b *js.NatsBalancer, typ string, on bool, reason, message string) {
-	s := metav1.ConditionFalse
-	if on {
-		s = metav1.ConditionTrue
-	}
-	meta.SetStatusCondition(&b.Status.Conditions, metav1.Condition{
-		Type: typ, Status: s, Reason: reason, Message: message, ObservedGeneration: b.Generation,
-	})
 }
 
 // keeper is b's pass state, kept across reconciles and started afresh for a

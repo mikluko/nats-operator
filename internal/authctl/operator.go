@@ -19,6 +19,7 @@ import (
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/telemetry"
@@ -77,7 +78,7 @@ func (r *OperatorReconciler) Reconcile(ctx context.Context, req reconcile.Reques
 func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.NatsOperator) (time.Duration, error) {
 	st := &op.Status
 	notReady := func(reason, msg string) {
-		setCondition(&st.Conditions, op.Generation, ConditionReady, metav1.ConditionFalse, reason, msg)
+		conditions.Set(&st.Conditions, op.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: reason, Message: msg})
 	}
 	var named authv1beta1.NatsAccountList
 	if err := r.List(ctx, &named, client.MatchingFields{operatorField: keyValue(client.ObjectKeyFromObject(op))}); err != nil {
@@ -185,7 +186,7 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	if err != nil {
 		return 0, err
 	}
-	setCondition(&st.Conditions, op.Generation, ConditionReady, metav1.ConditionTrue, ReasonSigned, "")
+	conditions.Set(&st.Conditions, op.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionTrue, Reason: ReasonSigned})
 	if next.IsZero() {
 		return 0, nil
 	}
@@ -314,15 +315,11 @@ func setRetiringCondition(op *authv1beta1.NatsOperator, retiring, jwts []string)
 		}
 	}
 	if n == 0 {
-		setCondition(&op.Status.Conditions, op.Generation, ConditionRetiringKeysInUse, metav1.ConditionFalse, ReasonNoneInUse, "")
+		conditions.Set(&op.Status.Conditions, op.Generation, metav1.Condition{Type: ConditionRetiringKeysInUse, Status: metav1.ConditionFalse, Reason: ReasonNoneInUse})
 		return
 	}
-	setCondition(&op.Status.Conditions, op.Generation, ConditionRetiringKeysInUse, metav1.ConditionTrue, ReasonInUse,
-		fmt.Sprintf("%d account JWTs are signed by a retiring key", n))
-}
+	conditions.Set(&op.Status.Conditions, op.Generation, metav1.Condition{Type: ConditionRetiringKeysInUse, Status: metav1.ConditionTrue, Reason: ReasonInUse, Message: fmt.Sprintf("%d account JWTs are signed by a retiring key", n)})
 
-func setConditionFrom(conds *[]metav1.Condition, c metav1.Condition) {
-	setCondition(conds, c.ObservedGeneration, c.Type, c.Status, c.Reason, c.Message)
 }
 
 // SetupWithManager registers the reconciler with mgr. The indexes Setup
