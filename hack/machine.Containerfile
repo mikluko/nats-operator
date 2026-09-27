@@ -1,10 +1,9 @@
-# The Debian container machine the e2e cluster runs in: the machine-debian
-# base with a Docker Engine that starts on boot, minikube's driver.
+# The Debian container machine hack/e2e runs in on darwin: the
+# machine-debian base brought up by hack/e2e/machine.sh, which the harness
+# also runs on every start.
 FROM ghcr.io/mikluko/machine-debian
 
-ARG DEBIAN_FRONTEND=noninteractive
+COPY e2e/machine.sh /usr/local/libexec/nats-operator-e2e-machine
 RUN --mount=type=cache,target=/var/lib/apt,sharing=locked \
     --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    apt-get update -yq && \
-    apt-get install -y docker.io iptables conntrack curl && \
-    systemctl enable docker
+    /usr/local/libexec/nats-operator-e2e-machine

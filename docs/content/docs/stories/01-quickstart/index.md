@@ -5,11 +5,11 @@ params:
   e2e:
     substitutions:
       - files: [01-natscluster.yaml, 02-natscluster-2.15.1.yaml]
-        reason: three servers share one 3G minikube node
+        reason: three servers share one kind node, on a host every cluster of the run shares
         patch: {spec: {resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 256Mi}}}}
       - files: [01-natscluster.yaml, 02-natscluster-2.15.1.yaml]
         reason: >-
-          nats 2.15.1 is not published; hack/e2e.sh loads 2.15.0 as localhost/nats under both tags, which
+          nats 2.15.1 is not published; hack/e2e loads 2.15.0 as localhost/nats under both tags, which
           the kubelet does not pull
         patch: {spec: {image: localhost/nats, podTemplate: {spec: {containers: [{name: nats, imagePullPolicy: Never}]}}}}
       - files: [01-status-natscluster-at-rest.yaml]

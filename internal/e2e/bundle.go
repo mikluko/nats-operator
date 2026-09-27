@@ -8,6 +8,7 @@ package e2e
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
@@ -48,6 +50,9 @@ type Bundle struct {
 	Clusters []Placement
 	// Substitutions are merged into the bundle's files as they load.
 	Substitutions []Substitution
+	// Waits are the steps that wait longer than the run's default for
+	// their expectations, by step number.
+	Waits map[int]StepWait
 	// Steps are ordered by step number.
 	Steps []Step
 
@@ -77,6 +82,33 @@ type Substitution struct {
 	// each file it reaches; a status file's document is its status block
 	// alone, under the status key.
 	Patch map[string]any `json:"patch"`
+}
+
+// StepWait is how long one step of a bundle waits for its expectations.
+type StepWait struct {
+	Step int `json:"step"`
+	// Wait is a Go duration, such as "4m".
+	Wait time.Duration `json:"-"`
+	// Reason says what makes the step slow; it is required.
+	Reason string `json:"reason"`
+}
+
+// UnmarshalJSON reads a StepWait whose wait is a Go duration string.
+func (w *StepWait) UnmarshalJSON(b []byte) error {
+	var raw struct {
+		Step   int    `json:"step"`
+		Wait   string `json:"wait"`
+		Reason string `json:"reason"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	d, err := time.ParseDuration(raw.Wait)
+	if err != nil {
+		return fmt.Errorf("wait of step %d: %w", raw.Step, err)
+	}
+	*w = StepWait{Step: raw.Step, Wait: d, Reason: raw.Reason}
+	return nil
 }
 
 // selects reports whether s reaches o, a manifest of a file s names.
@@ -244,7 +276,24 @@ func loadBundle(dir string) (*Bundle, error) {
 	if err := checkSubstitutions(dir, files, b.Substitutions); err != nil {
 		return nil, err
 	}
+	if err := b.checkWaits(dir); err != nil {
+		return nil, err
+	}
 	return b, checkPlacement(dir, files, b.Clusters)
+}
+
+// checkWaits fails where a wait names no step of b, lacks a reason or a
+// positive wait, or names a step another wait names.
+func (b *Bundle) checkWaits(dir string) error {
+	for n, w := range b.Waits {
+		if w.Reason == "" || w.Wait <= 0 {
+			return fmt.Errorf("%s: the wait of step %d needs a positive wait and a reason", dir, n)
+		}
+		if !slices.ContainsFunc(b.Steps, func(s Step) bool { return s.Number == n }) {
+			return fmt.Errorf("%s: a wait names step %d, which has no files", dir, n)
+		}
+	}
+	return nil
 }
 
 // substitute applies to f every substitution that names it, in order.
@@ -369,8 +418,8 @@ func (b *Bundle) step(n int) *Step {
 	return &b.Steps[len(b.Steps)-1]
 }
 
-// readFrontMatter sets b's After, Skip, Clusters and Substitutions from the YAML front matter
-// opening path, if path exists and has any.
+// readFrontMatter sets b's After, Skip, Clusters, Substitutions and Waits
+// from the YAML front matter opening path, if path exists and has any.
 func readFrontMatter(path string, b *Bundle) error {
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -394,6 +443,7 @@ func readFrontMatter(path string, b *Bundle) error {
 						Skip          string         `json:"skip"`
 						Clusters      []Placement    `json:"clusters"`
 						Substitutions []Substitution `json:"substitutions"`
+						Waits         []StepWait     `json:"waits"`
 					} `json:"e2e"`
 				} `json:"params"`
 			}
@@ -402,6 +452,15 @@ func readFrontMatter(path string, b *Bundle) error {
 			}
 			e := fm.Params.E2E
 			b.After, b.Skip, b.Clusters, b.Substitutions = e.After, e.Skip, e.Clusters, e.Substitutions
+			for _, w := range e.Waits {
+				if b.Waits == nil {
+					b.Waits = map[int]StepWait{}
+				}
+				if _, dup := b.Waits[w.Step]; dup {
+					return fmt.Errorf("%s: front matter: two waits for step %d", path, w.Step)
+				}
+				b.Waits[w.Step] = w
+			}
 			return nil
 		}
 		block.Write(s.Bytes())
@@ -418,6 +477,16 @@ func loadObjects(path string) ([]*unstructured.Unstructured, error) {
 	if err != nil {
 		return nil, err
 	}
+	objs, err := DecodeObjects(raw)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return objs, nil
+}
+
+// DecodeObjects returns the objects of the YAML documents in raw, skipping
+// empty ones.
+func DecodeObjects(raw []byte) ([]*unstructured.Unstructured, error) {
 	r := utilyaml.NewYAMLReader(bufio.NewReader(bytes.NewReader(raw)))
 	var objs []*unstructured.Unstructured
 	for {
@@ -426,11 +495,11 @@ func loadObjects(path string) ([]*unstructured.Unstructured, error) {
 			return objs, nil
 		}
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
+			return nil, err
 		}
 		var m map[string]any
 		if err := yaml.Unmarshal(doc, &m); err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
+			return nil, err
 		}
 		if len(m) == 0 {
 			continue

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -365,6 +366,41 @@ func TestLoadBundles_SubstitutionErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			index := "---\nparams:\n  e2e:\n    substitutions:\n      - " + tt.sub + "\n---\n"
 			_, err := LoadBundles(writeBundle(t, map[string]string{"01-a.yaml": cm, "index.md": index}))
+			require.ErrorContains(t, err, tt.err)
+		})
+	}
+}
+
+// TestLoadBundles_Waits pins that a story's front matter raises the wait
+// of the steps it names, and that a wait without a reason, a positive
+// duration or a step of the story fails loading.
+func TestLoadBundles_Waits(t *testing.T) {
+	const cm = "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x, namespace: a}\n"
+	load := func(waits string) (*Bundle, error) {
+		index := "---\nparams:\n  e2e:\n    waits:\n" + waits + "---\n"
+		bs, err := LoadBundles(writeBundle(t, map[string]string{"01-a.yaml": cm, "02-a.yaml": cm, "index.md": index}))
+		if err != nil {
+			return nil, err
+		}
+		return bs[0], nil
+	}
+
+	b, err := load("      - {step: 2, wait: 4m, reason: gateways connect}\n")
+	require.NoError(t, err)
+	require.Equal(t, map[int]StepWait{2: {Step: 2, Wait: 4 * time.Minute, Reason: "gateways connect"}}, b.Waits)
+
+	for _, tt := range []struct {
+		name  string
+		waits string
+		err   string
+	}{
+		{name: "no reason", waits: "      - {step: 1, wait: 4m}\n", err: "the wait of step 1 needs a positive wait and a reason"},
+		{name: "not a duration", waits: "      - {step: 1, wait: soon, reason: r}\n", err: "wait of step 1"},
+		{name: "no such step", waits: "      - {step: 3, wait: 4m, reason: r}\n", err: "a wait names step 3, which has no files"},
+		{name: "twice", waits: "      - {step: 1, wait: 4m, reason: r}\n      - {step: 1, wait: 5m, reason: r}\n", err: "two waits for step 1"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := load(tt.waits)
 			require.ErrorContains(t, err, tt.err)
 		})
 	}

@@ -3,6 +3,8 @@ title: Leaf nodes at the edge
 weight: 10
 params:
   e2e:
+    waits:
+      - {step: 1, wait: 4m, reason: "the hub and both edges start before the leaf remotes connect; 2m2s on kind"}
     clusters:
       - name: hub
         files: [e2e/00-hub.yaml, 01-hub.yaml]
@@ -20,8 +22,8 @@ params:
       - files: [01-hub.yaml, 01-edge.yaml, 01-edge-operator.yaml]
         kind: NatsCluster
         reason: >-
-          nats 2.15.1 is not published; hack/e2e.sh loads 2.15.0 as localhost/nats under both tags, which
-          the kubelet does not pull. A Kubernetes cluster is one 3G minikube node.
+          nats 2.15.1 is not published; hack/e2e loads 2.15.0 as localhost/nats under both tags, which
+          the kubelet does not pull. A Kubernetes cluster is one kind node, on a host every cluster of the run shares.
         patch:
           spec:
             image: localhost/nats
@@ -29,7 +31,7 @@ params:
             resources: {requests: {cpu: 100m, memory: 192Mi}, limits: {memory: 192Mi}}
       - files: [01-hub.yaml]
         kind: NatsCluster
-        reason: a 3G minikube node holds three servers; no cert-manager, so the leafnode listener runs without TLS
+        reason: one kind node, on a host every cluster of the run shares, holds three servers; no cert-manager, so the leafnode listener runs without TLS
         patch: {spec: {replicas: 3, leafnodes: {tls: null}}}
       - files: [01-edge.yaml]
         kind: NatsConnection

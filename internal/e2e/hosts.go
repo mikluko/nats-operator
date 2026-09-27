@@ -15,8 +15,8 @@ import (
 // hostnames, comma-separated.
 const HostnameAnnotation = "external-dns.alpha.kubernetes.io/hostname"
 
-// HostsKey is the key of kube-system/coredns that PublishHosts writes; the
-// Corefile hack/e2e.sh installs reads it through the hosts plugin.
+// HostsKey is the key of kube-system/coredns that PublishHosts writes;
+// Corefile reads it through the hosts plugin.
 const HostsKey = "e2e.hosts"
 
 // PublishHosts stands in for external-dns across the Kubernetes clusters

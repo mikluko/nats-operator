@@ -3,12 +3,14 @@ title: Retiring a NATS cluster
 weight: 11
 params:
   e2e:
+    waits:
+      - {step: 1, wait: 4m, reason: "six servers start before streams move off prod-east; 2m6s on kind"}
     substitutions:
       - files: [01-natscluster-prod-east.yaml, 01-evacuation.yaml]
         kind: NatsCluster
         reason: >-
-          nats 2.15.1 is not published; hack/e2e.sh loads 2.15.0 as localhost/nats under both tags, which
-          the kubelet does not pull. Six servers share one 3G minikube node.
+          nats 2.15.1 is not published; hack/e2e loads 2.15.0 as localhost/nats under both tags, which
+          the kubelet does not pull. Six servers share one kind node, on a host every cluster of the run shares.
         patch:
           spec:
             image: localhost/nats

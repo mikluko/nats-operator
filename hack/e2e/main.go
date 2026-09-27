@@ -1,6 +1,29 @@
-// Command e2e runs the story bundles against the Kubernetes clusters the
-// kubeconfig contexts in -contexts name, the home cluster first, and prints a
-// per-story result table. It exits 1 when any story fails.
+// Command e2e runs the story bundles end to end on kind clusters over
+// rootful podman, and prints a per-story result table; it exits 1 when any
+// story fails. Run from the repository root:
+//
+//	go run ./hack/e2e          create or reuse the clusters, run the stories
+//	go run ./hack/e2e -down    delete the clusters
+//
+// On Linux it runs in place, as root. On darwin nothing but the build runs
+// on the host: it builds the controller images with ko and itself for
+// Linux, brings up the Apple container machine E2E_MACHINE, ships the
+// working tree and both builds into it, and runs there.
+//
+// Every cluster is on kind's one podman network, with MetalLB handing out
+// LoadBalancer addresses from its own slice of that network, so a Service's
+// address is reachable from every cluster; the runner publishes the
+// hostnames such Services carry to every cluster's CoreDNS.
+//
+//	E2E_MACHINE           the darwin container machine              nats-operator-e2e
+//	E2E_DNS               nameserver the machine resolves by        9.9.9.9
+//	E2E_CLUSTER           home kind cluster; the others are         nats-operator-e2e
+//	                      named <cluster>-2, <cluster>-3
+//	E2E_CLUSTERS          how many Kubernetes clusters              2
+//	E2E_CONTROLLERS       controllers the home chart enables        cluster auth jetstream
+//	E2E_PEER_CONTROLLERS  controllers the others' chart enables     cluster jetstream
+//	E2E_STORIES           comma-separated story numbers             all
+//	E2E_WAIT              a step's wait, where its story sets none  90s
 package main
 
 import (
@@ -9,102 +32,92 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
-
-	"k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
-
-	"github.com/mikluko/nats-operator/internal/e2e"
 )
 
+// config is the run the E2E_* variables describe.
+type config struct {
+	machine         string
+	dns             string
+	cluster         string
+	clusters        int
+	controllers     []string
+	peerControllers []string
+	stories         string
+	wait            time.Duration
+}
+
+// loadConfig reads config from getenv, each unset or empty variable taking
+// its default.
+func loadConfig(getenv func(string) string) (config, error) {
+	get := func(k, def string) string {
+		if v := getenv(k); v != "" {
+			return v
+		}
+		return def
+	}
+	c := config{
+		machine:         get("E2E_MACHINE", "nats-operator-e2e"),
+		dns:             get("E2E_DNS", "9.9.9.9"),
+		cluster:         get("E2E_CLUSTER", "nats-operator-e2e"),
+		controllers:     strings.Fields(get("E2E_CONTROLLERS", "cluster auth jetstream")),
+		peerControllers: strings.Fields(get("E2E_PEER_CONTROLLERS", "cluster jetstream")),
+		stories:         getenv("E2E_STORIES"),
+	}
+	var err error
+	if c.clusters, err = strconv.Atoi(get("E2E_CLUSTERS", "2")); err != nil || c.clusters < 1 {
+		return c, fmt.Errorf("E2E_CLUSTERS %q is not a positive number", getenv("E2E_CLUSTERS"))
+	}
+	if c.wait, err = time.ParseDuration(get("E2E_WAIT", "90s")); err != nil || c.wait <= 0 {
+		return c, fmt.Errorf("E2E_WAIT %q is not a positive duration", getenv("E2E_WAIT"))
+	}
+	return c, nil
+}
+
+// clusterNames are the kind clusters, the home cluster first.
+func (c config) clusterNames() []string {
+	names := []string{c.cluster}
+	for i := 2; i <= c.clusters; i++ {
+		names = append(names, fmt.Sprintf("%s-%d", c.cluster, i))
+	}
+	return names
+}
+
 func main() {
-	stories := flag.String("stories", "docs/content/docs/stories", "directory holding the story bundles")
-	only := flag.String("only", "", "comma-separated story numbers to run; empty runs all")
-	timeout := flag.Duration("timeout", 5*time.Minute, "how long each story waits for its statuses")
-	interval := flag.Duration("interval", 2*time.Second, "how often statuses are read")
-	contexts := flag.String("contexts", "", "comma-separated kubeconfig contexts, the home cluster first; empty is the current context alone")
+	down := flag.Bool("down", false, "delete the kind clusters instead of running the stories")
+	images := flag.String("images", "", "images.json of controller images built elsewhere; empty builds them with ko")
 	flag.Parse()
 
-	if err := run(*stories, *only, *contexts, *timeout, *interval); err != nil {
+	if err := run(*down, *images); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "e2e:", err)
 		os.Exit(1)
 	}
 }
 
-func run(dir, only, contexts string, timeout, interval time.Duration) error {
-	selected, err := parseNumbers(only)
+func run(down bool, images string) error {
+	cfg, err := loadConfig(os.Getenv)
 	if err != nil {
 		return err
 	}
-	bundles, err := e2e.LoadBundles(dir)
+	root, err := os.Getwd()
 	if err != nil {
 		return err
 	}
-	clients, err := newClients(contexts)
-	if err != nil {
-		return err
-	}
-	r := &e2e.Runner{Clients: clients, Timeout: timeout, Interval: interval, Log: os.Stderr}
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	var results []e2e.Result
-	failed := false
-	for _, b := range bundles {
-		if len(selected) > 0 && !selected[b.Number] {
-			continue
-		}
-		res := r.Run(ctx, b)
-		failed = failed || res.Outcome == e2e.Fail
-		results = append(results, res)
+	switch runtime.GOOS {
+	case "darwin":
+		return viaMachine(ctx, cfg, root, down)
+	case "linux":
+		return harness(ctx, cfg, root, images, down)
+	default:
+		return fmt.Errorf("no e2e harness on %s", runtime.GOOS)
 	}
-	if len(results) == 0 {
-		return fmt.Errorf("no story in %s matches %q", dir, only)
-	}
-	fmt.Println()
-	if err := e2e.WriteTable(os.Stdout, results); err != nil {
-		return err
-	}
-	if failed {
-		return fmt.Errorf("stories failed")
-	}
-	return nil
 }
 
-func newClients(contexts string) ([]client.Client, error) {
-	names := []string{""}
-	if contexts != "" {
-		names = strings.Split(contexts, ",")
-	}
-	clients := make([]client.Client, 0, len(names))
-	for _, name := range names {
-		cfg, err := config.GetConfigWithContext(strings.TrimSpace(name))
-		if err != nil {
-			return nil, fmt.Errorf("context %q: %w", name, err)
-		}
-		c, err := client.New(cfg, client.Options{Scheme: scheme.Scheme})
-		if err != nil {
-			return nil, fmt.Errorf("context %q: %w", name, err)
-		}
-		clients = append(clients, c)
-	}
-	return clients, nil
-}
-
-func parseNumbers(s string) (map[int]bool, error) {
-	out := map[int]bool{}
-	for f := range strings.SplitSeq(s, ",") {
-		if f = strings.TrimSpace(f); f == "" {
-			continue
-		}
-		n, err := strconv.Atoi(f)
-		if err != nil {
-			return nil, fmt.Errorf("story number %q: %w", f, err)
-		}
-		out[n] = true
-	}
-	return out, nil
+func logf(format string, args ...any) {
+	_, _ = fmt.Fprintf(os.Stderr, "==> "+format+"\n", args...)
 }

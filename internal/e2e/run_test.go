@@ -47,9 +47,9 @@ func TestPoll_RetriesErrors(t *testing.T) {
 			r := &Runner{Clients: []client.Client{c}, Timeout: 500 * time.Millisecond, Interval: 10 * time.Millisecond}
 			sh := share{client: c, step: Step{Expectations: []Expectation{{File: "01-live-configmap.yaml", Want: map[string]any{"data": map[string]any{"v": "1"}}}}},
 				targets: []*unstructured.Unstructured{target}}
-			diff, err := r.poll(t.Context(), []share{sh})
+			o, err := r.poll(t.Context(), stage{at: "01-x step 1", wait: r.Timeout, shares: []share{sh}}, [][]string{nil})
 			require.NoError(t, err)
-			require.Equal(t, tt.want, diff)
+			require.Equal(t, outcome{diff: tt.want}, o)
 		})
 	}
 }

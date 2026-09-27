@@ -2,6 +2,7 @@ package lifecycle
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -56,6 +57,32 @@ func TestSync_SettlingRecheck(t *testing.T) {
 				fetchOnly{info: &Info{Config: cfg, Cluster: tt.cluster}})
 			require.NoError(t, err)
 			require.Equal(t, tt.want, res.RequeueAfter)
+		})
+	}
+}
+
+// TestClassify pins which JetStream API errors are Terminal: a request the
+// server refuses as invalid is, and one it cannot place for want of peers,
+// which servers coming online resolve, is not.
+func TestClassify(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		err      error
+		terminal bool
+	}{
+		{name: "bad request", err: &jetstream.APIError{Code: 400, ErrorCode: 10058, Description: "stream name already in use with a different configuration"}, terminal: true},
+		{name: "invalid stream config", err: &jetstream.APIError{Code: 500, ErrorCode: 10052, Description: "replicas > 1 not supported in non-clustered mode"}, terminal: true},
+		{name: "no peers", err: &jetstream.APIError{Code: 400, ErrorCode: 10005, Description: "no suitable peers for placement, peer offline"}},
+		{name: "server error", err: &jetstream.APIError{Code: 500, ErrorCode: 10008, Description: "JetStream system temporarily unavailable"}},
+		{name: "not an API error", err: context.DeadlineExceeded},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := classify(tt.err)
+			var te *TerminalError
+			require.Equal(t, tt.terminal, errors.As(got, &te))
+			if !tt.terminal {
+				require.Equal(t, tt.err, got)
+			}
 		})
 	}
 }

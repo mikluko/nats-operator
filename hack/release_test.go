@@ -121,7 +121,7 @@ type chartValues struct {
 }
 
 // controllers are the commands under cmd/ named *-controller, which the
-// Justfile, the release workflow and hack/e2e.sh build.
+// Justfile, the release workflow and hack/e2e build.
 func controllers(t *testing.T) []string {
 	t.Helper()
 	dirs, err := filepath.Glob("../cmd/*-controller")

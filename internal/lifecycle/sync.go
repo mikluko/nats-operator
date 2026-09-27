@@ -286,15 +286,26 @@ func (s Syncer) settle(ctx context.Context, r Resource, o Object, info *Info, m 
 	return info, nil
 }
 
-// errCodeStreamInvalidConfig is nats-server's JSStreamInvalidConfigF, a
-// stream config refused as invalid, which it reports with code 500.
-const errCodeStreamInvalidConfig jetstream.ErrorCode = 10052
+// JetStream API error codes classify tells apart.
+const (
+	// errCodeStreamInvalidConfig is nats-server's JSStreamInvalidConfigF, a
+	// stream config refused as invalid, which it reports with code 500.
+	errCodeStreamInvalidConfig jetstream.ErrorCode = 10052
+	// errCodeClusterNoPeers is nats-server's JSClusterNoPeersErrF, reported
+	// with code 400 while too few servers are online or have room to place
+	// the object, which changes as servers come and go.
+	errCodeClusterNoPeers jetstream.ErrorCode = 10005
+)
 
 // classify turns a JetStream API error refusing the request as invalid into
-// a TerminalError, and returns any other error as it is.
+// a TerminalError, and returns any other error, a lack of peers to place
+// the object on among them, as it is.
 func classify(err error) error {
 	var apiErr *jetstream.APIError
-	if errors.As(err, &apiErr) && (apiErr.Code == http.StatusBadRequest || apiErr.ErrorCode == errCodeStreamInvalidConfig) {
+	if !errors.As(err, &apiErr) || apiErr.ErrorCode == errCodeClusterNoPeers {
+		return err
+	}
+	if apiErr.Code == http.StatusBadRequest || apiErr.ErrorCode == errCodeStreamInvalidConfig {
 		return &TerminalError{Reason: ReasonRejected, Message: apiErr.Description}
 	}
 	return err

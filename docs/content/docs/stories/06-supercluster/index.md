@@ -3,6 +3,8 @@ title: A supercluster across Kubernetes clusters
 weight: 6
 params:
   e2e:
+    waits:
+      - {step: 1, wait: 3m, reason: "the gateways connect once both clusters' servers are up; 1m16s on kind"}
     clusters:
       - name: east
         files: [e2e/00-home.yaml, 01-natsoperatortrust.yaml, 01-east.yaml, 01-east-auth.yaml]
@@ -14,7 +16,7 @@ params:
         patch: {spec: {operatorJWT: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ.eyJqdGkiOiJGUkVPS0tGNFZMNDJGUzRINzRDMkpHQ083NElNVlJUU1lOR1BWRDZEUFhYRTVWN0ZJT1hBIiwiaWF0IjoxNzkwNDU4MDk4LCJpc3MiOiJPQUxVWk5RSExIVTZVN1VZWEdKWUxFRU9VTjY1MlpPQlZFNldTUUlUNEhPSldFVUdZNlZZS0tOTCIsIm5hbWUiOiJhY21lIiwic3ViIjoiT0FMVVpOUUhMSFU2VTdVWVhHSllMRUVPVU42NTJaT0JWRTZXU1FJVDRIT0pXRVVHWTZWWUtLTkwiLCJuYXRzIjp7InNpZ25pbmdfa2V5cyI6WyJPQ01GSVBDNUxYWDVIVFFaMktGWUNVSVhGRFdZS0RSMldXM0paTEc1VURQQ1k0UkhMUk1DTFVJQyJdLCJzeXN0ZW1fYWNjb3VudCI6IkFBQUUzVlRUMzNWNjZMREdVVFA2VVdRRjJOQ0tVV1lYSjJQREFXNTZVQllTNUpITklBVUNKM0pLIiwidHlwZSI6Im9wZXJhdG9yIiwidmVyc2lvbiI6Mn19.TiXzDMG0ayqvuCoFp_yS7dqhN4I0_G3FNafwYrI4MmtUnl9zoJiLmWQkvcV43bBxCmnc6okNkgH__S8aTmZzAg, systemAccountJWT: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ.eyJqdGkiOiJGQloyV0RESFIzVlU2RFBEWFNDVEpJTEdJVExBRTNVTEhBSzVWQVlWNDRUUzUyUUVaVzRBIiwiaWF0IjoxNzkwNDU4MDk4LCJpc3MiOiJPQ01GSVBDNUxYWDVIVFFaMktGWUNVSVhGRFdZS0RSMldXM0paTEc1VURQQ1k0UkhMUk1DTFVJQyIsIm5hbWUiOiJzeXMiLCJzdWIiOiJBQUFFM1ZUVDMzVjY2TERHVVRQNlVXUUYyTkNLVVdZWEoyUERBVzU2VUJZUzVKSE5JQVVDSjNKSyIsIm5hdHMiOnsibGltaXRzIjp7InN1YnMiOi0xLCJkYXRhIjotMSwicGF5bG9hZCI6LTEsImltcG9ydHMiOi0xLCJleHBvcnRzIjotMSwid2lsZGNhcmRzIjp0cnVlLCJjb25uIjotMSwibGVhZiI6LTF9LCJzaWduaW5nX2tleXMiOlsiQUE1QjRCUEtXNUk0Wk5SRTJBTDRMUUxYWE5SSUVCVFZWUFJRVVlKT0NWM0NPS1dRTEVJT05DWUciXSwiZGVmYXVsdF9wZXJtaXNzaW9ucyI6eyJwdWIiOnt9LCJzdWIiOnt9fSwiYXV0aG9yaXphdGlvbiI6e30sInR5cGUiOiJhY2NvdW50IiwidmVyc2lvbiI6Mn19.Jgm3mEMgAbtqmHH9p-coJfjElLl_xOAfvHAogRfdk1aa43Ep8WB7WJbu-DyOMNu38qZXqQexg2ypalA6kumJDw}}
       - files: [01-east.yaml, 01-west.yaml]
         reason: >-
-          three servers share one 3G minikube node with one storage class; no cert-manager, so the gateways
+          three servers share one kind node, on a host every cluster of the run shares, with one storage class; no cert-manager, so the gateways
           run without TLS
         patch:
           spec:

@@ -44,10 +44,19 @@ type Runner struct {
 	// Clients reach one Kubernetes cluster each, the home cluster first; a
 	// story's placements are taken by these in order.
 	Clients []client.Client
-	// Timeout bounds the wait for each step's expectations, and separately
-	// the wait for a previous story's namespace to finish deleting.
-	Timeout  time.Duration
+	// Timeout bounds the wait for a step's expectations where its bundle
+	// sets no wait of its own.
+	Timeout time.Duration
+	// Teardown bounds the wait for a previous story's namespace to finish
+	// deleting; 0 is Timeout.
+	Teardown time.Duration
 	Interval time.Duration
+	// Report is how often a step still waiting logs what it waits for; 0
+	// logs nothing.
+	Report time.Duration
+	// Namespaces are watched for stuck pods and failed Jobs in every
+	// cluster, besides the story's own.
+	Namespaces []string
 	// Log receives one line per phase of each story.
 	Log io.Writer
 }
@@ -57,7 +66,9 @@ const fieldOwner = "nats-operator-e2e"
 // share is one Kubernetes cluster's part of one step: the client reaching
 // it, the step's files placed there, and the object each expectation reads.
 type share struct {
-	client  client.Client
+	client client.Client
+	// cluster is the index of client in Runner.Clients.
+	cluster int
 	where   string
 	step    Step
 	targets []*unstructured.Unstructured
@@ -66,6 +77,7 @@ type share struct {
 // stage is one step of one bundle across every Kubernetes cluster.
 type stage struct {
 	at     string
+	wait   time.Duration
 	shares []share
 }
 
@@ -75,10 +87,16 @@ type stage struct {
 // declared in; then, bundle by bundle and step by step, it server-side
 // applies the step's manifests and deletes the objects it deletes in their
 // clusters, and polls until each of its expectations' target objects, read
-// in the expectation's cluster, contains it or Timeout passes. An
-// expectation that names no object of its cluster fails the story before
-// anything is applied; a bundle whose SkipReason is not "", or that places
-// files in more clusters than Clients reach, is skipped.
+// in the expectation's cluster, contains it, or the step's wait passes: the
+// bundle's Waits entry for it, else Timeout. A step fails at once on a
+// signal that its expectations will not be met: a target whose Terminal
+// condition is True or whose Ready condition is False for a terminal
+// reason, unless the expectation holds that condition itself, or, in the
+// story's namespaces or Namespaces of the step's clusters, a container
+// stuck waiting or a failed Job. An expectation that names no object of its
+// cluster fails the story before anything is applied; a bundle whose
+// SkipReason is not "", or that places files in more clusters than Clients
+// reach, is skipped.
 func (r *Runner) Run(ctx context.Context, b *Bundle) Result {
 	start := time.Now()
 	res := func(o Outcome, detail string) Result {
@@ -116,13 +134,16 @@ func (r *Runner) Run(ctx context.Context, b *Bundle) Result {
 		}
 		slices.Sort(numbers)
 		for _, n := range numbers {
-			st := stage{at: fmt.Sprintf("%s step %d", c.Name, n)}
+			st := stage{at: fmt.Sprintf("%s step %d", c.Name, n), wait: r.Timeout}
+			if w, ok := c.Waits[n]; ok {
+				st.wait = w.Wait
+			}
 			for i, p := range parts {
 				j := slices.IndexFunc(p.Steps, func(s Step) bool { return s.Number == n })
 				if j < 0 {
 					continue
 				}
-				sh := share{client: r.Clients[i], where: where(p), step: p.Steps[j]}
+				sh := share{client: r.Clients[i], cluster: i, where: where(p), step: p.Steps[j]}
 				for _, e := range sh.step.Expectations {
 					t, err := p.Target(n, e)
 					if err != nil {
@@ -171,14 +192,18 @@ func (r *Runner) Run(ctx context.Context, b *Bundle) Result {
 		if n == 0 {
 			continue
 		}
-		r.logf("%s: polling %d files, timeout %s", st.at, n, r.Timeout)
-		diff, err := r.poll(ctx, st.shares)
-		if err != nil {
+		r.logf("%s: polling %d files, timeout %s", st.at, n, st.wait)
+		began := time.Now()
+		o, err := r.poll(ctx, st, namespaces)
+		switch {
+		case err != nil:
 			return res(Fail, fmt.Sprintf("%s: %v", st.at, err))
+		case o.signal != "":
+			return res(Fail, fmt.Sprintf("%s: %s\n%s", st.at, o.signal, o.diff))
+		case o.diff != "":
+			return res(Fail, fmt.Sprintf("%s: timed out after %s\n%s", st.at, st.wait, o.diff))
 		}
-		if diff != "" {
-			return res(Fail, fmt.Sprintf("%s: timed out after %s\n%s", st.at, r.Timeout, diff))
-		}
+		r.logf("%s: matched after %s", st.at, time.Since(began).Round(time.Second))
 	}
 	return res(Pass, "")
 }
@@ -192,41 +217,61 @@ func where(p *Bundle) string {
 	return " in " + p.Clusters[0].Name
 }
 
-// poll returns "" once every expectation holds, or else the diff of the
-// last check when Timeout passes, which is never "" when no check completed,
-// followed by the last error a round met. A round failing on an API error
-// is retried until the deadline. Each round first publishes the external
-// hostnames of every cluster's LoadBalancer Services to all of them.
-func (r *Runner) poll(ctx context.Context, shares []share) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, r.Timeout)
+// outcome is how a step's wait ended: diff is "" once every expectation
+// holds, and otherwise the diff of the last check, which is never "" when no
+// check completed, followed by the last error a round met; signal is why
+// the step stopped waiting before its deadline, or "".
+type outcome struct {
+	diff   string
+	signal string
+}
+
+// poll waits up to st.wait for every expectation of st to hold. A round
+// failing on an API error is retried until the deadline; a round finding a
+// signal ends the wait. Each round first publishes the external hostnames
+// of every cluster's LoadBalancer Services to all of them. Every Report the
+// diff of the last check is logged.
+func (r *Runner) poll(ctx context.Context, st stage, namespaces [][]string) (outcome, error) {
+	ctx, cancel := context.WithTimeout(ctx, st.wait)
 	defer cancel()
 	tick := time.NewTicker(r.Interval)
 	defer tick.Stop()
+	began, reported := time.Now(), time.Now()
 	diff := "  no status read before the deadline\n"
 	var lastErr error
 	for {
 		err := PublishHosts(ctx, r.Clients)
 		var d string
 		if err == nil {
-			d, err = r.check(ctx, shares)
+			d, err = r.check(ctx, st.shares)
 		}
 		switch {
 		case err == nil && d == "":
-			return "", nil
+			return outcome{}, nil
 		case err == nil:
 			diff, lastErr = d, nil
+			sig, err := r.signal(ctx, st.shares, namespaces)
+			if err != nil {
+				lastErr = err
+			} else if sig != "" {
+				return outcome{diff: diff, signal: sig}, nil
+			}
 		default:
 			lastErr = err
+		}
+		if r.Report > 0 && time.Since(reported) >= r.Report {
+			reported = time.Now()
+			r.logf("%s: waiting %s\n%s", st.at, time.Since(began).Round(time.Second), strings.TrimSuffix(diff, "\n"))
 		}
 		select {
 		case <-ctx.Done():
 			if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return "", ctx.Err()
+				return outcome{}, ctx.Err()
 			}
 			if lastErr != nil {
 				diff += fmt.Sprintf("  last error: %v\n", lastErr)
 			}
-			return diff, nil
+			return outcome{diff: diff}, nil
 		case <-tick.C:
 		}
 	}
@@ -351,7 +396,11 @@ func forceDeletes(ctx context.Context, c client.Client, ns string) error {
 }
 
 func (r *Runner) awaitGone(ctx context.Context, c client.Client, ns *corev1.Namespace) error {
-	ctx, cancel := context.WithTimeout(ctx, r.Timeout)
+	limit := r.Teardown
+	if limit == 0 {
+		limit = r.Timeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	tick := time.NewTicker(r.Interval)
 	defer tick.Stop()
@@ -362,7 +411,7 @@ func (r *Runner) awaitGone(ctx context.Context, c client.Client, ns *corev1.Name
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("namespace %s still terminating after %s", ns.Name, r.Timeout)
+			return fmt.Errorf("namespace %s still terminating after %s", ns.Name, limit)
 		case <-tick.C:
 		}
 	}

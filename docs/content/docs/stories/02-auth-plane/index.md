@@ -5,7 +5,7 @@ params:
   e2e:
     substitutions:
       - files: [01-natscluster.yaml]
-        reason: three servers share one 3G minikube node
+        reason: three servers share one kind node, on a host every cluster of the run shares
         patch: {spec: {resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 256Mi}}}}
 ---
 

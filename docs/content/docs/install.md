@@ -44,6 +44,8 @@ For each enabled controller this starts the Pod `<release>-<controller>-test`, w
 
 Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NATS cluster with JetStream.
 
+The stories run end to end from a checkout of the repository with `just e2e`, on kind clusters it creates; [Running the stories]({{< relref "/docs/stories#running-the-stories" >}}) says what it needs.
+
 ## Values
 
 | Value | Default | What it sets |

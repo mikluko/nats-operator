@@ -112,10 +112,15 @@ envtest:
     KUBEBUILDER_ASSETS="$(go tool setup-envtest use {{ envtest_k8s_version }} --bin-dir "{{ bin }}" -p path)" \
         go test -race ./... -run Envtest
 
-# The story bundles end to end on minikube inside an Apple `container`
-# machine; hack/e2e.sh lists the E2E_* variables it reads.
+# The story bundles end to end on kind over rootful podman: in place on
+# Linux, run as root; on darwin, inside an Apple `container` machine.
+# hack/e2e lists the E2E_* variables it reads.
 e2e:
-    hack/e2e.sh
+    go run ./hack/e2e
+
+# Deletes the kind clusters `just e2e` runs on.
+e2e-down:
+    go run ./hack/e2e -down
 
 clean:
     rm -rf "{{ bin }}"

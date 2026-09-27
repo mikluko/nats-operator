@@ -85,6 +85,59 @@ spec: {servers: ["nats://demo:4222"]}
 	})
 }
 
+// TestEnvtest_CrashLoopFailsFast pins that a story whose pod crash-loops
+// fails its step within seconds, naming the pod, rather than at the step's
+// wait, which its front matter sets.
+func TestEnvtest_CrashLoopFailsFast(t *testing.T) {
+	c := startAPIServer(t)
+	root := writeBundle(t, map[string]string{
+		"index.md": "---\nparams:\n  e2e:\n    waits:\n      - {step: 1, wait: 2m, reason: slow}\n---\n",
+		"01-pod.yaml": `apiVersion: v1
+kind: Pod
+metadata: {name: nats-0, namespace: crashing}
+spec: {containers: [{name: nats, image: nats:2.15.0}]}
+`,
+		"01-conn.yaml": `apiVersion: nats.mikluko.io/v1beta1
+kind: NatsConnection
+metadata: {name: demo, namespace: crashing}
+spec: {servers: ["nats://demo:4222"]}
+`,
+		"01-status-natsconnection.yaml": "status:\n  conditions:\n  - {type: Ready, status: \"True\"}\n",
+	})
+	bundles, err := LoadBundles(root)
+	require.NoError(t, err)
+	go crashLoopWhenPresent(t.Context(), c, "crashing", "nats-0")
+	var log bytes.Buffer
+	r := &Runner{Clients: []client.Client{c}, Timeout: time.Minute, Interval: 100 * time.Millisecond, Log: &log}
+	start := time.Now()
+	res := r.Run(t.Context(), bundles[0])
+	require.Equal(t, Fail, res.Outcome)
+	require.Less(t, time.Since(start), 15*time.Second)
+	require.Contains(t, res.Detail, "step 1: pod crashing/nats-0 container nats: CrashLoopBackOff: back-off 10s restarting failed container\n")
+	require.Contains(t, res.Detail, "01-status-natsconnection.yaml -> NatsConnection crashing/demo")
+	require.Contains(t, log.String(), "step 1: polling 1 files, timeout 2m0s")
+}
+
+// crashLoopWhenPresent plays the kubelet for pod ns/name, whose container
+// crash-loops.
+func crashLoopWhenPresent(ctx context.Context, c client.Client, ns, name string) {
+	for ctx.Err() == nil {
+		var p corev1.Pod
+		if c.Get(ctx, client.ObjectKey{Namespace: ns, Name: name}, &p) == nil {
+			p.Status.ContainerStatuses = []corev1.ContainerStatus{{
+				Name: "nats", Image: "nats:2.15.0", RestartCount: 3,
+				State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{
+					Reason: "CrashLoopBackOff", Message: "back-off 10s restarting failed container",
+				}},
+			}}
+			if c.Status().Update(ctx, &p) == nil {
+				return
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 // TestEnvtest_ReleaseGuards pins that a namespace's NatsClusters are
 // annotated to pass their deletion guard, and its JetStream resources set to
 // retain their server objects, before the runner deletes it.
