@@ -14,14 +14,14 @@ import (
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/balance"
+	"github.com/mikluko/nats-operator/internal/streamctl"
 )
 
 // A member is a resource a pool can select: a NatsStream, NatsKeyValue or
 // NatsObjectStore, by the stream it stands for on the server.
 type member struct {
 	Labels labels.Set
-	// Stream is the server-side stream: a key-value bucket's is KV_<bucket>
-	// and an object store's OBJ_<bucket>.
+	// Stream is the server-side stream, as [streamctl.ServerStream] names it.
 	Stream string
 	// Cluster is the NATS cluster its spec pins it to, "" where none.
 	Cluster string
@@ -39,27 +39,30 @@ func members(ctx context.Context, c client.Reader, namespace string, conn natsv1
 	if err := c.List(ctx, &streams, client.InNamespace(namespace)); err != nil {
 		return nil, fmt.Errorf("list NatsStreams: %w", err)
 	}
-	for _, s := range streams.Items {
+	for i := range streams.Items {
+		s := &streams.Items[i]
 		if same(s.Spec.ConnectionRef) {
-			out = append(out, newMember(s.ObjectMeta, s.Spec.Name, "", s.Spec.Placement, s.Status.Conditions))
+			out = append(out, newMember(s, s.Spec.Placement, s.Status.Conditions))
 		}
 	}
 	var kvs js.NatsKeyValueList
 	if err := c.List(ctx, &kvs, client.InNamespace(namespace)); err != nil {
 		return nil, fmt.Errorf("list NatsKeyValues: %w", err)
 	}
-	for _, s := range kvs.Items {
+	for i := range kvs.Items {
+		s := &kvs.Items[i]
 		if same(s.Spec.ConnectionRef) {
-			out = append(out, newMember(s.ObjectMeta, s.Spec.Name, "KV_", s.Spec.Placement, s.Status.Conditions))
+			out = append(out, newMember(s, s.Spec.Placement, s.Status.Conditions))
 		}
 	}
 	var objs js.NatsObjectStoreList
 	if err := c.List(ctx, &objs, client.InNamespace(namespace)); err != nil {
 		return nil, fmt.Errorf("list NatsObjectStores: %w", err)
 	}
-	for _, s := range objs.Items {
+	for i := range objs.Items {
+		s := &objs.Items[i]
 		if same(s.Spec.ConnectionRef) {
-			out = append(out, newMember(s.ObjectMeta, s.Spec.Name, "OBJ_", s.Spec.Placement, s.Status.Conditions))
+			out = append(out, newMember(s, s.Spec.Placement, s.Status.Conditions))
 		}
 	}
 	return out, nil
@@ -72,11 +75,8 @@ func refNamespace(ref natsv1beta1.ObjectReference, own string) string {
 	return ref.Namespace
 }
 
-func newMember(m metav1.ObjectMeta, name, prefix string, p *js.Placement, conds []metav1.Condition) member {
-	if name == "" {
-		name = m.Name
-	}
-	out := member{Labels: m.Labels, Stream: prefix + name, Ready: meta.IsStatusConditionTrue(conds, ConditionReady)}
+func newMember(o client.Object, p *js.Placement, conds []metav1.Condition) member {
+	out := member{Labels: o.GetLabels(), Stream: streamctl.ServerStream(o), Ready: meta.IsStatusConditionTrue(conds, ConditionReady)}
 	if p != nil {
 		out.Cluster = p.Cluster
 	}

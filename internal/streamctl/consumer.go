@@ -20,9 +20,10 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
+	"github.com/mikluko/nats-operator/internal/jsapi"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
-	"github.com/mikluko/nats-operator/internal/telemetry"
+	"github.com/mikluko/nats-operator/internal/refindex"
 )
 
 // ConsumerKind is the kind a NatsConsumer is referred to by.
@@ -64,88 +65,66 @@ var immutableConsumerKeys = []string{
 // NatsStream to be Ready and, without connectionRef, uses its connection.
 // Deleting a NatsConsumer whose deletionPolicy is Delete waits until its
 // connection can delete the consumer, except where its streamRef names a
-// NatsStream that no longer exists or lifecycle.Released lets it go: those
-// leave the server alone.
+// NatsStream that no longer exists or no grant admits, or
+// lifecycle.NoConn.Released lets it go: those leave the server alone.
 type ConsumerReconciler struct {
 	Client client.Client
 	Dialer *natsconn.Dialer
 	Syncer lifecycle.Syncer
 }
 
-// Reconcile implements reconcile.Reconciler.
-func (r *ConsumerReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
-	var c js.NatsConsumer
-	if err := r.Client.Get(ctx, req.NamespacedName, &c); err != nil {
-		return reconcile.Result{}, client.IgnoreNotFound(err)
-	}
-	if !c.DeletionTimestamp.IsZero() {
-		return r.finalize(ctx, &c)
-	}
-	if err := lifecycle.AddFinalizer(ctx, r.Client, &c); err != nil {
-		return reconcile.Result{}, err
-	}
-	base := c.DeepCopy()
-	res, syncErr := r.sync(ctx, &c)
-	if err := lifecycle.PatchStatus(ctx, r.Client, base, &c, base.Status, c.Status); err != nil {
-		return reconcile.Result{}, errors.Join(syncErr, err)
-	}
-	return res, syncErr
-}
-
-func (r *ConsumerReconciler) sync(ctx context.Context, c *js.NatsConsumer) (reconcile.Result, error) {
-	o, err := r.object(ctx, c, true)
-	if err != nil || o == nil {
-		return reconcile.Result{RequeueAfter: natsconn.DefaultRetryAfter}, err
-	}
-	res, info, err := r.Syncer.Sync(ctx, lifecycle.Resource{
-		Object:      c,
-		Policies:    c.Spec.Policies,
-		Status:      &c.Status.SyncStatus,
-		OwnerExists: lifecycle.OwnerExists(r.Client, &js.NatsConsumerList{}),
-	}, o)
-	if info != nil {
+var consumerKind = lifecycle.Kind[*js.NatsConsumer]{
+	Name: ConsumerKind,
+	New:  func() *js.NatsConsumer { return &js.NatsConsumer{} },
+	List: func() client.ObjectList { return &js.NatsConsumerList{} },
+	Fields: func(c *js.NatsConsumer) lifecycle.Fields {
+		return lifecycle.Fields{Policies: c.Spec.Policies, Deletion: c.Spec.DeletionPolicy, Sync: &c.Status.SyncStatus, Status: c.Status}
+	},
+	Resolve: func(ctx context.Context, c client.Client, d *natsconn.Dialer, obj *js.NatsConsumer, ready bool) (lifecycle.Object, bool, error) {
+		o, gone, err := object(ctx, c, d, obj, ready)
+		if o == nil {
+			return nil, gone, err
+		}
+		return o, false, nil
+	},
+	Record: func(c *js.NatsConsumer, info *lifecycle.Info) {
 		s := &js.ConsumerServerStatus{}
 		if !info.Created.IsZero() {
 			s.Created = ptrTo(metav1.NewTime(info.Created))
 		}
 		s.Leader, s.Replicas = cluster(info.Cluster)
 		c.Status.Server = s
-	}
-	return res, err
+	},
+	Conns: func(c *js.NatsConsumer) []natsv1beta1.ObjectReference {
+		if ref := c.Spec.ConnectionRef; ref != nil {
+			return []natsv1beta1.ObjectReference{*ref}
+		}
+		return nil
+	},
+	Refs: func(c *js.NatsConsumer) []natsv1beta1.ObjectReference {
+		var out []natsv1beta1.ObjectReference
+		if ref := c.Spec.ConnectionRef; ref != nil {
+			out = append(out, *ref)
+		}
+		if ref := c.Spec.StreamRef; ref != nil {
+			out = append(out, *ref)
+		}
+		return out
+	},
+	Watches: watchStreamRefs,
 }
 
-func (r *ConsumerReconciler) finalize(ctx context.Context, c *js.NatsConsumer) (reconcile.Result, error) {
-	if c.Spec.DeletionPolicy == js.DeletionDelete {
-		base := c.DeepCopy()
-		o, err := r.object(ctx, c, false)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-		var wait *lifecycle.WaitError
-		switch {
-		case o == nil && !streamGone(c) && !lifecycle.Released(&c.Status.SyncStatus):
-			return reconcile.Result{RequeueAfter: natsconn.DefaultRetryAfter}, lifecycle.PatchStatus(ctx, r.Client, base, c, base.Status, c.Status)
-		case o == nil:
-		default:
-			if err := lifecycle.Finalize(ctx, c.UID, c.Spec.DeletionPolicy, o); err != nil && !errors.As(err, &wait) {
-				return reconcile.Result{}, err
-			}
-		}
-	}
-	return reconcile.Result{}, lifecycle.RemoveFinalizer(ctx, r.Client, c)
-}
-
-// streamGone reports whether c's status says the NatsStream its streamRef
-// names does not exist.
-func streamGone(c *js.NatsConsumer) bool {
-	cond := meta.FindStatusCondition(c.Status.Conditions, lifecycle.ConditionReady)
-	return c.Spec.StreamRef != nil && cond != nil && cond.Reason == ReasonStreamNotFound
+// Reconcile implements reconcile.Reconciler.
+func (r *ConsumerReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
+	return consumerKind.Reconcile(ctx, r.Client, r.Dialer, r.Syncer, req)
 }
 
 // object resolves c's stream and connection, waiting for a referenced
 // NatsStream to be Ready where ready is set. Where they cannot be resolved
-// it records why on c's status and returns nil and no error.
-func (r *ConsumerReconciler) object(ctx context.Context, c *js.NatsConsumer, ready bool) (*consumerObject, error) {
+// it records why on c's status and returns nil, with gone reporting that
+// nothing will reach the consumer: the NatsStream streamRef names does not
+// exist, or the NatsConnection does not, or no grant admits a reference.
+func object(ctx context.Context, cl client.Client, d *natsconn.Dialer, c *js.NatsConsumer, ready bool) (o *consumerObject, gone bool, err error) {
 	st, gen := &c.Status.SyncStatus, c.Generation
 	from := consumerReferrer(c.Namespace)
 	stream := c.Spec.Stream
@@ -154,88 +133,72 @@ func (r *ConsumerReconciler) object(ctx context.Context, c *js.NatsConsumer, rea
 		connRef = *c.Spec.ConnectionRef
 	}
 	if ref := c.Spec.StreamRef; ref != nil {
-		s, err := r.streamRef(ctx, c, *ref, ready)
+		s, gone, err := streamRef(ctx, cl, c, *ref, ready)
 		if err != nil || s == nil {
-			return nil, err
+			return nil, gone, err
 		}
 		stream = streamName(s)
 		if c.Spec.ConnectionRef == nil {
-			connRef, from = s.Spec.ConnectionRef, streamReferrer(s.Namespace)
+			connRef, from = s.Spec.ConnectionRef, streamKind.Referrer(s.Namespace)
 			if connRef.Namespace == "" {
 				connRef.Namespace = s.Namespace
 			}
 		}
 	}
-	api, err := lifecycle.Connect(ctx, r.Dialer, from, connRef, st, gen)
+	api, why, err := lifecycle.Connect(ctx, d, from, connRef, st, gen)
 	if err != nil || api == nil {
-		return nil, err
+		return nil, why.Released(), err
 	}
-	return &consumerObject{api: api, client: r.Client, obj: c, stream: stream}, nil
+	return &consumerObject{api: api, client: cl, obj: c, stream: stream}, false, nil
 }
 
 // streamRef returns the NatsStream ref names, or nil after recording on c's
-// status why it cannot be used.
-func (r *ConsumerReconciler) streamRef(ctx context.Context, c *js.NatsConsumer, ref natsv1beta1.ObjectReference, ready bool) (*js.NatsStream, error) {
+// status why it cannot be used, with gone reporting that it does not exist or
+// no grant admits it.
+func streamRef(ctx context.Context, cl client.Client, c *js.NatsConsumer, ref natsv1beta1.ObjectReference, ready bool) (s *js.NatsStream, gone bool, err error) {
 	st, gen := &c.Status.SyncStatus, c.Generation
 	ns := ref.Namespace
 	if ns == "" {
 		ns = c.Namespace
 	}
-	denied, err := grant.Admit(ctx, r.Client, consumerReferrer(c.Namespace), grant.Target{
+	denied, err := grant.Admit(ctx, cl, consumerReferrer(c.Namespace), grant.Target{
 		Group: js.GroupVersion.Group, Kind: StreamKind, Namespace: ns, Name: ref.Name,
 	})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if denied != nil {
 		conditions.Set(&st.Conditions, gen, *denied)
 		lifecycle.NotReady(st, gen, grant.ReasonReferenceNotPermitted, denied.Message)
-		return nil, nil
+		return nil, true, nil
 	}
-	var s js.NatsStream
-	if err := r.Client.Get(ctx, types.NamespacedName{Namespace: ns, Name: ref.Name}, &s); err != nil {
+	var got js.NatsStream
+	if err := cl.Get(ctx, types.NamespacedName{Namespace: ns, Name: ref.Name}, &got); err != nil {
 		if apierrors.IsNotFound(err) {
 			lifecycle.NotReady(st, gen, ReasonStreamNotFound, fmt.Sprintf("NatsStream %s/%s does not exist", ns, ref.Name))
-			return nil, nil
+			return nil, true, nil
 		}
-		return nil, fmt.Errorf("get NatsStream %s/%s: %w", ns, ref.Name, err)
+		return nil, false, fmt.Errorf("get NatsStream %s/%s: %w", ns, ref.Name, err)
 	}
-	if cond := meta.FindStatusCondition(s.Status.Conditions, lifecycle.ConditionReady); ready &&
-		(cond == nil || cond.Status != metav1.ConditionTrue || cond.ObservedGeneration != s.Generation) {
+	if cond := meta.FindStatusCondition(got.Status.Conditions, lifecycle.ConditionReady); ready &&
+		(cond == nil || cond.Status != metav1.ConditionTrue || cond.ObservedGeneration != got.Generation) {
 		lifecycle.NotReady(st, gen, ReasonStreamNotReady, fmt.Sprintf("NatsStream %s/%s is not Ready", ns, ref.Name))
-		return nil, nil
+		return nil, false, nil
 	}
-	return &s, nil
+	return &got, false, nil
 }
 
 // SetupWithManager registers the field indexes the reconciler reads and
 // builds its controller, watching NatsConsumers, the NatsStreams and
 // NatsConnections they name and the NatsReferenceGrants that admit them.
 func (r *ConsumerReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
-	idx := mgr.GetFieldIndexer()
-	conns := func(o client.Object) []natsv1beta1.ObjectReference {
-		if ref := o.(*js.NatsConsumer).Spec.ConnectionRef; ref != nil {
-			return []natsv1beta1.ObjectReference{*ref}
-		}
-		return nil
-	}
-	all := func(o client.Object) []natsv1beta1.ObjectReference {
-		out := conns(o)
-		if ref := o.(*js.NatsConsumer).Spec.StreamRef; ref != nil {
-			out = append(out, *ref)
-		}
-		return out
-	}
-	if err := lifecycle.IndexConnections(ctx, idx, &js.NatsConsumer{}, conns); err != nil {
-		return fmt.Errorf("index NatsConsumer connections: %w", err)
-	}
-	if err := lifecycle.IndexUID(ctx, idx, &js.NatsConsumer{}); err != nil {
-		return fmt.Errorf("index NatsConsumer UIDs: %w", err)
-	}
-	if err := grant.IndexReferrers(ctx, idx, &js.NatsConsumer{}, refNamespaces(all)); err != nil {
-		return fmt.Errorf("index NatsConsumer grant targets: %w", err)
-	}
-	if err := idx.IndexField(ctx, &js.NatsConsumer{}, StreamRefField, func(o client.Object) []string {
+	return consumerKind.SetupWithManager(ctx, mgr, r)
+}
+
+// watchStreamRefs registers StreamRefField and enqueues the NatsConsumers
+// whose streamRef names a NatsStream that changes.
+func watchStreamRefs(ctx context.Context, mgr ctrl.Manager, b *builder.Builder) (*builder.Builder, error) {
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &js.NatsConsumer{}, StreamRefField, func(o client.Object) []string {
 		ref := o.(*js.NatsConsumer).Spec.StreamRef
 		if ref == nil {
 			return nil
@@ -246,16 +209,13 @@ func (r *ConsumerReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Mana
 		}
 		return []string{types.NamespacedName{Namespace: ns, Name: ref.Name}.String()}
 	}); err != nil {
-		return fmt.Errorf("index NatsConsumer stream refs: %w", err)
+		return nil, fmt.Errorf("index NatsConsumer stream refs: %w", err)
 	}
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&js.NatsConsumer{}, builder.WithPredicates(lifecycle.SpecOrDeletion())).
-		Watches(&js.NatsStream{}, lifecycle.EnqueueByField(mgr.GetClient(), &js.NatsConsumerList{}, StreamRefField)).
-		Watches(&natsv1beta1.NatsConnection{}, lifecycle.EnqueueByField(mgr.GetClient(), &js.NatsConsumerList{}, lifecycle.ConnectionField)).
-		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(mgr.GetClient(), js.GroupVersion.WithKind(ConsumerKind).GroupKind(), &js.NatsConsumerList{})).
-		Complete(telemetry.Traced("NatsConsumer", r))
+	return b.Watches(&js.NatsStream{}, refindex.EnqueueByField(mgr.GetClient(), &js.NatsConsumerList{}, StreamRefField)), nil
 }
 
+// consumerReferrer is consumerKind.Referrer, which consumerKind's own
+// initializer cannot reference.
 func consumerReferrer(namespace string) grant.Referrer {
 	return grant.Referrer{Group: js.GroupVersion.Group, Kind: ConsumerKind, Namespace: namespace}
 }
@@ -288,7 +248,7 @@ func (o *consumerObject) Fetch(ctx context.Context) (*lifecycle.Info, error) {
 	switch {
 	case errors.As(err, &apiErr) && apiErr.ErrorCode == jetstream.JSErrCodeStreamNotFound:
 		return nil, &lifecycle.WaitError{Reason: ReasonStreamNotFound, Message: fmt.Sprintf("stream %s does not exist", o.stream)}
-	case errors.Is(err, lifecycle.ErrNotFound):
+	case errors.Is(err, jsapi.ErrNotFound):
 		return nil, nil
 	}
 	return info, err
@@ -329,7 +289,7 @@ func (o *consumerObject) Update(ctx context.Context, cur *lifecycle.Info, cfg li
 				o.Describe(), strings.Join(changed, ", ")),
 		}
 	}
-	if err := o.Delete(ctx); err != nil && !errors.Is(err, lifecycle.ErrNotFound) {
+	if err := o.Delete(ctx); err != nil && !errors.Is(err, jsapi.ErrNotFound) {
 		return nil, err
 	}
 	return o.Create(ctx, cfg)
@@ -354,11 +314,5 @@ func (o *consumerObject) WriteSpec(ctx context.Context, cfg lifecycle.Config, re
 	server := consumerFromWire(&w)
 	server.Name = o.obj.Spec.Name
 	server.Metadata = cfg.UserMetadata()
-	want := o.obj.DeepCopy()
-	if replace {
-		want.Spec.ConsumerConfig = server
-	} else if _, err := lifecycle.FillOmitted(&want.Spec.ConsumerConfig, &server); err != nil {
-		return err
-	}
-	return lifecycle.PatchSpec(ctx, o.client, o.obj, want, &o.obj.Spec, want.Spec)
+	return lifecycle.WriteSpec(ctx, o.client, o.obj, func(c *js.NatsConsumer) *js.ConsumerConfig { return &c.Spec.ConsumerConfig }, server, replace)
 }

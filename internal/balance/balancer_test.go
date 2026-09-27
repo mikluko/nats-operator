@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fake is a NATS cluster held in memory, and the three seams a Keeper acts
+// fake is a NATS cluster held in memory, and the three seams a Balancer acts
 // through: a move is applied where the next observation reads it.
 type fake struct {
 	obs Observation
@@ -32,7 +32,9 @@ func (f *fake) Observe(context.Context) (Observation, error) {
 	return obs, f.err
 }
 
-func (f *fake) CanMove(account string) bool { return !slices.Contains(f.unreachable, account) }
+func (f *fake) CanMove(_ context.Context, account string) bool {
+	return !slices.Contains(f.unreachable, account)
+}
 
 func (f *fake) MoveLeader(_ context.Context, m LeaderMove) error {
 	f.leads, f.log = append(f.leads, m), append(f.log, "lead")
@@ -71,7 +73,7 @@ func (f *fake) MovePlacement(_ context.Context, m PlacementMove) error {
 	return nil
 }
 
-func keeper(f *fake) *Keeper { return &Keeper{Observer: f, Leaders: f, Placement: f} }
+func balancerOf(f *fake) *Balancer { return &Balancer{Observer: f, Leaders: f, Placement: f} }
 
 // replicated is n streams of account on the first three of servers, each with
 // one consumer, every group led from servers[0].
@@ -88,7 +90,7 @@ func replicated(account string, n int, servers ...string) []Group {
 }
 
 // passUntilStill runs passes until one makes no move, and returns it.
-func passUntilStill(t *testing.T, k *Keeper) (Passed, int) {
+func passUntilStill(t *testing.T, k *Balancer) (Passed, int) {
 	t.Helper()
 	for n := 1; n <= 100; n++ {
 		got, err := k.Pass(context.Background())
@@ -98,13 +100,13 @@ func passUntilStill(t *testing.T, k *Keeper) (Passed, int) {
 			return got, n
 		}
 	}
-	t.Fatal("the keeper never came to rest")
+	t.Fatal("the balancer never came to rest")
 	return Passed{}, 0
 }
 
-func TestKeeper_MakesOneMoveAPassUntilEven(t *testing.T) {
+func TestBalancer_MakesOneMoveAPassUntilEven(t *testing.T) {
 	f := &fake{obs: Observation{Cluster: "c1", Servers: roster("n0", "n1", "n2"), Groups: replicated("a", 6, "n0", "n1", "n2")}}
-	got, passes := passUntilStill(t, keeper(f))
+	got, passes := passUntilStill(t, balancerOf(f))
 	require.Equal(t, 9, passes, "six streams and six consumers led from n0 are four moves each from 2/2/2")
 	require.Len(t, f.leads, 8)
 	require.Empty(t, f.places, "three copies on three servers leaves nothing to place")
@@ -113,10 +115,10 @@ func TestKeeper_MakesOneMoveAPassUntilEven(t *testing.T) {
 	require.Equal(t, []PoolReport{{Name: DefaultPool, Streams: 6}}, got.Pools)
 }
 
-func TestKeeper_PlacesAheadOfLeadersAndEndsEven(t *testing.T) {
+func TestBalancer_PlacesAheadOfLeadersAndEndsEven(t *testing.T) {
 	servers := []string{"n0", "n1", "n2", "n3", "n4"}
 	f := &fake{obs: Observation{Cluster: "c1", Servers: roster(servers...), Groups: replicated("a", 5, servers...)}}
-	k := keeper(f)
+	k := balancerOf(f)
 
 	first, err := k.Pass(context.Background())
 	require.NoError(t, err)
@@ -131,7 +133,7 @@ func TestKeeper_PlacesAheadOfLeadersAndEndsEven(t *testing.T) {
 	require.False(t, slices.Contains(f.log[slices.Index(f.log, "lead"):], "place"), "no placement move follows a leader move: %v", f.log)
 }
 
-func TestKeeper_TriesAnUnsureMoveOnceAStreamUntilThePoolImproves(t *testing.T) {
+func TestBalancer_TriesAnUnsureMoveOnceAStreamUntilThePoolImproves(t *testing.T) {
 	servers := roster("n0", "n1", "n2", "n3", "n4")
 	f := &fake{worst: true, obs: Observation{Cluster: "c1", Servers: servers, Groups: []Group{
 		group("a", "n0", "n0"), group("b", "n0", "n0"), group("c", "n0", "n0"),
@@ -139,7 +141,7 @@ func TestKeeper_TriesAnUnsureMoveOnceAStreamUntilThePoolImproves(t *testing.T) {
 		group("f", "n2", "n2"), group("g", "n2", "n2"),
 		group("h", "n3", "n3"), group("i", "n3", "n3"),
 	}}}
-	k := &Keeper{Observer: f, Placement: f}
+	k := &Balancer{Observer: f, Placement: f}
 	got, _ := passUntilStill(t, k)
 	require.Equal(t, 1, got.Pools[0].Misplaced, "a server that always picks badly leaves it one copy short")
 	var moved []string
@@ -151,27 +153,27 @@ func TestKeeper_TriesAnUnsureMoveOnceAStreamUntilThePoolImproves(t *testing.T) {
 	require.NotEmpty(t, moved)
 }
 
-func TestKeeper_Holds(t *testing.T) {
+func TestBalancer_Holds(t *testing.T) {
 	obs := Observation{Cluster: "c1", Servers: roster("n0", "n1", "n2"), Groups: replicated("a", 3, "n0", "n1", "n2")}
 	for _, tc := range []struct {
 		name   string
-		mutate func(*fake, *Keeper)
+		mutate func(*fake, *Balancer)
 		want   Passed
 		err    bool
 	}{
-		{name: "unsettled holds everything", want: Passed{Held: "n2 is offline for a/s0"}, mutate: func(f *fake, _ *Keeper) {
+		{name: "unsettled holds everything", want: Passed{Held: "n2 is offline for a/s0"}, mutate: func(f *fake, _ *Balancer) {
 			f.obs.Unsettled = "n2 is offline for a/s0"
 		}},
-		{name: "a failed observation fails the pass", err: true, mutate: func(f *fake, _ *Keeper) {
+		{name: "a failed observation fails the pass", err: true, mutate: func(f *fake, _ *Balancer) {
 			f.err = errors.New("no meta leader")
 		}},
-		{name: "a dry run plans and moves nothing", mutate: func(_ *fake, k *Keeper) { k.DryRun = true }},
-		{name: "no movers move nothing", mutate: func(_ *fake, k *Keeper) { k.Leaders, k.Placement = nil, nil }},
+		{name: "a dry run plans and moves nothing", mutate: func(_ *fake, k *Balancer) { k.DryRun = true }},
+		{name: "no movers move nothing", mutate: func(_ *fake, k *Balancer) { k.Leaders, k.Placement = nil, nil }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := &fake{obs: obs}
 			f.obs.Groups = slices.Clone(obs.Groups)
-			k := keeper(f)
+			k := balancerOf(f)
 			tc.mutate(f, k)
 			got, err := k.Pass(context.Background())
 			if tc.err {
@@ -190,18 +192,18 @@ func TestKeeper_Holds(t *testing.T) {
 	}
 }
 
-func TestKeeper_ReportsWhatItWouldMoveOnADryRun(t *testing.T) {
+func TestBalancer_ReportsWhatItWouldMoveOnADryRun(t *testing.T) {
 	f := &fake{obs: Observation{Cluster: "c1", Servers: roster("n0", "n1", "n2"), Groups: replicated("a", 3, "n0", "n1", "n2")}}
-	k := keeper(f)
+	k := balancerOf(f)
 	k.DryRun = true
 	got, err := k.Pass(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, []PoolReport{{Name: DefaultPool, Streams: 3, LeaderSkew: 3, PendingLeaders: 4}}, got.Pools)
 }
 
-func TestKeeper_YieldedStreamsAreCountedAndNeverMoved(t *testing.T) {
+func TestBalancer_YieldedStreamsAreCountedAndNeverMoved(t *testing.T) {
 	f := &fake{obs: Observation{Cluster: "c1", Servers: roster("n0", "n1", "n2"), Groups: replicated("a", 6, "n0", "n1", "n2")}}
-	k := keeper(f)
+	k := balancerOf(f)
 	k.Yield = func(id StreamID) string {
 		if id.Stream == "s0" {
 			return "a placement move is pending from NatsSystemBalancer demo"
@@ -216,11 +218,11 @@ func TestKeeper_YieldedStreamsAreCountedAndNeverMoved(t *testing.T) {
 	require.Equal(t, 4, got.Servers[0].Leaders, "n0 keeps s0 and its consumer and is still even")
 }
 
-func TestKeeper_LeavesAnAccountItCannotReach(t *testing.T) {
+func TestBalancer_LeavesAnAccountItCannotReach(t *testing.T) {
 	servers := []string{"n0", "n1", "n2"}
 	f := &fake{unreachable: []string{"b"}, obs: Observation{Cluster: "c1", Servers: roster(servers...),
 		Groups: append(replicated("a", 3, servers...), replicated("b", 3, servers...)...)}}
-	got, _ := passUntilStill(t, keeper(f))
+	got, _ := passUntilStill(t, balancerOf(f))
 	require.NotEmpty(t, f.leads)
 	for _, m := range f.leads {
 		require.Equal(t, "a", m.Group.Account)
@@ -228,14 +230,14 @@ func TestKeeper_LeavesAnAccountItCannotReach(t *testing.T) {
 	require.Equal(t, []string{"b"}, got.Unreachable)
 }
 
-func TestKeeper_EvensEachDeclaredPoolApart(t *testing.T) {
+func TestBalancer_EvensEachDeclaredPoolApart(t *testing.T) {
 	servers := []string{"n0", "n1", "n2"}
 	groups := replicated("a", 6, servers...)
 	for i := 0; i < 6; i += 2 {
 		groups[i] = group(groups[i].Stream, "n1", servers...)
 	}
 	f := &fake{obs: Observation{Cluster: "c1", Servers: roster(servers...), Groups: groups}}
-	k := keeper(f)
+	k := balancerOf(f)
 	k.Pools = Declared("a", []Pool{{Name: "first", Streams: []StreamID{{"a", "s0"}, {"a", "s1"}, {"a", "s2"}}}})
 	got, _ := passUntilStill(t, k)
 	require.Len(t, got.Pools, 2)
@@ -249,10 +251,10 @@ type failing struct{ *fake }
 
 func (failing) MovePlacement(context.Context, PlacementMove) error { return errors.New("refused") }
 
-func TestKeeper_AFailedMoveIsTheError(t *testing.T) {
+func TestBalancer_AFailedMoveIsTheError(t *testing.T) {
 	servers := []string{"n0", "n1", "n2", "n3", "n4"}
 	f := &fake{obs: Observation{Cluster: "c1", Servers: roster(servers...), Groups: replicated("a", 5, servers...)}}
-	k := &Keeper{Observer: f, Placement: failing{f}}
+	k := &Balancer{Observer: f, Placement: failing{f}}
 	got, err := k.Pass(context.Background())
 	require.ErrorContains(t, err, "refused")
 	require.Nil(t, got.Placed)

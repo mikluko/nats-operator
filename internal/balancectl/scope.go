@@ -12,6 +12,7 @@ import (
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	"github.com/mikluko/nats-operator/internal/balance"
+	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
@@ -52,7 +53,7 @@ func evacuationOf(ctx context.Context, c client.Reader, d *natsconn.Dialer, nc *
 		if e.Spec.From.Cluster != cluster || meta.IsStatusConditionTrue(e.Status.Conditions, ConditionReady) {
 			continue
 		}
-		sys, why, err := dial(ctx, d, evacuationReferrer(e.Namespace), e.Spec.ConnectionRef)
+		sys, why, err := lifecycle.Dial(ctx, d, evacuationReferrer(e.Namespace), e.Spec.ConnectionRef)
 		if err != nil {
 			return "", err
 		}
@@ -91,7 +92,7 @@ func (e *evacuees) Observe(ctx context.Context) (balance.Observation, error) {
 	return obs, nil
 }
 
-// Yield is a [balance.Keeper] Yield: why a stream of the last observation is
+// Yield is a [balance.Balancer] Yield: why a stream of the last observation is
 // the evacuation's rather than the balancer's, "" where it is not.
 func (e *evacuees) Yield(id balance.StreamID) string {
 	if e.moving[id] {

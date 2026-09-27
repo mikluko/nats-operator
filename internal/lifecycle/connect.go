@@ -3,16 +3,11 @@ package lifecycle
 import (
 	"context"
 	"errors"
-	"fmt"
 
+	"github.com/nats-io/nats.go"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	jetstreamv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
@@ -28,122 +23,85 @@ const (
 )
 
 // Connect returns the API through the NatsConnection that from's ref names.
-// Where the ref cannot be followed, because no grant admits it, the
-// NatsConnection does not exist, or its Secrets or servers fail, it records
-// why on status at generation and returns a nil API and no error. The error
+// Where Dial yields no connection it applies why to status at generation and
+// returns it with a nil API. The error is one the Kubernetes API server
+// returned.
+func Connect(ctx context.Context, d *natsconn.Dialer, from grant.Referrer, ref natsv1beta1.ObjectReference, status *jetstreamv1beta1.SyncStatus, generation int64) (*API, *NoConn, error) {
+	nc, why, err := Dial(ctx, d, from, ref)
+	if why != nil {
+		status.ObservedGeneration = generation
+		why.Apply(&status.Conditions, generation)
+		return nil, why, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	meta.RemoveStatusCondition(&status.Conditions, grant.ConditionReferencesResolved)
+	return &API{Conn: nc}, nil, nil
+}
+
+// Resolve returns the connection from's ref names and clears the
+// ReferencesResolved condition from conds. Where Dial yields no connection it
+// applies why to conds at generation and returns nil and no error. The error
 // is one the Kubernetes API server returned.
-func Connect(ctx context.Context, d *natsconn.Dialer, from grant.Referrer, ref natsv1beta1.ObjectReference, status *jetstreamv1beta1.SyncStatus, generation int64) (*API, error) {
+func Resolve(ctx context.Context, d *natsconn.Dialer, from grant.Referrer, ref natsv1beta1.ObjectReference, conds *[]metav1.Condition, generation int64) (*nats.Conn, error) {
+	nc, why, err := Dial(ctx, d, from, ref)
+	if why != nil {
+		why.Apply(conds, generation)
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	meta.RemoveStatusCondition(conds, grant.ConditionReferencesResolved)
+	return nc, nil
+}
+
+// A NoConn is why a reference yields no connection: Ready's reason and
+// message, and the ReferencesResolved condition a grant's refusal sets.
+type NoConn struct {
+	Reason, Message string
+	Denied          *metav1.Condition
+}
+
+// Apply records n in conds at generation: Ready False, and Denied where a
+// grant refused the reference.
+func (n *NoConn) Apply(conds *[]metav1.Condition, generation int64) {
+	if n.Denied != nil {
+		conditions.Set(conds, generation, *n.Denied)
+	}
+	conditions.Set(conds, generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: n.Reason, Message: n.Message})
+}
+
+// Released reports whether a resource being deleted without a connection
+// drops its finalizer without running its deletion policy: the
+// NatsConnection does not exist or no grant admits it, so nothing will reach
+// the server object through it. A connection that exists and fails holds
+// the finalizer, as does a nil n.
+func (n *NoConn) Released() bool {
+	return n != nil && (n.Reason == ReasonConnectionNotFound || n.Reason == grant.ReasonReferenceNotPermitted)
+}
+
+// Dial returns the connection from's ref names, or why there is none: no
+// grant admits the reference, the NatsConnection does not exist, or its
+// Secrets or servers fail. The error is one the Kubernetes API server
+// returned.
+func Dial(ctx context.Context, d *natsconn.Dialer, from grant.Referrer, ref natsv1beta1.ObjectReference) (*nats.Conn, *NoConn, error) {
 	nc, denied, err := d.Reference(ctx, from, ref)
 	switch {
 	case denied != nil:
-		conditions.Set(&status.Conditions, generation, *denied)
-		NotReady(status, generation, grant.ReasonReferenceNotPermitted, denied.Message)
-		return nil, nil
+		return nil, &NoConn{Reason: grant.ReasonReferenceNotPermitted, Message: denied.Message, Denied: denied}, nil
 	case apierrors.IsNotFound(err):
-		NotReady(status, generation, ReasonConnectionNotFound, err.Error())
-		return nil, nil
+		return nil, &NoConn{Reason: ReasonConnectionNotFound, Message: err.Error()}, nil
 	case isAPIStatus(err):
-		return nil, err
+		return nil, nil, err
 	case err != nil:
-		NotReady(status, generation, ReasonConnectionFailed, err.Error())
-		return nil, nil
+		return nil, &NoConn{Reason: ReasonConnectionFailed, Message: err.Error()}, nil
 	}
-	meta.RemoveStatusCondition(&status.Conditions, grant.ConditionReferencesResolved)
-	return &API{Conn: nc}, nil
-}
-
-// Released reports whether a resource being deleted, whose Connect returned
-// no API, drops its finalizer without running its deletion policy: the
-// NatsConnection does not exist or no grant admits it, so nothing will reach
-// the server object through it. A connection that exists and fails holds the
-// finalizer.
-func Released(status *jetstreamv1beta1.SyncStatus) bool {
-	c := meta.FindStatusCondition(status.Conditions, ConditionReady)
-	return c != nil && c.Status == metav1.ConditionFalse &&
-		(c.Reason == ReasonConnectionNotFound || c.Reason == grant.ReasonReferenceNotPermitted)
+	return nc, nil, nil
 }
 
 func isAPIStatus(err error) bool {
 	var s apierrors.APIStatus
 	return errors.As(err, &s)
-}
-
-// Field indexes the controllers register.
-const (
-	// ConnectionField holds "namespace/name" of each NatsConnection a
-	// resource names.
-	ConnectionField = "jetstream.nats.mikluko.io/connection"
-	// UIDField holds a resource's UID.
-	UIDField = "jetstream.nats.mikluko.io/uid"
-)
-
-// IndexConnections registers ConnectionField for obj's kind; refs returns
-// the connection references of an object, a reference without a namespace
-// naming the object's own.
-func IndexConnections(ctx context.Context, indexer client.FieldIndexer, obj client.Object, refs func(client.Object) []natsv1beta1.ObjectReference) error {
-	return indexer.IndexField(ctx, obj, ConnectionField, func(o client.Object) []string {
-		var out []string
-		for _, r := range refs(o) {
-			ns := r.Namespace
-			if ns == "" {
-				ns = o.GetNamespace()
-			}
-			out = append(out, types.NamespacedName{Namespace: ns, Name: r.Name}.String())
-		}
-		return out
-	})
-}
-
-// EnqueueByField maps an object to the objects, listed through list's type,
-// whose field index holds its "namespace/name", as ConnectionField does
-// for a NatsConnection; r carries the index.
-func EnqueueByField(r client.Reader, list client.ObjectList, field string) handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []reconcile.Request {
-		return listRequests(ctx, r, list, client.MatchingFields{field: client.ObjectKeyFromObject(o).String()})
-	})
-}
-
-func listRequests(ctx context.Context, r client.Reader, list client.ObjectList, opts ...client.ListOption) []reconcile.Request {
-	l, ok := list.DeepCopyObject().(client.ObjectList)
-	if !ok {
-		return nil
-	}
-	if err := r.List(ctx, l, opts...); err != nil {
-		ctrl.LoggerFrom(ctx).Error(err, "list referrers")
-		return nil
-	}
-	items, err := meta.ExtractList(l)
-	if err != nil {
-		ctrl.LoggerFrom(ctx).Error(err, "extract referrers")
-		return nil
-	}
-	out := make([]reconcile.Request, 0, len(items))
-	for _, it := range items {
-		if o, ok := it.(client.Object); ok {
-			out = append(out, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(o)})
-		}
-	}
-	return out
-}
-
-// IndexUID registers UIDField for obj's kind.
-func IndexUID(ctx context.Context, indexer client.FieldIndexer, obj client.Object) error {
-	return indexer.IndexField(ctx, obj, UIDField, func(o client.Object) []string {
-		return []string{string(o.GetUID())}
-	})
-}
-
-// OwnerExists returns Resource.OwnerExists for the kind list lists; r
-// carries UIDField.
-func OwnerExists(r client.Reader, list client.ObjectList) func(context.Context, types.UID) (bool, error) {
-	return func(ctx context.Context, uid types.UID) (bool, error) {
-		l, ok := list.DeepCopyObject().(client.ObjectList)
-		if !ok {
-			return false, fmt.Errorf("%T is not a list", list)
-		}
-		if err := r.List(ctx, l, client.MatchingFields{UIDField: string(uid)}); err != nil {
-			return false, fmt.Errorf("list owners by UID: %w", err)
-		}
-		return meta.LenList(l) > 0, nil
-	}
 }

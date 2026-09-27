@@ -16,10 +16,12 @@ import (
 
 	jetstreamv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	"github.com/mikluko/nats-operator/internal/conditions"
+	"github.com/mikluko/nats-operator/internal/jsapi"
 )
 
-// Finalizer holds a JetStream object resource until its deletion policy has
-// run.
+// Finalizer holds a JetStream controller resource until the server has been
+// told of its deletion: a JetStream object resource's deletion policy has
+// run, or a NatsClusterEvacuation's moves in flight are cancelled.
 const Finalizer = "jetstream.nats.mikluko.io/finalizer"
 
 // DefaultResync is how often a resource is compared to its server object
@@ -282,7 +284,7 @@ func Finalize(ctx context.Context, uid types.UID, policy jetstreamv1beta1.Deleti
 	if m, ok := ReadMarker(cur.Config.Metadata()); !ok || m.UID != uid {
 		return nil
 	}
-	if err := o.Delete(ctx); err != nil && !errors.Is(err, ErrNotFound) {
+	if err := o.Delete(ctx); err != nil && !errors.Is(err, jsapi.ErrNotFound) {
 		return err
 	}
 	return nil

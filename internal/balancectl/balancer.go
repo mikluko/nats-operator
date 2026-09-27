@@ -6,20 +6,21 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
@@ -29,6 +30,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
+	"github.com/mikluko/nats-operator/internal/refindex"
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
@@ -77,8 +79,7 @@ type BalancerReconciler struct {
 	// Telemetry counts held passes; nil counts none.
 	Telemetry *telemetry.JetStreamInstruments
 
-	mu      sync.Mutex
-	keepers map[types.NamespacedName]keeperOf
+	balancers balancerSet
 }
 
 // Reconcile implements reconcile.Reconciler.
@@ -86,7 +87,7 @@ func (r *BalancerReconciler) Reconcile(ctx context.Context, req reconcile.Reques
 	var b js.NatsBalancer
 	if err := r.Client.Get(ctx, req.NamespacedName, &b); err != nil {
 		if apierrors.IsNotFound(err) {
-			r.forget(req.NamespacedName)
+			r.balancers.forget(req.NamespacedName)
 		}
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
@@ -108,7 +109,7 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 	}
 	after := reconcile.Result{RequeueAfter: interval}
 
-	nc, err := r.connect(ctx, b)
+	nc, err := lifecycle.Resolve(ctx, r.Dialer, balancerReferrer(b.Namespace), b.Spec.ConnectionRef, &st.Conditions, b.Generation)
 	if nc == nil {
 		return after, err
 	}
@@ -117,6 +118,7 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionReady, Status: conditions.Status(false), Reason: ReasonNotClustered, Message: "the connection reaches a server in no NATS cluster"})
 		return after, nil
 	}
+	r.balancers.place(b, cluster)
 	account, err := accountOf(ctx, nc)
 	if err != nil {
 		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionReady, Status: conditions.Status(false), Reason: ReasonPassFailed, Message: err.Error()})
@@ -152,7 +154,7 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 	if err != nil {
 		return after, err
 	}
-	k := r.keeper(b)
+	k := r.balancers.balancer(b)
 	k.Observer, k.Yield = ev, ev.Yield
 	k.Pools = balance.Declared(account, declared)
 	k.Leaders, k.Placement = nil, nil
@@ -193,28 +195,6 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 	return after, nil
 }
 
-// connect returns the balancer's connection, or records on b why there is
-// none; the error is one the Kubernetes API server returned.
-func (r *BalancerReconciler) connect(ctx context.Context, b *js.NatsBalancer) (*nats.Conn, error) {
-	nc, denied, err := r.Dialer.Reference(ctx, balancerReferrer(b.Namespace), b.Spec.ConnectionRef)
-	switch {
-	case denied != nil:
-		conditions.Set(&b.Status.Conditions, b.Generation, *denied)
-		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionReady, Status: conditions.Status(false), Reason: grant.ReasonReferenceNotPermitted, Message: denied.Message})
-		return nil, nil
-	case apierrors.IsNotFound(err):
-		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionReady, Status: conditions.Status(false), Reason: lifecycle.ReasonConnectionNotFound, Message: err.Error()})
-		return nil, nil
-	case isAPIStatus(err):
-		return nil, err
-	case err != nil:
-		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionReady, Status: conditions.Status(false), Reason: lifecycle.ReasonConnectionFailed, Message: err.Error()})
-		return nil, nil
-	}
-	meta.RemoveStatusCondition(&b.Status.Conditions, grant.ConditionReferencesResolved)
-	return nc, nil
-}
-
 // userInfoSubject answers any connection with its own user and account while
 // the server runs a system account.
 const userInfoSubject = "$SYS.REQ.USER.INFO"
@@ -236,7 +216,7 @@ func accountOf(ctx context.Context, nc *nats.Conn) (string, error) {
 		Data struct {
 			Account string `json:"account"`
 		} `json:"data"`
-		Error *balance.APIError `json:"error"`
+		Error *jetstream.APIError `json:"error"`
 	}
 	if err := json.Unmarshal(msg.Data, &resp); err != nil {
 		return "", fmt.Errorf("read the connection's account: response %q: %w", msg.Data, err)
@@ -267,27 +247,54 @@ func systemPending(ctx context.Context, c client.Reader, account string) (string
 	return "", nil
 }
 
-// keeper is b's pass state, kept across reconciles and started afresh for a
-// new balancer of the same name.
-func (r *BalancerReconciler) keeper(b *js.NatsBalancer) *balance.Keeper {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.keepers == nil {
-		r.keepers = map[types.NamespacedName]keeperOf{}
+// ofSystemBalancer is the NatsBalancers a change to the NatsSystemBalancer o
+// concerns: those whose connection last reached the NATS cluster o's
+// connection reaches, and every one whose NATS cluster is not known on either
+// side.
+func (r *BalancerReconciler) ofSystemBalancer(ctx context.Context, c client.Reader, o client.Object) []reconcile.Request {
+	sb, ok := o.(*js.NatsSystemBalancer)
+	if !ok {
+		return nil
 	}
-	key := client.ObjectKeyFromObject(b)
-	k, ok := r.keepers[key]
-	if !ok || k.uid != b.UID {
-		k = keeperOf{uid: b.UID, keeper: &balance.Keeper{}}
-		r.keepers[key] = k
+	var cluster string
+	if nc, denied, err := r.Dialer.Reference(ctx, referrer(sb.Namespace), sb.Spec.ConnectionRef); err == nil && denied == nil {
+		cluster = nc.ConnectedClusterName()
 	}
-	return k.keeper
+	var list js.NatsBalancerList
+	if err := c.List(ctx, &list); err != nil {
+		ctrl.LoggerFrom(ctx).Error(err, "list NatsBalancers")
+		return nil
+	}
+	return inCluster(cluster, r.balancers.clusters(), list.Items)
 }
 
-func (r *BalancerReconciler) forget(key types.NamespacedName) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	delete(r.keepers, key)
+// inCluster is the requests for the balancers of items that clusters places
+// in cluster, or does not place at all; with cluster "" it is all of them.
+func inCluster(cluster string, clusters map[types.NamespacedName]string, items []js.NatsBalancer) []reconcile.Request {
+	var out []reconcile.Request
+	for i := range items {
+		key := client.ObjectKeyFromObject(&items[i])
+		if at := clusters[key]; cluster == "" || at == "" || at == cluster {
+			out = append(out, reconcile.Request{NamespacedName: key})
+		}
+	}
+	return out
+}
+
+// pendingOrSpec passes creates, deletes, spec changes, deletion marks, and
+// status writes that change a NatsSystemBalancer's pending moves, the one
+// part of its status a NatsBalancer reads.
+func pendingOrSpec() predicate.Predicate {
+	return predicate.Or(lifecycle.SpecOrDeletion(), predicate.Funcs{
+		CreateFunc:  func(event.CreateEvent) bool { return false },
+		DeleteFunc:  func(event.DeleteEvent) bool { return false },
+		GenericFunc: func(event.GenericEvent) bool { return false },
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			old, ok1 := e.ObjectOld.(*js.NatsSystemBalancer)
+			cur, ok2 := e.ObjectNew.(*js.NatsSystemBalancer)
+			return ok1 && ok2 && !equality.Semantic.DeepEqual(old.Status.Pending, cur.Status.Pending)
+		},
+	})
 }
 
 func (r *BalancerReconciler) pendingPoll() time.Duration {
@@ -303,15 +310,16 @@ func balancerReferrer(namespace string) grant.Referrer {
 
 // SetupWithManager registers the reconciler with mgr. It reconciles a
 // balancer on its spec changing, its NatsConnection changing, a grant that
-// admits it changing, any NatsStream, NatsKeyValue or NatsObjectStore in its
-// namespace changing, and any NatsSystemBalancer or NatsClusterEvacuation
-// changing.
+// admits it changing, the spec, labels or deletion of any NatsStream,
+// NatsKeyValue or NatsObjectStore in its namespace changing, the spec or
+// pending moves of a NatsSystemBalancer of its NATS cluster changing, and any
+// NatsClusterEvacuation changing.
 func (r *BalancerReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	idx := mgr.GetFieldIndexer()
 	refs := func(o client.Object) []natsv1beta1.ObjectReference {
 		return []natsv1beta1.ObjectReference{o.(*js.NatsBalancer).Spec.ConnectionRef}
 	}
-	if err := lifecycle.IndexConnections(ctx, idx, &js.NatsBalancer{}, refs); err != nil {
+	if err := refindex.IndexConnections(ctx, idx, &js.NatsBalancer{}, refs); err != nil {
 		return fmt.Errorf("index NatsBalancer connections: %w", err)
 	}
 	if err := grant.IndexReferrers(ctx, idx, &js.NatsBalancer{}, func(o client.Object) []string {
@@ -338,14 +346,17 @@ func (r *BalancerReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Mana
 			return out
 		})
 	}
+	memberChanges := builder.WithPredicates(predicate.Or(lifecycle.SpecOrDeletion(), predicate.LabelChangedPredicate{}))
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&js.NatsBalancer{}, builder.WithPredicates(lifecycle.SpecOrDeletion())).
-		Watches(&natsv1beta1.NatsConnection{}, lifecycle.EnqueueByField(c, &js.NatsBalancerList{}, lifecycle.ConnectionField)).
+		Watches(&natsv1beta1.NatsConnection{}, refindex.EnqueueByField(c, &js.NatsBalancerList{}, refindex.ConnectionField)).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, js.GroupVersion.WithKind(BalancerKind).GroupKind(), &js.NatsBalancerList{})).
-		Watches(&js.NatsStream{}, balancers(true)).
-		Watches(&js.NatsKeyValue{}, balancers(true)).
-		Watches(&js.NatsObjectStore{}, balancers(true)).
-		Watches(&js.NatsSystemBalancer{}, balancers(false)).
+		Watches(&js.NatsStream{}, balancers(true), memberChanges).
+		Watches(&js.NatsKeyValue{}, balancers(true), memberChanges).
+		Watches(&js.NatsObjectStore{}, balancers(true), memberChanges).
+		Watches(&js.NatsSystemBalancer{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []reconcile.Request {
+			return r.ofSystemBalancer(ctx, c, o)
+		}), builder.WithPredicates(pendingOrSpec())).
 		Watches(&js.NatsClusterEvacuation{}, balancers(false)).
 		Complete(telemetry.Traced(BalancerKind, r))
 }

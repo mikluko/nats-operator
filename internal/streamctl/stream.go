@@ -4,22 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/nats-io/nats.go/jetstream"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/grant"
+	"github.com/mikluko/nats-operator/internal/jsapi"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
-	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 // StreamKind is the kind a NatsStream is referred to by.
@@ -32,97 +29,37 @@ const StreamKind = "NatsStream"
 // StreamReconciler keeps NatsStreams' streams at their specs through their
 // connections, under their lifecycle policies. Deleting a NatsStream whose
 // deletionPolicy is Delete waits until its connection can delete the stream,
-// unless lifecycle.Released lets it go.
+// unless lifecycle.NoConn.Released lets it go.
 type StreamReconciler struct {
 	Client client.Client
 	Dialer *natsconn.Dialer
 	Syncer lifecycle.Syncer
 }
 
+var streamKind = lifecycle.Kind[*js.NatsStream]{
+	Name: StreamKind,
+	New:  func() *js.NatsStream { return &js.NatsStream{} },
+	List: func() client.ObjectList { return &js.NatsStreamList{} },
+	Fields: func(s *js.NatsStream) lifecycle.Fields {
+		return lifecycle.Fields{Policies: s.Spec.Policies, Deletion: s.Spec.DeletionPolicy, Sync: &s.Status.SyncStatus, Status: s.Status}
+	},
+	Connection: func(s *js.NatsStream) natsv1beta1.ObjectReference { return s.Spec.ConnectionRef },
+	Bind: func(api *lifecycle.API, c client.Client, s *js.NatsStream) lifecycle.Object {
+		return &streamObject{api: api, client: c, obj: s}
+	},
+	Record: func(s *js.NatsStream, info *lifecycle.Info) { s.Status.Server = streamServerStatus(info) },
+}
+
 // Reconcile implements reconcile.Reconciler.
 func (r *StreamReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
-	var s js.NatsStream
-	if err := r.Client.Get(ctx, req.NamespacedName, &s); err != nil {
-		return reconcile.Result{}, client.IgnoreNotFound(err)
-	}
-	if !s.DeletionTimestamp.IsZero() {
-		return r.finalize(ctx, &s)
-	}
-	if err := lifecycle.AddFinalizer(ctx, r.Client, &s); err != nil {
-		return reconcile.Result{}, err
-	}
-	base := s.DeepCopy()
-	res, syncErr := r.sync(ctx, &s)
-	if err := lifecycle.PatchStatus(ctx, r.Client, base, &s, base.Status, s.Status); err != nil {
-		return reconcile.Result{}, errors.Join(syncErr, err)
-	}
-	return res, syncErr
-}
-
-func (r *StreamReconciler) sync(ctx context.Context, s *js.NatsStream) (reconcile.Result, error) {
-	api, err := lifecycle.Connect(ctx, r.Dialer, streamReferrer(s.Namespace), s.Spec.ConnectionRef, &s.Status.SyncStatus, s.Generation)
-	if err != nil || api == nil {
-		return reconcile.Result{RequeueAfter: natsconn.DefaultRetryAfter}, err
-	}
-	o := &streamObject{api: api, client: r.Client, obj: s}
-	res, info, err := r.Syncer.Sync(ctx, lifecycle.Resource{
-		Object:      s,
-		Policies:    s.Spec.Policies,
-		Status:      &s.Status.SyncStatus,
-		OwnerExists: lifecycle.OwnerExists(r.Client, &js.NatsStreamList{}),
-	}, o)
-	if info != nil {
-		s.Status.Server = streamServerStatus(info)
-	}
-	return res, err
-}
-
-func (r *StreamReconciler) finalize(ctx context.Context, s *js.NatsStream) (reconcile.Result, error) {
-	if s.Spec.DeletionPolicy == js.DeletionDelete {
-		base := s.DeepCopy()
-		api, err := lifecycle.Connect(ctx, r.Dialer, streamReferrer(s.Namespace), s.Spec.ConnectionRef, &s.Status.SyncStatus, s.Generation)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-		switch {
-		case api == nil && !lifecycle.Released(&s.Status.SyncStatus):
-			return reconcile.Result{RequeueAfter: natsconn.DefaultRetryAfter}, lifecycle.PatchStatus(ctx, r.Client, base, s, base.Status, s.Status)
-		case api == nil:
-		default:
-			if err := lifecycle.Finalize(ctx, s.UID, s.Spec.DeletionPolicy, &streamObject{api: api, obj: s}); err != nil {
-				return reconcile.Result{}, err
-			}
-		}
-	}
-	return reconcile.Result{}, lifecycle.RemoveFinalizer(ctx, r.Client, s)
+	return streamKind.Reconcile(ctx, r.Client, r.Dialer, r.Syncer, req)
 }
 
 // SetupWithManager registers the field indexes the reconciler reads and
 // builds its controller, watching NatsStreams, the NatsConnections they
 // name and the NatsReferenceGrants that admit them.
 func (r *StreamReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
-	idx := mgr.GetFieldIndexer()
-	refs := func(o client.Object) []natsv1beta1.ObjectReference {
-		return []natsv1beta1.ObjectReference{o.(*js.NatsStream).Spec.ConnectionRef}
-	}
-	if err := lifecycle.IndexConnections(ctx, idx, &js.NatsStream{}, refs); err != nil {
-		return fmt.Errorf("index NatsStream connections: %w", err)
-	}
-	if err := lifecycle.IndexUID(ctx, idx, &js.NatsStream{}); err != nil {
-		return fmt.Errorf("index NatsStream UIDs: %w", err)
-	}
-	if err := grant.IndexReferrers(ctx, idx, &js.NatsStream{}, refNamespaces(refs)); err != nil {
-		return fmt.Errorf("index NatsStream grant targets: %w", err)
-	}
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&js.NatsStream{}, builder.WithPredicates(lifecycle.SpecOrDeletion())).
-		Watches(&natsv1beta1.NatsConnection{}, lifecycle.EnqueueByField(mgr.GetClient(), &js.NatsStreamList{}, lifecycle.ConnectionField)).
-		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(mgr.GetClient(), js.GroupVersion.WithKind(StreamKind).GroupKind(), &js.NatsStreamList{})).
-		Complete(telemetry.Traced("NatsStream", r))
-}
-
-func streamReferrer(namespace string) grant.Referrer {
-	return grant.Referrer{Group: js.GroupVersion.Group, Kind: StreamKind, Namespace: namespace}
+	return streamKind.SetupWithManager(ctx, mgr, r)
 }
 
 // streamName is the server-side name of s.
@@ -146,7 +83,7 @@ func (o *streamObject) Describe() string { return "stream " + streamName(o.obj) 
 // Fetch implements lifecycle.Object.
 func (o *streamObject) Fetch(ctx context.Context) (*lifecycle.Info, error) {
 	info, err := o.api.StreamInfo(ctx, streamName(o.obj))
-	if errors.Is(err, lifecycle.ErrNotFound) {
+	if errors.Is(err, jsapi.ErrNotFound) {
 		return nil, nil
 	}
 	return info, err
@@ -183,13 +120,7 @@ func (o *streamObject) WriteSpec(ctx context.Context, cfg lifecycle.Config, repl
 	server := streamFromWire(&w)
 	server.Name = o.obj.Spec.Name
 	server.Metadata = cfg.UserMetadata()
-	want := o.obj.DeepCopy()
-	if replace {
-		want.Spec.StreamConfig = server
-	} else if _, err := lifecycle.FillOmitted(&want.Spec.StreamConfig, &server); err != nil {
-		return err
-	}
-	return lifecycle.PatchSpec(ctx, o.client, o.obj, want, &o.obj.Spec, want.Spec)
+	return lifecycle.WriteSpec(ctx, o.client, o.obj, func(s *js.NatsStream) *js.StreamConfig { return &s.Spec.StreamConfig }, server, replace)
 }
 
 // streamServerStatus reads the stream's state from info.

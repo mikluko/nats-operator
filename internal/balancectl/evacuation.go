@@ -21,6 +21,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/nats-io/nats.go/jetstream"
+
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/balance"
@@ -28,6 +30,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
+	"github.com/mikluko/nats-operator/internal/refindex"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
@@ -128,15 +131,13 @@ func (r *EvacuationReconciler) evacuate(ctx context.Context, e *js.NatsClusterEv
 		return reconcile.Result{}, err
 	}
 
-	nc, why, err := dial(ctx, r.Dialer, evacuationReferrer(e.Namespace), e.Spec.ConnectionRef)
-	if why != nil {
-		why.apply(&st.Conditions, e.Generation)
-		return after, nil
-	}
+	nc, err := lifecycle.Resolve(ctx, r.Dialer, evacuationReferrer(e.Namespace), e.Spec.ConnectionRef, &st.Conditions, e.Generation)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	meta.RemoveStatusCondition(&st.Conditions, grant.ConditionReferencesResolved)
+	if nc == nil {
+		return after, nil
+	}
 
 	snap, err := sysobs.New(nc, from).Observe(ctx)
 	if err != nil {
@@ -237,12 +238,12 @@ func (r *EvacuationReconciler) finalize(ctx context.Context, e *js.NatsClusterEv
 
 func (r *EvacuationReconciler) cancel(ctx context.Context, e *js.NatsClusterEvacuation) error {
 	from := e.Spec.From.Cluster
-	nc, why, err := dial(ctx, r.Dialer, evacuationReferrer(e.Namespace), e.Spec.ConnectionRef)
+	nc, why, err := lifecycle.Dial(ctx, r.Dialer, evacuationReferrer(e.Namespace), e.Spec.ConnectionRef)
 	switch {
-	case why != nil && why.reason != lifecycle.ReasonConnectionFailed:
+	case why != nil && why.Reason != lifecycle.ReasonConnectionFailed:
 		return nil
 	case why != nil:
-		return fmt.Errorf("cancel moves off %s: %s", from, why.message)
+		return fmt.Errorf("cancel moves off %s: %s", from, why.Message)
 	case err != nil:
 		return err
 	}
@@ -280,11 +281,9 @@ func (r *EvacuationReconciler) cancel(ctx context.Context, e *js.NatsClusterEvac
 
 // noMove reports whether err says there was no move to cancel.
 func noMove(err error) bool {
-	var apiErr *balance.APIError
-	return errors.As(err, &apiErr) && (apiErr.ErrCode == balance.ErrCodeNoMove || apiErr.ErrCode == errCodeStreamNotFound)
+	var apiErr *jetstream.APIError
+	return errors.As(err, &apiErr) && (apiErr.ErrorCode == balance.ErrCodeNoMove || apiErr.ErrorCode == jetstream.JSErrCodeStreamNotFound)
 }
-
-const errCodeStreamNotFound = 10059
 
 // requestedOf is list by stream, with when each move was requested.
 func requestedOf(list []js.RequestedMove) map[balance.StreamID]time.Time {
@@ -532,7 +531,7 @@ func (r *EvacuationReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Ma
 	refs := func(o client.Object) []natsv1beta1.ObjectReference {
 		return []natsv1beta1.ObjectReference{o.(*js.NatsClusterEvacuation).Spec.ConnectionRef}
 	}
-	if err := lifecycle.IndexConnections(ctx, idx, &js.NatsClusterEvacuation{}, refs); err != nil {
+	if err := refindex.IndexConnections(ctx, idx, &js.NatsClusterEvacuation{}, refs); err != nil {
 		return fmt.Errorf("index NatsClusterEvacuation connections: %w", err)
 	}
 	if err := grant.IndexReferrers(ctx, idx, &js.NatsClusterEvacuation{}, func(o client.Object) []string {
@@ -554,7 +553,7 @@ func (r *EvacuationReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Ma
 	})
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&js.NatsClusterEvacuation{}, builder.WithPredicates(lifecycle.SpecOrDeletion())).
-		Watches(&natsv1beta1.NatsConnection{}, lifecycle.EnqueueByField(mgr.GetClient(), &js.NatsClusterEvacuationList{}, lifecycle.ConnectionField)).
+		Watches(&natsv1beta1.NatsConnection{}, refindex.EnqueueByField(mgr.GetClient(), &js.NatsClusterEvacuationList{}, refindex.ConnectionField)).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(mgr.GetClient(), js.GroupVersion.WithKind(EvacuationKind).GroupKind(), &js.NatsClusterEvacuationList{})).
 		Watches(&js.NatsStream{}, all, builder.WithPredicates(lifecycle.SpecOrDeletion())).
 		Watches(&js.NatsKeyValue{}, all, builder.WithPredicates(lifecycle.SpecOrDeletion())).

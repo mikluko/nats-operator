@@ -201,12 +201,20 @@ func TestBalancer_Pools(t *testing.T) {
 		stepToFirst(t, ctx, jsA, req[1])
 		stepToFirst(t, ctx, jsA, req[0])
 
-		for range 20 {
-			b := reconciledAccount(t, ctx, r, func(ct *assert.CollectT, b *js.NatsBalancer) {
-				accountCondition(ct, b, ConditionHolding, metav1.ConditionTrue, ReasonYielding)
-			}, "the balancer did not yield")
+		key := client.ObjectKey{Namespace: ns, Name: "payments"}
+		yielding := reconciledAccount(t, ctx, r, func(ct *assert.CollectT, b *js.NatsBalancer) {
+			accountCondition(ct, b, ConditionHolding, metav1.ConditionTrue, ReasonYielding)
+		}, "the balancer did not yield")
+		last := yielding.Status.LastMove
+		require.Greater(t, time.Since(last.Time.Time), yielding.Spec.Interval.Duration, "every pass below is due")
+		for range 5 {
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
+			require.NoError(t, err)
+			var b js.NatsBalancer
+			require.NoError(t, c.Get(ctx, key, &b))
+			accountCondition(t, &b, ConditionHolding, metav1.ConditionTrue, ReasonYielding)
 			require.Equal(t, "REQ_1 has a placement move pending from NatsSystemBalancer demo", meta.FindStatusCondition(b.Status.Conditions, ConditionHolding).Message)
-			time.Sleep(20 * time.Millisecond)
+			require.Equal(t, last, b.Status.LastMove, "a pass moved while the system balancer had a move pending")
 		}
 		require.Equal(t, "C1-0", streamLeader(t, ctx, jsA, req[0]), "a leader moved while the system balancer had a move pending")
 		require.Equal(t, "C1-0", streamLeader(t, ctx, jsA, req[1]), "a leader moved while the system balancer had a move pending")

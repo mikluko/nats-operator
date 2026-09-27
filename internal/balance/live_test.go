@@ -32,7 +32,7 @@ func TestStepdown_AccountConnectionMovesAStreamAndAConsumer(t *testing.T) {
 	require.NoError(t, err)
 	obs := accountObserver(js, globalAccount, "ticks")
 	mover := Stepdown{Conn: nc}
-	require.True(t, mover.CanMove(globalAccount))
+	require.True(t, mover.CanMove(t.Context(), globalAccount))
 
 	for _, name := range []string{"$G/ticks", "$G/ticks > d"} {
 		o := settled(t, ctx, obs, func(o Observation) bool { _, ok := find(o, name); return ok }, "the NATS cluster did not settle")
@@ -95,8 +95,8 @@ func TestSystemMovers_ReachAnotherAccountThroughItsExport(t *testing.T) {
 	fill(t, ctx, jsA, "ticks", 5, 5)
 
 	leaders := Stepdown{Conn: sys, Prefix: p.prefix}
-	require.True(t, leaders.CanMove(p.a.pub))
-	require.False(t, leaders.CanMove(p.b.pub), "B carries no stepdown export")
+	require.True(t, leaders.CanMove(t.Context(), p.a.pub))
+	require.False(t, leaders.CanMove(t.Context(), p.b.pub), "B carries no stepdown export")
 
 	obsA := accountObserver(jsA, p.a.pub, "ticks", "one")
 	ticks, consumer := StreamID{p.a.pub, "ticks"}.String(), StreamID{p.a.pub, "ticks"}.String()+" > d"
@@ -125,7 +125,7 @@ func TestSystemMovers_ReachAnotherAccountThroughItsExport(t *testing.T) {
 	intact(t, ctx, jsA, "one", 50, 10)
 }
 
-func TestKeeper_SystemBalancerEvensOutAnAccountItReaches(t *testing.T) {
+func TestBalancer_SystemBalancerEvensOutAnAccountItReaches(t *testing.T) {
 	t.Parallel()
 	p := newPlane(t)
 	servers := startCluster(t, p)
@@ -153,7 +153,7 @@ func TestKeeper_SystemBalancerEvensOutAnAccountItReaches(t *testing.T) {
 		}
 	}
 
-	k := &Keeper{Observer: obs, Leaders: Stepdown{Conn: sys, Prefix: p.prefix}, Placement: StreamMove{Conn: sys}}
+	k := &Balancer{Observer: obs, Leaders: Stepdown{Conn: sys, Prefix: p.prefix}, Placement: StreamMove{Conn: sys}}
 	var got Passed
 	require.Eventually(t, func() bool {
 		var err error
@@ -168,7 +168,7 @@ func TestKeeper_SystemBalancerEvensOutAnAccountItReaches(t *testing.T) {
 	require.Empty(t, got.Unreachable)
 }
 
-func TestKeeper_HoldsWhileAServerIsDown(t *testing.T) {
+func TestBalancer_HoldsWhileAServerIsDown(t *testing.T) {
 	t.Parallel()
 	servers := startCluster(t, nil)
 	js := jetStream(t, connect(t, servers[0], nil))
@@ -176,7 +176,7 @@ func TestKeeper_HoldsWhileAServerIsDown(t *testing.T) {
 	defer cancel()
 	_, err := js.CreateStream(ctx, jetstream.StreamConfig{Name: "ticks", Subjects: []string{"ticks.>"}, Replicas: 3})
 	require.NoError(t, err)
-	k := &Keeper{Observer: accountObserver(js, globalAccount, "ticks"), DryRun: true}
+	k := &Balancer{Observer: accountObserver(js, globalAccount, "ticks"), DryRun: true}
 	require.Eventually(t, func() bool {
 		got, err := k.Pass(ctx)
 		return err == nil && got.Held == ""
@@ -186,7 +186,7 @@ func TestKeeper_HoldsWhileAServerIsDown(t *testing.T) {
 	require.Eventually(t, func() bool {
 		got, err := k.Pass(ctx)
 		return err != nil || got.Held != ""
-	}, 30*time.Second, 200*time.Millisecond, "a server down left the keeper free to move")
+	}, 30*time.Second, 200*time.Millisecond, "a server down left the balancer free to move")
 	require.Never(t, func() bool {
 		got, err := k.Pass(ctx)
 		return err == nil && got.Held == ""

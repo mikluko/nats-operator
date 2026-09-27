@@ -9,13 +9,14 @@ import (
 	"time"
 )
 
-// A Keeper is one balancer's passes over one NATS cluster. It makes at most one
-// move a pass and none while the NATS cluster is not Settled, so every move is
-// followed by a Settled reading before the next: a leader move starts an
-// election, and a second one started into it is an outage.
+// A Balancer is a system or account balancer's passes over one NATS cluster.
+// It makes at most one move a pass and none while the NATS cluster is not
+// Settled, so every move is followed by a Settled reading before the next: a
+// leader move starts an election, and a second one started into it is an
+// outage.
 //
-// A Keeper is not safe for concurrent use.
-type Keeper struct {
+// A Balancer is not safe for concurrent use.
+type Balancer struct {
 	Observer Observer
 	// Pools partitions each observation; nil is [WholeCluster].
 	Pools Pooler
@@ -25,7 +26,7 @@ type Keeper struct {
 	// placement move to make makes it ahead of any leader move, since a leader
 	// evened out in the middle of one would be handed straight back.
 	Placement PlacementMover
-	// Yield returns why a stream is not this keeper's to move, and "" where it
+	// Yield returns why a stream is not this balancer's to move, and "" where it
 	// is: a move pending on it from another balancer, or an evacuation. A
 	// yielded stream is still counted.
 	Yield func(StreamID) string
@@ -55,7 +56,7 @@ type Passed struct {
 	// copies, one server carries less the fewest another does.
 	LeaderSkew, CopySkew int
 	Pools                []PoolReport
-	// Yielded names each pooled stream [Keeper.Yield] kept from moving, with why.
+	// Yielded names each pooled stream [Balancer.Yield] kept from moving, with why.
 	Yielded []string
 	// Unreachable is the accounts in the pools whose leaders the leader mover
 	// cannot move, sorted.
@@ -87,7 +88,7 @@ type PoolReport struct {
 const passTimeout = 10 * time.Second
 
 // Pass observes the NATS cluster once and makes at most one move.
-func (k *Keeper) Pass(ctx context.Context) (Passed, error) {
+func (k *Balancer) Pass(ctx context.Context) (Passed, error) {
 	ctx, cancel := context.WithTimeout(ctx, passTimeout)
 	defer cancel()
 
@@ -137,7 +138,7 @@ func (k *Keeper) Pass(ctx context.Context) (Passed, error) {
 			if k.Leaders == nil || yielded[g.ID()] {
 				return false
 			}
-			if !k.Leaders.CanMove(g.Account) {
+			if !k.Leaders.CanMove(ctx, g.Account) {
 				unreachable[g.Account] = true
 				return false
 			}
@@ -175,7 +176,7 @@ func (k *Keeper) Pass(ctx context.Context) (Passed, error) {
 
 // triedIn is the pool's tried set, emptied when the pool reads more even than
 // it ever has.
-func (k *Keeper) triedIn(pool string, streams []Group) map[StreamID]bool {
+func (k *Balancer) triedIn(pool string, streams []Group) map[StreamID]bool {
 	if k.tried == nil {
 		k.tried, k.uneven = map[string]map[StreamID]bool{}, map[string]int{}
 	}

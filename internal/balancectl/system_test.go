@@ -138,7 +138,7 @@ func TestCapabilities(t *testing.T) {
 			for _, a := range []string{"A", "B", "C"} {
 				r.known[a] = tt.reach[a]
 			}
-			require.Equal(t, tt.want, capabilities(obs, r))
+			require.Equal(t, tt.want, capabilities(t.Context(), obs, r))
 		})
 	}
 }

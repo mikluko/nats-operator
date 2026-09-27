@@ -23,7 +23,6 @@ const probeTimeout = 2 * time.Second
 // [jwtplane.StepdownPrefix], as they do while the system account imports the
 // account's jetstream-stepdown export. It remembers each account's answer.
 type stepdownReach struct {
-	ctx   context.Context
 	nc    *nats.Conn
 	known map[string]bool
 	// err is the first probe that neither reached the API nor found it
@@ -31,16 +30,16 @@ type stepdownReach struct {
 	err error
 }
 
-func newStepdownReach(ctx context.Context, nc *nats.Conn) *stepdownReach {
-	return &stepdownReach{ctx: ctx, nc: nc, known: map[string]bool{}}
+func newStepdownReach(nc *nats.Conn) *stepdownReach {
+	return &stepdownReach{nc: nc, known: map[string]bool{}}
 }
 
 // prefix is a [balance.Stepdown] Prefix.
-func (r *stepdownReach) prefix(account string) (string, bool) {
+func (r *stepdownReach) prefix(ctx context.Context, account string) (string, bool) {
 	ok, seen := r.known[account]
 	if !seen {
 		var err error
-		ok, err = r.probe(account)
+		ok, err = r.probe(ctx, account)
 		if err != nil && r.err == nil {
 			r.err = err
 		}
@@ -52,12 +51,12 @@ func (r *stepdownReach) prefix(account string) (string, bool) {
 	return jwtplane.StepdownPrefix(account), true
 }
 
-func (r *stepdownReach) probe(account string) (bool, error) {
+func (r *stepdownReach) probe(ctx context.Context, account string) (bool, error) {
 	for _, subject := range []string{
 		jwtplane.StreamStepdownSubject(account, probeStream),
 		jwtplane.ConsumerStepdownSubject(account, probeStream, probeStream),
 	} {
-		ctx, cancel := context.WithTimeout(r.ctx, probeTimeout)
+		ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 		_, err := r.nc.RequestWithContext(ctx, subject, nil)
 		cancel()
 		switch {

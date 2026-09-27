@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
+	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
@@ -36,33 +37,29 @@ type KeyValueReconciler struct {
 	Syncer lifecycle.Syncer
 }
 
-var keyValueKind = bucketKind[*js.NatsKeyValue]{
-	kind: KeyValueKind,
-	new:  func() *js.NatsKeyValue { return &js.NatsKeyValue{} },
-	list: func() client.ObjectList { return &js.NatsKeyValueList{} },
-	fields: func(kv *js.NatsKeyValue) bucketFields {
-		return bucketFields{
-			conn:     kv.Spec.ConnectionRef,
-			policies: kv.Spec.Policies,
-			deletion: kv.Spec.DeletionPolicy,
-			sync:     &kv.Status.SyncStatus,
-			server:   &kv.Status.Server,
-		}
+var keyValueKind = lifecycle.Kind[*js.NatsKeyValue]{
+	Name: KeyValueKind,
+	New:  func() *js.NatsKeyValue { return &js.NatsKeyValue{} },
+	List: func() client.ObjectList { return &js.NatsKeyValueList{} },
+	Fields: func(b *js.NatsKeyValue) lifecycle.Fields {
+		return lifecycle.Fields{Policies: b.Spec.Policies, Deletion: b.Spec.DeletionPolicy, Sync: &b.Status.SyncStatus, Status: b.Status}
 	},
-	object: func(api *lifecycle.API, c client.Client, kv *js.NatsKeyValue) lifecycle.Object {
-		return &keyValueObject{api: api, client: c, obj: kv}
+	Connection: func(b *js.NatsKeyValue) natsv1beta1.ObjectReference { return b.Spec.ConnectionRef },
+	Bind: func(api *lifecycle.API, c client.Client, b *js.NatsKeyValue) lifecycle.Object {
+		return &keyValueObject{api: api, client: c, obj: b}
 	},
+	Record: func(b *js.NatsKeyValue, info *lifecycle.Info) { b.Status.Server = streamServerStatus(info) },
 }
 
 // Reconcile implements reconcile.Reconciler.
 func (r *KeyValueReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
-	return keyValueKind.reconcile(ctx, r.Client, r.Dialer, r.Syncer, req)
+	return keyValueKind.Reconcile(ctx, r.Client, r.Dialer, r.Syncer, req)
 }
 
 // SetupWithManager registers the field indexes the reconciler reads and
 // builds its controller.
 func (r *KeyValueReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
-	return keyValueKind.setup(ctx, mgr, r)
+	return keyValueKind.SetupWithManager(ctx, mgr, r)
 }
 
 // keyValueObject is a NatsKeyValue's bucket. Its configs are nats.go
@@ -152,11 +149,5 @@ func (o *keyValueObject) WriteSpec(ctx context.Context, cfg lifecycle.Config, re
 	server := kvFromWire(&w)
 	server.Name = o.obj.Spec.Name
 	server.Metadata = cfg.UserMetadata()
-	want := o.obj.DeepCopy()
-	if replace {
-		want.Spec.KeyValueConfig = server
-	} else if _, err := lifecycle.FillOmitted(&want.Spec.KeyValueConfig, &server); err != nil {
-		return err
-	}
-	return lifecycle.PatchSpec(ctx, o.client, o.obj, want, &o.obj.Spec, want.Spec)
+	return lifecycle.WriteSpec(ctx, o.client, o.obj, func(b *js.NatsKeyValue) *js.KeyValueConfig { return &b.Spec.KeyValueConfig }, server, replace)
 }

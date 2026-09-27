@@ -10,6 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
+	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
@@ -31,33 +32,29 @@ type ObjectStoreReconciler struct {
 	Syncer lifecycle.Syncer
 }
 
-var objectStoreKind = bucketKind[*js.NatsObjectStore]{
-	kind: ObjectStoreKind,
-	new:  func() *js.NatsObjectStore { return &js.NatsObjectStore{} },
-	list: func() client.ObjectList { return &js.NatsObjectStoreList{} },
-	fields: func(os *js.NatsObjectStore) bucketFields {
-		return bucketFields{
-			conn:     os.Spec.ConnectionRef,
-			policies: os.Spec.Policies,
-			deletion: os.Spec.DeletionPolicy,
-			sync:     &os.Status.SyncStatus,
-			server:   &os.Status.Server,
-		}
+var objectStoreKind = lifecycle.Kind[*js.NatsObjectStore]{
+	Name: ObjectStoreKind,
+	New:  func() *js.NatsObjectStore { return &js.NatsObjectStore{} },
+	List: func() client.ObjectList { return &js.NatsObjectStoreList{} },
+	Fields: func(b *js.NatsObjectStore) lifecycle.Fields {
+		return lifecycle.Fields{Policies: b.Spec.Policies, Deletion: b.Spec.DeletionPolicy, Sync: &b.Status.SyncStatus, Status: b.Status}
 	},
-	object: func(api *lifecycle.API, c client.Client, os *js.NatsObjectStore) lifecycle.Object {
-		return &objectStoreObject{api: api, client: c, obj: os}
+	Connection: func(b *js.NatsObjectStore) natsv1beta1.ObjectReference { return b.Spec.ConnectionRef },
+	Bind: func(api *lifecycle.API, c client.Client, b *js.NatsObjectStore) lifecycle.Object {
+		return &objectStoreObject{api: api, client: c, obj: b}
 	},
+	Record: func(b *js.NatsObjectStore, info *lifecycle.Info) { b.Status.Server = streamServerStatus(info) },
 }
 
 // Reconcile implements reconcile.Reconciler.
 func (r *ObjectStoreReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
-	return objectStoreKind.reconcile(ctx, r.Client, r.Dialer, r.Syncer, req)
+	return objectStoreKind.Reconcile(ctx, r.Client, r.Dialer, r.Syncer, req)
 }
 
 // SetupWithManager registers the field indexes the reconciler reads and
 // builds its controller.
 func (r *ObjectStoreReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
-	return objectStoreKind.setup(ctx, mgr, r)
+	return objectStoreKind.SetupWithManager(ctx, mgr, r)
 }
 
 // objectStoreObject is a NatsObjectStore's object store. Its configs are
@@ -140,11 +137,5 @@ func (o *objectStoreObject) WriteSpec(ctx context.Context, cfg lifecycle.Config,
 	server := objFromWire(&w)
 	server.Name = o.obj.Spec.Name
 	server.Metadata = cfg.UserMetadata()
-	want := o.obj.DeepCopy()
-	if replace {
-		want.Spec.ObjectStoreConfig = server
-	} else if _, err := lifecycle.FillOmitted(&want.Spec.ObjectStoreConfig, &server); err != nil {
-		return err
-	}
-	return lifecycle.PatchSpec(ctx, o.client, o.obj, want, &o.obj.Spec, want.Spec)
+	return lifecycle.WriteSpec(ctx, o.client, o.obj, func(b *js.NatsObjectStore) *js.ObjectStoreConfig { return &b.Spec.ObjectStoreConfig }, server, replace)
 }

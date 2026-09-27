@@ -174,7 +174,7 @@ func (p *plane) user(t *testing.T, account *identity) *identity {
 func (p *plane) prefixOf(account string) string { return "acc." + account + "." }
 
 // prefix is [Stepdown.Prefix] for a system connection under p.
-func (p *plane) prefix(account string) (string, bool) {
+func (p *plane) prefix(_ context.Context, account string) (string, bool) {
 	if account != p.a.pub {
 		return "", false
 	}

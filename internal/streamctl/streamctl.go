@@ -7,16 +7,20 @@ package streamctl
 import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 )
 
-// refNamespaces adapts refs to grant.IndexReferrers.
-func refNamespaces(refs func(client.Object) []natsv1beta1.ObjectReference) func(client.Object) []string {
-	return func(o client.Object) []string {
-		var out []string
-		for _, r := range refs(o) {
-			out = append(out, r.Namespace)
-		}
-		return out
+// ServerStream is the server-side stream obj stands for: a NatsStream's own,
+// KV_<bucket> for a NatsKeyValue and OBJ_<bucket> for a NatsObjectStore. It
+// is "" for any other object.
+func ServerStream(obj client.Object) string {
+	switch o := obj.(type) {
+	case *js.NatsStream:
+		return streamName(o)
+	case *js.NatsKeyValue:
+		return kvStreamPrefix + bucketName(o.Spec.Name, o)
+	case *js.NatsObjectStore:
+		return objStreamPrefix + bucketName(o.Spec.Name, o)
 	}
+	return ""
 }

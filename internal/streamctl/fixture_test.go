@@ -18,6 +18,7 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
+	"github.com/mikluko/nats-operator/internal/refindex"
 )
 
 const (
@@ -50,10 +51,10 @@ func newFixture(t *testing.T) *fixture {
 			Spec:       natsv1beta1.NatsConnectionSpec{Servers: n.urls},
 		})
 	idx := indexerFunc(func(obj client.Object, field string, extract client.IndexerFunc) { b.WithIndex(obj, field, extract) })
-	require.NoError(t, lifecycle.IndexUID(t.Context(), idx, &js.NatsStream{}))
-	require.NoError(t, lifecycle.IndexUID(t.Context(), idx, &js.NatsConsumer{}))
-	require.NoError(t, lifecycle.IndexUID(t.Context(), idx, &js.NatsKeyValue{}))
-	require.NoError(t, lifecycle.IndexUID(t.Context(), idx, &js.NatsObjectStore{}))
+	require.NoError(t, refindex.IndexUID(t.Context(), idx, &js.NatsStream{}))
+	require.NoError(t, refindex.IndexUID(t.Context(), idx, &js.NatsConsumer{}))
+	require.NoError(t, refindex.IndexUID(t.Context(), idx, &js.NatsKeyValue{}))
+	require.NoError(t, refindex.IndexUID(t.Context(), idx, &js.NatsObjectStore{}))
 	c := b.Build()
 	pool := natsconn.NewPool()
 	t.Cleanup(pool.Close)

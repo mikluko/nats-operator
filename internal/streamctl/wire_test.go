@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
@@ -129,4 +130,24 @@ func TestConsumerWireRoundTrip(t *testing.T) {
 	var w consumerWire
 	require.NoError(t, lifecycle.FromConfig(cfg, &w))
 	require.Equal(t, in, consumerFromWire(&w))
+}
+
+func TestServerStream(t *testing.T) {
+	meta := func(name string) metav1.ObjectMeta { return metav1.ObjectMeta{Name: name} }
+	for _, tc := range []struct {
+		name string
+		obj  client.Object
+		want string
+	}{
+		{"stream by resource name", &js.NatsStream{ObjectMeta: meta("orders")}, "orders"},
+		{"stream by spec name", &js.NatsStream{ObjectMeta: meta("orders"), Spec: js.NatsStreamSpec{StreamConfig: js.StreamConfig{Name: "ORDERS"}}}, "ORDERS"},
+		{"key-value", &js.NatsKeyValue{ObjectMeta: meta("sessions")}, "KV_sessions"},
+		{"key-value by spec name", &js.NatsKeyValue{ObjectMeta: meta("sessions"), Spec: js.NatsKeyValueSpec{KeyValueConfig: js.KeyValueConfig{Name: "cfg"}}}, "KV_cfg"},
+		{"object store", &js.NatsObjectStore{ObjectMeta: meta("blobs")}, "OBJ_blobs"},
+		{"other", &js.NatsConsumer{ObjectMeta: meta("c")}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, ServerStream(tc.obj))
+		})
+	}
 }
