@@ -5,9 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -89,9 +89,6 @@ type EvacuationReconciler struct {
 	// Recorder records moves started, done, refused and cancelled, and a
 	// refused evacuation; nil records none.
 	Recorder events.EventRecorder
-
-	mu   sync.Mutex
-	runs map[types.UID]map[balance.StreamID]time.Time
 }
 
 // Reconcile implements reconcile.Reconciler.
@@ -120,11 +117,10 @@ func (r *EvacuationReconciler) evacuate(ctx context.Context, e *js.NatsClusterEv
 	from := e.Spec.From.Cluster
 	after := reconcile.Result{RequeueAfter: DefaultInterval}
 
-	owners, pinned, err := resources(ctx, r.Client, from)
+	owners, err := resources(ctx, r.Client)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	st.Pinned = pinned
 
 	nc, why, err := dial(ctx, r.Dialer, evacuationReferrer(e.Namespace), e.Spec.ConnectionRef)
 	if why != nil {
@@ -141,6 +137,8 @@ func (r *EvacuationReconciler) evacuate(ctx context.Context, e *js.NatsClusterEv
 		setEvacuation(e, ConditionReady, false, ReasonPassFailed, err.Error())
 		return after, nil
 	}
+	st.Pinned = pinnedIn(snap, owners, from)
+	pinned := st.Pinned
 	if s := carrier(snap.Servers, e.Spec.To.ServerTags); s != "" {
 		msg := fmt.Sprintf("server %s of %s carries %s", s, from, strings.Join(e.Spec.To.ServerTags, ", "))
 		if c := meta.FindStatusCondition(st.Conditions, ConditionReady); c == nil || c.Reason != ReasonTargetTagsInSource {
@@ -152,7 +150,7 @@ func (r *EvacuationReconciler) evacuate(ctx context.Context, e *js.NatsClusterEv
 	}
 
 	now := time.Now()
-	requested := r.run(e.UID)
+	requested := requestedOf(st.Requested)
 	p := planEvacuation(snap, owners, requested, now, r.maxInFlight())
 	for _, id := range p.completed {
 		delete(requested, id)
@@ -182,6 +180,7 @@ func (r *EvacuationReconciler) evacuate(ctx context.Context, e *js.NatsClusterEv
 		}
 	}
 	st.InFlight = int32(inFlight)
+	st.Requested = requestedList(requested)
 
 	leaving := inFlight + p.waiting + len(refused)
 	st.Remaining = int32(leaving)
@@ -227,13 +226,7 @@ func (r *EvacuationReconciler) finalize(ctx context.Context, e *js.NatsClusterEv
 			return err
 		}
 	}
-	if err := lifecycle.RemoveFinalizer(ctx, r.Client, e); err != nil {
-		return err
-	}
-	r.mu.Lock()
-	delete(r.runs, e.UID)
-	r.mu.Unlock()
-	return nil
+	return lifecycle.RemoveFinalizer(ctx, r.Client, e)
 }
 
 func (r *EvacuationReconciler) cancel(ctx context.Context, e *js.NatsClusterEvacuation) error {
@@ -254,11 +247,11 @@ func (r *EvacuationReconciler) cancel(ctx context.Context, e *js.NatsClusterEvac
 	if err != nil {
 		return fmt.Errorf("cancel moves off %s: %w", from, err)
 	}
-	owners, _, err := resources(ctx, r.Client, from)
+	owners, err := resources(ctx, r.Client)
 	if err != nil {
 		return err
 	}
-	requested := r.run(e.UID)
+	requested := requestedOf(e.Status.Requested)
 	p := planEvacuation(snap, owners, requested, time.Now(), 0)
 	pending := p.inFlight
 	for id := range requested {
@@ -287,20 +280,23 @@ func noMove(err error) bool {
 
 const errCodeStreamNotFound = 10059
 
-// run is the moves requested for the evacuation uid and not yet seen to
-// complete, with when each was requested.
-func (r *EvacuationReconciler) run(uid types.UID) map[balance.StreamID]time.Time {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.runs == nil {
-		r.runs = map[types.UID]map[balance.StreamID]time.Time{}
+// requestedOf is list by stream, with when each move was requested.
+func requestedOf(list []js.RequestedMove) map[balance.StreamID]time.Time {
+	out := make(map[balance.StreamID]time.Time, len(list))
+	for _, m := range list {
+		out[balance.StreamID{Account: m.Account, Stream: m.Stream}] = m.Time.Time
 	}
-	m, ok := r.runs[uid]
-	if !ok {
-		m = map[balance.StreamID]time.Time{}
-		r.runs[uid] = m
+	return out
+}
+
+// requestedList is requested as a status lists it, sorted by account and
+// stream.
+func requestedList(requested map[balance.StreamID]time.Time) []js.RequestedMove {
+	var out []js.RequestedMove
+	for _, id := range slices.SortedFunc(maps.Keys(requested), compareStreamIDs) {
+		out = append(out, js.RequestedMove{Account: id.Account, Stream: id.Stream, Time: metav1.NewTime(requested[id])})
 	}
-	return m
+	return out
 }
 
 func (r *EvacuationReconciler) maxInFlight() int {
@@ -320,50 +316,62 @@ func (r *EvacuationReconciler) pendingPoll() time.Duration {
 // An owner is a resource that owns a stream on the server, and the NATS
 // cluster its spec declares, "" where it declares none.
 type owner struct {
+	object  js.PinnedObject
 	cluster string
 }
 
-// resources is every NatsStream, NatsKeyValue and NatsObjectStore by UID,
-// and those whose spec declares placement.cluster from, sorted by namespace,
-// name and kind.
-func resources(ctx context.Context, c client.Reader, from string) (map[types.UID]owner, []js.PinnedObject, error) {
+// resources is every NatsStream, NatsKeyValue and NatsObjectStore by UID.
+func resources(ctx context.Context, c client.Reader) (map[types.UID]owner, error) {
 	owners := map[types.UID]owner{}
-	var pinned []js.PinnedObject
 	see := func(kind string, o metav1.Object, p *js.Placement) {
 		var cluster string
 		if p != nil {
 			cluster = p.Cluster
 		}
-		owners[o.GetUID()] = owner{cluster: cluster}
-		if cluster == from {
-			pinned = append(pinned, js.PinnedObject{Kind: kind, Namespace: o.GetNamespace(), Name: o.GetName()})
-		}
+		owners[o.GetUID()] = owner{object: js.PinnedObject{Kind: kind, Namespace: o.GetNamespace(), Name: o.GetName()}, cluster: cluster}
 	}
 	var streams js.NatsStreamList
 	if err := c.List(ctx, &streams); err != nil {
-		return nil, nil, fmt.Errorf("list NatsStreams: %w", err)
+		return nil, fmt.Errorf("list NatsStreams: %w", err)
 	}
 	for i := range streams.Items {
 		see("NatsStream", &streams.Items[i], streams.Items[i].Spec.Placement)
 	}
 	var kvs js.NatsKeyValueList
 	if err := c.List(ctx, &kvs); err != nil {
-		return nil, nil, fmt.Errorf("list NatsKeyValues: %w", err)
+		return nil, fmt.Errorf("list NatsKeyValues: %w", err)
 	}
 	for i := range kvs.Items {
 		see("NatsKeyValue", &kvs.Items[i], kvs.Items[i].Spec.Placement)
 	}
 	var objs js.NatsObjectStoreList
 	if err := c.List(ctx, &objs); err != nil {
-		return nil, nil, fmt.Errorf("list NatsObjectStores: %w", err)
+		return nil, fmt.Errorf("list NatsObjectStores: %w", err)
 	}
 	for i := range objs.Items {
 		see("NatsObjectStore", &objs.Items[i], objs.Items[i].Spec.Placement)
 	}
-	slices.SortFunc(pinned, func(a, b js.PinnedObject) int {
+	return owners, nil
+}
+
+// pinnedIn is the resources whose spec declares placement.cluster from and
+// whose stream snap, the source NATS cluster, holds, sorted by namespace,
+// name and kind. A resource declaring from whose stream sits in another NATS
+// system with a cluster of that name is not among them.
+func pinnedIn(snap *sysobs.Snapshot, owners map[types.UID]owner, from string) []js.PinnedObject {
+	var out []js.PinnedObject
+	for _, g := range snap.Groups {
+		if g.Kind != sysobs.KindStream {
+			continue
+		}
+		if o, ok := ownerOf(g.Metadata, owners); ok && o.cluster == from && !slices.Contains(out, o.object) {
+			out = append(out, o.object)
+		}
+	}
+	slices.SortFunc(out, func(a, b js.PinnedObject) int {
 		return cmp.Or(cmp.Compare(a.Namespace, b.Namespace), cmp.Compare(a.Name, b.Name), cmp.Compare(a.Kind, b.Kind))
 	})
-	return owners, pinned, nil
+	return out
 }
 
 // An evacuationPlan is what one pass over the source finds and may do.
@@ -399,7 +407,7 @@ func planEvacuation(snap *sysobs.Snapshot, owners map[types.UID]owner, requested
 		}
 		id := streamID(g)
 		held[id] = true
-		if o, ok := ownerOf(g, owners); ok && o.cluster != "" {
+		if !evacuates(g.Metadata, owners) {
 			p.owned++
 			continue
 		}
@@ -433,9 +441,17 @@ func leaving(g sysobs.Group, roster map[string]bool) bool {
 	return slices.ContainsFunc(g.Members, func(m sysobs.Member) bool { return !roster[m.Server] })
 }
 
-// ownerOf is the resource whose ownership marker g's metadata carries.
-func ownerOf(g sysobs.Group, owners map[types.UID]owner) (owner, bool) {
-	m, ok := lifecycle.ReadMarker(g.Metadata)
+// evacuates reports whether an evacuation moves the stream whose config
+// metadata is metadata: every stream but one whose owning resource declares a
+// placement.cluster, which its owner moves.
+func evacuates(metadata map[string]string, owners map[types.UID]owner) bool {
+	o, ok := ownerOf(metadata, owners)
+	return !ok || o.cluster == ""
+}
+
+// ownerOf is the resource whose ownership marker metadata carries.
+func ownerOf(metadata map[string]string, owners map[types.UID]owner) (owner, bool) {
+	m, ok := lifecycle.ReadMarker(metadata)
 	if !ok {
 		return owner{}, false
 	}
@@ -446,7 +462,7 @@ func ownerOf(g sysobs.Group, owners map[types.UID]owner) (owner, bool) {
 // stale reports whether g, about to be moved off from, has no owning
 // resource and a config that names from.
 func stale(g sysobs.Group, from string, owners map[types.UID]owner) bool {
-	if _, ok := ownerOf(g, owners); ok {
+	if _, ok := ownerOf(g.Metadata, owners); ok {
 		return false
 	}
 	return g.Placement != nil && g.Placement.Cluster == from

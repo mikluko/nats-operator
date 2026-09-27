@@ -220,6 +220,42 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              lastMove:
+                description: |-
+                  LastMove is the last move made; the next waits for spec.interval
+                  after its time.
+                properties:
+                  account:
+                    description: Account is the public key of the account whose stream
+                      moved.
+                    type: string
+                  consumer:
+                    description: |-
+                      Consumer is the name of the consumer whose leader moved; empty on a
+                      stream's move.
+                    type: string
+                  from:
+                    description: From is the server moved off.
+                    type: string
+                  kind:
+                    description: Kind of move.
+                    enum:
+                    - Leader
+                    - Placement
+                    type: string
+                  stream:
+                    description: |-
+                      Stream is the name of the stream moved, or of the stream whose
+                      consumer's leader moved.
+                    type: string
+                  time:
+                    description: Time the move was requested.
+                    format: date-time
+                    type: string
+                  to:
+                    description: To is the server moved to.
+                    type: string
+                type: object
               observedGeneration:
                 description: ObservedGeneration is the generation the status describes.
                 format: int64

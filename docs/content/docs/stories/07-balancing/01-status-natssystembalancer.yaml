@@ -26,7 +26,8 @@ status:
     replicas: !any 56
   lastMove:
     kind: Placement
-    stream: !any orders/ORDERS_EU
+    account: !any ADTWXTPEOI65FGIGO36XGZBDFOYDDPV6XZPRQWDIRXIYCAJD6TBP76JN
+    stream: !any ORDERS_EU
     from: !any demo-1
     time: !any "2026-09-26T11:31:02Z"
   pending: []

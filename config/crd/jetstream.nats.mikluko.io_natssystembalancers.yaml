@@ -172,6 +172,15 @@ spec:
               lastMove:
                 description: LastMove is the last move made.
                 properties:
+                  account:
+                    description: Account is the public key of the account whose stream
+                      moved.
+                    type: string
+                  consumer:
+                    description: |-
+                      Consumer is the name of the consumer whose leader moved; empty on a
+                      stream's move.
+                    type: string
                   from:
                     description: From is the server moved off.
                     type: string
@@ -182,7 +191,9 @@ spec:
                     - Placement
                     type: string
                   stream:
-                    description: Stream moved, as account/stream.
+                    description: |-
+                      Stream is the name of the stream moved, or of the stream whose
+                      consumer's leader moved.
                     type: string
                   time:
                     description: Time the move was requested.
@@ -201,6 +212,15 @@ spec:
                 items:
                   description: Move is a leader or placement move.
                   properties:
+                    account:
+                      description: Account is the public key of the account whose
+                        stream moved.
+                      type: string
+                    consumer:
+                      description: |-
+                        Consumer is the name of the consumer whose leader moved; empty on a
+                        stream's move.
+                      type: string
                     from:
                       description: From is the server moved off.
                       type: string
@@ -211,7 +231,9 @@ spec:
                       - Placement
                       type: string
                     stream:
-                      description: Stream moved, as account/stream.
+                      description: |-
+                        Stream is the name of the stream moved, or of the stream whose
+                        consumer's leader moved.
                       type: string
                     time:
                       description: Time the move was requested.

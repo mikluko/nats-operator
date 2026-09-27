@@ -85,7 +85,7 @@ func observation(cluster string, snap *sysobs.Snapshot) balance.Observation {
 }
 
 func group(g sysobs.Group) balance.Group {
-	out := balance.Group{Account: g.Account, Stream: g.Stream, Consumer: g.Consumer, Leader: g.Leader}
+	out := balance.Group{Account: g.Account, Stream: g.Stream, Consumer: g.Consumer, Leader: g.Leader, Metadata: g.Metadata}
 	if p := g.Placement; p != nil {
 		out.Placement = &balance.Placement{Cluster: p.Cluster, Tags: p.Tags}
 	}

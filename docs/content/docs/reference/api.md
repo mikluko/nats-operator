@@ -779,11 +779,13 @@ Appears on: [Capabilities](#Capabilities).
 | `Partial` |  |
 ### Move {#Move}
 Move is a leader or placement move.\
-Appears on: [NatsSystemBalancerStatus](#NatsSystemBalancerStatus).
+Appears on: [NatsBalancerStatus](#NatsBalancerStatus), [NatsSystemBalancerStatus](#NatsSystemBalancerStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `kind` | [{{< type "MoveKind" >}}](#MoveKind) | No | Kind of move. |
-| `stream` | {{< type "string" >}} | No | Stream moved, as account/stream. |
+| `account` | {{< type "string" >}} | No | Account is the public key of the account whose stream moved. |
+| `stream` | {{< type "string" >}} | No | Stream is the name of the stream moved, or of the stream whose consumer's leader moved. |
+| `consumer` | {{< type "string" >}} | No | Consumer is the name of the consumer whose leader moved; empty on a stream's move. |
 | `from` | {{< type "string" >}} | No | From is the server moved off. |
 | `to` | {{< type "string" >}} | No | To is the server moved to. |
 | `time` | [{{< type "Time" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Time) | No | Time the move was requested. |
@@ -828,6 +830,7 @@ Appears on: [NatsBalancer](#NatsBalancer).
 | `observedGeneration` | {{< type "int64" >}} | No | ObservedGeneration is the generation the status describes. |
 | `conditions` | [{{< type "[]Condition" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Condition) | No | Conditions: Ready, Holding, Overlapping. |
 | `pools` | [{{< type "[]PoolStatus" >}}](#PoolStatus) | No | Pools report each pool's evenness. |
+| `lastMove` | [{{< type "Move" >}}](#Move) | No | LastMove is the last move made; the next waits for spec.interval after its time. |
 ### NatsClusterEvacuation {#NatsClusterEvacuation}
 NatsClusterEvacuation moves every stream, key-value bucket and object store in every account off one NATS cluster.
 | Field | Type | Required | Description |
@@ -854,6 +857,7 @@ Appears on: [NatsClusterEvacuation](#NatsClusterEvacuation).
 | `conditions` | [{{< type "[]Condition" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Condition) | No | Conditions: Ready, Progressing. |
 | `moved` | {{< type "int32" >}} | No | Moved is the number of streams moved. |
 | `inFlight` | {{< type "int32" >}} | No | InFlight is the number of moves in progress. |
+| `requested` | [{{< type "[]RequestedMove" >}}](#RequestedMove) | No | Requested are the moves requested that the source cluster has not yet seen complete; deleting the evacuation cancels them. |
 | `remaining` | {{< type "int32" >}} | No | Remaining is the number of streams still to leave the source cluster: in flight, waiting for a slot, or refused by the server in the last pass. Pinned streams and streams left for their owners are not counted. |
 | `pinned` | [{{< type "[]PinnedObject" >}}](#PinnedObject) | No | Pinned are the resources left in place; the evacuation is not Ready while any remains. |
 | `stalePlacement` | [{{< type "[]ServerStream" >}}](#ServerStream) | No | StalePlacement are the streams moved that no resource owns and whose config still names the source cluster: while it exists, an update that changes their placement returns them to it. |
@@ -1209,6 +1213,14 @@ Appears on: [KeyValueConfig](#KeyValueConfig), [StreamConfig](#StreamConfig).
 | `source` | {{< type "string" >}} | No | Source subject filter. |
 | `destination` | {{< type "string" >}} | Yes | Destination subject. |
 | `headersOnly` | {{< type "bool" >}} | No | HeadersOnly republishes headers without the payload. |
+### RequestedMove {#RequestedMove}
+RequestedMove is a stream an evacuation asked the server to move.\
+Appears on: [NatsClusterEvacuationStatus](#NatsClusterEvacuationStatus).
+| Field | Type | Required | Description |
+| :---- | :--- | :------: | :---------- |
+| `account` | {{< type "string" >}} | Yes | Account is the account's public key. |
+| `stream` | {{< type "string" >}} | Yes | Stream is the name of the stream. |
+| `time` | [{{< type "Time" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Time) | Yes | Time the move was last requested. |
 ### RetentionPolicy {#RetentionPolicy}
 RetentionPolicy is a stream's retention policy.\
 Type: {{< type "string" >}}\

@@ -3,6 +3,7 @@ package balancectl
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -133,6 +134,48 @@ func TestBalancer_Pools(t *testing.T) {
 		}
 	})
 
+	t.Run("PacesFromStatusAcrossRestarts", func(t *testing.T) {
+		requestsPool := append(slices.Clone(req), "KV_cfg")
+		for _, s := range requestsPool {
+			stepToFirst(t, ctx, jsA, s)
+		}
+		var b js.NatsBalancer
+		key := client.ObjectKey{Namespace: ns, Name: "payments"}
+		require.NoError(t, c.Get(ctx, key, &b))
+		b.Spec.Interval = &metav1.Duration{Duration: time.Hour}
+		require.NoError(t, c.Update(ctx, &b))
+		recent := metav1.NewTime(time.Now().Add(-time.Minute))
+		b.Status.LastMove = &js.Move{Kind: js.MoveLeader, Account: p.aPub, Stream: res[0], From: "C1-1", To: "C1-2", Time: &recent}
+		require.NoError(t, c.Status().Update(ctx, &b))
+
+		for range 5 {
+			fresh := &BalancerReconciler{Client: c, Dialer: r.Dialer, PendingPoll: time.Millisecond}
+			_, err := fresh.Reconcile(ctx, reconcile.Request{NamespacedName: key})
+			require.NoError(t, err)
+		}
+		for _, s := range requestsPool {
+			require.Equal(t, "C1-0", streamLeader(t, ctx, jsA, s), "a restarted balancer moved inside the interval of its last move")
+		}
+
+		require.NoError(t, c.Get(ctx, key, &b))
+		due := metav1.NewTime(time.Now().Add(-2 * time.Hour))
+		b.Status.LastMove.Time = &due
+		require.NoError(t, c.Status().Update(ctx, &b))
+		got := reconciledAccount(t, ctx, &BalancerReconciler{Client: c, Dialer: r.Dialer, PendingPoll: time.Millisecond}, func(ct *assert.CollectT, b *js.NatsBalancer) {
+			assert.True(ct, b.Status.LastMove.Time.After(due.Time), "no move once the interval had passed")
+		}, "the balancer did not move once its last move was an interval old")
+		require.Equal(t, p.aPub, got.Status.LastMove.Account)
+		require.Contains(t, requestsPool, got.Status.LastMove.Stream)
+		require.Equal(t, "C1-0", got.Status.LastMove.From)
+
+		require.NoError(t, c.Get(ctx, key, &b))
+		b.Spec.Interval = &metav1.Duration{Duration: 10 * time.Millisecond}
+		require.NoError(t, c.Update(ctx, &b))
+		reconciledAccount(t, ctx, r, func(ct *assert.CollectT, b *js.NatsBalancer) {
+			assert.Equal(ct, even, b.Status.Pools)
+		}, "the pools did not come even again")
+	})
+
 	t.Run("ReportsOverlap", func(t *testing.T) {
 		var s js.NatsStream
 		require.NoError(t, c.Get(ctx, client.ObjectKey{Namespace: ns, Name: req[0]}, &s))
@@ -153,10 +196,10 @@ func TestBalancer_Pools(t *testing.T) {
 	t.Run("YieldsToSystemBalancer", func(t *testing.T) {
 		sys := &js.NatsSystemBalancer{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "demo"}}
 		require.NoError(t, c.Create(ctx, sys))
-		sys.Status.Pending = []js.Move{{Kind: js.MovePlacement, Stream: p.aPub + "/" + req[1], From: "C1-1"}}
+		sys.Status.Pending = []js.Move{{Kind: js.MovePlacement, Account: p.aPub, Stream: req[1], From: "C1-1"}}
 		require.NoError(t, c.Status().Update(ctx, sys))
-		stepTo(t, ctx, jsA, req[1], "C1-0")
-		stepTo(t, ctx, jsA, req[0], "C1-0")
+		stepToFirst(t, ctx, jsA, req[1])
+		stepToFirst(t, ctx, jsA, req[0])
 
 		for range 20 {
 			b := reconciledAccount(t, ctx, r, func(ct *assert.CollectT, b *js.NatsBalancer) {
@@ -179,9 +222,11 @@ func TestBalancer_Pools(t *testing.T) {
 	})
 }
 
-// stepTo moves stream's leader to server through j's own stepdown API.
-func stepTo(t *testing.T, ctx context.Context, j jetstream.JetStream, stream, server string) {
+// stepToFirst moves stream's leader to C1-0, the first server of C1, through
+// j's own stepdown API.
+func stepToFirst(t *testing.T, ctx context.Context, j jetstream.JetStream, stream string) {
 	t.Helper()
+	const server = "C1-0"
 	require.Eventually(t, func() bool {
 		s, err := j.Stream(ctx, stream)
 		if err != nil || s.CachedInfo().Cluster == nil {

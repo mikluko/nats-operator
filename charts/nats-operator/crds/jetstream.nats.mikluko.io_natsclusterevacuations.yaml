@@ -203,6 +203,30 @@ spec:
                   pass. Pinned streams and streams left for their owners are not counted.
                 format: int32
                 type: integer
+              requested:
+                description: |-
+                  Requested are the moves requested that the source cluster has not yet
+                  seen complete; deleting the evacuation cancels them.
+                items:
+                  description: RequestedMove is a stream an evacuation asked the server
+                    to move.
+                  properties:
+                    account:
+                      description: Account is the account's public key.
+                      type: string
+                    stream:
+                      description: Stream is the name of the stream.
+                      type: string
+                    time:
+                      description: Time the move was last requested.
+                      format: date-time
+                      type: string
+                  required:
+                  - account
+                  - stream
+                  - time
+                  type: object
+                type: array
               stalePlacement:
                 description: |-
                   StalePlacement are the streams moved that no resource owns and whose

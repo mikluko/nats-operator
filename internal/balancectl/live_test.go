@@ -133,7 +133,8 @@ func TestSystemBalancer_Supercluster(t *testing.T) {
 		}, b.Status.Capabilities)
 		require.NotNil(t, b.Status.LastMove)
 		require.Equal(t, js.MoveLeader, b.Status.LastMove.Kind)
-		require.True(t, strings.HasPrefix(b.Status.LastMove.Stream, p.aPub+"/A_"), b.Status.LastMove.Stream)
+		require.Equal(t, p.aPub, b.Status.LastMove.Account)
+		require.True(t, strings.HasPrefix(b.Status.LastMove.Stream, "A_"), b.Status.LastMove.Stream)
 		require.Equal(t, "C1-0", b.Status.LastMove.From)
 		for _, name := range bStreams {
 			require.Equal(t, "C1-0", streamLeader(t, ctx, jsB, name), "%s belongs to an account without the export", name)
@@ -141,7 +142,7 @@ func TestSystemBalancer_Supercluster(t *testing.T) {
 		evs := recorded(rec)
 		started := notes(evs, "Normal", "MoveStarted")
 		require.NotEmpty(t, started)
-		require.Equal(t, fmt.Sprintf("leader of %s from %s to %s", b.Status.LastMove.Stream, b.Status.LastMove.From, b.Status.LastMove.To), started[len(started)-1])
+		require.Equal(t, fmt.Sprintf("leader of %s/%s from %s to %s", p.aPub, b.Status.LastMove.Stream, b.Status.LastMove.From, b.Status.LastMove.To), started[len(started)-1])
 		require.ElementsMatch(t, started, notes(evs, "Normal", "MoveDone"), "a move started was not seen done")
 	})
 
@@ -166,27 +167,44 @@ func TestSystemBalancer_Supercluster(t *testing.T) {
 		require.Equal(t, &js.Capabilities{Placement: true, Leader: js.LeaderCapabilityFull}, other.Status.Capabilities)
 	})
 
-	t.Run("HoldsWhileEvacuating", func(t *testing.T) {
-		evac := &js.NatsClusterEvacuation{
-			ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "drain-c1"},
-			Spec: js.NatsClusterEvacuationSpec{
-				ConnectionRef: natsv1beta1.ObjectReference{Name: "c1"},
-				From:          js.EvacuationSource{Cluster: "C1"},
-				To:            js.EvacuationTarget{ServerTags: []string{"new"}},
-			},
+	t.Run("EvacuationsScopedByNATSSystem", func(t *testing.T) {
+		q := newPlane(t)
+		other := startSupercluster(t, q, "C1")
+		for _, o := range connection("other-c1", other["C1"][0].ClientURL(), q.sysCreds) {
+			require.NoError(t, c.Create(ctx, o))
 		}
-		require.NoError(t, c.Create(ctx, evac))
-		b := reconciled(t, ctx, r, "demo", func(ct *assert.CollectT, b *js.NatsSystemBalancer) {
-			condition(ct, b, ConditionHolding, metav1.ConditionTrue, ReasonEvacuating)
-		}, "the balancer did not hold for an evacuation")
-		require.Equal(t, "NatsClusterEvacuation nats-system/drain-c1 empties NATS cluster C1", meta.FindStatusCondition(b.Status.Conditions, ConditionHolding).Message)
-		reconciled(t, ctx, r, "other", func(ct *assert.CollectT, b *js.NatsSystemBalancer) {
-			condition(ct, b, ConditionHolding, metav1.ConditionFalse, ReasonSettled)
-		}, "an evacuation of C1 held C2's balancer")
-		require.NoError(t, c.Delete(ctx, evac))
+		drain := func(name, conn string) *js.NatsClusterEvacuation {
+			return &js.NatsClusterEvacuation{
+				ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name},
+				Spec: js.NatsClusterEvacuationSpec{
+					ConnectionRef: natsv1beta1.ObjectReference{Name: conn},
+					From:          js.EvacuationSource{Cluster: "C1"},
+					To:            js.EvacuationTarget{ServerTags: []string{"new"}},
+				},
+			}
+		}
+		nc, denied, err := r.Dialer.Reference(ctx, referrer(ns), natsv1beta1.ObjectReference{Name: "c1"})
+		require.NoError(t, err)
+		require.Nil(t, denied)
+
+		elsewhere := drain("drain-other-c1", "other-c1")
+		require.NoError(t, c.Create(ctx, elsewhere))
+		got, err := evacuationOf(ctx, c, r.Dialer, nc)
+		require.NoError(t, err)
+		require.Empty(t, got, "an evacuation of another NATS system's C1 was taken for this one's")
+
+		here := drain("drain-c1", "c2")
+		require.NoError(t, c.Create(ctx, here))
+		got, err = evacuationOf(ctx, c, r.Dialer, nc)
+		require.NoError(t, err)
+		require.Equal(t, "nats-system/drain-c1", got)
+
 		reconciled(t, ctx, r, "demo", func(ct *assert.CollectT, b *js.NatsSystemBalancer) {
+			condition(ct, b, ConditionReady, metav1.ConditionTrue, ReasonBalancing)
 			condition(ct, b, ConditionHolding, metav1.ConditionFalse, ReasonSettled)
-		}, "the balancer did not resume")
+		}, "the balancer held for an evacuation instead of leaving it its streams")
+		require.NoError(t, c.Delete(ctx, here))
+		require.NoError(t, c.Delete(ctx, elsewhere))
 	})
 
 	t.Run("HoldsWhileUnsettled", func(t *testing.T) {

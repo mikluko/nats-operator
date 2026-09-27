@@ -64,6 +64,7 @@ var identities = []identity{
 		Calls: []call{
 			{"$SYS.REQ.SERVER.PING.STATSZ", "Lists the servers of the NATS cluster and their tags.", []string{"internal/sysobs"}},
 			{"$SYS.REQ.SERVER.PING.JSZ", "Reads every account's streams and consumers, with their leaders and replicas.", []string{"internal/sysobs"}},
+			{"$SYS.REQ.SERVER.*.JSZ", "Asks the server a balancer's connection reaches, by server ID, whether it is in the same NATS system as a `NatsClusterEvacuation`'s connection.", []string{"internal/balancectl"}},
 			{"acc.*.$JS.API.STREAM.LEADER.STEPDOWN.*", "Moves a stream leader through the account's `jetstream-stepdown` export, and probes whether the system account imports it.", []string{"internal/balance", "internal/balancectl"}},
 			{"acc.*.$JS.API.CONSUMER.LEADER.STEPDOWN.*.*", "Moves a consumer leader the same way.", []string{"internal/balance", "internal/balancectl"}},
 			{"$JS.API.ACCOUNT.STREAM.MOVE.*.*", "Moves a stream's copies off a server, or onto servers carrying an evacuation's tags.", []string{"internal/balance"}},

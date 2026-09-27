@@ -45,14 +45,16 @@ func (o AccountObserver) Observe(ctx context.Context) (Observation, error) {
 			continue
 		}
 		names = append(names, name)
-		obs.Groups = append(obs.Groups, o.groupOf(name, "", info.Cluster, info.Config.Placement))
+		g := o.groupOf(name, "", info.Cluster, info.Config.Placement)
+		g.Metadata = info.Config.Metadata
+		obs.Groups = append(obs.Groups, g)
 	}
 	if err := lister.Err(); err != nil && !errors.Is(err, jetstream.ErrEndOfData) {
 		return Observation{}, fmt.Errorf("list streams: %w", err)
 	}
 
 	for i, name := range names {
-		placement := obs.Groups[i].Placement
+		placement, metadata := obs.Groups[i].Placement, obs.Groups[i].Metadata
 		stream, err := o.JS.Stream(ctx, name)
 		if offline(err) {
 			obs.Groups[i].Offline, obs.Groups[i].Leader = true, ""
@@ -64,7 +66,7 @@ func (o AccountObserver) Observe(ctx context.Context) (Observation, error) {
 		consumers := stream.ListConsumers(ctx)
 		for info := range consumers.Info() {
 			g := o.groupOf(name, info.Name, info.Cluster, nil)
-			g.Placement = placement
+			g.Placement, g.Metadata = placement, metadata
 			obs.Groups = append(obs.Groups, g)
 		}
 		switch err := consumers.Err(); {

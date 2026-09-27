@@ -1,12 +1,15 @@
 package balancectl
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	"github.com/mikluko/nats-operator/internal/balance"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/sysobs"
@@ -117,3 +120,87 @@ func TestCarrier(t *testing.T) {
 		})
 	}
 }
+
+func TestPinnedIn(t *testing.T) {
+	marked := func(stream, uid string) sysobs.Group {
+		return sysobs.Group{Kind: sysobs.KindStream, Account: "A", Stream: stream, Metadata: map[string]string{lifecycle.OwnerKey: uid}}
+	}
+	obj := func(kind, name string) js.PinnedObject {
+		return js.PinnedObject{Kind: kind, Namespace: "ns", Name: name}
+	}
+	owners := map[types.UID]owner{
+		"uid-kv":     {object: obj("NatsKeyValue", "b"), cluster: "C1"},
+		"uid-stream": {object: obj("NatsStream", "a"), cluster: "C1"},
+		"uid-away":   {object: obj("NatsStream", "away"), cluster: "C2"},
+		"uid-free":   {object: obj("NatsStream", "free")},
+		"uid-absent": {object: obj("NatsStream", "absent"), cluster: "C1"},
+	}
+	snap := &sysobs.Snapshot{Groups: []sysobs.Group{
+		{Kind: sysobs.KindMeta},
+		marked("KV_b", "uid-kv"),
+		{Kind: sysobs.KindConsumer, Account: "A", Stream: "KV_b", Consumer: "D", Metadata: map[string]string{lifecycle.OwnerKey: "uid-kv"}},
+		marked("A", "uid-stream"),
+		marked("AWAY", "uid-away"),
+		marked("FREE", "uid-free"),
+		{Kind: sysobs.KindStream, Account: "A", Stream: "BARE"},
+	}}
+	require.Equal(t, []js.PinnedObject{obj("NatsStream", "a"), obj("NatsKeyValue", "b")}, pinnedIn(snap, owners, "C1"),
+		"absent's stream is not in the source, whatever its spec declares")
+}
+
+func TestRequestedRoundTrip(t *testing.T) {
+	at := time.Date(2026, 9, 26, 11, 31, 2, 0, time.UTC)
+	requested := map[balance.StreamID]time.Time{
+		{Account: "B", Stream: "S"}: at,
+		{Account: "A", Stream: "T"}: at.Add(time.Second),
+		{Account: "A", Stream: "S"}: at.Add(2 * time.Second),
+	}
+	list := requestedList(requested)
+	require.Equal(t, []js.RequestedMove{
+		{Account: "A", Stream: "S", Time: metav1.NewTime(at.Add(2 * time.Second))},
+		{Account: "A", Stream: "T", Time: metav1.NewTime(at.Add(time.Second))},
+		{Account: "B", Stream: "S", Time: metav1.NewTime(at)},
+	}, list)
+	require.Equal(t, requested, requestedOf(list))
+	require.Empty(t, requestedList(nil))
+}
+
+func TestEvacuees(t *testing.T) {
+	marked := func(stream, uid string) balance.Group {
+		return balance.Group{Account: "A", Stream: stream, Metadata: map[string]string{lifecycle.OwnerKey: uid}}
+	}
+	obs := balance.Observation{Groups: []balance.Group{
+		marked("PINNED", "uid-pinned"),
+		marked("OWNED", "uid-free"),
+		marked("ORPHAN", "uid-gone"),
+		{Account: "A", Stream: "BARE"},
+		{Account: "A", Stream: "PINNED", Consumer: "D", Metadata: map[string]string{lifecycle.OwnerKey: "uid-pinned"}},
+	}}
+	owners := map[types.UID]owner{"uid-pinned": {cluster: "C1"}, "uid-free": {}}
+	id := func(name string) balance.StreamID { return balance.StreamID{Account: "A", Stream: name} }
+	moves := "NatsClusterEvacuation nats-system/retire moves it"
+
+	tests := []struct {
+		name string
+		evac string
+		want map[string]string
+	}{
+		{"NoEvacuation", "", map[string]string{"PINNED": "", "OWNED": "", "ORPHAN": "", "BARE": ""}},
+		{"Evacuation", "nats-system/retire", map[string]string{"PINNED": "", "OWNED": moves, "ORPHAN": moves, "BARE": moves}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := &evacuees{Observer: fixedObserver{obs}, evac: tt.evac, owners: owners}
+			got, err := e.Observe(t.Context())
+			require.NoError(t, err)
+			require.Equal(t, obs, got)
+			for stream, want := range tt.want {
+				require.Equal(t, want, e.Yield(id(stream)), stream)
+			}
+		})
+	}
+}
+
+type fixedObserver struct{ obs balance.Observation }
+
+func (f fixedObserver) Observe(context.Context) (balance.Observation, error) { return f.obs, nil }

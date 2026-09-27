@@ -73,6 +73,11 @@ type NatsClusterEvacuationStatus struct {
 	// +optional
 	InFlight int32 `json:"inFlight,omitempty"`
 
+	// Requested are the moves requested that the source cluster has not yet
+	// seen complete; deleting the evacuation cancels them.
+	// +optional
+	Requested []RequestedMove `json:"requested,omitempty"`
+
 	// Remaining is the number of streams still to leave the source cluster:
 	// in flight, waiting for a slot, or refused by the server in the last
 	// pass. Pinned streams and streams left for their owners are not counted.
@@ -100,6 +105,21 @@ type ServerStream struct {
 	// Name of the stream.
 	// +required
 	Name string `json:"name"`
+}
+
+// RequestedMove is a stream an evacuation asked the server to move.
+type RequestedMove struct {
+	// Account is the account's public key.
+	// +required
+	Account string `json:"account"`
+
+	// Stream is the name of the stream.
+	// +required
+	Stream string `json:"stream"`
+
+	// Time the move was last requested.
+	// +required
+	Time metav1.Time `json:"time"`
 }
 
 // +kubebuilder:object:root=true

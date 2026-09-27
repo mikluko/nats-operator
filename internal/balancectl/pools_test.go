@@ -161,18 +161,18 @@ func TestSystemPending(t *testing.T) {
 		want    string
 	}{
 		{"none", "A", []client.Object{sys("demo")}, ""},
-		{"another account", "A", []client.Object{sys("demo", js.Move{Kind: js.MovePlacement, Stream: "B/REQ_07", From: "s1"})}, ""},
+		{"another account", "A", []client.Object{sys("demo", js.Move{Kind: js.MovePlacement, Account: "B", Stream: "REQ_07", From: "s1"})}, ""},
 		{
 			"placement", "A",
-			[]client.Object{sys("demo", js.Move{Kind: js.MovePlacement, Stream: "A/REQ_07", From: "s1"})},
+			[]client.Object{sys("demo", js.Move{Kind: js.MovePlacement, Account: "A", Stream: "REQ_07", From: "s1"})},
 			"REQ_07 has a placement move pending from NatsSystemBalancer demo",
 		},
 		{
 			"consumer leader", "A",
-			[]client.Object{sys("demo", js.Move{Kind: js.MoveLeader, Stream: "A/REQ_07 > worker", From: "s1", To: "s2"})},
+			[]client.Object{sys("demo", js.Move{Kind: js.MoveLeader, Account: "A", Stream: "REQ_07", Consumer: "worker", From: "s1", To: "s2"})},
 			"REQ_07 has a leader move pending from NatsSystemBalancer demo",
 		},
-		{"no account known", "", []client.Object{sys("demo", js.Move{Kind: js.MovePlacement, Stream: "/REQ_07"})}, ""},
+		{"no account known", "", []client.Object{sys("demo", js.Move{Kind: js.MovePlacement, Stream: "REQ_07"})}, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

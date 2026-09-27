@@ -20,6 +20,7 @@ import (
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
@@ -35,14 +36,19 @@ func evacuation(name, conn string, tags ...string) *js.NatsClusterEvacuation {
 	}
 }
 
-// evacuated reconciles the evacuation name until its status satisfies want,
-// and returns it.
+// restarted is r as a controller restart leaves it: its configuration alone.
+func restarted(r *EvacuationReconciler) *EvacuationReconciler {
+	return &EvacuationReconciler{Client: r.Client, Dialer: r.Dialer, MaxInFlight: r.MaxInFlight, PendingPoll: r.PendingPoll, Recorder: r.Recorder}
+}
+
+// evacuated reconciles the evacuation name, each time as after a restart,
+// until its status satisfies want, and returns it.
 func evacuated(t *testing.T, ctx context.Context, r *EvacuationReconciler, name string, want func(*assert.CollectT, *js.NatsClusterEvacuation), msg string) *js.NatsClusterEvacuation {
 	t.Helper()
 	var e js.NatsClusterEvacuation
 	key := client.ObjectKey{Namespace: ns, Name: name}
 	require.EventuallyWithT(t, func(ct *assert.CollectT) {
-		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
+		_, err := restarted(r).Reconcile(ctx, reconcile.Request{NamespacedName: key})
 		require.NoError(t, err)
 		require.NoError(t, r.Client.Get(ctx, key, &e))
 		want(ct, &e)
@@ -116,9 +122,10 @@ func consumerIn(ctx context.Context, j jetstream.JetStream, stream, consumer str
 // TestEvacuation_Supercluster empties C1 of a two-cluster operator-mode
 // supercluster into C2, whose servers alone carry the tag "new", over two
 // accounts: plain streams, a stream whose config names C1 without a
-// resource, a consumer, a key-value bucket, an object store, and a stream
-// whose NatsStream pins C1. The evacuation observes C1 through a connection
-// to C2, and a system balancer of C1 runs beside it.
+// resource, a consumer, a key-value bucket, an object store, and three
+// streams whose NatsStreams pin C1. The evacuation observes C1 through a
+// connection to C2, and a system balancer and an account balancer of C1 run
+// beside it.
 func TestEvacuation_Supercluster(t *testing.T) {
 	t.Parallel()
 	p := newPlane(t)
@@ -144,6 +151,13 @@ func TestEvacuation_Supercluster(t *testing.T) {
 		Metadata:  map[string]string{lifecycle.OwnerKey: "uid-orders"},
 	}
 	create(jsA, pinnedCfg)
+	pinnedNames := []string{"PINNED", "PINNED_1", "PINNED_2"}
+	for i, name := range pinnedNames[1:] {
+		cfg := pinnedCfg
+		cfg.Name, cfg.Subjects = name, []string{strings.ToLower(name) + ".>"}
+		cfg.Metadata = map[string]string{lifecycle.OwnerKey: fmt.Sprintf("uid-orders-%d", i+1)}
+		create(jsA, cfg)
+	}
 	create(jsB, jetstream.StreamConfig{Name: "LOG", Subjects: []string{"log.>"}, Replicas: 1})
 	_, err = jsB.CreateKeyValue(ctx, jetstream.KeyValueConfig{Bucket: "sessions", Replicas: 3})
 	require.NoError(t, err)
@@ -171,14 +185,26 @@ func TestEvacuation_Supercluster(t *testing.T) {
 	}
 	require.EventuallyWithT(t, everywhere("C1"), time.Minute, 200*time.Millisecond, "the streams did not settle in C1")
 
-	orders := &js.NatsStream{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "orders", Name: "orders", UID: "uid-orders"},
-		Spec:       js.NatsStreamSpec{StreamConfig: js.StreamConfig{Name: "PINNED", Placement: &js.Placement{Cluster: "C1"}}},
+	owner := func(name, uid, stream string) *js.NatsStream {
+		return &js.NatsStream{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "orders", Name: name, UID: types.UID(uid)},
+			Spec:       js.NatsStreamSpec{StreamConfig: js.StreamConfig{Name: stream, Placement: &js.Placement{Cluster: "C1"}}},
+		}
 	}
+	owners := []*js.NatsStream{
+		owner("orders", "uid-orders", "PINNED"),
+		owner("orders-1", "uid-orders-1", "PINNED_1"),
+		owner("orders-2", "uid-orders-2", "PINNED_2"),
+	}
+	ghost := owner("ghost", "uid-ghost", "GHOST")
 	objs := append(connection("c1", sc["C1"][2].ClientURL(), p.sysCreds), connection("c2", sc["C2"][0].ClientURL(), p.sysCreds)...)
-	objs = append(objs, orders, balancer("demo", "c1", time.Now()))
+	objs = append(objs, connection("a", sc["C1"][0].ClientURL(), creds(t, jwtplane.User{}, p.a))...)
+	objs = append(objs, ghost, balancer("demo", "c1", time.Now()), accountBalancer("payments", "a"))
+	for _, o := range owners {
+		objs = append(objs, o)
+	}
 	c := fake.NewClientBuilder().WithScheme(testScheme(t)).
-		WithStatusSubresource(&js.NatsSystemBalancer{}, &js.NatsClusterEvacuation{}).
+		WithStatusSubresource(&js.NatsSystemBalancer{}, &js.NatsBalancer{}, &js.NatsClusterEvacuation{}).
 		WithObjects(objs...).
 		Build()
 	pool := natsconn.NewPool()
@@ -187,6 +213,7 @@ func TestEvacuation_Supercluster(t *testing.T) {
 	rec := events.NewFakeRecorder(1000)
 	r := &EvacuationReconciler{Client: c, Dialer: dialer, MaxInFlight: 2, PendingPoll: time.Millisecond, Recorder: rec}
 	br := &SystemBalancerReconciler{Client: c, Dialer: dialer, PendingPoll: time.Millisecond}
+	ar := &BalancerReconciler{Client: c, Dialer: dialer, PendingPoll: time.Millisecond}
 
 	t.Run("RefusesTargetTagsInSource", func(t *testing.T) {
 		require.NoError(t, c.Create(ctx, evacuation("wrong", "c2", "old")))
@@ -229,12 +256,19 @@ func TestEvacuation_Supercluster(t *testing.T) {
 		}
 		require.Subset(t, notes(evs, "Normal", "MoveStarted"), started)
 		require.ElementsMatch(t, done, notes(evs, "Normal", "MoveDone"))
-		require.Equal(t, "1 resource pins placement.cluster C1", meta.FindStatusCondition(e.Status.Conditions, ConditionReady).Message)
-		require.Equal(t, []js.PinnedObject{{Kind: "NatsStream", Namespace: "orders", Name: "orders"}}, e.Status.Pinned)
+		require.Empty(t, e.Status.Requested)
+		require.Equal(t, "3 resources pin placement.cluster C1", meta.FindStatusCondition(e.Status.Conditions, ConditionReady).Message)
+		require.Equal(t, []js.PinnedObject{
+			{Kind: "NatsStream", Namespace: "orders", Name: "orders"},
+			{Kind: "NatsStream", Namespace: "orders", Name: "orders-1"},
+			{Kind: "NatsStream", Namespace: "orders", Name: "orders-2"},
+		}, e.Status.Pinned, "ghost's stream is not in C1")
 		require.Equal(t, []js.ServerStream{{Account: p.aPub, Name: "STALE"}}, e.Status.StalePlacement)
 
 		require.EventuallyWithT(t, everywhere("C2"), time.Minute, 200*time.Millisecond, "a moved stream did not settle in C2")
-		require.Equal(t, "C1", placedIn(ctx, jsA, "PINNED"), "a pinned stream was moved")
+		for _, name := range pinnedNames {
+			require.Equal(t, "C1", placedIn(ctx, jsA, name), "a pinned stream was moved")
+		}
 		require.Eventually(t, func() bool { return consumerIn(ctx, jsA, "PLAIN", "D") == "C2" }, time.Minute, 200*time.Millisecond, "the consumer did not follow its stream")
 		plain, err := jsA.Stream(ctx, "PLAIN")
 		require.NoError(t, err)
@@ -242,20 +276,53 @@ func TestEvacuation_Supercluster(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "kept", string(msg.Data))
 
-		b := reconciled(t, ctx, br, "demo", func(ct *assert.CollectT, b *js.NatsSystemBalancer) {
-			condition(ct, b, ConditionHolding, metav1.ConditionTrue, ReasonEvacuating)
-		}, "the system balancer of C1 did not hold")
-		require.Equal(t, "NatsClusterEvacuation nats-system/retire-c1 empties NATS cluster C1", meta.FindStatusCondition(b.Status.Conditions, ConditionHolding).Message)
+	})
+
+	t.Run("BalancersBalanceWhatThePinnedEvacuationLeaves", func(t *testing.T) {
+		for _, name := range pinnedNames {
+			stepToFirst(t, ctx, jsA, name)
+		}
+		reconciled(t, ctx, br, "demo", func(ct *assert.CollectT, b *js.NatsSystemBalancer) {
+			condition(ct, b, ConditionHolding, metav1.ConditionFalse, ReasonSettled)
+			if assert.NotNil(ct, b.Status.Skew) {
+				assert.Zero(ct, b.Status.Skew.Leaders, "leaders %v", b.Status.Servers)
+			}
+		}, "the system balancer did not even C1's leaders beside a pinned evacuation")
+		leaders := map[string]bool{}
+		for _, name := range pinnedNames {
+			leaders[streamLeader(t, ctx, jsA, name)] = true
+		}
+		require.Len(t, leaders, 3, "the pinned streams are led by one server each")
+
+		for _, name := range pinnedNames {
+			stepToFirst(t, ctx, jsA, name)
+		}
+		reconciledAccount(t, ctx, ar, func(ct *assert.CollectT, b *js.NatsBalancer) {
+			accountCondition(ct, b, ConditionHolding, metav1.ConditionFalse, ReasonSettled)
+			if assert.Len(ct, b.Status.Pools, 1) {
+				assert.Equal(ct, int32(3), b.Status.Pools[0].Streams)
+				assert.Zero(ct, b.Status.Pools[0].LeaderSkew)
+			}
+		}, "the account balancer did not even C1's leaders beside a pinned evacuation")
+
+		var e js.NatsClusterEvacuation
+		require.NoError(t, c.Get(ctx, client.ObjectKey{Namespace: ns, Name: "retire-c1"}, &e))
+		require.False(t, meta.IsStatusConditionTrue(e.Status.Conditions, ConditionReady), "the evacuation became Ready")
 	})
 
 	t.Run("ReadyOnceTheOwnerMoves", func(t *testing.T) {
-		var o js.NatsStream
-		require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(orders), &o))
-		o.Spec.Placement.Cluster = "C2"
-		require.NoError(t, c.Update(ctx, &o))
-		pinnedCfg.Placement = &jetstream.Placement{Cluster: "C2"}
-		_, err := jsA.UpdateStream(ctx, pinnedCfg)
-		require.NoError(t, err)
+		for i, own := range owners {
+			var o js.NatsStream
+			require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(own), &o))
+			o.Spec.Placement.Cluster = "C2"
+			require.NoError(t, c.Update(ctx, &o))
+			s, err := jsA.Stream(ctx, pinnedNames[i])
+			require.NoError(t, err)
+			cfg := s.CachedInfo().Config
+			cfg.Placement = &jetstream.Placement{Cluster: "C2"}
+			_, err = jsA.UpdateStream(ctx, cfg)
+			require.NoError(t, err)
+		}
 
 		e := evacuated(t, ctx, r, "retire-c1", func(ct *assert.CollectT, e *js.NatsClusterEvacuation) {
 			evacCondition(ct, e, ConditionReady, metav1.ConditionTrue, ReasonEvacuated)
@@ -263,7 +330,9 @@ func TestEvacuation_Supercluster(t *testing.T) {
 		}, "the evacuation did not become Ready once the owner moved its stream")
 		require.Empty(t, e.Status.Pinned)
 		require.Equal(t, int32(5), e.Status.Moved, "an owner's move is not the evacuation's")
-		require.Eventually(t, func() bool { return placedIn(ctx, jsA, "PINNED") == "C2" }, time.Minute, 100*time.Millisecond, "the owner's move did not settle")
+		for _, name := range pinnedNames {
+			require.Eventually(t, func() bool { return placedIn(ctx, jsA, name) == "C2" }, time.Minute, 100*time.Millisecond, "the owner's move of %s did not settle", name)
+		}
 		reconciled(t, ctx, br, "demo", func(ct *assert.CollectT, b *js.NatsSystemBalancer) {
 			condition(ct, b, ConditionHolding, metav1.ConditionFalse, ReasonSettled)
 		}, "the system balancer did not resume once the evacuation was Ready")
@@ -291,7 +360,8 @@ func TestEvacuation_Supercluster(t *testing.T) {
 			var e js.NatsClusterEvacuation
 			require.NoError(t, c.Get(ctx, client.ObjectKey{Namespace: ns, Name: evac}, &e))
 			require.Equal(t, int32(1), e.Status.InFlight, "the move was not requested")
-			deleteEvacuation(t, ctx, r, evac)
+			require.Equal(t, []string{name}, requestedStreams(e.Status.Requested))
+			deleteEvacuation(t, ctx, restarted(r), evac)
 
 			var landed string
 			require.Eventually(t, func() bool { landed = placedIn(ctx, jsA, name); return landed != "" }, time.Minute, 100*time.Millisecond, "%s never settled", name)
@@ -306,4 +376,12 @@ func TestEvacuation_Supercluster(t *testing.T) {
 		}
 		t.Fatalf("no move was still in flight when its evacuation was deleted, in %d tries", tries)
 	})
+}
+
+func requestedStreams(list []js.RequestedMove) []string {
+	var out []string
+	for _, m := range list {
+		out = append(out, m.Stream)
+	}
+	return out
 }

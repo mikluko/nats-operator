@@ -91,9 +91,19 @@ type Move struct {
 	// +optional
 	Kind MoveKind `json:"kind,omitempty"`
 
-	// Stream moved, as account/stream.
+	// Account is the public key of the account whose stream moved.
+	// +optional
+	Account string `json:"account,omitempty"`
+
+	// Stream is the name of the stream moved, or of the stream whose
+	// consumer's leader moved.
 	// +optional
 	Stream string `json:"stream,omitempty"`
+
+	// Consumer is the name of the consumer whose leader moved; empty on a
+	// stream's move.
+	// +optional
+	Consumer string `json:"consumer,omitempty"`
 
 	// From is the server moved off.
 	// +optional

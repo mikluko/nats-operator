@@ -32,7 +32,7 @@ func TestMoves(t *testing.T) {
 func TestRecord(t *testing.T) {
 	now := time.Date(2026, 9, 26, 11, 31, 2, 0, time.UTC)
 	at := metav1.NewTime(now)
-	earlier := js.Move{Kind: js.MoveLeader, Stream: "A/X", From: "s1", To: "s2"}
+	earlier := js.Move{Kind: js.MoveLeader, Account: "A", Stream: "X", From: "s1", To: "s2"}
 	group := balance.Group{Account: "A", Stream: "S", Leader: "s1"}
 	loads := []balance.Load{{Server: "s1", Leaders: 3, Copies: 4}, {Server: "s2", Leaders: 1, Copies: 2}}
 	tests := []struct {
@@ -62,8 +62,8 @@ func TestRecord(t *testing.T) {
 			want: js.NatsSystemBalancerStatus{
 				Servers:  []js.ServerLoad{{Name: "s1", Leaders: 3, Replicas: 4}, {Name: "s2", Leaders: 1, Replicas: 2}},
 				Skew:     &js.Skew{Leaders: 2, Replicas: 2},
-				LastMove: &js.Move{Kind: js.MoveLeader, Stream: "A/S > D", From: "s1", To: "s2", Time: &at},
-				Pending:  []js.Move{earlier, {Kind: js.MoveLeader, Stream: "A/S > D", From: "s1", To: "s2", Time: &at}},
+				LastMove: &js.Move{Kind: js.MoveLeader, Account: "A", Stream: "S", Consumer: "D", From: "s1", To: "s2", Time: &at},
+				Pending:  []js.Move{earlier, {Kind: js.MoveLeader, Account: "A", Stream: "S", Consumer: "D", From: "s1", To: "s2", Time: &at}},
 			},
 		},
 		{
@@ -72,8 +72,8 @@ func TestRecord(t *testing.T) {
 			want: js.NatsSystemBalancerStatus{
 				Servers:  []js.ServerLoad{{Name: "s1", Leaders: 3, Replicas: 4}, {Name: "s2", Leaders: 1, Replicas: 2}},
 				Skew:     &js.Skew{Leaders: 2, Replicas: 2},
-				LastMove: &js.Move{Kind: js.MovePlacement, Stream: "A/S", From: "s1", Time: &at},
-				Pending:  []js.Move{earlier, {Kind: js.MovePlacement, Stream: "A/S", From: "s1", Time: &at}},
+				LastMove: &js.Move{Kind: js.MovePlacement, Account: "A", Stream: "S", From: "s1", Time: &at},
+				Pending:  []js.Move{earlier, {Kind: js.MovePlacement, Account: "A", Stream: "S", From: "s1", Time: &at}},
 			},
 		},
 	}
@@ -87,8 +87,8 @@ func TestRecord(t *testing.T) {
 }
 
 func TestStillPending(t *testing.T) {
-	leader := js.Move{Kind: js.MoveLeader, Stream: "A/S", From: "s1", To: "s2"}
-	placement := js.Move{Kind: js.MovePlacement, Stream: "A/S", From: "s1"}
+	leader := js.Move{Kind: js.MoveLeader, Account: "A", Stream: "S", From: "s1", To: "s2"}
+	placement := js.Move{Kind: js.MovePlacement, Account: "A", Stream: "S", From: "s1"}
 	on := func(unsettled string, holders ...string) balance.Observation {
 		g := balance.Group{Account: "A", Stream: "S", Leader: holders[0]}
 		for _, h := range holders[1:] {

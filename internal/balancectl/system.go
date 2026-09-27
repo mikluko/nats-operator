@@ -1,8 +1,8 @@
 // Package balancectl reconciles balancers and evacuations: a
 // NatsSystemBalancer is a [balance.Keeper] over the NATS cluster its
 // NatsConnection reaches, and a NatsClusterEvacuation empties one NATS
-// cluster, both on a system connection. A balancer holds while an evacuation
-// of its NATS cluster is not Ready.
+// cluster, both on a system connection. A balancer leaves alone the streams
+// an evacuation of its NATS cluster moves while it is not Ready.
 package balancectl
 
 import (
@@ -68,9 +68,6 @@ const (
 	// ReasonMovePending is Holding's reason while a placement move the
 	// balancer made has not left its server.
 	ReasonMovePending = "MovePending"
-	// ReasonEvacuating is Holding's reason while a NatsClusterEvacuation
-	// empties the NATS cluster.
-	ReasonEvacuating = "Evacuating"
 )
 
 const (
@@ -84,7 +81,7 @@ const (
 // SystemBalancerReconciler runs each NatsSystemBalancer's passes over the
 // NATS cluster its NatsConnection reaches, which must be as a user of the
 // system account: one move per interval, none while the NATS cluster is not
-// Settled, none while a NatsClusterEvacuation empties it, and none by a
+// Settled, none of a stream a NatsClusterEvacuation moves, and none by a
 // second balancer of the same NATS cluster.
 type SystemBalancerReconciler struct {
 	Client client.Client
@@ -143,19 +140,17 @@ func (r *SystemBalancerReconciler) balance(ctx context.Context, b *js.NatsSystem
 		}
 		return after, err
 	}
-	if evac, err := r.evacuation(ctx, cluster); err != nil || evac != "" {
-		if evac != "" {
-			r.setHolding(b, true, ReasonEvacuating, fmt.Sprintf("NatsClusterEvacuation %s empties NATS cluster %s", evac, cluster))
-			r.setReady(b, true, ReasonBalancing, "")
-		}
+	obs := &SystemObserver{Sys: sysobs.New(nc, cluster), Cluster: cluster}
+	ev, err := evacueesOf(ctx, r.Client, r.Dialer, nc, obs)
+	if err != nil {
 		return after, err
 	}
 
 	now := time.Now()
-	obs := &SystemObserver{Sys: sysobs.New(nc, cluster), Cluster: cluster}
 	reach := newStepdownReach(ctx, nc)
 	k := r.keeper(b)
-	k.Observer, k.Yield, k.Leaders, k.Placement = obs, obs.Pinned, nil, nil
+	k.Observer, k.Leaders, k.Placement = ev, nil, nil
+	k.Yield = func(id balance.StreamID) string { return cmp.Or(obs.Pinned(id), ev.Yield(id)) }
 	if moves(b.Spec.Moves).leader {
 		k.Leaders = balance.Stepdown{Conn: nc, Prefix: reach.prefix}
 	}
@@ -191,7 +186,7 @@ func (r *SystemBalancerReconciler) balance(ctx context.Context, b *js.NatsSystem
 	case passed.Held != "":
 		r.setHolding(b, true, ReasonUnsettled, passed.Held)
 	case placementPending(st.Pending):
-		r.setHolding(b, true, ReasonMovePending, fmt.Sprintf("%s is leaving %s", st.Pending[0].Stream, st.Pending[0].From))
+		r.setHolding(b, true, ReasonMovePending, fmt.Sprintf("%s is leaving %s", moveTarget(st.Pending[0]), st.Pending[0].From))
 	default:
 		r.setHolding(b, false, ReasonSettled, "")
 	}
@@ -290,21 +285,6 @@ func compareAge(a, b js.NatsSystemBalancer) int {
 	)
 }
 
-// evacuation names a NatsClusterEvacuation emptying cluster that is not yet
-// Ready.
-func (r *SystemBalancerReconciler) evacuation(ctx context.Context, cluster string) (string, error) {
-	var list js.NatsClusterEvacuationList
-	if err := r.Client.List(ctx, &list); err != nil {
-		return "", fmt.Errorf("list NatsClusterEvacuations: %w", err)
-	}
-	for _, e := range list.Items {
-		if e.Spec.From.Cluster == cluster && !meta.IsStatusConditionTrue(e.Status.Conditions, ConditionReady) {
-			return client.ObjectKeyFromObject(&e).String(), nil
-		}
-	}
-	return "", nil
-}
-
 // movesOn is a spec's moves with the API's defaults applied.
 type movesOn struct{ leader, placement bool }
 
@@ -345,26 +325,33 @@ func moveOf(p balance.Passed, now time.Time) *js.Move {
 	at := metav1.NewTime(now)
 	switch {
 	case p.Moved != nil:
-		return &js.Move{Kind: js.MoveLeader, Stream: p.Moved.Group.String(), From: p.Moved.Group.Leader, To: p.Moved.To, Time: &at}
+		g := p.Moved.Group
+		return &js.Move{Kind: js.MoveLeader, Account: g.Account, Stream: g.Stream, Consumer: g.Consumer, From: g.Leader, To: p.Moved.To, Time: &at}
 	case p.Placed != nil:
-		return &js.Move{Kind: js.MovePlacement, Stream: p.Placed.Group.ID().String(), From: p.Placed.From, Time: &at}
+		g := p.Placed.Group
+		return &js.Move{Kind: js.MovePlacement, Account: g.Account, Stream: g.Stream, From: p.Placed.From, Time: &at}
 	}
 	return nil
 }
 
-// sameMove matches a move of the same kind, stream and servers as m.
+// sameMove matches a move of the same kind, group and servers as m.
 func sameMove(m js.Move) func(js.Move) bool {
 	return func(o js.Move) bool {
-		return o.Kind == m.Kind && o.Stream == m.Stream && o.From == m.From && o.To == m.To
+		return o.Kind == m.Kind && o.Account == m.Account && o.Stream == m.Stream && o.Consumer == m.Consumer && o.From == m.From && o.To == m.To
 	}
+}
+
+// moveTarget is the group m moved, as [balance.Group] names it.
+func moveTarget(m js.Move) string {
+	return balance.Group{Account: m.Account, Stream: m.Stream, Consumer: m.Consumer}.String()
 }
 
 // describeMove is m as an event's note.
 func describeMove(m js.Move) string {
 	if m.Kind == js.MoveLeader {
-		return fmt.Sprintf("leader of %s from %s to %s", m.Stream, m.From, m.To)
+		return fmt.Sprintf("leader of %s from %s to %s", moveTarget(m), m.From, m.To)
 	}
-	return fmt.Sprintf("%s off %s", m.Stream, m.From)
+	return fmt.Sprintf("%s off %s", moveTarget(m), m.From)
 }
 
 // stillPending is the moves of pending that obs does not show complete. A
@@ -379,7 +366,8 @@ func stillPending(pending []js.Move, obs balance.Observation) []js.Move {
 				continue
 			}
 		case js.MovePlacement:
-			i := slices.IndexFunc(obs.Groups, func(g balance.Group) bool { return g.Consumer == "" && g.ID().String() == m.Stream })
+			id := balance.StreamID{Account: m.Account, Stream: m.Stream}
+			i := slices.IndexFunc(obs.Groups, func(g balance.Group) bool { return g.Consumer == "" && g.ID() == id })
 			if i < 0 || !slices.Contains(obs.Groups[i].Holders(), m.From) {
 				continue
 			}

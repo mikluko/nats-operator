@@ -76,7 +76,7 @@ func TestBalancerEnvtest(t *testing.T) {
 		Spec:       js.NatsSystemBalancerSpec{ConnectionRef: natsv1beta1.ObjectReference{Name: "demo"}},
 	}
 	require.NoError(t, c.Create(t.Context(), sys))
-	sys.Status.Pending = []js.Move{{Kind: js.MovePlacement, Stream: p.aPub + "/REQ_07", From: "C1-1"}}
+	sys.Status.Pending = []js.Move{{Kind: js.MovePlacement, Account: p.aPub, Stream: "REQ_07", From: "C1-1"}}
 	require.NoError(t, c.Status().Update(t.Context(), sys))
 
 	for _, obj := range readManifests(t, "07-balancing/01-account.yaml") {

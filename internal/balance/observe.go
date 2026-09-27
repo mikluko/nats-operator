@@ -59,6 +59,9 @@ type Group struct {
 	// Placement is the stream's declared placement, nil where it declares none.
 	// A consumer group carries its stream's.
 	Placement *Placement
+	// Metadata is the stream's config metadata; a consumer group carries
+	// its stream's.
+	Metadata map[string]string
 }
 
 // A Placement is what a stream's config declares about where it may sit.

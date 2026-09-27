@@ -57,9 +57,9 @@ const (
 // BalancerReconciler runs each NatsBalancer's passes over the NATS cluster
 // its NatsConnection reaches, as a user of the account it balances: its
 // streams split into the declared pools and the default pool, one move per
-// interval, none while the NATS cluster is not Settled, none while a
-// NatsClusterEvacuation empties it, and none while any NatsSystemBalancer
-// has a move pending on one of the account's streams.
+// interval, none while the NATS cluster is not Settled, none of a stream a
+// NatsClusterEvacuation moves, and none while any NatsSystemBalancer has a
+// move pending on one of the account's streams.
 type BalancerReconciler struct {
 	Client client.Client
 	Dialer *natsconn.Dialer
@@ -72,15 +72,7 @@ type BalancerReconciler struct {
 	Telemetry *telemetry.JetStream
 
 	mu      sync.Mutex
-	keepers map[types.NamespacedName]*accountKeeper
-}
-
-// accountKeeper is what a NatsBalancer's passes remember across reconciles.
-type accountKeeper struct {
-	uid    types.UID
-	keeper *balance.Keeper
-	// moved is when the balancer last moved.
-	moved time.Time
+	keepers map[types.NamespacedName]keeperOf
 }
 
 // Reconcile implements reconcile.Reconciler.
@@ -140,10 +132,6 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 		setBalancerCondition(b, ConditionOverlapping, false, ReasonDisjoint, "")
 	}
 
-	evac, err := evacuating(ctx, r.Client, cluster)
-	if err != nil {
-		return after, err
-	}
 	yield, err := systemPending(ctx, r.Client, account)
 	if err != nil {
 		return after, err
@@ -154,9 +142,12 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 		setBalancerCondition(b, ConditionReady, false, ReasonPassFailed, err.Error())
 		return after, nil
 	}
-	state := r.keeper(b)
-	k := state.keeper
-	k.Observer = balance.AccountObserver{JS: j, Account: account, Cluster: cluster, Expect: expected(ms, cluster)}
+	ev, err := evacueesOf(ctx, r.Client, r.Dialer, nc, balance.AccountObserver{JS: j, Account: account, Cluster: cluster, Expect: expected(ms, cluster)})
+	if err != nil {
+		return after, err
+	}
+	k := r.keeper(b)
+	k.Observer, k.Yield = ev, ev.Yield
 	k.Pools = balance.Declared(account, declared)
 	k.Leaders, k.Placement = nil, nil
 	if moves(b.Spec.Moves).leader {
@@ -166,8 +157,8 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 		k.Placement = balance.StreamMove{Conn: nc}
 	}
 	now := time.Now()
-	due := state.moved.IsZero() || !now.Before(state.moved.Add(interval))
-	k.DryRun = !due || evac != "" || yield != ""
+	due := st.LastMove == nil || st.LastMove.Time == nil || !now.Before(st.LastMove.Time.Add(interval))
+	k.DryRun = !due || yield != ""
 
 	passed, err := k.Pass(ctx)
 	if err != nil {
@@ -178,12 +169,10 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 		st.Pools = poolStatus(b.Spec.Pools, passed.Pools)
 	}
 	if m := moveOf(passed, now); m != nil {
-		state.moved = now
+		st.LastMove = m
 		telemetry.Emit(r.Recorder, b, telemetry.MoveStarted, "%s", describeMove(*m))
 	}
 	switch {
-	case evac != "":
-		setBalancerCondition(b, ConditionHolding, true, ReasonEvacuating, fmt.Sprintf("NatsClusterEvacuation %s empties NATS cluster %s", evac, cluster))
 	case yield != "":
 		setBalancerCondition(b, ConditionHolding, true, ReasonYielding, yield)
 	case passed.Held != "":
@@ -253,24 +242,8 @@ func accountOf(ctx context.Context, nc *nats.Conn) (string, error) {
 	return resp.Data.Account, nil
 }
 
-// evacuating names a NatsClusterEvacuation emptying cluster that is not yet
-// Ready.
-func evacuating(ctx context.Context, c client.Reader, cluster string) (string, error) {
-	var list js.NatsClusterEvacuationList
-	if err := c.List(ctx, &list); err != nil {
-		return "", fmt.Errorf("list NatsClusterEvacuations: %w", err)
-	}
-	for _, e := range list.Items {
-		if e.Spec.From.Cluster == cluster && !meta.IsStatusConditionTrue(e.Status.Conditions, ConditionReady) {
-			return client.ObjectKeyFromObject(&e).String(), nil
-		}
-	}
-	return "", nil
-}
-
 // systemPending says which of account's streams a NatsSystemBalancer has a
-// move pending on, and is "" where none has. A system balancer names a
-// stream "<account>/<stream>", and a consumer "<account>/<stream> > <consumer>".
+// move pending on, and is "" where none has.
 func systemPending(ctx context.Context, c client.Reader, account string) (string, error) {
 	if account == "" {
 		return "", nil
@@ -281,12 +254,9 @@ func systemPending(ctx context.Context, c client.Reader, account string) (string
 	}
 	for _, sb := range list.Items {
 		for _, m := range sb.Status.Pending {
-			id, _, _ := strings.Cut(m.Stream, " > ")
-			acc, stream, ok := strings.Cut(id, "/")
-			if !ok || acc != account {
-				continue
+			if m.Account == account {
+				return fmt.Sprintf("%s has a %s move pending from %s %s", m.Stream, strings.ToLower(string(m.Kind)), SystemBalancerKind, sb.Name), nil
 			}
-			return fmt.Sprintf("%s has a %s move pending from %s %s", stream, strings.ToLower(string(m.Kind)), SystemBalancerKind, sb.Name), nil
 		}
 	}
 	return "", nil
@@ -304,19 +274,19 @@ func setBalancerCondition(b *js.NatsBalancer, typ string, on bool, reason, messa
 
 // keeper is b's pass state, kept across reconciles and started afresh for a
 // new balancer of the same name.
-func (r *BalancerReconciler) keeper(b *js.NatsBalancer) *accountKeeper {
+func (r *BalancerReconciler) keeper(b *js.NatsBalancer) *balance.Keeper {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.keepers == nil {
-		r.keepers = map[types.NamespacedName]*accountKeeper{}
+		r.keepers = map[types.NamespacedName]keeperOf{}
 	}
 	key := client.ObjectKeyFromObject(b)
 	k, ok := r.keepers[key]
 	if !ok || k.uid != b.UID {
-		k = &accountKeeper{uid: b.UID, keeper: &balance.Keeper{}}
+		k = keeperOf{uid: b.UID, keeper: &balance.Keeper{}}
 		r.keepers[key] = k
 	}
-	return k
+	return k.keeper
 }
 
 func (r *BalancerReconciler) forget(key types.NamespacedName) {

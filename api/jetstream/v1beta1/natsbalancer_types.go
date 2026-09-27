@@ -90,6 +90,11 @@ type NatsBalancerStatus struct {
 	// +listType=map
 	// +listMapKey=name
 	Pools []PoolStatus `json:"pools,omitempty"`
+
+	// LastMove is the last move made; the next waits for spec.interval
+	// after its time.
+	// +optional
+	LastMove *Move `json:"lastMove,omitempty"`
 }
 
 // +kubebuilder:object:root=true
