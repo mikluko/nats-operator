@@ -14,6 +14,6 @@ spec:
   storage: File
   replicas: 3
   retention: Limits
-  maxAge: 168h
-  maxBytes: -1
+  maxAge: 168h0m0s
+  maxBytes: "-1"
   discard: Old

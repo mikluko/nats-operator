@@ -33,12 +33,8 @@ func TestLoadBundles_Stories(t *testing.T) {
 		}
 	}
 	require.Equal(t, map[string]string{
-		"03-unmanaged":       "needs a NATS cluster the controllers did not deploy, holding streams created at runtime",
-		"07-balancing":       "its statuses describe moves made and pending across many streams, which its manifests alone do not produce",
 		"08-stream-transfer": "runs in the story 6 supercluster, which spans Kubernetes clusters",
 		"09-acceptance":      "needs more than one Kubernetes cluster",
-		"10-leafnodes":       "needs more than one Kubernetes cluster",
-		"11-evacuation":      "runs in the story 9 supercluster, which spans Kubernetes clusters",
 	}, skipped)
 
 	chains := map[string][]string{}
@@ -264,12 +260,16 @@ func TestLoadBundles_SuperclusterParts(t *testing.T) {
 	require.Equal(t, []placed{
 		{
 			cluster: "east",
-			objects: []string{"NatsUser west-cluster-controller", "NatsUser west-jetstream-controller", "NatsCluster east", "NatsOperatorTrust acme"},
+			objects: []string{
+				"Secret acme-operator-keys", "Secret sys-keys", "NatsOperator acme", "NatsSystemAccount sys",
+				"NatsUser cluster-controller", "NatsUser auth-controller", "NatsConnection auth-controller",
+				"NatsUser west-cluster-controller", "NatsUser west-jetstream-controller", "NatsCluster east", "NatsOperatorTrust acme",
+			},
 			targets: map[string]string{},
 		},
 		{
 			cluster: "west",
-			objects: []string{"NatsOperatorTrust acme", "NatsCluster west"},
+			objects: []string{"Secret west-cluster-controller-creds", "NatsOperatorTrust acme", "NatsCluster west"},
 			targets: map[string]string{"01-status-natscluster-west.yaml": "NatsCluster nats-system/west"},
 		},
 	}, got)
@@ -309,4 +309,83 @@ func TestLoadBundles_PlacementErrors(t *testing.T) {
 			require.ErrorContains(t, err, tt.err)
 		})
 	}
+}
+
+func TestLoadBundles_Substitutions(t *testing.T) {
+	root := writeBundle(t, map[string]string{
+		"index.md": `---
+params:
+  e2e:
+    substitutions:
+      - files: [01-a.yaml]
+        reason: the harness has less memory
+        patch: {data: {mem: 1Gi, gone: null}}
+      - files: [01-status-configmap.yaml]
+        reason: the harness has less memory
+        patch: {status: {mem: 768Mi}}
+      - files: [01-c.yaml]
+        kind: ConfigMap
+        name: c1
+        reason: selected
+        patch: {data: {picked: "yes"}}
+---
+`,
+		"01-a.yaml":                "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x, namespace: a}\ndata: {mem: 4Gi, gone: x, kept: z}\n",
+		"01-b.yaml":                "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: y, namespace: a}\ndata: {mem: 4Gi}\n",
+		"01-c.yaml":                "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: c1, namespace: a}\n---\napiVersion: v1\nkind: Secret\nmetadata: {name: c1, namespace: a}\n---\napiVersion: v1\nkind: ConfigMap\nmetadata: {name: c2, namespace: a}\n",
+		"01-status-configmap.yaml": "status: {mem: !any 3Gi}\ndata: {mem: 3Gi}\n",
+	})
+	bundles, err := LoadBundles(root)
+	require.NoError(t, err)
+	s := bundles[0].Steps[0]
+	require.Equal(t, map[string]any{"mem": "1Gi", "kept": "z"}, s.Apply[0].Object["data"])
+	require.Equal(t, map[string]any{"mem": "4Gi"}, s.Apply[1].Object["data"], "a file no substitution names is as written")
+	require.Equal(t, map[string]any{"status": map[string]any{"mem": "768Mi"}}, s.Expectations[0].Want)
+	var picked []string
+	for _, o := range s.Apply {
+		if d, ok := o.Object["data"].(map[string]any); ok && d["picked"] == "yes" {
+			picked = append(picked, o.GetKind()+" "+o.GetName())
+		}
+	}
+	require.Equal(t, []string{"ConfigMap c1"}, picked, "kind and name narrow a substitution to one manifest")
+}
+
+func TestLoadBundles_SubstitutionErrors(t *testing.T) {
+	const cm = "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x, namespace: a}\n"
+	tests := []struct {
+		name string
+		sub  string
+		err  string
+	}{
+		{name: "no reason", sub: "{files: [01-a.yaml], patch: {data: {}}}", err: "needs files, a reason and a patch"},
+		{name: "no patch", sub: "{files: [01-a.yaml], reason: r}", err: "needs files, a reason and a patch"},
+		{name: "missing file", sub: "{files: [01-z.yaml], reason: r, patch: {data: {}}}", err: "names 01-z.yaml, which the bundle does not have"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			index := "---\nparams:\n  e2e:\n    substitutions:\n      - " + tt.sub + "\n---\n"
+			_, err := LoadBundles(writeBundle(t, map[string]string{"01-a.yaml": cm, "index.md": index}))
+			require.ErrorContains(t, err, tt.err)
+		})
+	}
+}
+
+func TestLoadBundles_Fixtures(t *testing.T) {
+	root := writeBundle(t, map[string]string{
+		"01-a.yaml": "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: a, namespace: story}\n",
+		"index.md":  "---\nparams:\n  e2e:\n    clusters:\n      - {name: east, files: [01-a.yaml, e2e/00-fixture.yaml, e2e/00-status-job.yaml]}\n---\n",
+	})
+	dir := filepath.Join(root, "01-test", FixtureDir)
+	require.NoError(t, os.Mkdir(dir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "00-fixture.yaml"),
+		[]byte("apiVersion: batch/v1\nkind: Job\nmetadata: {name: seed, namespace: fixture}\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "00-status-job.yaml"), []byte("status: {succeeded: 1}\n"), 0o600))
+	bundles, err := LoadBundles(root)
+	require.NoError(t, err)
+	b := bundles[0]
+	require.Len(t, b.Steps, 2)
+	require.Equal(t, 0, b.Steps[0].Number)
+	require.Equal(t, "seed", b.Steps[0].Apply[0].GetName())
+	require.Equal(t, "00-status-job.yaml", b.Steps[0].Expectations[0].File)
+	require.Equal(t, []string{"fixture", "story"}, b.Namespaces())
 }

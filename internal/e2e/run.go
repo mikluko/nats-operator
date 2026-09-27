@@ -12,8 +12,11 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -133,6 +136,13 @@ func (r *Runner) Run(ctx context.Context, b *Bundle) Result {
 		}
 	}
 	for i, nss := range namespaces {
+		for _, ns := range nss {
+			if err := releaseGuards(ctx, r.Clients[i], ns); err != nil {
+				return res(Fail, err.Error())
+			}
+		}
+	}
+	for i, nss := range namespaces {
 		slices.Sort(nss)
 		for _, ns := range nss {
 			r.logf("%s: fresh namespace %s%s", b.Name, ns, wheres[i])
@@ -183,15 +193,17 @@ func where(p *Bundle) string {
 }
 
 // poll returns "" once every expectation holds, or else the diff of the
-// last check when Timeout passes, which is never "" when no check completed.
-// Each round first publishes the external hostnames of every cluster's
-// LoadBalancer Services to all of them.
+// last check when Timeout passes, which is never "" when no check completed,
+// followed by the last error a round met. A round failing on an API error
+// is retried until the deadline. Each round first publishes the external
+// hostnames of every cluster's LoadBalancer Services to all of them.
 func (r *Runner) poll(ctx context.Context, shares []share) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.Timeout)
 	defer cancel()
 	tick := time.NewTicker(r.Interval)
 	defer tick.Stop()
 	diff := "  no status read before the deadline\n"
+	var lastErr error
 	for {
 		err := PublishHosts(ctx, r.Clients)
 		var d string
@@ -202,16 +214,19 @@ func (r *Runner) poll(ctx context.Context, shares []share) (string, error) {
 		case err == nil && d == "":
 			return "", nil
 		case err == nil:
-			diff = d
-		case ctx.Err() == nil:
-			return "", err
+			diff, lastErr = d, nil
+		default:
+			lastErr = err
 		}
 		select {
 		case <-ctx.Done():
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return diff, nil
+			if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return "", ctx.Err()
 			}
-			return "", ctx.Err()
+			if lastErr != nil {
+				diff += fmt.Sprintf("  last error: %v\n", lastErr)
+			}
+			return diff, nil
 		case <-tick.C:
 		}
 	}
@@ -243,6 +258,8 @@ func (r *Runner) check(ctx context.Context, shares []share) (string, error) {
 	return b.String(), nil
 }
 
+// freshNamespace deletes namespace name, waits for it to go, and creates it
+// again.
 func (r *Runner) freshNamespace(ctx context.Context, c client.Client, name string) error {
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}
 	err := c.Delete(ctx, ns)
@@ -257,6 +274,78 @@ func (r *Runner) freshNamespace(ctx context.Context, c client.Client, name strin
 	}
 	if err := c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}); err != nil {
 		return fmt.Errorf("create namespace %s: %w", name, err)
+	}
+	return nil
+}
+
+// releaseGuards lets every object in namespace ns that guards its deletion
+// on a NATS server go without reaching one: a story's namespaces are deleted
+// together, NATS servers and connections with the rest. NatsClusters get
+// forceDeleteAnnotation; JetStream resources that delete their server
+// object are set to retain it.
+func releaseGuards(ctx context.Context, c client.Client, ns string) error {
+	if err := forceDeletes(ctx, c, ns); err != nil {
+		return err
+	}
+	return retainJetStream(ctx, c, ns)
+}
+
+// jetStreamKinds are the kinds whose deletionPolicy Delete reaches a server.
+var jetStreamKinds = []string{"NatsStream", "NatsConsumer", "NatsKeyValue", "NatsObjectStore"}
+
+// retainJetStream sets spec.deletionPolicy to Retain on every JetStream
+// resource in namespace ns whose policy is Delete; an API server without
+// the kinds has none.
+func retainJetStream(ctx context.Context, c client.Client, ns string) error {
+	for _, kind := range jetStreamKinds {
+		list := &unstructured.UnstructuredList{}
+		list.SetGroupVersionKind(schema.GroupVersionKind{Group: "jetstream.nats.mikluko.io", Version: "v1beta1", Kind: kind + "List"})
+		err := c.List(ctx, list, client.InNamespace(ns))
+		switch {
+		case meta.IsNoMatchError(err):
+			return nil
+		case err != nil:
+			return fmt.Errorf("list %ss in %s: %w", kind, ns, err)
+		}
+		for i := range list.Items {
+			o := &list.Items[i]
+			if p, _, _ := unstructured.NestedString(o.Object, "spec", "deletionPolicy"); p != "Delete" {
+				continue
+			}
+			patch := []byte(`{"spec":{"deletionPolicy":"Retain"}}`)
+			if err := c.Patch(ctx, o, client.RawPatch(types.MergePatchType, patch)); client.IgnoreNotFound(err) != nil {
+				return fmt.Errorf("retain %s %s: %w", kind, key(o), err)
+			}
+		}
+	}
+	return nil
+}
+
+// forceDeleteAnnotation lets a NatsCluster's deletion proceed while its
+// JetStream data remains or cannot be observed.
+const forceDeleteAnnotation = "cluster.nats.mikluko.io/force-delete"
+
+// forceDeletes sets forceDeleteAnnotation on every NatsCluster in namespace
+// ns; an API server without the kind has none to set it on.
+func forceDeletes(ctx context.Context, c client.Client, ns string) error {
+	list := &unstructured.UnstructuredList{}
+	list.SetGroupVersionKind(schema.GroupVersionKind{Group: "cluster.nats.mikluko.io", Version: "v1beta1", Kind: "NatsClusterList"})
+	err := c.List(ctx, list, client.InNamespace(ns))
+	switch {
+	case meta.IsNoMatchError(err):
+		return nil
+	case err != nil:
+		return fmt.Errorf("list NatsClusters in %s: %w", ns, err)
+	}
+	for i := range list.Items {
+		nc := &list.Items[i]
+		if _, ok := nc.GetAnnotations()[forceDeleteAnnotation]; ok {
+			continue
+		}
+		patch := fmt.Appendf(nil, `{"metadata":{"annotations":{%q:""}}}`, forceDeleteAnnotation)
+		if err := c.Patch(ctx, nc, client.RawPatch(types.MergePatchType, patch)); client.IgnoreNotFound(err) != nil {
+			return fmt.Errorf("annotate NatsCluster %s: %w", key(nc), err)
+		}
 	}
 	return nil
 }

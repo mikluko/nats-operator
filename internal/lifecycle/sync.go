@@ -28,6 +28,11 @@ const Finalizer = "jetstream.nats.mikluko.io/finalizer"
 // when Syncer.Resync is zero.
 const DefaultResync = 10 * time.Minute
 
+// SettlingRecheck is how soon a synced object is read again, when sooner
+// than the resync period, while its Raft group has no leader or a member
+// that is not current, so its status follows the group as it settles.
+const SettlingRecheck = 15 * time.Second
+
 // Object is one resource's server object, bound to the resource's spec and
 // connection.
 type Object interface {
@@ -118,7 +123,32 @@ func (s Syncer) Sync(ctx context.Context, r Resource, o Object) (reconcile.Resul
 	conditions.Set(&st.Conditions, gen, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionTrue, Reason: ReasonSynced})
 	now := metav1.NewTime(s.now())
 	st.LastSyncedTime = &now
-	return reconcile.Result{RequeueAfter: s.resync()}, info, nil
+	return reconcile.Result{RequeueAfter: s.recheck(info)}, info, nil
+}
+
+// recheck returns when a synced object with info is read again.
+func (s Syncer) recheck(info *Info) time.Duration {
+	if settling(info) && SettlingRecheck < s.resync() {
+		return SettlingRecheck
+	}
+	return s.resync()
+}
+
+// settling reports whether info names a Raft group with no leader, or with a
+// member that is offline or not current.
+func settling(info *Info) bool {
+	if info == nil || info.Cluster == nil {
+		return false
+	}
+	if info.Cluster.Leader == "" {
+		return true
+	}
+	for _, p := range info.Cluster.Replicas {
+		if p == nil || !p.Current || p.Offline {
+			return true
+		}
+	}
+	return false
 }
 
 // held reports whether status carries a Terminal condition that Hold keeps

@@ -27,4 +27,8 @@ A live object matches when it holds every field the file states. Conditions are 
 
 A story's front matter may set `params.e2e.after`, the number of the story whose end state it starts from, and `params.e2e.skip`, why the harness does not run it. A story spanning Kubernetes clusters places each of its files with `params.e2e.clusters`, a list of `{name, files}`, the home cluster first; its files are applied to, deleted from and read in their own cluster, and the story is skipped when the run has fewer clusters.
 
+Where a manifest cannot run on the harness's clusters as written, such as its resource requests or storage class, `params.e2e.substitutions` changes it for the run alone: a list of `{files, reason, patch}`, each patch a JSON merge patch applied to every document of the files it names, a status file's under its `status` key; `kind` and `name` narrow one to the manifests they match. The page still shows the file as written.
 
+
+
+What a story assumes already exists, such as a NATS cluster nobody here deployed, is stood up by files in its `e2e/` directory, named and run as the story's own files are; the page does not show them. `hack/e2e-fixtures` generates those that hold keys.

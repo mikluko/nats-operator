@@ -35,7 +35,7 @@ tests:
               verbs: [create, delete, get, list, update, watch]
             - apiGroups: [auth.nats.mikluko.io]
               resources: [natsaccounts, natsusers]
-              verbs: [get, list, update, watch]
+              verbs: [get, list, patch, watch]
             - apiGroups: [auth.nats.mikluko.io]
               resources: [natsaccounts/finalizers, natsaccounts/status, natsoperators/finalizers, natsoperators/status, natssystemaccounts/finalizers, natssystemaccounts/status, natsusers/finalizers, natsusers/status]
               verbs: [update]

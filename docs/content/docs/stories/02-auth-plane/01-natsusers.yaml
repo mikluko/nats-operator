@@ -87,3 +87,17 @@ spec:
   credentials:
     secretKeyRef:
       name: jetstream-controller-creds
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsUser
+metadata:
+  name: auth-controller
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsSystemAccount
+    name: sys
+  preset: auth-controller
+  credentials:
+    secretKeyRef:
+      name: auth-controller-creds

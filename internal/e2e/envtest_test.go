@@ -85,6 +85,39 @@ spec: {servers: ["nats://demo:4222"]}
 	})
 }
 
+// TestEnvtest_ReleaseGuards pins that a namespace's NatsClusters are
+// annotated to pass their deletion guard, and its JetStream resources set to
+// retain their server objects, before the runner deletes it.
+func TestEnvtest_ReleaseGuards(t *testing.T) {
+	c := startAPIServer(t)
+	require.NoError(t, c.Create(t.Context(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "guarded"}}))
+	obj := func(apiVersion, kind, name string, spec map[string]any) *unstructured.Unstructured {
+		u := &unstructured.Unstructured{Object: map[string]any{"spec": spec}}
+		u.SetAPIVersion(apiVersion)
+		u.SetKind(kind)
+		u.SetNamespace("guarded")
+		u.SetName(name)
+		require.NoError(t, c.Create(t.Context(), u))
+		return u
+	}
+	nc := obj("cluster.nats.mikluko.io/v1beta1", "NatsCluster", "demo", map[string]any{"version": "2.15.0", "replicas": int64(3)})
+	consumer := obj("jetstream.nats.mikluko.io/v1beta1", "NatsConsumer", "audit",
+		map[string]any{"connectionRef": map[string]any{"name": "demo"}, "stream": "LEDGER"})
+	require.Equal(t, "Delete", consumer.Object["spec"].(map[string]any)["deletionPolicy"], "a consumer deletes by default")
+	stream := obj("jetstream.nats.mikluko.io/v1beta1", "NatsStream", "ledger",
+		map[string]any{"connectionRef": map[string]any{"name": "demo"}, "name": "LEDGER"})
+
+	require.NoError(t, releaseGuards(t.Context(), c, "guarded"))
+	require.NoError(t, releaseGuards(t.Context(), c, "guarded"), "a released namespace is left as it is")
+	for _, o := range []*unstructured.Unstructured{nc, consumer, stream} {
+		require.NoError(t, c.Get(t.Context(), client.ObjectKeyFromObject(o), o))
+	}
+	require.Contains(t, nc.GetAnnotations(), forceDeleteAnnotation)
+	require.Equal(t, "Retain", consumer.Object["spec"].(map[string]any)["deletionPolicy"])
+	require.Equal(t, "Retain", stream.Object["spec"].(map[string]any)["deletionPolicy"])
+	require.NoError(t, releaseGuards(t.Context(), c, "empty"))
+}
+
 // TestEnvtest_TwoClusters pins, against two API servers, that a placed story
 // applies each file only to its own Kubernetes cluster and reads each status
 // from there, that it is skipped when the run reaches fewer clusters than it

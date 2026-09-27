@@ -132,7 +132,7 @@ Each controller's ClusterRole is named `<release>-<controller>`, for example `na
 | API group | Resources | Verbs |
 |---|---|---|
 | `""` | `secrets` | `get`, `list`, `watch`, `create`, `update`, `delete` |
-| `auth.nats.mikluko.io` | `natsaccounts`, `natsusers` | `get`, `list`, `watch`, `update` |
+| `auth.nats.mikluko.io` | `natsaccounts`, `natsusers` | `get`, `list`, `watch`, `patch` |
 | `auth.nats.mikluko.io` | `natsaccounts/finalizers`, `natsaccounts/status`, `natsoperators/finalizers`, `natsoperators/status`, `natssystemaccounts/finalizers`, `natssystemaccounts/status`, `natsusers/finalizers`, `natsusers/status` | `update` |
 | `auth.nats.mikluko.io` | `natsoperators`, `natssystemaccounts` | `get`, `list`, `watch` |
 | `nats.mikluko.io` | `natsaccounttrusts`, `natsconnections`, `natsoperatortrusts` | `get`, `list`, `watch` |

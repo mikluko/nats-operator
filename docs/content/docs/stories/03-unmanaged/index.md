@@ -1,9 +1,6 @@
 ---
 title: JetStream on a NATS cluster you did not deploy
 weight: 3
-params:
-  e2e:
-    skip: needs a NATS cluster the controllers did not deploy, holding streams created at runtime
 ---
 
 An application team runs on a NATS cluster someone else deployed, a Helm release in `messaging`, and wants the streams its services created at runtime declared as resources without recreating them.

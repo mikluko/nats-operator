@@ -75,7 +75,7 @@ type AccountReconciler struct {
 // records the deletion.
 const AccountFinalizer = "auth.nats.mikluko.io/delete"
 
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts,verbs=get;list;watch;update
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts,verbs=get;list;watch;patch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts/status,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts/finalizers,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
@@ -92,10 +92,8 @@ func (r *AccountReconciler) Reconcile(ctx context.Context, req reconcile.Request
 	if acc.DeletionTimestamp != nil {
 		return reconcile.Result{}, r.finalize(ctx, &acc)
 	}
-	if controllerutil.AddFinalizer(&acc, AccountFinalizer) {
-		if err := r.Update(ctx, &acc); err != nil {
-			return reconcile.Result{}, err
-		}
+	if err := patchFinalizer(ctx, r.Client, &acc, AccountFinalizer, true); err != nil {
+		return reconcile.Result{}, err
 	}
 	before := acc.Status.DeepCopy()
 	res, err := r.reconcile(ctx, &acc)
@@ -232,8 +230,7 @@ func (r *AccountReconciler) finalize(ctx context.Context, acc *authv1beta1.NatsA
 			return err
 		}
 	}
-	controllerutil.RemoveFinalizer(acc, AccountFinalizer)
-	return r.Update(ctx, acc)
+	return patchFinalizer(ctx, r.Client, acc, AccountFinalizer, false)
 }
 
 // deletionPending reports whether acc's NatsOperator exists and its status

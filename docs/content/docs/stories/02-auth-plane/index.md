@@ -1,6 +1,12 @@
 ---
 title: Owning the auth plane
 weight: 2
+params:
+  e2e:
+    substitutions:
+      - files: [01-natscluster.yaml]
+        reason: three servers share one 3G minikube node
+        patch: {spec: {resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 256Mi}}}}
 ---
 
 The platform engineer from the first story wants that cluster to run under a NATS operator the auth controller owns, with accounts and users declared as resources instead of minted by hand.
@@ -30,6 +36,10 @@ An account change is pushed to the servers' resolvers without a restart; status 
 A user's creds can land in a Secret shaped the way a NatsConnection reads it, so a connection needs only the Secret's name. The controllers' own system users take a permission preset instead of a permission list.
 
 {{< manifest "01-natsusers.yaml" >}}
+
+The auth controller signs without a connection, and pushes to the servers through the one its chart value `auth.systemConnection` names, with its own system user's creds:
+
+{{< manifest "01-natsconnection-auth-controller.yaml" >}}
 
 A user that brings its own key gets only a signed JWT, in status:
 

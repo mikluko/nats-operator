@@ -202,6 +202,7 @@ func TestRender_Gateway(t *testing.T) {
 	require.Equal(t, "west-gateway", svc.Name)
 	require.Equal(t, corev1.ServiceTypeLoadBalancer, svc.Spec.Type)
 	require.Equal(t, nc.Spec.Gateway.Service.Annotations, svc.Annotations)
+	require.True(t, svc.Spec.PublishNotReadyAddresses, "servers reach each other's gateways before any is Ready")
 	require.Equal(t, map[string]string{LabelCluster: "west"}, svc.Spec.Selector)
 	require.Equal(t, []corev1.ServicePort{servicePort("gateway", PortGateway)}, svc.Spec.Ports)
 	require.Contains(t, p.HeadlessService.Spec.Ports, servicePort("gateway", PortGateway))

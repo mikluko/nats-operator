@@ -4,7 +4,6 @@ weight: 7
 params:
   e2e:
     after: 4
-    skip: its statuses describe moves made and pending across many streams, which its manifests alone do not produce
 ---
 
 Unevenly placed leaders and copies slow the whole NATS cluster, not only the account that owns them. The platform team balances across every account; an application team refines within pools of its own streams, so that hot streams spread among themselves instead of piling onto one server while the leader count still looks even. The two are layered: the account balancer yields to the system one, and both wait while the NATS cluster is not Settled.
@@ -17,7 +16,7 @@ The system balancer runs on system credentials. Placement moves work for any acc
 
 {{< manifest "01-account-export.yaml" >}}
 
-Its status says what it can do, how uneven each server is, and the last move it made.
+Its status says what it can do, how uneven each server is, and the last move it made. With three servers and three copies of every stream, every server holds every copy, so only leaders have anywhere to move.
 
 {{< manifest "01-status-natssystembalancer.yaml" >}}
 
@@ -27,6 +26,6 @@ The account balancer runs on the account's own connection and judges evenness pe
 
 {{< manifest "01-account.yaml" >}}
 
-When the system balancer has a move pending on one of its streams, it holds:
+At rest it reports each pool's streams and how unevenly their leaders sit. While the system balancer has a move pending on one of its streams, `Holding` turns True with reason `YieldingToSystemBalancer`, naming the stream, and the account balancer moves nothing.
 
 {{< manifest "01-status-natsbalancer.yaml" >}}

@@ -229,6 +229,7 @@ func (e *env) testStory2(t *testing.T) {
 		assert.Equal(ct, op.Status.SystemAccount.JWT, trust.Status.SystemAccountJWT)
 	})
 
+	require.EqualValues(t, 1, orders.Generation, "adding the finalizer leaves spec, jwtTTL: 48h among it, as applied")
 	require.Equal(t, &authv1beta1.SeedSecrets{Identity: "demo-operator-identity", Signing: []string{"demo-operator-signing-1"}}, op.Status.SeedSecrets)
 	for _, name := range []string{"demo-operator-identity", "demo-operator-signing-1", "sys-system-account-identity", "orders-account-signing-1"} {
 		var sec corev1.Secret

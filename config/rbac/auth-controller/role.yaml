@@ -23,7 +23,7 @@ rules:
   verbs:
   - get
   - list
-  - update
+  - patch
   - watch
 - apiGroups:
   - auth.nats.mikluko.io

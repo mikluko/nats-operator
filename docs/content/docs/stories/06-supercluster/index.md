@@ -5,9 +5,26 @@ params:
   e2e:
     clusters:
       - name: east
-        files: [01-natsoperatortrust.yaml, 01-east.yaml, 01-east-auth.yaml]
+        files: [e2e/00-home.yaml, 01-natsoperatortrust.yaml, 01-east.yaml, 01-east-auth.yaml]
       - name: west
-        files: [01-natsoperatortrust.yaml, 01-west.yaml, 01-status-natscluster-west.yaml]
+        files: [e2e/00-west.yaml, 01-natsoperatortrust.yaml, 01-west.yaml, 01-status-natscluster-west.yaml]
+    substitutions:
+      - files: [01-natsoperatortrust.yaml]
+        reason: the JWTs of the NATS operator and system account e2e/00-home.yaml adopts, from hack/supercluster-fixture
+        patch: {spec: {operatorJWT: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ.eyJqdGkiOiJGUkVPS0tGNFZMNDJGUzRINzRDMkpHQ083NElNVlJUU1lOR1BWRDZEUFhYRTVWN0ZJT1hBIiwiaWF0IjoxNzkwNDU4MDk4LCJpc3MiOiJPQUxVWk5RSExIVTZVN1VZWEdKWUxFRU9VTjY1MlpPQlZFNldTUUlUNEhPSldFVUdZNlZZS0tOTCIsIm5hbWUiOiJhY21lIiwic3ViIjoiT0FMVVpOUUhMSFU2VTdVWVhHSllMRUVPVU42NTJaT0JWRTZXU1FJVDRIT0pXRVVHWTZWWUtLTkwiLCJuYXRzIjp7InNpZ25pbmdfa2V5cyI6WyJPQ01GSVBDNUxYWDVIVFFaMktGWUNVSVhGRFdZS0RSMldXM0paTEc1VURQQ1k0UkhMUk1DTFVJQyJdLCJzeXN0ZW1fYWNjb3VudCI6IkFBQUUzVlRUMzNWNjZMREdVVFA2VVdRRjJOQ0tVV1lYSjJQREFXNTZVQllTNUpITklBVUNKM0pLIiwidHlwZSI6Im9wZXJhdG9yIiwidmVyc2lvbiI6Mn19.TiXzDMG0ayqvuCoFp_yS7dqhN4I0_G3FNafwYrI4MmtUnl9zoJiLmWQkvcV43bBxCmnc6okNkgH__S8aTmZzAg, systemAccountJWT: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ.eyJqdGkiOiJGQloyV0RESFIzVlU2RFBEWFNDVEpJTEdJVExBRTNVTEhBSzVWQVlWNDRUUzUyUUVaVzRBIiwiaWF0IjoxNzkwNDU4MDk4LCJpc3MiOiJPQ01GSVBDNUxYWDVIVFFaMktGWUNVSVhGRFdZS0RSMldXM0paTEc1VURQQ1k0UkhMUk1DTFVJQyIsIm5hbWUiOiJzeXMiLCJzdWIiOiJBQUFFM1ZUVDMzVjY2TERHVVRQNlVXUUYyTkNLVVdZWEoyUERBVzU2VUJZUzVKSE5JQVVDSjNKSyIsIm5hdHMiOnsibGltaXRzIjp7InN1YnMiOi0xLCJkYXRhIjotMSwicGF5bG9hZCI6LTEsImltcG9ydHMiOi0xLCJleHBvcnRzIjotMSwid2lsZGNhcmRzIjp0cnVlLCJjb25uIjotMSwibGVhZiI6LTF9LCJzaWduaW5nX2tleXMiOlsiQUE1QjRCUEtXNUk0Wk5SRTJBTDRMUUxYWE5SSUVCVFZWUFJRVVlKT0NWM0NPS1dRTEVJT05DWUciXSwiZGVmYXVsdF9wZXJtaXNzaW9ucyI6eyJwdWIiOnt9LCJzdWIiOnt9fSwiYXV0aG9yaXphdGlvbiI6e30sInR5cGUiOiJhY2NvdW50IiwidmVyc2lvbiI6Mn19.Jgm3mEMgAbtqmHH9p-coJfjElLl_xOAfvHAogRfdk1aa43Ep8WB7WJbu-DyOMNu38qZXqQexg2ypalA6kumJDw}}
+      - files: [01-east.yaml, 01-west.yaml]
+        reason: >-
+          three servers share one 3G minikube node with one storage class; no cert-manager, so the gateways
+          run without TLS
+        patch:
+          spec:
+            resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 256Mi}}
+            jetstream: {volumeClaimTemplate: {spec: {storageClassName: standard, resources: {requests: {storage: 5Gi}}}}}
+            gateway:
+              remotes:
+                - {name: east, url: "nats://nats-east.example.net:7222"}
+                - {name: west, url: "nats://nats-west.example.net:7222"}
+              tls: null
 ---
 
 Two Kubernetes clusters, `east` and `west`, each with its own NATS cluster, joined by gateways into one supercluster with no hub. `east` is the home cluster: the auth controller runs there, holds the signing key, and every account is declared there.

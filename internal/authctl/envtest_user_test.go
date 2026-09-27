@@ -81,7 +81,7 @@ func (e *env) testStory2Users(t *testing.T) {
 	e.eventually(t, func(ct *assert.CollectT) {
 		e.get(ct, key("nats-system", "orders"), &orders)
 		e.get(ct, key("nats-system", "sys"), &sys)
-		for _, name := range []string{"orders-service", "orders-batch", "orders-jetstream", "cluster-controller", "jetstream-controller"} {
+		for _, name := range []string{"orders-service", "orders-batch", "orders-jetstream", "cluster-controller", "jetstream-controller", "auth-controller"} {
 			u := &authv1beta1.NatsUser{}
 			e.get(ct, key("nats-system", name), u)
 			ready(ct, u.Status.Conditions, u.Generation, authctl.ReasonSigned)
@@ -91,6 +91,7 @@ func (e *env) testStory2Users(t *testing.T) {
 
 	for name, u := range users {
 		require.Contains(t, u.Finalizers, authctl.UserFinalizer, name)
+		require.EqualValues(t, 1, u.Generation, name)
 	}
 
 	batch := users["orders-batch"]
@@ -292,21 +293,6 @@ func (e *env) testDeletion(t *testing.T) {
 	})
 	t.Cleanup(func() { e.d.onPush(nil) })
 
-	e.apply(t, `
-apiVersion: auth.nats.mikluko.io/v1beta1
-kind: NatsUser
-metadata:
-  name: auth-controller
-  namespace: nats-system
-spec:
-  accountRef:
-    kind: NatsSystemAccount
-    name: sys
-  preset: auth-controller
-  credentials:
-    secretKeyRef:
-      name: auth-controller-creds
-`)
 	var sysToken, sysSeed string
 	e.eventually(t, func(ct *assert.CollectT) {
 		sysToken, sysSeed, _ = e.creds(ct, key("nats-system", "auth-controller-creds"))

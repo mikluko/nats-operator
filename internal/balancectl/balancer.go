@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -201,8 +202,13 @@ const userInfoSubject = "$SYS.REQ.USER.INFO"
 
 // accountOf is the account nc is a user of, as the server names it: the
 // account's public key under a NATS operator. It is "" where the server runs
-// no system account, which leaves no system balancer to yield to.
+// no system account, which leaves no system balancer to yield to. A user
+// JWT names its account, so a connection with one asks no server, and needs
+// no permission to publish to userInfoSubject.
 func accountOf(ctx context.Context, nc *nats.Conn) (string, error) {
+	if account := jwtAccount(nc); account != "" {
+		return account, nil
+	}
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 	msg, err := nc.RequestWithContext(ctx, userInfoSubject, nil)
@@ -225,6 +231,25 @@ func accountOf(ctx context.Context, nc *nats.Conn) (string, error) {
 		return "", fmt.Errorf("read the connection's account: %w", resp.Error)
 	}
 	return resp.Data.Account, nil
+}
+
+// jwtAccount is the account nc's user JWT names, or "" where nc has none.
+func jwtAccount(nc *nats.Conn) string {
+	if nc.Opts.UserJWT == nil {
+		return ""
+	}
+	token, err := nc.Opts.UserJWT()
+	if err != nil {
+		return ""
+	}
+	c, err := jwt.DecodeUserClaims(token)
+	if err != nil {
+		return ""
+	}
+	if c.IssuerAccount != "" {
+		return c.IssuerAccount
+	}
+	return c.Issuer
 }
 
 // systemPending says which of account's streams a NatsSystemBalancer has a

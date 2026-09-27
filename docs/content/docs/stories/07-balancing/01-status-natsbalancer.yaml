@@ -5,19 +5,20 @@ status:
       status: "True"
       reason: Balancing
     - type: Holding
-      status: "True"
-      reason: YieldingToSystemBalancer
-      message: REQ_07 has a placement move pending from NatsSystemBalancer demo
+      status: "False"
+      reason: Settled
     - type: Overlapping
       status: "False"
       reason: PoolsDisjoint
+  # REQ_07 in requests; PAYMENTS, from story 4, carries no pool label and
+  # falls to the default pool. A pool of one stream is skewed by one
+  # whichever server leads it.
   pools:
     - name: requests
-      streams: 12
-      leaderSkew: !any 2
+      streams: 1
+      leaderSkew: 1
     - name: responses
-      streams: 12
-      leaderSkew: !any 0
+      streams: 0
     - name: (default)
-      streams: 3
-      leaderSkew: !any 1
+      streams: 1
+      leaderSkew: 1

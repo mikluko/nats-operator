@@ -1,6 +1,20 @@
 ---
 title: A NATS cluster with JetStream
 weight: 1
+params:
+  e2e:
+    substitutions:
+      - files: [01-natscluster.yaml, 02-natscluster-2.15.1.yaml]
+        reason: three servers share one 3G minikube node
+        patch: {spec: {resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 256Mi}}}}
+      - files: [01-natscluster.yaml, 02-natscluster-2.15.1.yaml]
+        reason: >-
+          nats 2.15.1 is not published; hack/e2e.sh loads 2.15.0 as localhost/nats under both tags, which
+          the kubelet does not pull
+        patch: {spec: {image: localhost/nats, podTemplate: {spec: {containers: [{name: nats, imagePullPolicy: Never}]}}}}
+      - files: [01-status-natscluster-at-rest.yaml]
+        reason: max_memory_store derives from the substituted 256Mi limit
+        patch: {status: {jetstream: {limits: {maxMemoryStore: 192Mi}}}}
 ---
 
 A platform engineer wants a three-server NATS cluster with JetStream in one Kubernetes cluster, and one stream on it. No auth plane: every client lands in the global account.

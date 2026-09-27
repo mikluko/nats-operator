@@ -35,6 +35,14 @@ work=$root/bin/e2e
 release=nats-operator
 release_ns=nats-operator
 image_repo=localhost/nats-operator
+# auth_connection is the NatsConnection the auth controller pushes through,
+# the one story 2 declares.
+auth_connection=nats-system/auth-controller
+# nats_image is loaded into every cluster as localhost/nats under each of
+# nats_tags: a story's rollout names a nats-server version that is not
+# published, and its substitutions point spec.image here.
+nats_image=nats:2.15.0
+nats_tags=(2.15.0 2.15.1)
 machine_image=$image_repo/e2e-machine
 minikube_version=v1.39.0
 case $(uname -m) in
@@ -301,6 +309,24 @@ build_images() {
 	done
 }
 
+# nats_images pulls $nats_image into the machine and loads it into every
+# cluster as localhost/nats under each of $nats_tags, each tag an image of
+# its own: the kubelet takes an image whose ID it once pulled under another
+# name for one it has to pull again.
+nats_images() {
+	local tag
+	in_machine user M_IMAGE="$nats_image" <<-'EOF' >/dev/null
+		docker pull -q "$M_IMAGE"
+	EOF
+	for tag in "${nats_tags[@]}"; do
+		in_machine user M_IMAGE="$nats_image" M_TAG="localhost/nats:$tag" <<-'EOF' >/dev/null
+			printf 'FROM %s\nLABEL io.mikluko.nats-operator.e2e.tag=%s\n' "$M_IMAGE" "$M_TAG" |
+				DOCKER_BUILDKIT=0 docker build -q -t "$M_TAG" - 2>/dev/null
+		EOF
+		image_load "localhost/nats:$tag"
+	done
+}
+
 # install_chart installs the chart from the working tree in context $1 with
 # the controllers named in $2 enabled, reading image lines from stdin, and
 # runs its `helm test`, printing the test pods' logs to stderr when it fails.
@@ -308,7 +334,8 @@ build_images() {
 # install.
 install_chart() {
 	local key repo tag
-	local sets=(--set cluster.enabled=false --set auth.enabled=false --set jetstream.enabled=false)
+	local sets=(--set cluster.enabled=false --set auth.enabled=false --set jetstream.enabled=false
+		--set "auth.systemConnection=$auth_connection")
 	while read -r key repo tag; do
 		sets+=(--set "$key.image.repository=$repo" --set "$key.image.tag=$tag"
 			--set "$key.image.pullPolicy=Never")
@@ -331,6 +358,8 @@ mkdir -p "$work"
 log "clusters ${profiles[*]}"
 cluster_up
 build_images >"$work/images.txt"
+log "image localhost/nats:{$(IFS=,; echo "${nats_tags[*]}")} from $nats_image"
+nats_images
 for i in "${!profiles[@]}"; do
 	enabled=$controllers
 	if ((i > 0)); then

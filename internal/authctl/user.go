@@ -59,7 +59,7 @@ type UserReconciler struct {
 	Recorder events.EventRecorder
 }
 
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=get;list;watch;update
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=get;list;watch;patch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers/status,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers/finalizers,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators;natssystemaccounts;natsaccounts,verbs=get;list;watch
@@ -75,10 +75,8 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req reconcile.Request) (
 	if u.DeletionTimestamp != nil {
 		return r.finalize(ctx, &u)
 	}
-	if controllerutil.AddFinalizer(&u, UserFinalizer) {
-		if err := r.Update(ctx, &u); err != nil {
-			return reconcile.Result{}, err
-		}
+	if err := patchFinalizer(ctx, r.Client, &u, UserFinalizer, true); err != nil {
+		return reconcile.Result{}, err
 	}
 	before := u.Status.DeepCopy()
 	res, err := r.reconcile(ctx, &u)
@@ -388,8 +386,7 @@ func (r *UserReconciler) finalize(ctx context.Context, u *authv1beta1.NatsUser) 
 	if err := r.deleteCreds(ctx, u); err != nil {
 		return reconcile.Result{}, err
 	}
-	controllerutil.RemoveFinalizer(u, UserFinalizer)
-	return reconcile.Result{}, r.Update(ctx, u)
+	return reconcile.Result{}, patchFinalizer(ctx, r.Client, u, UserFinalizer, false)
 }
 
 // drain reports whether a deleted user is revoked everywhere and has no

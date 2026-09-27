@@ -404,7 +404,9 @@ func headlessService(nc *clusterv1beta1.NatsCluster) *corev1.Service {
 
 // gatewayService renders gateway.service over every server's gateway
 // port, or nil when it is unset. Its type and annotations are the
-// template's.
+// template's. It serves servers that are not Ready: a JetStream server is
+// Ready once it reaches a meta leader, which a supercluster elects over
+// these gateways.
 func gatewayService(nc *clusterv1beta1.NatsCluster) *corev1.Service {
 	g := nc.Spec.Gateway
 	if g == nil || g.Service == nil {
@@ -418,9 +420,10 @@ func gatewayService(nc *clusterv1beta1.NatsCluster) *corev1.Service {
 			Annotations: maps.Clone(g.Service.Annotations),
 		},
 		Spec: corev1.ServiceSpec{
-			Type:     g.Service.Type,
-			Selector: clusterSelector(nc),
-			Ports:    []corev1.ServicePort{servicePort("gateway", PortGateway)},
+			Type:                     g.Service.Type,
+			Selector:                 clusterSelector(nc),
+			Ports:                    []corev1.ServicePort{servicePort("gateway", PortGateway)},
+			PublishNotReadyAddresses: true,
 		},
 	}
 }

@@ -49,11 +49,15 @@ func apiScheme(t *testing.T) *runtime.Scheme {
 	return s
 }
 
-// storyFiles returns the story YAML files but the delete files, split into
-// status files and the rest, whose documents are whole objects.
+// storyFiles returns the story YAML files but the delete files and the
+// harness's fixtures, split into status files and the rest, whose documents
+// are whole objects.
 func storyFiles(t *testing.T) (manifests, statuses []string) {
 	t.Helper()
 	err := filepath.WalkDir(storiesDir, func(path string, d fs.DirEntry, err error) error {
+		if err == nil && d.IsDir() && d.Name() == e2e.FixtureDir {
+			return fs.SkipDir
+		}
 		if err != nil || d.IsDir() || filepath.Ext(path) != ".yaml" {
 			return err
 		}

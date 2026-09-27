@@ -7,27 +7,33 @@ status:
     - type: Holding
       status: "False"
       reason: Settled
+  # orders, from story 2, carries no jetstream-stepdown export: its leaders
+  # stay where they are, and the others move around them.
   capabilities:
     placement: true
     leader: Partial
-    leaderReason: !any 3 of 7 accounts carry no jetstream-stepdown export; their leaders are not moved
+    leaderReason: 1 of 2 accounts carry no jetstream-stepdown export; their leaders are not moved
+  # ORDERS, PAYMENTS and REQ_07, three copies each on three servers.
   servers:
     - name: demo-0
-      leaders: !any 41
-      replicas: !any 118
+      leaders: 1
+      replicas: 3
     - name: demo-1
-      leaders: !any 39
-      replicas: !any 120
+      leaders: 1
+      replicas: 3
     - name: demo-2
-      leaders: !any 12
-      replicas: !any 64
+      leaders: 1
+      replicas: 3
   skew:
-    leaders: !any 29
-    replicas: !any 56
-  lastMove:
-    kind: Placement
-    account: !any ADTWXTPEOI65FGIGO36XGZBDFOYDDPV6XZPRQWDIRXIYCAJD6TBP76JN
-    stream: !any ORDERS_EU
-    from: !any demo-1
-    time: !any "2026-09-26T11:31:02Z"
+    leaders: 0
+    replicas: 0
+  # Absent until a pass has moved something; where the streams' leaders
+  # landed decides whether one had to.
+  lastMove: !any
+    kind: Leader
+    account: ABFAGFB4TX4F4GEPOPBDD4SUQR23BDIBE3NCLZFE3ZF3VP77JJHFHGQF
+    stream: PAYMENTS
+    from: demo-2
+    to: demo-0
+    time: "2026-09-26T21:00:10Z"
   pending: []

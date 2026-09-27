@@ -22,6 +22,13 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+// FixtureDir is the directory in a story's bundle holding files the harness
+// loads as the story's own and the story's page does not show: what a
+// story assumes exists before its first step. They are named as the
+// story's files are, and placed by their path from the bundle, as in
+// "e2e/00-cluster.yaml".
+const FixtureDir = "e2e"
+
 // Bundle is one story directory: its steps, and how the harness treats it
 // as declared in its index.md front matter under params.e2e.
 type Bundle struct {
@@ -39,6 +46,8 @@ type Bundle struct {
 	// Clusters places the bundle's files in Kubernetes clusters, the home
 	// cluster first; empty means the story runs in one Kubernetes cluster.
 	Clusters []Placement
+	// Substitutions are merged into the bundle's files as they load.
+	Substitutions []Substitution
 	// Steps are ordered by step number.
 	Steps []Step
 
@@ -51,6 +60,28 @@ type Placement struct {
 	// Name is the story's name for the Kubernetes cluster.
 	Name  string   `json:"name"`
 	Files []string `json:"files"`
+}
+
+// Substitution is a change the harness makes to files of a bundle, where
+// what the story shows the reader cannot run as written on the harness's
+// Kubernetes clusters.
+type Substitution struct {
+	Files []string `json:"files"`
+	// Kind and Name, where set, narrow the substitution to the manifests
+	// of that kind and name; either set, it reaches no status or live file.
+	Kind string `json:"kind,omitempty"`
+	Name string `json:"name,omitempty"`
+	// Reason says what the harness lacks; it is required.
+	Reason string `json:"reason"`
+	// Patch is a JSON merge patch (RFC 7386) applied to every document of
+	// each file it reaches; a status file's document is its status block
+	// alone, under the status key.
+	Patch map[string]any `json:"patch"`
+}
+
+// selects reports whether s reaches o, a manifest of a file s names.
+func (s Substitution) selects(o *unstructured.Unstructured) bool {
+	return (s.Kind == "" || o.GetKind() == s.Kind) && (s.Name == "" || o.GetName() == s.Name)
 }
 
 // bundleFile is one loaded bundle file.
@@ -184,10 +215,18 @@ func loadBundle(dir string) (*Bundle, error) {
 	if err != nil {
 		return nil, err
 	}
+	fixtures, err := filepath.Glob(filepath.Join(dir, FixtureDir, "*.yaml"))
+	if err != nil {
+		return nil, err
+	}
+	files = append(files, fixtures...)
 	slices.Sort(files)
 	for _, path := range files {
 		f := bundleFile{base: filepath.Base(path)}
-		if f.name, err = ParseFileName(f.base); err != nil {
+		if filepath.Base(filepath.Dir(path)) == FixtureDir {
+			f.base = FixtureDir + "/" + f.base
+		}
+		if f.name, err = ParseFileName(filepath.Base(path)); err != nil {
 			return nil, err
 		}
 		switch f.name.Role {
@@ -199,9 +238,66 @@ func loadBundle(dir string) (*Bundle, error) {
 		if err != nil {
 			return nil, err
 		}
+		f.substitute(b.Substitutions)
 		b.add(f)
 	}
+	if err := checkSubstitutions(dir, files, b.Substitutions); err != nil {
+		return nil, err
+	}
 	return b, checkPlacement(dir, files, b.Clusters)
+}
+
+// substitute applies to f every substitution that names it, in order.
+func (f *bundleFile) substitute(subs []Substitution) {
+	for _, s := range subs {
+		if !slices.Contains(s.Files, f.base) {
+			continue
+		}
+		for _, o := range f.objs {
+			if s.selects(o) {
+				o.Object = mergePatch(o.Object, s.Patch)
+			}
+		}
+		if f.exp.Want != nil && s.Kind == "" && s.Name == "" {
+			f.exp.Want = mergePatch(f.exp.Want, s.Patch)
+		}
+	}
+}
+
+// mergePatch returns target with patch merged in per RFC 7386: a null in
+// patch deletes the key, a map merges into a map, anything else replaces.
+func mergePatch(target, patch map[string]any) map[string]any {
+	if target == nil {
+		target = map[string]any{}
+	}
+	for k, pv := range patch {
+		switch pv := pv.(type) {
+		case nil:
+			delete(target, k)
+		case map[string]any:
+			tv, _ := target[k].(map[string]any)
+			target[k] = mergePatch(tv, pv)
+		default:
+			target[k] = pv
+		}
+	}
+	return target
+}
+
+// checkSubstitutions fails when a substitution gives no reason, patches
+// nothing, or names a file the bundle lacks.
+func checkSubstitutions(dir string, files []string, subs []Substitution) error {
+	for i, s := range subs {
+		if s.Reason == "" || len(s.Patch) == 0 || len(s.Files) == 0 {
+			return fmt.Errorf("%s: substitution %d needs files, a reason and a patch", dir, i)
+		}
+		for _, f := range s.Files {
+			if !slices.Contains(files, filepath.Join(dir, f)) {
+				return fmt.Errorf("%s: substitution %d names %s, which the bundle does not have", dir, i, f)
+			}
+		}
+	}
+	return nil
 }
 
 // add files f under its step, keeping the steps ordered.
@@ -235,7 +331,7 @@ func checkPlacement(dir string, files []string, clusters []Placement) error {
 		}
 	}
 	for _, path := range files {
-		if !placed[filepath.Base(path)] {
+		if rel, _ := filepath.Rel(dir, path); !placed[filepath.ToSlash(rel)] {
 			return fmt.Errorf("%s: in none of the Kubernetes clusters index.md places files in", path)
 		}
 	}
@@ -273,7 +369,7 @@ func (b *Bundle) step(n int) *Step {
 	return &b.Steps[len(b.Steps)-1]
 }
 
-// readFrontMatter sets b's After, Skip and Clusters from the YAML front matter
+// readFrontMatter sets b's After, Skip, Clusters and Substitutions from the YAML front matter
 // opening path, if path exists and has any.
 func readFrontMatter(path string, b *Bundle) error {
 	raw, err := os.ReadFile(path)
@@ -294,16 +390,18 @@ func readFrontMatter(path string, b *Bundle) error {
 			var fm struct {
 				Params struct {
 					E2E struct {
-						After    int         `json:"after"`
-						Skip     string      `json:"skip"`
-						Clusters []Placement `json:"clusters"`
+						After         int            `json:"after"`
+						Skip          string         `json:"skip"`
+						Clusters      []Placement    `json:"clusters"`
+						Substitutions []Substitution `json:"substitutions"`
 					} `json:"e2e"`
 				} `json:"params"`
 			}
 			if err := yaml.Unmarshal(block.Bytes(), &fm); err != nil {
 				return fmt.Errorf("%s: front matter: %w", path, err)
 			}
-			b.After, b.Skip, b.Clusters = fm.Params.E2E.After, fm.Params.E2E.Skip, fm.Params.E2E.Clusters
+			e := fm.Params.E2E
+			b.After, b.Skip, b.Clusters, b.Substitutions = e.After, e.Skip, e.Clusters, e.Substitutions
 			return nil
 		}
 		block.Write(s.Bytes())
