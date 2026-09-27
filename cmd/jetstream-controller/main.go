@@ -75,6 +75,11 @@ func newScheme() (*runtime.Scheme, error) {
 	return scheme, nil
 }
 
+// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections,verbs=get;list;watch
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections/status,verbs=patch
+
 // setup registers the JetStream controller's instruments and adds the
 // connection pool, the NatsConnection reconciler, the stream, consumer,
 // key-value and object store reconcilers, the system and account balancer

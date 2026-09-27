@@ -25,6 +25,10 @@ import (
 // StreamKind is the kind a NatsStream is referred to by.
 const StreamKind = "NatsStream"
 
+// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsstreams,verbs=get;list;watch;patch
+// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsstreams/status,verbs=patch
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
+
 // StreamReconciler keeps NatsStreams' streams at their specs through their
 // connections, under their lifecycle policies. Deleting a NatsStream whose
 // deletionPolicy is Delete waits until its connection can delete the stream,

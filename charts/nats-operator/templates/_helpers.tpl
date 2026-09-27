@@ -41,12 +41,15 @@ Both empty, it returns nothing.
 nats-operator.controller renders one controller's ServiceAccount, RBAC and
 Deployment. It takes a dict of root (the chart context), name (the
 controller's name, which is also its binary and image), group (its API group,
-which is also its leader election lease), values (its block of values),
-rules (its ClusterRole rules as YAML) and, optionally, args (flags appended to
-the controller's own).
+which is also its leader election lease), values (its block of values) and,
+optionally, args (flags appended to the controller's own). Its ClusterRole's
+rules are those of files/rbac/<name>.yaml, a copy of the role controller-gen
+generates for it.
 */}}
 {{- define "nats-operator.controller" -}}
 {{- $fullname := include "nats-operator.fullname" . -}}
+{{- $role := printf "files/rbac/%s.yaml" .name -}}
+{{- $rules := required (printf "%s has no rules" $role) (.root.Files.Get $role | fromYaml).rules -}}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -62,13 +65,7 @@ metadata:
   labels:
     {{- include "nats-operator.labels" . | nindent 4 }}
 rules:
-  {{- .rules | nindent 2 }}
-  - apiGroups: [""]
-    resources: [events]
-    verbs: [create, patch]
-  - apiGroups: [events.k8s.io]
-    resources: [events]
-    verbs: [create, patch]
+  {{- toYaml $rules | nindent 2 }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -97,6 +94,9 @@ rules:
   - apiGroups: [coordination.k8s.io]
     resources: [leases]
     verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

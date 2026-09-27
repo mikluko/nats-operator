@@ -75,6 +75,9 @@ func newScheme() (*runtime.Scheme, error) {
 	return scheme, nil
 }
 
+// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+
 // setup registers the auth controller's instruments and adds its
 // reconcilers to mgr; with systemConnection set, as namespace/name, it adds
 // the connection pool and resolvers that reach NATS through it.

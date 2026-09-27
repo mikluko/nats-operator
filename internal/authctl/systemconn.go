@@ -34,6 +34,7 @@ type SystemConnection struct {
 }
 
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections,verbs=get;list;watch
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
 
 // Conn returns the connection for operator. The error wraps
 // ErrOperatorGone when operator does not exist, and ErrForeignConnection

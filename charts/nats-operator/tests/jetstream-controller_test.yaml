@@ -30,30 +30,30 @@ tests:
       - equal:
           path: rules
           value:
-            - apiGroups: [jetstream.nats.mikluko.io]
-              resources: [natsstreams, natsconsumers, natskeyvalues, natsobjectstores, natsbalancers, natssystembalancers, natsclusterevacuations]
-              verbs: [get, list, watch, update, patch]
-            - apiGroups: [jetstream.nats.mikluko.io]
-              resources: [natsstreams/status, natsconsumers/status, natskeyvalues/status, natsobjectstores/status, natsbalancers/status, natssystembalancers/status, natsclusterevacuations/status]
-              verbs: [get, update, patch]
-            - apiGroups: [jetstream.nats.mikluko.io]
-              resources: [natsstreams/finalizers, natsconsumers/finalizers, natskeyvalues/finalizers, natsobjectstores/finalizers, natsbalancers/finalizers, natssystembalancers/finalizers, natsclusterevacuations/finalizers]
-              verbs: [update]
-            - apiGroups: [nats.mikluko.io]
-              resources: [natsconnections, natsreferencegrants]
-              verbs: [get, list, watch]
-            - apiGroups: [nats.mikluko.io]
-              resources: [natsconnections/status]
-              verbs: [get, update, patch]
             - apiGroups: [""]
               resources: [secrets]
               verbs: [get, list, watch]
-            - apiGroups: [""]
-              resources: [events]
-              verbs: [create, patch]
             - apiGroups: [events.k8s.io]
               resources: [events]
               verbs: [create, patch]
+            - apiGroups: [jetstream.nats.mikluko.io]
+              resources: [natsbalancers, natssystembalancers]
+              verbs: [get, list, watch]
+            - apiGroups: [jetstream.nats.mikluko.io]
+              resources: [natsbalancers/status, natsclusterevacuations/status, natsconsumers/status, natskeyvalues/status, natsobjectstores/status, natsstreams/status, natssystembalancers/status]
+              verbs: [patch]
+            - apiGroups: [jetstream.nats.mikluko.io]
+              resources: [natsclusterevacuations, natsconsumers, natskeyvalues, natsobjectstores, natsstreams]
+              verbs: [get, list, patch, watch]
+            - apiGroups: [nats.mikluko.io]
+              resources: [natsconnections]
+              verbs: [get, list, watch]
+            - apiGroups: [nats.mikluko.io]
+              resources: [natsconnections/status]
+              verbs: [patch]
+            - apiGroups: [nats.mikluko.io]
+              resources: [natsreferencegrants]
+              verbs: [list, watch]
   - it: binds its ClusterRole to its ServiceAccount
     documentSelector: {path: kind, value: ClusterRoleBinding}
     asserts:
@@ -63,7 +63,7 @@ tests:
       - equal:
           path: subjects
           value: [{kind: ServiceAccount, name: rel-jetstream-controller, namespace: nats}]
-  - it: grants every verb on Leases for leader election
+  - it: grants every verb on Leases, and writing Events, for leader election
     documentSelector: {path: kind, value: Role}
     asserts:
       - equal:
@@ -72,6 +72,9 @@ tests:
             - apiGroups: [coordination.k8s.io]
               resources: [leases]
               verbs: [get, list, watch, create, update, patch, delete]
+            - apiGroups: [""]
+              resources: [events]
+              verbs: [create, patch]
   - it: runs under its ServiceAccount with leader election on its API group
     documentSelector: {path: kind, value: Deployment}
     asserts:

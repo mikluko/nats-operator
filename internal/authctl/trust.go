@@ -29,7 +29,9 @@ type OperatorTrustReconciler struct {
 }
 
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsoperatortrusts,verbs=get;list;watch
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsoperatortrusts/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsoperatortrusts/status,verbs=update
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
 
 // Reconcile implements reconcile.Reconciler.
 func (r *OperatorTrustReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -99,7 +101,9 @@ type AccountTrustReconciler struct {
 }
 
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsaccounttrusts,verbs=get;list;watch
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsaccounttrusts/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsaccounttrusts/status,verbs=update
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts,verbs=get;list;watch
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
 
 // Reconcile implements reconcile.Reconciler.
 func (r *AccountTrustReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {

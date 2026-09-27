@@ -54,6 +54,11 @@ var immutableConsumerKeys = []string{
 	"ack_policy", "replay_policy", "idle_heartbeat", "flow_control", "max_waiting",
 }
 
+// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsconsumers,verbs=get;list;watch;patch
+// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsconsumers/status,verbs=patch
+// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsstreams,verbs=get;list;watch
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
+
 // ConsumerReconciler keeps NatsConsumers' consumers at their specs under
 // their lifecycle policies. A consumer with streamRef waits for that
 // NatsStream to be Ready and, without connectionRef, uses its connection.

@@ -74,6 +74,9 @@ func newScheme() (*runtime.Scheme, error) {
 	return scheme, nil
 }
 
+// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+
 // setup registers the cluster controller's instruments and adds the
 // connection pool and the NatsCluster reconciler to mgr.
 func setup(ctx context.Context, mgr ctrl.Manager) error {

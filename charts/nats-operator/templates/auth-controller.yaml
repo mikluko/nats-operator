@@ -1,27 +1,7 @@
 {{- if .Values.auth.enabled }}
-{{- $rules := `
-- apiGroups: [auth.nats.mikluko.io]
-  resources: [natsoperators, natssystemaccounts, natsaccounts, natsusers]
-  verbs: [get, list, watch, update, patch]
-- apiGroups: [auth.nats.mikluko.io]
-  resources: [natsoperators/status, natssystemaccounts/status, natsaccounts/status, natsusers/status]
-  verbs: [get, update, patch]
-- apiGroups: [auth.nats.mikluko.io]
-  resources: [natsoperators/finalizers, natssystemaccounts/finalizers, natsaccounts/finalizers, natsusers/finalizers]
-  verbs: [update]
-- apiGroups: [nats.mikluko.io]
-  resources: [natsoperatortrusts, natsaccounttrusts, natsconnections, natsreferencegrants]
-  verbs: [get, list, watch]
-- apiGroups: [nats.mikluko.io]
-  resources: [natsoperatortrusts/status, natsaccounttrusts/status]
-  verbs: [get, update, patch]
-- apiGroups: [""]
-  resources: [secrets]
-  verbs: [get, list, watch, create, update, patch, delete]
-` }}
 {{- $args := list }}
 {{- with .Values.auth.systemConnection }}
 {{- $args = append $args (printf "--system-connection=%s" .) }}
 {{- end }}
-{{- include "nats-operator.controller" (dict "root" . "name" "auth-controller" "group" "auth.nats.mikluko.io" "values" .Values.auth "rules" (trim $rules) "args" $args) }}
+{{- include "nats-operator.controller" (dict "root" . "name" "auth-controller" "group" "auth.nats.mikluko.io" "values" .Values.auth "args" $args) }}
 {{- end }}

@@ -22,6 +22,10 @@ const KeyValueKind = "NatsKeyValue"
 // kept in exists and is not a key-value bucket.
 const ReasonNotABucket = "NotABucket"
 
+// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natskeyvalues,verbs=get;list;watch;patch
+// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natskeyvalues/status,verbs=patch
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
+
 // KeyValueReconciler keeps NatsKeyValues' buckets at their specs through
 // nats.go's key-value manager, under their lifecycle policies. The marker
 // is in the bucket's stream, KV_<bucket>, and drift is judged on the

@@ -55,6 +55,11 @@ const (
 	ReasonDisjoint = "PoolsDisjoint"
 )
 
+// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsbalancers,verbs=get;list;watch
+// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsbalancers/status,verbs=patch
+// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsstreams;natskeyvalues;natsobjectstores;natssystembalancers;natsclusterevacuations,verbs=list;watch
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
+
 // BalancerReconciler runs each NatsBalancer's passes over the NATS cluster
 // its NatsConnection reaches, as a user of the account it balances: its
 // streams split into the declared pools and the default pool, one move per

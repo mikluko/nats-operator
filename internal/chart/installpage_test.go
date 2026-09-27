@@ -63,7 +63,7 @@ func TestInstallPage_Values(t *testing.T) {
 }
 
 // TestInstallPage_RBAC pins that the install page's RBAC tables are each
-// controller's ClusterRole as its helm-unittest suite fixes it, exactly.
+// controller's generated ClusterRole, exactly.
 func TestInstallPage_RBAC(t *testing.T) {
 	headings := map[string]string{
 		"Cluster controller":   "cluster",
@@ -88,7 +88,7 @@ func TestInstallPage_RBAC(t *testing.T) {
 	require.NotNil(t, common)
 
 	for _, c := range controllers {
-		require.Equal(t, clusterRoleFixture(t, c), merge(page[c], common), c)
+		require.Equal(t, generatedRole(t, c), merge(page[c], common), c)
 	}
 }
 

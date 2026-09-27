@@ -16,6 +16,9 @@ import (
 
 const chartDir = "../../charts/nats-operator"
 
+// rbacDir holds each controller's ClusterRole as controller-gen generates it.
+const rbacDir = "../../config/rbac"
+
 // rulesTest is the name of the test in each controller's helm-unittest suite
 // whose equal assertion is that controller's ClusterRole rules, exactly.
 const rulesTest = "grants exactly its ClusterRole rules"
@@ -33,13 +36,27 @@ var ownGroups = map[string]string{
 // grants maps "group/resource" to the verbs granted on it.
 type grants map[string][]string
 
-// TestChartRBAC_Fixtures pins that no controller's ClusterRole, as its
-// helm-unittest suite fixes it, grants on another controller's API group or
-// names a resource of the chart's API groups that no CRD in crds/ defines.
-func TestChartRBAC_Fixtures(t *testing.T) {
+// TestChartRBAC_Generated pins that each controller's role in the chart's
+// files/rbac is config/rbac/<controller>/role.yaml byte for byte, and that its
+// helm-unittest suite asserts that role's rules exactly.
+func TestChartRBAC_Generated(t *testing.T) {
+	for _, c := range controllers {
+		want, err := os.ReadFile(filepath.Join(rbacDir, c+"-controller", "role.yaml"))
+		require.NoError(t, err)
+		got, err := os.ReadFile(filepath.Join(chartDir, "files", "rbac", c+"-controller.yaml"))
+		require.NoError(t, err)
+		require.Equal(t, string(want), string(got), "%s: run just chart-rbac", c)
+		require.Equal(t, generatedRole(t, c), clusterRoleFixture(t, c), c)
+	}
+}
+
+// TestChartRBAC_Groups pins that no controller's generated ClusterRole grants
+// on another controller's API group or names a resource of the chart's API
+// groups that no CRD in crds/ defines.
+func TestChartRBAC_Groups(t *testing.T) {
 	plurals := crdPlurals(t)
 	for _, c := range controllers {
-		for key := range clusterRoleFixture(t, c) {
+		for key := range generatedRole(t, c) {
 			group, resource, _ := strings.Cut(key, "/")
 			for other, own := range ownGroups {
 				require.False(t, other != c && group == own, "%s holds %s", c, key)
@@ -50,6 +67,18 @@ func TestChartRBAC_Fixtures(t *testing.T) {
 			}
 		}
 	}
+}
+
+// generatedRole returns controller c's ClusterRole rules as controller-gen
+// writes them to config/rbac.
+func generatedRole(t *testing.T, c string) grants {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(rbacDir, c+"-controller", "role.yaml"))
+	require.NoError(t, err)
+	var role rbacv1.ClusterRole
+	require.NoError(t, yaml.Unmarshal(b, &role))
+	require.NotEmpty(t, role.Rules, c)
+	return flatten(t, role.Rules)
 }
 
 // clusterRoleFixture returns controller c's ClusterRole rules as the rulesTest

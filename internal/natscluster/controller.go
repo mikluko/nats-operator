@@ -92,15 +92,17 @@ type Reconciler struct {
 	Recorder events.EventRecorder
 }
 
-// +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters,verbs=get;list;watch;patch
+// +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters/status,verbs=patch
 // +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters/finalizers,verbs=update
-// +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=services;configmaps;secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=services;secrets,verbs=get;list;watch;create;update;delete
 // +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;delete
-// +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsoperatortrusts;natsreferencegrants,verbs=get;list;watch
+// +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update
+// +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;create;update;delete
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsoperatortrusts,verbs=get;list;watch
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
 
 // TrustField is the field index SetupWithManager registers on NatsClusters:
 // the namespace/name of the NatsOperatorTrust auth.trustRef names.

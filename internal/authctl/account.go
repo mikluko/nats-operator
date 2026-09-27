@@ -75,11 +75,13 @@ type AccountReconciler struct {
 // records the deletion.
 const AccountFinalizer = "auth.nats.mikluko.io/delete"
 
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts,verbs=get;list;watch;update;patch
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts,verbs=get;list;watch;update
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts/status,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts/finalizers,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=get;list;watch
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=list;watch
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create
 
 // Reconcile implements reconcile.Reconciler.
 func (r *AccountReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {

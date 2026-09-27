@@ -103,51 +103,53 @@ The flags below are the binaries' own. The chart sets only `--system-connection`
 
 ## RBAC
 
-Each controller's ClusterRole is named `<release>-<controller>`, for example `nats-operator-cluster-controller`, and is bound to the ServiceAccount of the same name in the release namespace. No controller can write another controller's API group. While `leaderElection.enabled` is on, each also gets the Role `<release>-<controller>-leader-election` on `coordination.k8s.io` `leases` in the release namespace, with every verb.
+Each controller's ClusterRole is named `<release>-<controller>`, for example `nats-operator-cluster-controller`, and is bound to the ServiceAccount of the same name in the release namespace. No controller can write another controller's API group. While `leaderElection.enabled` is on, each also gets the Role `<release>-<controller>-leader-election` in the release namespace: every verb on `coordination.k8s.io` `leases`, and `create` and `patch` on `""` `events`.
 
 ### Every controller
 
 | API group | Resources | Verbs |
 |---|---|---|
-| `""` | `events` | `create`, `patch` |
 | `events.k8s.io` | `events` | `create`, `patch` |
 
 ### Cluster controller
 
 | API group | Resources | Verbs |
 |---|---|---|
-| `cluster.nats.mikluko.io` | `natsclusters` | `get`, `list`, `watch`, `update`, `patch` |
-| `cluster.nats.mikluko.io` | `natsclusters/status` | `get`, `update`, `patch` |
-| `cluster.nats.mikluko.io` | `natsclusters/finalizers` | `update` |
-| `nats.mikluko.io` | `natsoperatortrusts`, `natsaccounttrusts`, `natsconnections`, `natsreferencegrants` | `get`, `list`, `watch` |
-| `apps` | `statefulsets` | `get`, `list`, `watch`, `create`, `update`, `patch`, `delete` |
-| `""` | `configmaps`, `services`, `secrets` | `get`, `list`, `watch`, `create`, `update`, `patch`, `delete` |
-| `policy` | `poddisruptionbudgets` | `get`, `list`, `watch`, `create`, `update`, `patch`, `delete` |
-| `cert-manager.io` | `certificates` | `get`, `list`, `watch`, `create`, `update`, `patch`, `delete` |
-| `""` | `pods` | `get`, `list`, `watch` |
+| `""` | `configmaps` | `get`, `list`, `watch`, `create`, `update`, `patch`, `delete` |
 | `""` | `persistentvolumeclaims` | `get`, `list`, `watch`, `delete` |
+| `""` | `secrets`, `services` | `get`, `list`, `watch`, `create`, `update`, `delete` |
+| `apps` | `statefulsets` | `list`, `watch`, `create`, `update`, `patch`, `delete` |
+| `cert-manager.io` | `certificates` | `get`, `create`, `update`, `delete` |
+| `cluster.nats.mikluko.io` | `natsclusters` | `get`, `list`, `watch`, `patch` |
+| `cluster.nats.mikluko.io` | `natsclusters/finalizers` | `update` |
+| `cluster.nats.mikluko.io` | `natsclusters/status` | `patch` |
+| `nats.mikluko.io` | `natsaccounttrusts`, `natsconnections`, `natsoperatortrusts` | `get`, `list`, `watch` |
+| `nats.mikluko.io` | `natsreferencegrants` | `list`, `watch` |
+| `policy` | `poddisruptionbudgets` | `get`, `list`, `watch`, `create`, `update` |
 
 ### Auth controller
 
 | API group | Resources | Verbs |
 |---|---|---|
-| `auth.nats.mikluko.io` | `natsoperators`, `natssystemaccounts`, `natsaccounts`, `natsusers` | `get`, `list`, `watch`, `update`, `patch` |
-| `auth.nats.mikluko.io` | `natsoperators/status`, `natssystemaccounts/status`, `natsaccounts/status`, `natsusers/status` | `get`, `update`, `patch` |
-| `auth.nats.mikluko.io` | `natsoperators/finalizers`, `natssystemaccounts/finalizers`, `natsaccounts/finalizers`, `natsusers/finalizers` | `update` |
-| `nats.mikluko.io` | `natsoperatortrusts`, `natsaccounttrusts`, `natsconnections`, `natsreferencegrants` | `get`, `list`, `watch` |
-| `nats.mikluko.io` | `natsoperatortrusts/status`, `natsaccounttrusts/status` | `get`, `update`, `patch` |
-| `""` | `secrets` | `get`, `list`, `watch`, `create`, `update`, `patch`, `delete` |
+| `""` | `secrets` | `get`, `list`, `watch`, `create`, `update`, `delete` |
+| `auth.nats.mikluko.io` | `natsaccounts`, `natsusers` | `get`, `list`, `watch`, `update` |
+| `auth.nats.mikluko.io` | `natsaccounts/finalizers`, `natsaccounts/status`, `natsoperators/finalizers`, `natsoperators/status`, `natssystemaccounts/finalizers`, `natssystemaccounts/status`, `natsusers/finalizers`, `natsusers/status` | `update` |
+| `auth.nats.mikluko.io` | `natsoperators`, `natssystemaccounts` | `get`, `list`, `watch` |
+| `nats.mikluko.io` | `natsaccounttrusts`, `natsconnections`, `natsoperatortrusts` | `get`, `list`, `watch` |
+| `nats.mikluko.io` | `natsaccounttrusts/status`, `natsoperatortrusts/status` | `update` |
+| `nats.mikluko.io` | `natsreferencegrants` | `list`, `watch` |
 
 ### JetStream controller
 
 | API group | Resources | Verbs |
 |---|---|---|
-| `jetstream.nats.mikluko.io` | `natsstreams`, `natsconsumers`, `natskeyvalues`, `natsobjectstores`, `natsbalancers`, `natssystembalancers`, `natsclusterevacuations` | `get`, `list`, `watch`, `update`, `patch` |
-| `jetstream.nats.mikluko.io` | `natsstreams/status`, `natsconsumers/status`, `natskeyvalues/status`, `natsobjectstores/status`, `natsbalancers/status`, `natssystembalancers/status`, `natsclusterevacuations/status` | `get`, `update`, `patch` |
-| `jetstream.nats.mikluko.io` | `natsstreams/finalizers`, `natsconsumers/finalizers`, `natskeyvalues/finalizers`, `natsobjectstores/finalizers`, `natsbalancers/finalizers`, `natssystembalancers/finalizers`, `natsclusterevacuations/finalizers` | `update` |
-| `nats.mikluko.io` | `natsconnections`, `natsreferencegrants` | `get`, `list`, `watch` |
-| `nats.mikluko.io` | `natsconnections/status` | `get`, `update`, `patch` |
 | `""` | `secrets` | `get`, `list`, `watch` |
+| `jetstream.nats.mikluko.io` | `natsbalancers`, `natssystembalancers` | `get`, `list`, `watch` |
+| `jetstream.nats.mikluko.io` | `natsbalancers/status`, `natsclusterevacuations/status`, `natsconsumers/status`, `natskeyvalues/status`, `natsobjectstores/status`, `natsstreams/status`, `natssystembalancers/status` | `patch` |
+| `jetstream.nats.mikluko.io` | `natsclusterevacuations`, `natsconsumers`, `natskeyvalues`, `natsobjectstores`, `natsstreams` | `get`, `list`, `watch`, `patch` |
+| `nats.mikluko.io` | `natsconnections` | `get`, `list`, `watch` |
+| `nats.mikluko.io` | `natsconnections/status` | `patch` |
+| `nats.mikluko.io` | `natsreferencegrants` | `list`, `watch` |
 
 ## Upgrade
 

@@ -17,6 +17,10 @@ import (
 // ObjectStoreKind is the kind a NatsObjectStore is referred to by.
 const ObjectStoreKind = "NatsObjectStore"
 
+// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsobjectstores,verbs=get;list;watch;patch
+// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsobjectstores/status,verbs=patch
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
+
 // ObjectStoreReconciler keeps NatsObjectStores' object stores at their
 // specs through nats.go's object store manager, under their lifecycle
 // policies. The marker is in the store's stream, OBJ_<bucket>, and drift is

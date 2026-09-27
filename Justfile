@@ -39,16 +39,29 @@ tidy:
     go mod tidy
 
 # controller-gen from the tool directive in go.mod: deep-copy methods for
-# every api/ package and CRDs into config/crd.
+# every api/ package, CRDs into config/crd, and each controller's ClusterRole
+# into config/rbac/<controller> from the markers hack/rbac names.
 generate:
     go tool controller-gen object paths=./api/...
     go tool controller-gen crd paths=./api/... output:crd:artifacts:config=config/crd
+    go run ./hack/rbac
 
 # The chart's crds/ is a copy of config/crd.
 chart-crds:
     rm -f charts/nats-operator/crds/*.yaml
     mkdir -p charts/nats-operator/crds
     cp config/crd/*.yaml charts/nats-operator/crds/
+
+# The chart's files/rbac/<controller>.yaml is a copy of
+# config/rbac/<controller>/role.yaml.
+chart-rbac:
+    #!/usr/bin/env sh
+    set -eu
+    rm -f charts/nats-operator/files/rbac/*.yaml
+    mkdir -p charts/nats-operator/files/rbac
+    for c in {{ controllers }}; do
+        cp "config/rbac/$c/role.yaml" "charts/nats-operator/files/rbac/$c.yaml"
+    done
 
 # helm lint under the defaults and each chart-testing values file, a lint that
 # must fail on a misspelled key, and the chart's helm-unittest suites.
@@ -86,7 +99,7 @@ telemetry-docs:
 
 # Fails when generated files, tracked or not, are stale relative to their
 # sources.
-verify: generate chart-crds api-docs perm-docs telemetry-docs
+verify: generate chart-crds chart-rbac api-docs perm-docs telemetry-docs
     git diff --exit-code -- api config charts docs/content/docs/reference
     test -z "$(git status --porcelain -- api config charts docs/content/docs/reference)"
 

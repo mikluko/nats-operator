@@ -79,6 +79,11 @@ const (
 	DefaultPendingPoll = 5 * time.Second
 )
 
+// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natssystembalancers,verbs=get;list;watch
+// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natssystembalancers/status,verbs=patch
+// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsclusterevacuations,verbs=list;watch
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
+
 // SystemBalancerReconciler runs each NatsSystemBalancer's passes over the
 // NATS cluster its NatsConnection reaches, which must be as a user of the
 // system account: one move per interval, none while the NATS cluster is not

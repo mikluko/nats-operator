@@ -30,30 +30,30 @@ tests:
       - equal:
           path: rules
           value:
-            - apiGroups: [auth.nats.mikluko.io]
-              resources: [natsoperators, natssystemaccounts, natsaccounts, natsusers]
-              verbs: [get, list, watch, update, patch]
-            - apiGroups: [auth.nats.mikluko.io]
-              resources: [natsoperators/status, natssystemaccounts/status, natsaccounts/status, natsusers/status]
-              verbs: [get, update, patch]
-            - apiGroups: [auth.nats.mikluko.io]
-              resources: [natsoperators/finalizers, natssystemaccounts/finalizers, natsaccounts/finalizers, natsusers/finalizers]
-              verbs: [update]
-            - apiGroups: [nats.mikluko.io]
-              resources: [natsoperatortrusts, natsaccounttrusts, natsconnections, natsreferencegrants]
-              verbs: [get, list, watch]
-            - apiGroups: [nats.mikluko.io]
-              resources: [natsoperatortrusts/status, natsaccounttrusts/status]
-              verbs: [get, update, patch]
             - apiGroups: [""]
               resources: [secrets]
-              verbs: [get, list, watch, create, update, patch, delete]
-            - apiGroups: [""]
-              resources: [events]
-              verbs: [create, patch]
+              verbs: [create, delete, get, list, update, watch]
+            - apiGroups: [auth.nats.mikluko.io]
+              resources: [natsaccounts, natsusers]
+              verbs: [get, list, update, watch]
+            - apiGroups: [auth.nats.mikluko.io]
+              resources: [natsaccounts/finalizers, natsaccounts/status, natsoperators/finalizers, natsoperators/status, natssystemaccounts/finalizers, natssystemaccounts/status, natsusers/finalizers, natsusers/status]
+              verbs: [update]
+            - apiGroups: [auth.nats.mikluko.io]
+              resources: [natsoperators, natssystemaccounts]
+              verbs: [get, list, watch]
             - apiGroups: [events.k8s.io]
               resources: [events]
               verbs: [create, patch]
+            - apiGroups: [nats.mikluko.io]
+              resources: [natsaccounttrusts, natsconnections, natsoperatortrusts]
+              verbs: [get, list, watch]
+            - apiGroups: [nats.mikluko.io]
+              resources: [natsaccounttrusts/status, natsoperatortrusts/status]
+              verbs: [update]
+            - apiGroups: [nats.mikluko.io]
+              resources: [natsreferencegrants]
+              verbs: [list, watch]
   - it: binds its ClusterRole to its ServiceAccount
     documentSelector: {path: kind, value: ClusterRoleBinding}
     asserts:
@@ -63,7 +63,7 @@ tests:
       - equal:
           path: subjects
           value: [{kind: ServiceAccount, name: rel-auth-controller, namespace: nats}]
-  - it: grants every verb on Leases for leader election
+  - it: grants every verb on Leases, and writing Events, for leader election
     documentSelector: {path: kind, value: Role}
     asserts:
       - equal:
@@ -72,6 +72,9 @@ tests:
             - apiGroups: [coordination.k8s.io]
               resources: [leases]
               verbs: [get, list, watch, create, update, patch, delete]
+            - apiGroups: [""]
+              resources: [events]
+              verbs: [create, patch]
   - it: runs under its ServiceAccount with leader election on its API group
     documentSelector: {path: kind, value: Deployment}
     asserts:

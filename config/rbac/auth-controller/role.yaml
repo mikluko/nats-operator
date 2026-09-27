@@ -1,0 +1,80 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: auth-controller
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - auth.nats.mikluko.io
+  resources:
+  - natsaccounts
+  - natsusers
+  verbs:
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - auth.nats.mikluko.io
+  resources:
+  - natsaccounts/finalizers
+  - natsaccounts/status
+  - natsoperators/finalizers
+  - natsoperators/status
+  - natssystemaccounts/finalizers
+  - natssystemaccounts/status
+  - natsusers/finalizers
+  - natsusers/status
+  verbs:
+  - update
+- apiGroups:
+  - auth.nats.mikluko.io
+  resources:
+  - natsoperators
+  - natssystemaccounts
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - nats.mikluko.io
+  resources:
+  - natsaccounttrusts
+  - natsconnections
+  - natsoperatortrusts
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - nats.mikluko.io
+  resources:
+  - natsaccounttrusts/status
+  - natsoperatortrusts/status
+  verbs:
+  - update
+- apiGroups:
+  - nats.mikluko.io
+  resources:
+  - natsreferencegrants
+  verbs:
+  - list
+  - watch

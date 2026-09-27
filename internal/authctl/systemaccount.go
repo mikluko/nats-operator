@@ -45,9 +45,12 @@ type SystemAccountReconciler struct {
 }
 
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natssystemaccounts,verbs=get;list;watch
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natssystemaccounts/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natssystemaccounts/status,verbs=update
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natssystemaccounts/finalizers,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=get;list;watch
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=list;watch
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create
 
 // Reconcile implements reconcile.Reconciler.
 func (r *SystemAccountReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {

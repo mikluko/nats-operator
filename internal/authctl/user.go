@@ -59,9 +59,11 @@ type UserReconciler struct {
 	Recorder events.EventRecorder
 }
 
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=get;list;watch;update;patch
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=get;list;watch;update
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers/status,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers/finalizers,verbs=update
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators;natssystemaccounts;natsaccounts,verbs=get;list;watch
+// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;delete
 
 // Reconcile implements reconcile.Reconciler.

@@ -30,42 +30,42 @@ tests:
       - equal:
           path: rules
           value:
+            - apiGroups: [""]
+              resources: [configmaps]
+              verbs: [create, delete, get, list, patch, update, watch]
+            - apiGroups: [""]
+              resources: [persistentvolumeclaims]
+              verbs: [delete, get, list, watch]
+            - apiGroups: [""]
+              resources: [secrets, services]
+              verbs: [create, delete, get, list, update, watch]
+            - apiGroups: [apps]
+              resources: [statefulsets]
+              verbs: [create, delete, list, patch, update, watch]
+            - apiGroups: [cert-manager.io]
+              resources: [certificates]
+              verbs: [create, delete, get, update]
             - apiGroups: [cluster.nats.mikluko.io]
               resources: [natsclusters]
-              verbs: [get, list, watch, update, patch]
-            - apiGroups: [cluster.nats.mikluko.io]
-              resources: [natsclusters/status]
-              verbs: [get, update, patch]
+              verbs: [get, list, patch, watch]
             - apiGroups: [cluster.nats.mikluko.io]
               resources: [natsclusters/finalizers]
               verbs: [update]
-            - apiGroups: [nats.mikluko.io]
-              resources: [natsoperatortrusts, natsaccounttrusts, natsconnections, natsreferencegrants]
-              verbs: [get, list, watch]
-            - apiGroups: [apps]
-              resources: [statefulsets]
-              verbs: [get, list, watch, create, update, patch, delete]
-            - apiGroups: [""]
-              resources: [configmaps, services, secrets]
-              verbs: [get, list, watch, create, update, patch, delete]
-            - apiGroups: [policy]
-              resources: [poddisruptionbudgets]
-              verbs: [get, list, watch, create, update, patch, delete]
-            - apiGroups: [cert-manager.io]
-              resources: [certificates]
-              verbs: [get, list, watch, create, update, patch, delete]
-            - apiGroups: [""]
-              resources: [pods]
-              verbs: [get, list, watch]
-            - apiGroups: [""]
-              resources: [persistentvolumeclaims]
-              verbs: [get, list, watch, delete]
-            - apiGroups: [""]
-              resources: [events]
-              verbs: [create, patch]
+            - apiGroups: [cluster.nats.mikluko.io]
+              resources: [natsclusters/status]
+              verbs: [patch]
             - apiGroups: [events.k8s.io]
               resources: [events]
               verbs: [create, patch]
+            - apiGroups: [nats.mikluko.io]
+              resources: [natsaccounttrusts, natsconnections, natsoperatortrusts]
+              verbs: [get, list, watch]
+            - apiGroups: [nats.mikluko.io]
+              resources: [natsreferencegrants]
+              verbs: [list, watch]
+            - apiGroups: [policy]
+              resources: [poddisruptionbudgets]
+              verbs: [create, get, list, update, watch]
   - it: binds its ClusterRole to its ServiceAccount
     documentSelector: {path: kind, value: ClusterRoleBinding}
     asserts:
@@ -75,7 +75,7 @@ tests:
       - equal:
           path: subjects
           value: [{kind: ServiceAccount, name: rel-cluster-controller, namespace: nats}]
-  - it: grants every verb on Leases for leader election
+  - it: grants every verb on Leases, and writing Events, for leader election
     documentSelector: {path: kind, value: Role}
     asserts:
       - equal:
@@ -84,6 +84,9 @@ tests:
             - apiGroups: [coordination.k8s.io]
               resources: [leases]
               verbs: [get, list, watch, create, update, patch, delete]
+            - apiGroups: [""]
+              resources: [events]
+              verbs: [create, patch]
   - it: runs under its ServiceAccount with leader election on its API group
     documentSelector: {path: kind, value: Deployment}
     asserts:
