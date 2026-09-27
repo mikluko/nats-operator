@@ -1,4 +1,4 @@
-package auth_test
+package authctl_test
 
 import (
 	"bufio"
@@ -39,7 +39,7 @@ import (
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/auth"
+	"github.com/mikluko/nats-operator/internal/authctl"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
@@ -67,12 +67,12 @@ func (r *recorder) Push(_ context.Context, operator types.NamespacedName, accoun
 	return nil
 }
 
-// Current implements auth.Distributor; a recorder reaches no server.
+// Current implements authctl.Distributor; a recorder reaches no server.
 func (r *recorder) Current(context.Context, types.NamespacedName, string) (authv1beta1.Distribution, error) {
-	return authv1beta1.Distribution{}, auth.ErrUnreachable
+	return authv1beta1.Distribution{}, authctl.ErrUnreachable
 }
 
-// Lookup implements auth.Distributor: the newest JWT for account pushed
+// Lookup implements authctl.Distributor: the newest JWT for account pushed
 // for operator, standing for the servers that would hold it.
 func (r *recorder) Lookup(_ context.Context, operator types.NamespacedName, account string) (string, error) {
 	r.mu.Lock()
@@ -88,7 +88,7 @@ func (r *recorder) Lookup(_ context.Context, operator types.NamespacedName, acco
 	return newest, nil
 }
 
-// Delete implements auth.Distributor.
+// Delete implements authctl.Distributor.
 func (r *recorder) Delete(context.Context, types.NamespacedName, string) error {
 	return nil
 }
@@ -166,8 +166,8 @@ func TestEnvtest(t *testing.T) {
 	})
 	require.NoError(t, err)
 	e := &env{ctx: t.Context(), d: &recorder{}, log: &eventLog{}}
-	sessions := auth.ConnSessions{Conn: e.systemConn, Wait: 500 * time.Millisecond}
-	require.NoError(t, auth.Setup(t.Context(), mgr, e.d, sessions, e.log))
+	sessions := authctl.ConnSessions{Resolvers: &authctl.Resolvers{Conn: e.systemConn, Wait: 500 * time.Millisecond}}
+	require.NoError(t, authctl.Setup(t.Context(), mgr, e.d, sessions, e.log))
 	done := make(chan error, 1)
 	go func() { done <- mgr.Start(t.Context()) }()
 	t.Cleanup(func() { require.NoError(t, <-done) })
@@ -217,14 +217,14 @@ func (e *env) testStory2(t *testing.T) {
 		e.get(ct, key("nats-system", "sys"), sys)
 		e.get(ct, key("nats-system", "orders"), orders)
 		e.get(ct, demo, trust)
-		ready(ct, op.Status.Conditions, op.Generation, auth.ReasonSigned)
-		ready(ct, sys.Status.Conditions, sys.Generation, auth.ReasonSigned)
-		ready(ct, orders.Status.Conditions, orders.Generation, auth.ReasonSigned)
-		ready(ct, trust.Status.Conditions, trust.Generation, auth.ReasonMirrored)
+		ready(ct, op.Status.Conditions, op.Generation, authctl.ReasonSigned)
+		ready(ct, sys.Status.Conditions, sys.Generation, authctl.ReasonSigned)
+		ready(ct, orders.Status.Conditions, orders.Generation, authctl.ReasonSigned)
+		ready(ct, trust.Status.Conditions, trust.Generation, authctl.ReasonMirrored)
 		if !assert.NotNil(ct, op.Status.SystemAccount) {
 			return
 		}
-		assert.Equal(ct, auth.JWTHash(op.Status.SystemAccount.JWT), sys.Status.JWTHash)
+		assert.Equal(ct, authctl.JWTHash(op.Status.SystemAccount.JWT), sys.Status.JWTHash)
 		assert.Equal(ct, op.Status.JWT, trust.Status.OperatorJWT)
 		assert.Equal(ct, op.Status.SystemAccount.JWT, trust.Status.SystemAccountJWT)
 	})
@@ -233,7 +233,7 @@ func (e *env) testStory2(t *testing.T) {
 	for _, name := range []string{"demo-operator-identity", "demo-operator-signing-1", "sys-system-account-identity", "orders-account-signing-1"} {
 		var sec corev1.Secret
 		require.NoError(t, e.c.Get(t.Context(), key("nats-system", name), &sec))
-		require.Contains(t, sec.Data, auth.SeedKey)
+		require.Contains(t, sec.Data, authctl.SeedKey)
 		require.NotNil(t, metav1.GetControllerOf(&sec), name)
 	}
 
@@ -258,7 +258,7 @@ func (e *env) testStory2(t *testing.T) {
 	require.Equal(t, orders.Status.PublicKey, ac.Subject)
 	require.Equal(t, op.Status.SigningKeys[0], ac.Issuer)
 	require.InDelta(t, (48 * time.Hour).Seconds(), float64(ac.Expires-ac.IssuedAt), 2)
-	require.Equal(t, auth.JWTHash(orders.Status.JWT), orders.Status.JWTHash)
+	require.Equal(t, authctl.JWTHash(orders.Status.JWT), orders.Status.JWTHash)
 	lim := ac.Limits
 	require.Equal(t, []int64{500, 10000, 1 << 20, 1 << 30, 50 << 30, 20, 200},
 		[]int64{lim.Conn, lim.Subs, lim.Payload, lim.MemoryStorage, lim.DiskStorage, lim.Streams, lim.Consumer})
@@ -281,12 +281,12 @@ func (e *env) testStory5(t *testing.T) {
 	e.eventually(t, func(ct *assert.CollectT) {
 		e.get(ct, key("nats-system", "monitoring"), monitoring)
 		e.get(ct, key("nats-system", "core"), core)
-		ready(ct, monitoring.Status.Conditions, monitoring.Generation, auth.ReasonSigned)
-		ready(ct, core.Status.Conditions, core.Generation, auth.ReasonSigned)
+		ready(ct, monitoring.Status.Conditions, monitoring.Generation, authctl.ReasonSigned)
+		ready(ct, core.Status.Conditions, core.Generation, authctl.ReasonSigned)
 		cond := meta.FindStatusCondition(core.Status.Conditions, grant.ConditionReferencesResolved)
 		if assert.NotNil(ct, cond) {
 			assert.Equal(ct, metav1.ConditionTrue, cond.Status)
-			assert.Equal(ct, auth.ReasonAllImportsResolved, cond.Reason)
+			assert.Equal(ct, authctl.ReasonAllImportsResolved, cond.Reason)
 		}
 	})
 	require.Equal(t, []authv1beta1.ImportStatus{
@@ -360,7 +360,7 @@ func (e *env) testServed(t *testing.T) {
 		acc := accounts[account]
 		var sec corev1.Secret
 		require.NoError(t, e.c.Get(t.Context(), key("nats-system", account+"-account-signing-1"), &sec))
-		sk, err := nkeys.FromSeed(sec.Data[auth.SeedKey])
+		sk, err := nkeys.FromSeed(sec.Data[authctl.SeedKey])
 		require.NoError(t, err)
 		u, err := nkeys.CreateUser()
 		require.NoError(t, err)
@@ -434,7 +434,7 @@ spec:
 		return func(ct *assert.CollectT) {
 			var acc authv1beta1.NatsAccount
 			e.get(ct, billing, &acc)
-			cond := meta.FindStatusCondition(acc.Status.Conditions, auth.ConditionReady)
+			cond := meta.FindStatusCondition(acc.Status.Conditions, authctl.ConditionReady)
 			if !assert.NotNil(ct, cond) {
 				return
 			}
@@ -454,14 +454,14 @@ spec:
 		g := o.(*natsv1beta1.NatsReferenceGrant)
 		g.Spec.To = append(g.Spec.To, natsv1beta1.ReferenceGrantTo{Group: "auth.nats.mikluko.io", Kind: "NatsAccount", Name: "monitoring"})
 	})
-	e.eventually(t, state(false, auth.ReasonImportsUnresolved, auth.ReasonImportsUnresolved, "check-results"))
+	e.eventually(t, state(false, authctl.ReasonImportsUnresolved, authctl.ReasonImportsUnresolved, "check-results"))
 
 	e.update(t, key("nats-system", "monitoring"), &authv1beta1.NatsAccount{}, func(o client.Object) {
 		acc := o.(*authv1beta1.NatsAccount)
 		acc.Spec.Exports[1].Importers = append(acc.Spec.Exports[1].Importers,
 			authv1beta1.AccountReference{Kind: authv1beta1.AccountKindAccount, ObjectReference: natsv1beta1.ObjectReference{Name: "billing", Namespace: "team-a"}})
 	})
-	e.eventually(t, state(true, auth.ReasonSigned, auth.ReasonAllImportsResolved, "check-results", "execute"))
+	e.eventually(t, state(true, authctl.ReasonSigned, authctl.ReasonAllImportsResolved, "check-results", "execute"))
 
 	e.update(t, key("nats-system", "team-a"), &natsv1beta1.NatsReferenceGrant{}, func(o client.Object) {
 		g := o.(*natsv1beta1.NatsReferenceGrant)
@@ -515,15 +515,15 @@ spec:
 	e.eventually(t, func(ct *assert.CollectT) {
 		e.get(ct, key("foreign", "exporter"), &exporter)
 		e.get(ct, key("foreign", "importer"), &importer)
-		ready(ct, exporter.Status.Conditions, exporter.Generation, auth.ReasonSigned)
-		cond := meta.FindStatusCondition(importer.Status.Conditions, auth.ConditionReady)
+		ready(ct, exporter.Status.Conditions, exporter.Generation, authctl.ReasonSigned)
+		cond := meta.FindStatusCondition(importer.Status.Conditions, authctl.ConditionReady)
 		if assert.NotNil(ct, cond) {
 			assert.Equal(ct, metav1.ConditionFalse, cond.Status)
-			assert.Equal(ct, auth.ReasonImportsUnresolved, cond.Reason)
+			assert.Equal(ct, authctl.ReasonImportsUnresolved, cond.Reason)
 		}
 		rr := meta.FindStatusCondition(importer.Status.Conditions, grant.ConditionReferencesResolved)
 		if assert.NotNil(ct, rr) {
-			assert.Equal(ct, auth.ReasonImportsUnresolved, rr.Reason)
+			assert.Equal(ct, authctl.ReasonImportsUnresolved, rr.Reason)
 			assert.Equal(ct, "exporter/events: NatsAccount foreign/exporter is signed by NatsOperator foreign/foreign, not nats-system/demo", rr.Message)
 		}
 		assert.NotEmpty(ct, importer.Status.JWT)
@@ -564,11 +564,11 @@ spec:
 		e.get(ct, key("nats-system", "telemetry"), acc)
 		e.get(ct, key("nats-system", "telemetry"), trust)
 		e.get(ct, key("team-a", "telemetry"), foreign)
-		ready(ct, acc.Status.Conditions, acc.Generation, auth.ReasonSigned)
-		ready(ct, trust.Status.Conditions, trust.Generation, auth.ReasonMirrored)
+		ready(ct, acc.Status.Conditions, acc.Generation, authctl.ReasonSigned)
+		ready(ct, trust.Status.Conditions, trust.Generation, authctl.ReasonMirrored)
 		assert.Equal(ct, acc.Status.PublicKey, trust.Status.PublicKey)
 		assert.Equal(ct, acc.Status.JWT, trust.Status.JWT)
-		cond := meta.FindStatusCondition(foreign.Status.Conditions, auth.ConditionReady)
+		cond := meta.FindStatusCondition(foreign.Status.Conditions, authctl.ConditionReady)
 		if assert.NotNil(ct, cond) {
 			assert.Equal(ct, grant.ReasonReferenceNotPermitted, cond.Reason)
 		}
@@ -617,7 +617,7 @@ spec:
 			var acc authv1beta1.NatsAccount
 			e.get(ct, rot, &op)
 			e.get(ct, key("rot", "app"), &acc)
-			ready(ct, op.Status.Conditions, op.Generation, auth.ReasonSigned)
+			ready(ct, op.Status.Conditions, op.Generation, authctl.ReasonSigned)
 			assert.Equal(ct, pubs["rot-id"], op.Status.PublicKey)
 			assert.Nil(ct, op.Status.SeedSecrets)
 			oc, err := jwt.DecodeOperatorClaims(op.Status.JWT)
@@ -629,7 +629,7 @@ spec:
 			}
 			assert.Equal(ct, want, issuerOf(ct, acc.Status.JWT))
 			assert.True(ct, e.d.pushed(rot, acc.Status.JWT))
-			retiring := meta.FindStatusCondition(op.Status.Conditions, auth.ConditionRetiringKeysInUse)
+			retiring := meta.FindStatusCondition(op.Status.Conditions, authctl.ConditionRetiringKeysInUse)
 			if assert.NotNil(ct, retiring) {
 				assert.Equal(ct, metav1.ConditionFalse, retiring.Status)
 			}
@@ -675,7 +675,7 @@ func (e *env) testOfflineIdentities(t *testing.T) {
 
 	var signingSeed corev1.Secret
 	require.NoError(t, e.c.Get(t.Context(), key("offline", "op-signing"), &signingSeed))
-	sk, err := nkeys.FromSeed(signingSeed.Data[auth.SeedKey])
+	sk, err := nkeys.FromSeed(signingSeed.Data[authctl.SeedKey])
 	require.NoError(t, err)
 	offlineJWT, err := jwtplane.SignOperator(jwtplane.Operator{
 		Name:          "offline",
@@ -740,7 +740,7 @@ spec:
 		e.get(ct, key("offline", "offline"), &op)
 		e.get(ct, key("offline", "stray"), &stray)
 		e.get(ct, key("offline", "app"), &acc)
-		ready(ct, op.Status.Conditions, op.Generation, auth.ReasonSigned)
+		ready(ct, op.Status.Conditions, op.Generation, authctl.ReasonSigned)
 		assert.Equal(ct, offlineJWT, op.Status.JWT, "the offline JWT is served unchanged")
 		assert.Equal(ct, opPub, op.Status.PublicKey)
 		assert.Nil(ct, op.Status.SeedSecrets)
@@ -748,16 +748,16 @@ spec:
 			assert.Equal(ct, sysPub, op.Status.SystemAccount.PublicKey)
 			assert.Equal(ct, opSigning, issuerOf(ct, op.Status.SystemAccount.JWT))
 		}
-		ready(ct, acc.Status.Conditions, acc.Generation, auth.ReasonSigned)
+		ready(ct, acc.Status.Conditions, acc.Generation, authctl.ReasonSigned)
 		assert.Equal(ct, accPub, acc.Status.PublicKey)
 		if c, err := jwt.DecodeAccountClaims(acc.Status.JWT); assert.NoError(ct, err) {
 			assert.Equal(ct, accPub, c.Subject)
 			assert.Equal(ct, []string{accSigning}, c.SigningKeys.Keys())
 			assert.Equal(ct, opSigning, c.Issuer)
 		}
-		cond := meta.FindStatusCondition(stray.Status.Conditions, auth.ConditionReady)
+		cond := meta.FindStatusCondition(stray.Status.Conditions, authctl.ConditionReady)
 		if assert.NotNil(ct, cond) {
-			assert.Equal(ct, auth.ReasonInvalidJWT, cond.Reason)
+			assert.Equal(ct, authctl.ReasonInvalidJWT, cond.Reason)
 		}
 	})
 	var secrets corev1.SecretList
@@ -819,10 +819,10 @@ spec:
 			e.get(ct, key("flip", idleName), &idleSys)
 			e.get(ct, key("flip", "js"), &acc)
 			e.get(ct, key("flip", "flip"), &trust)
-			ready(ct, liveSys.Status.Conditions, liveSys.Generation, auth.ReasonSigned)
-			cond := meta.FindStatusCondition(idleSys.Status.Conditions, auth.ConditionReady)
+			ready(ct, liveSys.Status.Conditions, liveSys.Generation, authctl.ReasonSigned)
+			cond := meta.FindStatusCondition(idleSys.Status.Conditions, authctl.ConditionReady)
 			if assert.NotNil(ct, cond) {
-				assert.Equal(ct, auth.ReasonNotReferenced, cond.Reason)
+				assert.Equal(ct, authctl.ReasonNotReferenced, cond.Reason)
 			}
 			assert.Empty(ct, idleSys.Status.JWTHash)
 			if !assert.NotNil(ct, op.Status.SystemAccount) {
@@ -899,7 +899,7 @@ func (e *env) apply(t *testing.T, manifest string) {
 	}
 }
 
-// seedSecret creates a Secret holding a new seed under auth.SeedKey and
+// seedSecret creates a Secret holding a new seed under authctl.SeedKey and
 // returns its public key.
 func (e *env) seedSecret(t *testing.T, namespace, name string, prefix nkeys.PrefixByte) string {
 	t.Helper()
@@ -911,14 +911,14 @@ func (e *env) seedSecret(t *testing.T, namespace, name string, prefix nkeys.Pref
 	require.NoError(t, err)
 	require.NoError(t, e.c.Create(t.Context(), &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
-		Data:       map[string][]byte{auth.SeedKey: seed},
+		Data:       map[string][]byte{authctl.SeedKey: seed},
 	}))
 	return pub
 }
 
 // ready asserts Ready=True with reason on conds, observed at gen.
 func ready(ct *assert.CollectT, conds []metav1.Condition, gen int64, reason string) {
-	cond := meta.FindStatusCondition(conds, auth.ConditionReady)
+	cond := meta.FindStatusCondition(conds, authctl.ConditionReady)
 	if !assert.NotNil(ct, cond) {
 		return
 	}

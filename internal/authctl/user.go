@@ -1,4 +1,4 @@
-package auth
+package authctl
 
 import (
 	"context"
@@ -24,6 +24,7 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"github.com/mikluko/nats-operator/internal/natsconn"
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
@@ -31,10 +32,6 @@ import (
 // revocation has reached every server, its connections are closed and its
 // creds Secret is removed.
 const UserFinalizer = "auth.nats.mikluko.io/revoke"
-
-// DefaultCredentialsKey is the key a creds Secret holds the creds file under
-// unless credentials.secretKeyRef names another.
-const DefaultCredentialsKey = "user.creds"
 
 // kickInterval is how long a deleted user waits between kick passes that
 // still found connections.
@@ -185,7 +182,7 @@ func userClaims(u *authv1beta1.NatsUser, pub string) jwtplane.User {
 
 // credsSecret returns the key of u's creds Secret and the key within it.
 func credsSecret(u *authv1beta1.NatsUser) (types.NamespacedName, string) {
-	name, key := u.Name+"-creds", DefaultCredentialsKey
+	name, key := u.Name+"-creds", natsconn.DefaultCredentialsKey
 	if c := u.Spec.Credentials; c != nil {
 		name = c.SecretKeyRef.Name
 		if c.SecretKeyRef.Key != "" {

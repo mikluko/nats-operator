@@ -34,7 +34,7 @@ func (d *Dialer) Connection(ctx context.Context, nc *natsv1beta1.NatsConnection)
 	if err != nil {
 		return nil, err
 	}
-	return d.Pool.Get(ConnectionKey(client.ObjectKeyFromObject(nc)), ep)
+	return d.Pool.Get(ctx, ConnectionKey(client.ObjectKeyFromObject(nc)), ep)
 }
 
 // Reference returns the connection for the NatsConnection that from's ref

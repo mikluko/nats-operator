@@ -1,4 +1,4 @@
-package auth
+package authctl
 
 import (
 	"context"
@@ -66,7 +66,7 @@ func (s *SystemConnection) Conn(ctx context.Context, operator types.NamespacedNa
 		return nil, fmt.Errorf("%w: NatsConnection %s is a user of %s, NatsOperator %s's system account is %s",
 			ErrForeignConnection, s.Name, account, operator, sysPub)
 	}
-	return s.Pool.Get(natsconn.ConnectionKey(s.Name), ep)
+	return s.Pool.Get(ctx, natsconn.ConnectionKey(s.Name), ep)
 }
 
 // signedSystemAccount returns the public key of op's system account as its

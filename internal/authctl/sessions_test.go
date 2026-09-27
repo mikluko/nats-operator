@@ -1,4 +1,4 @@
-package auth_test
+package authctl_test
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/mikluko/nats-operator/internal/auth"
+	"github.com/mikluko/nats-operator/internal/authctl"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
 
@@ -137,13 +137,13 @@ func TestConnSessions_Kick(t *testing.T) {
 	bystander, _ := dial(t, srvs[1].ClientURL(), jwtplane.User{Name: "bystander"}, p.acc)
 
 	operator := types.NamespacedName{Namespace: "ns", Name: "op"}
-	s := auth.ConnSessions{
+	s := authctl.ConnSessions{Resolvers: &authctl.Resolvers{
 		Conn: func(_ context.Context, got types.NamespacedName) (*nats.Conn, error) {
 			require.Equal(t, operator, got)
 			return sysNC, nil
 		},
 		Wait: 500 * time.Millisecond,
-	}
+	}}
 	n, err := s.Kick(t.Context(), operator, p.sysPub, pub)
 	require.NoError(t, err)
 	require.Zero(t, n, "the account is filtered on as well as the user")
@@ -182,10 +182,10 @@ func TestConnSessions_KickNoRoster(t *testing.T) {
 	srv.Shutdown()
 	require.Eventually(t, sysNC.IsReconnecting, 5*time.Second, 20*time.Millisecond)
 
-	s := auth.ConnSessions{
+	s := authctl.ConnSessions{Resolvers: &authctl.Resolvers{
 		Conn: func(context.Context, types.NamespacedName) (*nats.Conn, error) { return sysNC, nil },
 		Wait: 200 * time.Millisecond,
-	}
+	}}
 	_, err = s.Kick(t.Context(), types.NamespacedName{Namespace: "ns", Name: "op"}, p.accPub, pub)
-	require.ErrorIs(t, err, auth.ErrUnreachable)
+	require.ErrorIs(t, err, authctl.ErrUnreachable)
 }

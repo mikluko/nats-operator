@@ -1,4 +1,4 @@
-package auth_test
+package authctl_test
 
 import (
 	"os"
@@ -28,7 +28,7 @@ import (
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/auth"
+	"github.com/mikluko/nats-operator/internal/authctl"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
@@ -62,11 +62,11 @@ func TestEnvtestDistribution(t *testing.T) {
 	})
 	require.NoError(t, err)
 	pool := natsconn.NewPool()
-	conn := &auth.SystemConnection{Reader: mgr.GetClient(), Pool: pool, Name: key("nats-system", "system")}
-	resolvers := &auth.Resolvers{Conn: conn.Conn, Wait: time.Second, Interval: 300 * time.Millisecond}
+	conn := &authctl.SystemConnection{Reader: mgr.GetClient(), Pool: pool, Name: key("nats-system", "system")}
+	resolvers := &authctl.Resolvers{Conn: conn.Conn, Wait: time.Second, Interval: 300 * time.Millisecond}
 	require.NoError(t, mgr.Add(pool))
 	require.NoError(t, mgr.Add(resolvers))
-	require.NoError(t, auth.Setup(t.Context(), mgr, resolvers, auth.ConnSessions{Conn: conn.Conn, Wait: 300 * time.Millisecond}, nil))
+	require.NoError(t, authctl.Setup(t.Context(), mgr, resolvers, authctl.ConnSessions{Resolvers: resolvers}, nil))
 	done := make(chan error, 1)
 	go func() { done <- mgr.Start(t.Context()) }()
 	t.Cleanup(func() { require.NoError(t, <-done) })
@@ -91,9 +91,9 @@ func TestEnvtestDistribution(t *testing.T) {
 	fresh := &authv1beta1.NatsAccount{}
 	e.eventually(t, func(ct *assert.CollectT) {
 		e.get(ct, key("nats-system", "orders"), fresh)
-		ready(ct, fresh.Status.Conditions, fresh.Generation, auth.ReasonSigned)
+		ready(ct, fresh.Status.Conditions, fresh.Generation, authctl.ReasonSigned)
 		assert.NotEmpty(ct, fresh.Status.JWT)
-		assert.True(ct, meta.IsStatusConditionTrue(fresh.Status.Conditions, auth.ConditionRevocationsUnrecovered))
+		assert.True(ct, meta.IsStatusConditionTrue(fresh.Status.Conditions, authctl.ConditionRevocationsUnrecovered))
 	})
 	require.Nil(t, lastPush(fresh.Status.Distribution), "never distributed: signed without a server to ask")
 	oc, err := jwt.DecodeOperatorClaims(op.Status.JWT)
@@ -155,8 +155,8 @@ spec:
 			e.get(ct, key("nats-system", "sys"), sys)
 			distributed(ct, orders.Status.Conditions, orders.Status.Distribution)
 			distributed(ct, sys.Status.Conditions, sys.Status.Distribution)
-			ready(ct, orders.Status.Conditions, orders.Generation, auth.ReasonDistributed)
-			assert.Nil(ct, meta.FindStatusCondition(orders.Status.Conditions, auth.ConditionRevocationsUnrecovered), "the servers answered once up")
+			ready(ct, orders.Status.Conditions, orders.Generation, authctl.ReasonDistributed)
+			assert.Nil(ct, meta.FindStatusCondition(orders.Status.Conditions, authctl.ConditionRevocationsUnrecovered), "the servers answered once up")
 		})
 		for i := range cl.srvs {
 			require.Equal(t, orders.Status.JWT, cl.held(i, orders.Status.PublicKey), "server %d", i)
@@ -267,7 +267,7 @@ spec:
 				assert.True(ct, revokesKey(op.Status.SystemAccount.JWT, systemUser), "the system account JWT signed after both were lost revokes the user")
 			}
 			assert.True(ct, slices.ContainsFunc(sys.Status.Revocations, func(r authv1beta1.Revocation) bool { return r.PublicKey == systemUser }))
-			ready(ct, op.Status.Conditions, op.Generation, auth.ReasonSigned)
+			ready(ct, op.Status.Conditions, op.Generation, authctl.ReasonSigned)
 		})
 	})
 
@@ -276,7 +276,7 @@ spec:
 		for _, name := range []string{"orders", "forever"} {
 			var acc authv1beta1.NatsAccount
 			require.NoError(t, c.Get(t.Context(), key("nats-system", name), &acc))
-			require.Contains(t, acc.Finalizers, auth.AccountFinalizer)
+			require.Contains(t, acc.Finalizers, authctl.AccountFinalizer)
 			pubs[name] = acc.Status.PublicKey
 			require.NoError(t, c.Delete(t.Context(), &acc))
 		}
@@ -312,9 +312,9 @@ func loseSystemAccountStatus(t *testing.T, e *env) {
 	})
 	e.eventually(t, func(ct *assert.CollectT) {
 		e.get(ct, demo, op)
-		cond := meta.FindStatusCondition(op.Status.Conditions, auth.ConditionReady)
+		cond := meta.FindStatusCondition(op.Status.Conditions, authctl.ConditionReady)
 		if assert.NotNil(ct, cond) {
-			assert.Equal(ct, auth.ReasonNotFound, cond.Reason)
+			assert.Equal(ct, authctl.ReasonNotFound, cond.Reason)
 		}
 	})
 	sys := &authv1beta1.NatsSystemAccount{}
@@ -357,7 +357,7 @@ spec:
 	u := &authv1beta1.NatsUser{}
 	e.eventually(t, func(ct *assert.CollectT) {
 		e.get(ct, key("nats-system", name), u)
-		ready(ct, u.Status.Conditions, u.Generation, auth.ReasonSigned)
+		ready(ct, u.Status.Conditions, u.Generation, authctl.ReasonSigned)
 	})
 	require.NoError(t, e.c.Delete(t.Context(), u))
 	e.eventually(t, func(ct *assert.CollectT) {
@@ -377,7 +377,7 @@ func resignedLater(t *testing.T, e *env, accountJWT string) string {
 	var secrets corev1.SecretList
 	require.NoError(t, e.c.List(t.Context(), &secrets, client.InNamespace("nats-system")))
 	for _, s := range secrets.Items {
-		kp, err := nkeys.FromSeed(s.Data[auth.SeedKey])
+		kp, err := nkeys.FromSeed(s.Data[authctl.SeedKey])
 		if err != nil {
 			continue
 		}
@@ -413,10 +413,10 @@ func revokesKey(accountJWT, pub string) bool {
 // distributed asserts story 2's distribution status: every server holds
 // the current JWT.
 func distributed(ct *assert.CollectT, conds []metav1.Condition, d *authv1beta1.Distribution) {
-	cond := meta.FindStatusCondition(conds, auth.ConditionDistributed)
+	cond := meta.FindStatusCondition(conds, authctl.ConditionDistributed)
 	if assert.NotNil(ct, cond) {
 		assert.Equal(ct, metav1.ConditionTrue, cond.Status, cond.Message)
-		assert.Equal(ct, auth.ReasonAllServersCurrent, cond.Reason)
+		assert.Equal(ct, authctl.ReasonAllServersCurrent, cond.Reason)
 		assert.Equal(ct, "3 of 3 servers hold this JWT", cond.Message)
 	}
 	assert.Equal(ct, &authv1beta1.Distribution{Servers: 3, Current: 3, LastPushTime: lastPush(d)}, d)

@@ -1,4 +1,4 @@
-package auth_test
+package authctl_test
 
 import (
 	"testing"
@@ -14,7 +14,7 @@ import (
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/auth"
+	"github.com/mikluko/nats-operator/internal/authctl"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
@@ -59,12 +59,12 @@ func TestSystemConnection_Conn(t *testing.T) {
 			name:     "a user of another account",
 			operator: operatorWithSystemAccount(p.sysPub),
 			creds:    creds(p.acc),
-			wantErr:  auth.ErrForeignConnection,
+			wantErr:  authctl.ErrForeignConnection,
 		},
 		{
 			name:    "no such operator",
 			creds:   creds(p.sys),
-			wantErr: auth.ErrOperatorGone,
+			wantErr: authctl.ErrOperatorGone,
 		},
 	}
 	for _, tt := range tests {
@@ -91,7 +91,7 @@ func TestSystemConnection_Conn(t *testing.T) {
 			}
 			pool := natsconn.NewPool()
 			t.Cleanup(pool.Close)
-			conn := &auth.SystemConnection{
+			conn := &authctl.SystemConnection{
 				Reader: fake.NewClientBuilder().WithScheme(s).WithObjects(objs...).Build(),
 				Pool:   pool,
 				Name:   key("nats-system", "system"),

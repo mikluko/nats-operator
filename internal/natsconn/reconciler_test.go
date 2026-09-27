@@ -108,7 +108,7 @@ func TestReconcilerForgetsDeleted(t *testing.T) {
 	r := &Reconciler{Client: c, Pool: p}
 	_, err := r.Reconcile(t.Context(), reconcile.Request{NamespacedName: demo})
 	require.NoError(t, err)
-	conn, err := p.Get(ConnectionKey(demo), n.endpoint())
+	conn, err := p.Get(t.Context(), ConnectionKey(demo), n.endpoint())
 	require.NoError(t, err)
 
 	require.NoError(t, c.Delete(t.Context(), nc))
@@ -126,7 +126,7 @@ func TestReconcilerForgetsUnresolvable(t *testing.T) {
 	r := &Reconciler{Client: c, Pool: p}
 	_, err := r.Reconcile(t.Context(), reconcile.Request{NamespacedName: demo})
 	require.NoError(t, err)
-	conn, err := p.Get(ConnectionKey(demo), n.endpoint())
+	conn, err := p.Get(t.Context(), ConnectionKey(demo), n.endpoint())
 	require.NoError(t, err)
 
 	require.NoError(t, c.Delete(t.Context(), objs[1]))

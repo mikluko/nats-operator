@@ -1,4 +1,4 @@
-package auth
+package authctl
 
 import (
 	"context"
@@ -185,7 +185,7 @@ func (*lookupOnly) Current(context.Context, types.NamespacedName, string) (authv
 
 func (*lookupOnly) Delete(context.Context, types.NamespacedName, string) error { return nil }
 
-func TestSeededRevocations(t *testing.T) {
+func TestRecoverRevocations(t *testing.T) {
 	op := testKeys(t, nkeys.PrefixByteOperator, false)
 	acc := testKeys(t, nkeys.PrefixByteAccount, false)
 	accPub := testPub(t, acc.Identity)
@@ -278,7 +278,7 @@ func TestSeededRevocations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			slices.SortFunc(tt.want, func(a, b authv1beta1.Revocation) int { return strings.Compare(a.PublicKey, b.PublicKey) })
-			got, err := seededRevocations(t.Context(), tt.d, types.NamespacedName{Name: "op"}, tt.recorded, tt.prev, accPub, []string{keyA}, tt.users, tt.unrecovered, tt.distributed)
+			got, err := recoverRevocations(t.Context(), tt.d, types.NamespacedName{Name: "op"}, tt.recorded, tt.prev, accPub, []string{keyA}, tt.users, tt.unrecovered, tt.distributed)
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
 				return
@@ -295,19 +295,19 @@ func TestSeededRevocations(t *testing.T) {
 	}
 
 	t.Run("no Distributor: nothing to ask", func(t *testing.T) {
-		got, err := seededRevocations(t.Context(), nil, types.NamespacedName{Name: "op"}, nil, "", accPub, []string{keyA}, nil, true, true)
+		got, err := recoverRevocations(t.Context(), nil, types.NamespacedName{Name: "op"}, nil, "", accPub, []string{keyA}, nil, true, true)
 		require.NoError(t, err)
-		require.Equal(t, seed{revocations: []authv1beta1.Revocation{}}, got)
+		require.Equal(t, recoveredRevocations{revocations: []authv1beta1.Revocation{}}, got)
 	})
 }
 
-func TestRecordSeed(t *testing.T) {
+func TestRecordRecovery(t *testing.T) {
 	var conds []metav1.Condition
-	recordSeed(&conds, 1, seed{unasked: fmt.Errorf("%w: down", ErrUnreachable)})
+	recordRecovery(&conds, 1, recoveredRevocations{unasked: fmt.Errorf("%w: down", ErrUnreachable)})
 	require.True(t, unrecovered(conds))
-	recordSeed(&conds, 1, seed{})
+	recordRecovery(&conds, 1, recoveredRevocations{})
 	require.True(t, unrecovered(conds), "a signing that did not ask leaves it")
-	recordSeed(&conds, 1, seed{asked: true})
+	recordRecovery(&conds, 1, recoveredRevocations{asked: true})
 	require.Empty(t, conds)
 }
 

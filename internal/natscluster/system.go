@@ -81,7 +81,7 @@ func (s *SystemConnections) observer(ctx context.Context, nc *clusterv1beta1.Nat
 	if s.Servers != nil {
 		servers = s.Servers(nc)
 	}
-	conn, err := s.Pool.Get(natsconn.Key{Kind: PoolKind, NamespacedName: client.ObjectKeyFromObject(nc)}, natsconn.Endpoint{Servers: servers, Creds: creds})
+	conn, err := s.Pool.Get(ctx, natsconn.Key{Kind: PoolKind, NamespacedName: client.ObjectKeyFromObject(nc)}, natsconn.Endpoint{Servers: servers, Creds: creds})
 	if err != nil {
 		return nil, err
 	}

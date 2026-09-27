@@ -32,8 +32,9 @@ type Pool struct {
 	closed bool
 }
 
+// slot is one Key's connection; sem, holding one token, guards the rest.
 type slot struct {
-	mu          sync.Mutex
+	sem         chan struct{}
 	conn        *nats.Conn
 	fingerprint [sha256.Size]byte
 	gone        bool
@@ -70,21 +71,27 @@ func (p *Pool) OnChange(f func(Key)) {
 
 // Get returns key's connection to ep, dialing when there is none, when ep
 // differs from what it was dialed with, or when it has closed. A dial for
-// one key does not wait on a dial for another.
-func (p *Pool) Get(key Key, ep Endpoint) (*nats.Conn, error) {
+// one key does not wait on a dial for another. Waiting on a dial for the
+// same key, and dialing, end with ctx, returning its error; a dial ctx
+// abandons closes its connection once it arrives.
+func (p *Pool) Get(ctx context.Context, key Key, ep Endpoint) (*nats.Conn, error) {
 	fp := fingerprint(ep)
 	for {
 		s, err := p.slot(key)
 		if err != nil {
 			return nil, err
 		}
-		s.mu.Lock()
+		select {
+		case <-s.sem:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 		if s.gone {
-			s.mu.Unlock()
+			s.sem <- struct{}{}
 			continue
 		}
-		nc, err := s.get(ep, fp, p.dialOptions(key))
-		s.mu.Unlock()
+		nc, err := s.get(ctx, ep, fp, p.dialOptions(key))
+		s.sem <- struct{}{}
 		return nc, err
 	}
 }
@@ -97,19 +104,20 @@ func (p *Pool) slot(key Key) (*slot, error) {
 	}
 	s, ok := p.slots[key]
 	if !ok {
-		s = &slot{}
+		s = &slot{sem: make(chan struct{}, 1)}
+		s.sem <- struct{}{}
 		p.slots[key] = s
 	}
 	return s, nil
 }
 
-// get runs with s.mu held.
-func (s *slot) get(ep Endpoint, fp [sha256.Size]byte, opts []nats.Option) (*nats.Conn, error) {
+// get runs holding s.sem.
+func (s *slot) get(ctx context.Context, ep Endpoint, fp [sha256.Size]byte, opts []nats.Option) (*nats.Conn, error) {
 	if s.conn != nil && s.fingerprint == fp && !s.conn.IsClosed() {
 		return s.conn, nil
 	}
 	s.close()
-	nc, err := Dial(ep, opts...)
+	nc, err := dialContext(ctx, ep, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +125,7 @@ func (s *slot) get(ep Endpoint, fp [sha256.Size]byte, opts []nats.Option) (*nats
 	return nc, nil
 }
 
-// close runs with s.mu held.
+// close runs holding s.sem.
 func (s *slot) close() {
 	if s.conn != nil {
 		s.conn.Close()
@@ -152,10 +160,38 @@ func (p *Pool) Forget(key Key) {
 }
 
 func (s *slot) retire() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	<-s.sem
+	defer func() { s.sem <- struct{}{} }()
 	s.gone = true
 	s.close()
+}
+
+// dialContext is Dial, returning ctx's error once ctx ends first and
+// closing the connection that dial then makes.
+func dialContext(ctx context.Context, ep Endpoint, opts ...nats.Option) (*nats.Conn, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	type result struct {
+		nc  *nats.Conn
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		nc, err := Dial(ep, opts...)
+		done <- result{nc, err}
+	}()
+	select {
+	case r := <-done:
+		return r.nc, r.err
+	case <-ctx.Done():
+		go func() {
+			if r := <-done; r.nc != nil {
+				r.nc.Close()
+			}
+		}()
+		return nil, ctx.Err()
+	}
 }
 
 // Close closes every connection; Get fails with ErrPoolClosed afterwards.

@@ -1,4 +1,4 @@
-package auth
+package authctl
 
 import (
 	"context"
@@ -119,7 +119,10 @@ func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta
 	if unrecovered(op.Status.Conditions) {
 		return 0, nil
 	}
-	return distribute(ctx, r.Distributor, key, signed.JWT, accountDistribution{&st.Distribution, &st.Conditions, sys.Generation})
+	dist, distributed, again, err := distribute(ctx, r.Distributor, key, signed.JWT, st.Distribution)
+	st.Distribution = dist
+	recordDistribution(&st.Conditions, sys.Generation, distributed)
+	return again, err
 }
 
 // SetupWithManager registers the reconciler with mgr. The indexes Setup

@@ -30,12 +30,12 @@ Connects through the `NatsConnection` its `--system-connection` flag names, as a
 
 | Subject | Use | Code |
 |---|---|---|
-| `$SYS.REQ.SERVER.PING.STATSZ` | Lists the servers that should answer the requests below. | `internal/auth` |
-| `$SYS.REQ.CLAIMS.UPDATE` | Pushes an account JWT to every resolver. | `internal/auth` |
-| `$SYS.REQ.CLAIMS.DELETE` | Deletes accounts from every `Full` resolver. | `internal/auth` |
-| `$SYS.REQ.ACCOUNT.*.CLAIMS.LOOKUP` | Reads the JWT the resolvers hold for an account, by account public key. | `internal/auth` |
-| `$SYS.REQ.SERVER.PING.CONNZ` | Finds a revoked user's connections. | `internal/auth` |
-| `$SYS.REQ.SERVER.*.KICK` | Disconnects one of them, by server ID. | `internal/auth` |
+| `$SYS.REQ.SERVER.PING.STATSZ` | Lists the servers that should answer the requests below. | `internal/authctl` |
+| `$SYS.REQ.CLAIMS.UPDATE` | Pushes an account JWT to every resolver. | `internal/authctl` |
+| `$SYS.REQ.CLAIMS.DELETE` | Deletes accounts from every `Full` resolver. | `internal/authctl` |
+| `$SYS.REQ.ACCOUNT.*.CLAIMS.LOOKUP` | Reads the JWT the resolvers hold for an account, by account public key. | `internal/authctl` |
+| `$SYS.REQ.SERVER.PING.CONNZ` | Finds a revoked user's connections. | `internal/authctl` |
+| `$SYS.REQ.SERVER.*.KICK` | Disconnects one of them, by server ID. | `internal/authctl` |
 
 ## JetStream controller, as a system account user
 

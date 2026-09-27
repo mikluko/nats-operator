@@ -104,7 +104,7 @@ func (r *Reconciler) observe(ctx context.Context, nc *natsv1beta1.NatsConnection
 	case err != nil:
 		return metav1.Condition{}, err
 	}
-	conn, err := r.Pool.Get(key, ep)
+	conn, err := r.Pool.Get(ctx, key, ep)
 	switch {
 	case errors.Is(err, ErrInvalidCA), errors.Is(err, ErrInvalidCredentials):
 		r.Pool.Forget(key)

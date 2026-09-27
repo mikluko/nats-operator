@@ -2,6 +2,7 @@ package natsconn
 
 import (
 	"context"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -39,9 +40,9 @@ func TestPoolGet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			p := NewPool()
 			t.Cleanup(p.Close)
-			first, err := p.Get(testKey, ep)
+			first, err := p.Get(t.Context(), testKey, ep)
 			require.NoError(t, err)
-			second, err := p.Get(testKey, tt.second(ep))
+			second, err := p.Get(t.Context(), testKey, tt.second(ep))
 			require.NoError(t, err)
 			if tt.wantSame {
 				require.Same(t, first, second)
@@ -60,9 +61,9 @@ func TestPoolKeysAreSeparate(t *testing.T) {
 	t.Cleanup(p.Close)
 	other := testKey
 	other.Name = "other"
-	a, err := p.Get(testKey, n.endpoint())
+	a, err := p.Get(t.Context(), testKey, n.endpoint())
 	require.NoError(t, err)
-	b, err := p.Get(other, n.endpoint())
+	b, err := p.Get(t.Context(), other, n.endpoint())
 	require.NoError(t, err)
 	require.NotSame(t, a, b)
 
@@ -75,10 +76,10 @@ func TestPoolRedialsClosed(t *testing.T) {
 	n := startNATS(t)
 	p := NewPool()
 	t.Cleanup(p.Close)
-	a, err := p.Get(testKey, n.endpoint())
+	a, err := p.Get(t.Context(), testKey, n.endpoint())
 	require.NoError(t, err)
 	a.Close()
-	b, err := p.Get(testKey, n.endpoint())
+	b, err := p.Get(t.Context(), testKey, n.endpoint())
 	require.NoError(t, err)
 	require.NotSame(t, a, b)
 	require.True(t, b.IsConnected())
@@ -88,11 +89,11 @@ func TestPoolFailedDialKeepsNothing(t *testing.T) {
 	n := startNATS(t)
 	p := NewPool()
 	t.Cleanup(p.Close)
-	good, err := p.Get(testKey, n.endpoint())
+	good, err := p.Get(t.Context(), testKey, n.endpoint())
 	require.NoError(t, err)
 	bad := n.endpoint()
 	bad.Creds = nil
-	_, err = p.Get(testKey, bad)
+	_, err = p.Get(t.Context(), testKey, bad)
 	require.Error(t, err)
 	require.True(t, good.IsClosed())
 }
@@ -100,11 +101,11 @@ func TestPoolFailedDialKeepsNothing(t *testing.T) {
 func TestPoolClose(t *testing.T) {
 	n := startNATS(t)
 	p := NewPool()
-	a, err := p.Get(testKey, n.endpoint())
+	a, err := p.Get(t.Context(), testKey, n.endpoint())
 	require.NoError(t, err)
 	p.Close()
 	require.True(t, a.IsClosed())
-	_, err = p.Get(testKey, n.endpoint())
+	_, err = p.Get(t.Context(), testKey, n.endpoint())
 	require.ErrorIs(t, err, ErrPoolClosed)
 	p.Close()
 }
@@ -112,7 +113,7 @@ func TestPoolClose(t *testing.T) {
 func TestPoolStartClosesOnDone(t *testing.T) {
 	n := startNATS(t)
 	p := NewPool()
-	a, err := p.Get(testKey, n.endpoint())
+	a, err := p.Get(t.Context(), testKey, n.endpoint())
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error)
@@ -130,7 +131,7 @@ func TestPoolConcurrentGet(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := range conns {
 		wg.Go(func() {
-			nc, err := p.Get(testKey, n.endpoint())
+			nc, err := p.Get(t.Context(), testKey, n.endpoint())
 			require.NoError(t, err)
 			conns[i] = nc
 		})
@@ -145,7 +146,7 @@ func TestPoolOnChange(t *testing.T) {
 	n := startNATS(t)
 	p := NewPool()
 	t.Cleanup(p.Close)
-	_, err := p.Get(testKey, n.endpoint())
+	_, err := p.Get(t.Context(), testKey, n.endpoint())
 	require.NoError(t, err)
 
 	changed := make(chan Key, 16)
@@ -157,4 +158,52 @@ func TestPoolOnChange(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("no change notified on disconnect")
 	}
+}
+
+// TestPoolGetContext pins that a dial, and a wait on another dial for the
+// same key, end with the caller's context rather than the connect timeout.
+func TestPoolGetContext(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			t.Cleanup(func() { _ = c.Close() })
+		}
+	}()
+	silent := Endpoint{Servers: []string{"nats://" + ln.Addr().String()}}
+	p := NewPool(WithNATSOptions(nats.Timeout(time.Minute)))
+	t.Cleanup(p.Close)
+
+	dialing := make(chan error, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+		defer cancel()
+		_, err := p.Get(ctx, testKey, silent)
+		dialing <- err
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	_, err = p.Get(ctx, testKey, silent)
+	require.ErrorIs(t, err, context.DeadlineExceeded, "waiting on the dial in flight")
+	require.Less(t, time.Since(start), time.Second)
+
+	select {
+	case err := <-dialing:
+		require.ErrorIs(t, err, context.DeadlineExceeded, "the dial itself")
+	case <-time.After(10 * time.Second):
+		t.Fatal("the dial outlived its context")
+	}
+
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, err = p.Get(cancelled, testKey, silent)
+	require.ErrorIs(t, err, context.Canceled)
 }

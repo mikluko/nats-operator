@@ -49,12 +49,12 @@ var identities = []identity{
 		Connection: "Connects through the `NatsConnection` its `--system-connection` flag names, as a user of a `NatsOperator`'s system account.",
 		Preset:     jwtplane.PresetAuthController,
 		Calls: []call{
-			{"$SYS.REQ.SERVER.PING.STATSZ", "Lists the servers that should answer the requests below.", []string{"internal/auth"}},
-			{"$SYS.REQ.CLAIMS.UPDATE", "Pushes an account JWT to every resolver.", []string{"internal/auth"}},
-			{"$SYS.REQ.CLAIMS.DELETE", "Deletes accounts from every `Full` resolver.", []string{"internal/auth"}},
-			{"$SYS.REQ.ACCOUNT.*.CLAIMS.LOOKUP", "Reads the JWT the resolvers hold for an account, by account public key.", []string{"internal/auth"}},
-			{"$SYS.REQ.SERVER.PING.CONNZ", "Finds a revoked user's connections.", []string{"internal/auth"}},
-			{"$SYS.REQ.SERVER.*.KICK", "Disconnects one of them, by server ID.", []string{"internal/auth"}},
+			{"$SYS.REQ.SERVER.PING.STATSZ", "Lists the servers that should answer the requests below.", []string{"internal/authctl"}},
+			{"$SYS.REQ.CLAIMS.UPDATE", "Pushes an account JWT to every resolver.", []string{"internal/authctl"}},
+			{"$SYS.REQ.CLAIMS.DELETE", "Deletes accounts from every `Full` resolver.", []string{"internal/authctl"}},
+			{"$SYS.REQ.ACCOUNT.*.CLAIMS.LOOKUP", "Reads the JWT the resolvers hold for an account, by account public key.", []string{"internal/authctl"}},
+			{"$SYS.REQ.SERVER.PING.CONNZ", "Finds a revoked user's connections.", []string{"internal/authctl"}},
+			{"$SYS.REQ.SERVER.*.KICK", "Disconnects one of them, by server ID.", []string{"internal/authctl"}},
 		},
 	},
 	{

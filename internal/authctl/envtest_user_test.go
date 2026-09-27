@@ -1,4 +1,4 @@
-package auth_test
+package authctl_test
 
 import (
 	"context"
@@ -25,8 +25,9 @@ import (
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/auth"
+	"github.com/mikluko/nats-operator/internal/authctl"
 	"github.com/mikluko/nats-operator/internal/grant"
+	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
 // errNoSystemConnection is what the env's Sessions answer before a subtest
@@ -49,7 +50,7 @@ func (e *env) creds(ct assert.TestingT, k types.NamespacedName) (token, seed str
 	if !assert.NoError(ct, e.c.Get(e.ctx, k, s)) {
 		return "", "", nil
 	}
-	raw := s.Data[auth.DefaultCredentialsKey]
+	raw := s.Data[natsconn.DefaultCredentialsKey]
 	token, err := jwt.ParseDecoratedJWT(raw)
 	if !assert.NoError(ct, err) {
 		return "", "", nil
@@ -83,13 +84,13 @@ func (e *env) testStory2Users(t *testing.T) {
 		for _, name := range []string{"orders-service", "orders-batch", "orders-jetstream", "cluster-controller", "jetstream-controller"} {
 			u := &authv1beta1.NatsUser{}
 			e.get(ct, key("nats-system", name), u)
-			ready(ct, u.Status.Conditions, u.Generation, auth.ReasonSigned)
+			ready(ct, u.Status.Conditions, u.Generation, authctl.ReasonSigned)
 			users[name] = u
 		}
 	})
 
 	for name, u := range users {
-		require.Contains(t, u.Finalizers, auth.UserFinalizer, name)
+		require.Contains(t, u.Finalizers, authctl.UserFinalizer, name)
 	}
 
 	batch := users["orders-batch"]
@@ -182,7 +183,7 @@ spec:
 	e.eventually(t, func(ct *assert.CollectT) {
 		e.get(ct, key("nats-system", "payments"), &payments)
 		e.get(ct, key("payments", "payments-api"), api)
-		ready(ct, api.Status.Conditions, api.Generation, auth.ReasonSigned)
+		ready(ct, api.Status.Conditions, api.Generation, authctl.ReasonSigned)
 		token, _, _ := e.creds(ct, key("payments", "payments-api-creds"))
 		c, err := jwt.DecodeUserClaims(token)
 		if assert.NoError(ct, err) {
@@ -239,7 +240,7 @@ spec:
 	require.NoError(t, e.c.Create(t.Context(), &g))
 	e.eventually(t, func(ct *assert.CollectT) {
 		e.get(ct, key("payments", "payments-api"), api)
-		ready(ct, api.Status.Conditions, api.Generation, auth.ReasonSigned)
+		ready(ct, api.Status.Conditions, api.Generation, authctl.ReasonSigned)
 		e.get(ct, key("nats-system", "payments"), &payments)
 		token, _, _ := e.creds(ct, key("payments", "payments-api-creds"))
 		ac, err := jwt.DecodeAccountClaims(payments.Status.JWT)
@@ -337,9 +338,9 @@ spec:
 			assert.Contains(ct, ac.Revocations, pub)
 		}
 		e.get(ct, userKey, u)
-		cond := meta.FindStatusCondition(u.Status.Conditions, auth.ConditionReady)
+		cond := meta.FindStatusCondition(u.Status.Conditions, authctl.ConditionReady)
 		if assert.NotNil(ct, cond) {
-			assert.Equal(ct, auth.ReasonDistributing, cond.Reason)
+			assert.Equal(ct, authctl.ReasonDistributing, cond.Reason)
 		}
 	})
 	select {
@@ -430,9 +431,9 @@ spec:
 	u := &authv1beta1.NatsUser{}
 	e.eventually(t, func(ct *assert.CollectT) {
 		e.get(ct, sysKey, &sys)
-		ready(ct, sys.Status.Conditions, sys.Generation, auth.ReasonSigned)
+		ready(ct, sys.Status.Conditions, sys.Generation, authctl.ReasonSigned)
 		e.get(ct, userKey, u)
-		ready(ct, u.Status.Conditions, u.Generation, auth.ReasonSigned)
+		ready(ct, u.Status.Conditions, u.Generation, authctl.ReasonSigned)
 	})
 
 	var g natsv1beta1.NatsReferenceGrant
@@ -466,9 +467,9 @@ spec:
 			}
 		}
 		e.get(ct, userKey, u)
-		cond := meta.FindStatusCondition(u.Status.Conditions, auth.ConditionReady)
+		cond := meta.FindStatusCondition(u.Status.Conditions, authctl.ConditionReady)
 		if assert.NotNil(ct, cond) {
-			assert.Equal(ct, auth.ReasonDistributing, cond.Reason)
+			assert.Equal(ct, authctl.ReasonDistributing, cond.Reason)
 		}
 	})
 	require.Never(t, func() bool {
@@ -481,7 +482,7 @@ spec:
 		e.get(ct, opKey, &op)
 		e.get(ct, sysKey, &sys)
 		if assert.NotNil(ct, op.Status.SystemAccount) {
-			assert.Equal(ct, auth.JWTHash(op.Status.SystemAccount.JWT), sys.Status.JWTHash)
+			assert.Equal(ct, authctl.JWTHash(op.Status.SystemAccount.JWT), sys.Status.JWTHash)
 		}
 	})
 	setDistribution()
@@ -559,7 +560,7 @@ spec:
 	sysUser := &authv1beta1.NatsUser{}
 	e.eventually(t, func(ct *assert.CollectT) {
 		e.get(ct, sysUserKey, sysUser)
-		ready(ct, sysUser.Status.Conditions, sysUser.Generation, auth.ReasonSigned)
+		ready(ct, sysUser.Status.Conditions, sysUser.Generation, authctl.ReasonSigned)
 	})
 	require.NoError(t, e.c.Delete(t.Context(), sysUser))
 	var op authv1beta1.NatsOperator
@@ -591,8 +592,8 @@ spec:
 	rotated := e.seedSecret(t, "nats-system", "orders-rotated", nkeys.PrefixByteAccount)
 	e.update(t, ordersKey, &authv1beta1.NatsAccount{}, func(o client.Object) {
 		o.(*authv1beta1.NatsAccount).Spec.Keys = &authv1beta1.Keys{
-			Identity: &authv1beta1.IdentityKey{SecretKeyRef: authv1beta1.SeedSecretKeySelector{Name: "orders-account-identity", Key: auth.SeedKey}},
-			Signing:  []authv1beta1.SigningKey{{Name: "rotated", SecretKeyRef: authv1beta1.SeedSecretKeySelector{Name: "orders-rotated", Key: auth.SeedKey}}},
+			Identity: &authv1beta1.IdentityKey{SecretKeyRef: authv1beta1.SeedSecretKeySelector{Name: "orders-account-identity", Key: authctl.SeedKey}},
+			Signing:  []authv1beta1.SigningKey{{Name: "rotated", SecretKeyRef: authv1beta1.SeedSecretKeySelector{Name: "orders-rotated", Key: authctl.SeedKey}}},
 		}
 	})
 	e.eventually(t, func(ct *assert.CollectT) {

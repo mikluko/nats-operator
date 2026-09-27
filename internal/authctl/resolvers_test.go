@@ -1,4 +1,4 @@
-package auth_test
+package authctl_test
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
-	"github.com/mikluko/nats-operator/internal/auth"
+	"github.com/mikluko/nats-operator/internal/authctl"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
 
@@ -145,10 +145,10 @@ func signTwice(t *testing.T, p plane, keys jwtplane.Keys) (older, newer string) 
 
 // resolversOn returns Resolvers reaching c through a system user holding
 // the auth-controller preset, connected to server 0.
-func resolversOn(t *testing.T, c *fullCluster, operator types.NamespacedName) *auth.Resolvers {
+func resolversOn(t *testing.T, c *fullCluster, operator types.NamespacedName) *authctl.Resolvers {
 	t.Helper()
 	nc, _ := dial(t, c.srvs[0].ClientURL(), jwtplane.User{Name: "auth-controller", SystemAccount: true, Preset: jwtplane.PresetAuthController}, c.p.sys)
-	return &auth.Resolvers{
+	return &authctl.Resolvers{
 		Conn: func(_ context.Context, got types.NamespacedName) (*nats.Conn, error) {
 			require.Equal(t, operator, got)
 			return nc, nil
@@ -243,14 +243,14 @@ func TestResolvers_Lookup(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, v2, got, "the newest of the JWTs the servers hold")
 
-	down := &auth.Resolvers{
+	down := &authctl.Resolvers{
 		Conn: func(context.Context, types.NamespacedName) (*nats.Conn, error) {
 			return nil, errors.New("dial: refused")
 		},
 		Wait: 200 * time.Millisecond,
 	}
 	_, err = down.Lookup(t.Context(), testOperator, pub)
-	require.ErrorIs(t, err, auth.ErrUnreachable)
+	require.ErrorIs(t, err, authctl.ErrUnreachable)
 }
 
 // TestResolvers_NeverPushesOlder pins Q2181's rule: a server keeps whatever
@@ -265,11 +265,11 @@ func TestResolvers_NeverPushesOlder(t *testing.T) {
 
 	r := resolversOn(t, c, testOperator)
 	require.NoError(t, r.Push(t.Context(), testOperator, v2))
-	require.ErrorIs(t, r.Push(t.Context(), testOperator, v1), auth.ErrStaleJWT)
+	require.ErrorIs(t, r.Push(t.Context(), testOperator, v1), authctl.ErrStaleJWT)
 	require.NoError(t, r.Push(t.Context(), testOperator, v2), "the same JWT again is not older")
 
 	restarted := resolversOn(t, c, testOperator)
-	require.ErrorIs(t, restarted.Push(t.Context(), testOperator, v1), auth.ErrStaleJWT, "a server holds a newer one")
+	require.ErrorIs(t, restarted.Push(t.Context(), testOperator, v1), authctl.ErrStaleJWT, "a server holds a newer one")
 	for i := range c.srvs {
 		require.Equal(t, v2, c.held(i, pub), "server %d", i)
 	}

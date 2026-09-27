@@ -17,7 +17,7 @@ import (
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/auth"
+	"github.com/mikluko/nats-operator/internal/authctl"
 	"github.com/mikluko/nats-operator/internal/manager"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 	"github.com/mikluko/nats-operator/internal/telemetry"
@@ -60,8 +60,8 @@ func main() {
 		log.Error(err, "register instruments")
 		os.Exit(1)
 	}
-	var d auth.Distributor
-	var s auth.Sessions
+	var d authctl.Distributor
+	var s authctl.Sessions
 	if *systemConnection != "" {
 		name, err := namespacedName(*systemConnection)
 		if err != nil {
@@ -69,8 +69,8 @@ func main() {
 			os.Exit(1)
 		}
 		pool := natsconn.NewPool()
-		conn := &auth.SystemConnection{Reader: mgr.GetClient(), Pool: pool, Name: name}
-		resolvers := &auth.Resolvers{Conn: conn.Conn, Log: ctrl.Log.WithName("resolvers")}
+		conn := &authctl.SystemConnection{Reader: mgr.GetClient(), Pool: pool, Name: name}
+		resolvers := &authctl.Resolvers{Conn: conn.Conn, Log: ctrl.Log.WithName("resolvers")}
 		for _, r := range []interface {
 			Start(ctx context.Context) error
 		}{pool, resolvers} {
@@ -79,9 +79,9 @@ func main() {
 				os.Exit(1)
 			}
 		}
-		d, s = resolvers, auth.ConnSessions{Conn: conn.Conn}
+		d, s = resolvers, authctl.ConnSessions{Resolvers: resolvers}
 	}
-	if err := auth.Setup(ctx, mgr, d, s, mgr.GetEventRecorder(telemetry.AuthController)); err != nil {
+	if err := authctl.Setup(ctx, mgr, d, s, mgr.GetEventRecorder(telemetry.AuthController)); err != nil {
 		log.Error(err, "set up reconcilers")
 		os.Exit(1)
 	}

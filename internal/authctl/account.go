@@ -1,4 +1,4 @@
-package auth
+package authctl
 
 import (
 	"context"
@@ -78,7 +78,6 @@ const AccountFinalizer = "auth.nats.mikluko.io/delete"
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts/finalizers,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=get;list;watch
 
 // Reconcile implements reconcile.Reconciler.
@@ -144,14 +143,14 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	sd, err := seededRevocations(ctx, r.Distributor, opKey, st.Revocations, st.JWT, pub, signing, users,
+	sd, err := recoverRevocations(ctx, r.Distributor, opKey, st.Revocations, st.JWT, pub, signing, users,
 		unrecovered(st.Conditions), everDistributed(st.Distribution))
 	if err != nil {
 		recordHeld(r.Recorder, acc, st.Conditions, err)
 		again, err := recoveryFailed(err, notReady)
 		return reconcile.Result{RequeueAfter: again}, err
 	}
-	recordSeed(&st.Conditions, acc.Generation, sd)
+	recordRecovery(&st.Conditions, acc.Generation, sd)
 	st.Revocations = sd.revocations
 	a := jwtplane.Account{
 		Name:        acc.Name,
@@ -175,7 +174,7 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 	}
 	adopt := func() error {
 		err := push(ctx, r.Distributor, opKey, token)
-		if err := pushErr(err); err != nil {
+		if err := ignoreUnreachable(err); err != nil {
 			return fmt.Errorf("push account JWT: %w", err)
 		}
 		st.JWT = token
@@ -204,36 +203,53 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 		setCondition(&st.Conditions, acc.Generation, grant.ConditionReferencesResolved, metav1.ConditionTrue, ReasonAllImportsResolved, "")
 		setCondition(&st.Conditions, acc.Generation, ConditionReady, metav1.ConditionTrue, ReasonSigned, "")
 	}
-	dist := accountDistribution{&st.Distribution, &st.Conditions, acc.Generation}
-	again, err := distribute(ctx, r.Distributor, opKey, st.JWT, dist)
+	dist, cond, again, err := distribute(ctx, r.Distributor, opKey, st.JWT, st.Distribution)
 	if errors.Is(err, ErrStaleJWT) && st.JWT != token {
 		if err := adopt(); err != nil {
 			return reconcile.Result{}, err
 		}
-		again, err = distribute(ctx, r.Distributor, opKey, st.JWT, dist)
+		dist, cond, again, err = distribute(ctx, r.Distributor, opKey, st.JWT, st.Distribution)
 	}
+	st.Distribution = dist
+	recordDistribution(&st.Conditions, acc.Generation, cond)
 	res := requeueAtRenewal(st.JWT, now)
 	res.RequeueAfter = soonest(res.RequeueAfter, again)
 	return res, err
 }
 
-// finalize records acc's deletion in its NatsOperator's status, where it
-// has a JWT to delete, and removes AccountFinalizer.
+// finalize removes AccountFinalizer once acc's NatsOperator records its
+// deletion, where it has a JWT to delete.
 func (r *AccountReconciler) finalize(ctx context.Context, acc *authv1beta1.NatsAccount) error {
 	if !controllerutil.ContainsFinalizer(acc, AccountFinalizer) {
 		return nil
 	}
 	if acc.Status.PublicKey != "" && acc.Status.JWT != "" {
-		deleted, err := deletedAccount(acc.Status.PublicKey, acc.Status.JWT)
-		if err != nil {
-			return err
-		}
-		if err := recordDeleted(ctx, r.Client, refKey(acc.Spec.OperatorRef, acc.Namespace), deleted); err != nil {
+		held, err := r.deletionPending(ctx, acc)
+		if err != nil || held {
 			return err
 		}
 	}
 	controllerutil.RemoveFinalizer(acc, AccountFinalizer)
 	return r.Update(ctx, acc)
+}
+
+// deletionPending reports whether acc's NatsOperator exists and its status
+// does not yet record acc's deletion.
+func (r *AccountReconciler) deletionPending(ctx context.Context, acc *authv1beta1.NatsAccount) (bool, error) {
+	d, err := deletedAccount(acc.Status.PublicKey, acc.Status.JWT)
+	if err != nil {
+		return false, err
+	}
+	key := refKey(acc.Spec.OperatorRef, acc.Namespace)
+	var op authv1beta1.NatsOperator
+	if err := r.Get(ctx, key, &op); err != nil {
+		return false, client.IgnoreNotFound(err)
+	}
+	var list authv1beta1.NatsAccountList
+	if err := r.List(ctx, &list, client.MatchingFields{operatorField: keyValue(key)}); err != nil {
+		return false, fmt.Errorf("list NatsAccounts: %w", err)
+	}
+	return !deletionRecorded(&op, list.Items, d, time.Now()), nil
 }
 
 // listUsers lists the NatsUsers of the account of kind at key.

@@ -20,7 +20,7 @@ const root = "../.."
 
 // scanned are the packages whose subjects the page must account for.
 var scanned = []string{
-	"internal/auth",
+	"internal/authctl",
 	"internal/balance",
 	"internal/balancectl",
 	"internal/lifecycle",

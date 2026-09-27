@@ -1,4 +1,4 @@
-package auth
+package authctl
 
 import (
 	"cmp"
@@ -72,9 +72,9 @@ func accountRevocations(recorded []authv1beta1.Revocation, prev, pub string, sig
 	return out
 }
 
-// seed is the revocations an account is signed with, and whether the
-// servers were asked for them.
-type seed struct {
+// recoveredRevocations is the revocations an account is signed with, and
+// whether the servers were asked for them.
+type recoveredRevocations struct {
 	revocations []authv1beta1.Revocation
 	// asked is set when the servers answered.
 	asked bool
@@ -83,7 +83,7 @@ type seed struct {
 	unasked error
 }
 
-// seededRevocations returns the revocations to sign into the JWT of the
+// recoverRevocations returns the revocations to sign into the JWT of the
 // account pub. They are accountRevocations', merged with those of the
 // newest JWT d finds on the servers trusting operator where the status
 // cannot be trusted to hold them all: recorded and prev both empty, or
@@ -91,25 +91,25 @@ type seed struct {
 // server can be asked, an account whose status records it distributed is
 // not to be signed, and the error wraps ErrUnreachable; any other is
 // signed with what the status and users give. A nil d is asked nothing.
-func seededRevocations(ctx context.Context, d Distributor, operator types.NamespacedName, recorded []authv1beta1.Revocation, prev, pub string, signing []string, users []authv1beta1.NatsUser, unrecovered, distributed bool) (seed, error) {
+func recoverRevocations(ctx context.Context, d Distributor, operator types.NamespacedName, recorded []authv1beta1.Revocation, prev, pub string, signing []string, users []authv1beta1.NatsUser, unrecovered, distributed bool) (recoveredRevocations, error) {
 	revs := accountRevocations(recorded, prev, pub, signing, users)
 	if d == nil || !unrecovered && (prev != "" || len(recorded) > 0) {
-		return seed{revocations: revs}, nil
+		return recoveredRevocations{revocations: revs}, nil
 	}
 	held, err := d.Lookup(ctx, operator, pub)
 	switch {
 	case errors.Is(err, ErrUnreachable) && !distributed:
-		return seed{revocations: revs, unasked: err}, nil
+		return recoveredRevocations{revocations: revs, unasked: err}, nil
 	case err != nil:
-		return seed{}, err
+		return recoveredRevocations{}, err
 	}
-	return seed{revocations: accountRevocations(revs, held, pub, signing, users), asked: true}, nil
+	return recoveredRevocations{revocations: accountRevocations(revs, held, pub, signing, users), asked: true}, nil
 }
 
-// recordSeed sets ConditionRevocationsUnrecovered on conds from s: True
+// recordRecovery sets ConditionRevocationsUnrecovered on conds from s: True
 // while an account was signed without asking the servers, removed once
 // they answered.
-func recordSeed(conds *[]metav1.Condition, gen int64, s seed) {
+func recordRecovery(conds *[]metav1.Condition, gen int64, s recoveredRevocations) {
 	switch {
 	case s.unasked != nil:
 		setCondition(conds, gen, ConditionRevocationsUnrecovered, metav1.ConditionTrue, ReasonUnreachable,
@@ -132,7 +132,7 @@ func everDistributed(d *authv1beta1.Distribution) bool {
 	return d != nil && (d.LastPushTime != nil || d.Current > 0)
 }
 
-// recoveryFailed reports err from seededRevocations on an account that is
+// recoveryFailed reports err from recoverRevocations on an account that is
 // therefore not signed, and returns how soon to try again.
 func recoveryFailed(err error, notReady func(reason, msg string)) (time.Duration, error) {
 	notReady(ReasonRecovering, "status holds neither a JWT nor revocations though the account was distributed, and the servers cannot be asked for the JWT to recover them from: "+err.Error())
@@ -142,7 +142,7 @@ func recoveryFailed(err error, notReady func(reason, msg string)) (time.Duration
 	return 0, err
 }
 
-// recordHeld records JWTHeld on obj for err from seededRevocations, unless
+// recordHeld records JWTHeld on obj for err from recoverRevocations, unless
 // conds, its conditions before, already hold it with Ready's reason
 // RecoveringRevocations.
 func recordHeld(rec events.EventRecorder, obj runtime.Object, conds []metav1.Condition, err error) {

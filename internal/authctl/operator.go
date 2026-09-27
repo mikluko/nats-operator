@@ -1,4 +1,4 @@
-package auth
+package authctl
 
 import (
 	"context"
@@ -41,9 +41,10 @@ import (
 // servers hold a newer one of, as after a push whose status write was
 // lost, is signed and pushed afresh.
 //
-// status.deletedAccounts, filled by AccountReconciler, keeps each deleted
-// account until its last JWT expires or its key is signed again; the
-// Distributor is handed the request deleting them.
+// status.deletedAccounts records each NatsAccount naming the operator that
+// is being deleted and has a JWT, and keeps it until that JWT expires or
+// its key is signed again; the Distributor is handed the request deleting
+// them.
 type OperatorReconciler struct {
 	client.Client
 	// Distributor receives the system account JWT whenever it is newly
@@ -78,6 +79,11 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	notReady := func(reason, msg string) {
 		setCondition(&st.Conditions, op.Generation, ConditionReady, metav1.ConditionFalse, reason, msg)
 	}
+	var named authv1beta1.NatsAccountList
+	if err := r.List(ctx, &named, client.MatchingFields{operatorField: keyValue(client.ObjectKeyFromObject(op))}); err != nil {
+		return 0, fmt.Errorf("list NatsAccounts: %w", err)
+	}
+	st.DeletedAccounts = recordDeleting(st.DeletedAccounts, named.Items)
 	signedBefore := st.JWT != ""
 	src, err := operatorKeySource(op)
 	if err != nil {
@@ -121,7 +127,7 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 		st.JWT = opJWT
 	}
 
-	accounts, err := r.signedAccounts(ctx, op)
+	accounts, err := r.signedAccounts(ctx, op, named.Items)
 	if err != nil {
 		return 0, err
 	}
@@ -142,13 +148,13 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	if signedBefore {
 		lookup = r.Distributor
 	}
-	sd, err := seededRevocations(ctx, lookup, client.ObjectKeyFromObject(op), sys.Status.Revocations, prevJWT, sysPub, sysSigning, users,
+	sd, err := recoverRevocations(ctx, lookup, client.ObjectKeyFromObject(op), sys.Status.Revocations, prevJWT, sysPub, sysSigning, users,
 		unrecovered(st.Conditions), everDistributed(sys.Status.Distribution))
 	if err != nil {
 		recordHeld(r.Recorder, op, st.Conditions, err)
 		return recoveryFailed(err, notReady)
 	}
-	recordSeed(&st.Conditions, op.Generation, sd)
+	recordRecovery(&st.Conditions, op.Generation, sd)
 	sysJWT, err := jwtplane.SignSystemAccount(jwtplane.SystemAccount{
 		Name:             sys.Name,
 		Keys:             sysKeys.Keys,
@@ -159,10 +165,13 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 		notReady(ReasonInvalidKeys, err.Error())
 		return 0, nil
 	}
-	if prev == nil || prev.Name != sys.Name || !sameAccountClaims(prev.JWT, sysJWT) ||
-		!unrecovered(st.Conditions) && superseded(ctx, r.Distributor, client.ObjectKeyFromObject(op), prev.JWT) {
+	resign := prev == nil || prev.Name != sys.Name || !sameAccountClaims(prev.JWT, sysJWT)
+	if !resign && !unrecovered(st.Conditions) {
+		resign = repushStale(ctx, r.Distributor, client.ObjectKeyFromObject(op), prev.JWT)
+	}
+	if resign {
 		err := push(ctx, r.Distributor, client.ObjectKeyFromObject(op), sysJWT)
-		if err := pushErr(err); err != nil {
+		if err := ignoreUnreachable(err); err != nil {
 			return 0, fmt.Errorf("push system account JWT: %w", err)
 		}
 		if r.Distributor != nil && err == nil {
@@ -172,7 +181,7 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	}
 
 	setRetiringCondition(op, retiring, append([]string{st.SystemAccount.JWT}, accountJWTs(accounts)...))
-	next, err := r.deletes(ctx, op, keys.Keys, sysPub)
+	next, err := r.deletes(ctx, op, keys.Keys, named.Items)
 	if err != nil {
 		return 0, err
 	}
@@ -184,20 +193,12 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 }
 
 // deletes prunes op's deleted accounts of those whose JWTs have expired
-// and those whose keys an account signed by op, or the system account
-// sysPub, holds again, and hands the Distributor the request deleting the
-// rest. It returns when the next of them expires, the zero time for never.
-func (r *OperatorReconciler) deletes(ctx context.Context, op *authv1beta1.NatsOperator, keys jwtplane.Keys, sysPub string) (time.Time, error) {
-	var list authv1beta1.NatsAccountList
-	if err := r.List(ctx, &list, client.MatchingFields{operatorField: keyValue(client.ObjectKeyFromObject(op))}); err != nil {
-		return time.Time{}, fmt.Errorf("list NatsAccounts: %w", err)
-	}
-	live := map[string]bool{sysPub: true}
-	for i := range list.Items {
-		if acc := &list.Items[i]; acc.DeletionTimestamp == nil && acc.Status.PublicKey != "" {
-			live[acc.Status.PublicKey] = true
-		}
-	}
+// and those whose keys its system account, or an account in accounts not
+// being deleted, holds again, and hands the Distributor the request
+// deleting the rest. It returns when the next of them expires, the zero
+// time for never.
+func (r *OperatorReconciler) deletes(ctx context.Context, op *authv1beta1.NatsOperator, keys jwtplane.Keys, accounts []authv1beta1.NatsAccount) (time.Time, error) {
+	live := liveKeys(op, accounts)
 	pruned, next := pruneDeleted(op.Status.DeletedAccounts, live, time.Now())
 	op.Status.DeletedAccounts = pruned
 	if r.Distributor == nil {
@@ -207,7 +208,7 @@ func (r *OperatorReconciler) deletes(ctx context.Context, op *authv1beta1.NatsOp
 	if err != nil {
 		return time.Time{}, fmt.Errorf("sign delete request: %w", err)
 	}
-	if err := deleteErr(r.Distributor.Delete(ctx, client.ObjectKeyFromObject(op), request)); err != nil {
+	if err := ignoreUnreachable(r.Distributor.Delete(ctx, client.ObjectKeyFromObject(op), request)); err != nil {
 		return time.Time{}, fmt.Errorf("delete accounts: %w", err)
 	}
 	return next, nil
@@ -258,15 +259,12 @@ func (r *OperatorReconciler) systemAccount(ctx context.Context, op *authv1beta1.
 	return &sys, keys, true, nil
 }
 
-// signedAccounts returns the NatsAccounts that name op and are admitted to.
-func (r *OperatorReconciler) signedAccounts(ctx context.Context, op *authv1beta1.NatsOperator) ([]authv1beta1.NatsAccount, error) {
-	var list authv1beta1.NatsAccountList
-	if err := r.List(ctx, &list, client.MatchingFields{operatorField: keyValue(client.ObjectKeyFromObject(op))}); err != nil {
-		return nil, fmt.Errorf("list NatsAccounts: %w", err)
-	}
+// signedAccounts returns the accounts in accounts, the NatsAccounts naming
+// op, that are admitted to it.
+func (r *OperatorReconciler) signedAccounts(ctx context.Context, op *authv1beta1.NatsOperator, accounts []authv1beta1.NatsAccount) ([]authv1beta1.NatsAccount, error) {
 	var out []authv1beta1.NatsAccount
-	for i := range list.Items {
-		acc := &list.Items[i]
+	for i := range accounts {
+		acc := &accounts[i]
 		cond, err := admit(ctx, r.Client, authGroup, "NatsAccount", acc, "NatsOperator", client.ObjectKeyFromObject(op))
 		if err != nil {
 			return nil, err
