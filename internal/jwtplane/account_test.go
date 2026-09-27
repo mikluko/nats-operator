@@ -67,7 +67,7 @@ func TestSignAccountTTL(t *testing.T) {
 
 			renew, err := jwtplane.RenewAt(tok)
 			require.NoError(t, err)
-			require.Equal(t, time.Unix(c.IssuedAt+int64(tt.want/time.Second)/2, 0), renew)
+			require.Equal(t, time.Unix(c.IssuedAt+(c.Expires-c.IssuedAt)/2, 0), renew)
 		})
 	}
 }
