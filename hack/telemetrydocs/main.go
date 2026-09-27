@@ -28,8 +28,8 @@ type envVar struct {
 	Effect  string
 }
 
-// environment are the variables the SDK reads, read off the sources of
-// autoexport, the OTLP exporters and the SDK at the versions go.mod names.
+// environment are the variables the SDK reads. Every Default a row names is
+// pinned by TestEnvironmentDefaults against the SDK go.mod names.
 var environment = []envVar{
 	{[]string{"OTEL_SDK_DISABLED"}, "`false`", "`true`, in any case, exports nothing whatever else is set; no exporter is built and no Prometheus listener opened."},
 	{[]string{"OTEL_SERVICE_NAME"}, "the controller's name, such as `cluster-controller`", "`service.name` of every metric and span."},
@@ -39,13 +39,13 @@ var environment = []envVar{
 	{[]string{"OTEL_EXPORTER_OTLP_PROTOCOL", "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL", "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"}, "`http/protobuf`", "`http/protobuf` or `grpc`."},
 	{[]string{"OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"}, "`https://localhost:4318` over `http/protobuf`, `https://localhost:4317` over `grpc`", "Where OTLP is sent; set, it turns on the signals it applies to. An `http://` endpoint sends without TLS."},
 	{[]string{"OTEL_EXPORTER_OTLP_INSECURE", "OTEL_EXPORTER_OTLP_METRICS_INSECURE", "OTEL_EXPORTER_OTLP_TRACES_INSECURE"}, "`false`", "`true` sends OTLP without TLS."},
-	{[]string{"OTEL_EXPORTER_OTLP_CERTIFICATE", "OTEL_EXPORTER_OTLP_METRICS_CERTIFICATE", "OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE"}, "the system roots", "PEM file of the CA certificates the collector's certificate is verified against."},
+	{[]string{"OTEL_EXPORTER_OTLP_CERTIFICATE", "OTEL_EXPORTER_OTLP_METRICS_CERTIFICATE", "OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE"}, "", "PEM file of the CA certificates the collector's certificate is verified against."},
 	{[]string{"OTEL_EXPORTER_OTLP_HEADERS", "OTEL_EXPORTER_OTLP_METRICS_HEADERS", "OTEL_EXPORTER_OTLP_TRACES_HEADERS"}, "", "Headers sent with each export, as `key=value` pairs separated by commas."},
-	{[]string{"OTEL_EXPORTER_OTLP_TIMEOUT", "OTEL_EXPORTER_OTLP_METRICS_TIMEOUT", "OTEL_EXPORTER_OTLP_TRACES_TIMEOUT"}, "`10000`", "Milliseconds an export may take."},
+	{[]string{"OTEL_EXPORTER_OTLP_TIMEOUT", "OTEL_EXPORTER_OTLP_METRICS_TIMEOUT", "OTEL_EXPORTER_OTLP_TRACES_TIMEOUT"}, "", "Milliseconds an export may take."},
 	{[]string{"OTEL_EXPORTER_OTLP_COMPRESSION", "OTEL_EXPORTER_OTLP_METRICS_COMPRESSION", "OTEL_EXPORTER_OTLP_TRACES_COMPRESSION"}, "none", "`gzip` compresses each export."},
 	{[]string{"OTEL_EXPORTER_PROMETHEUS_HOST", "OTEL_EXPORTER_PROMETHEUS_PORT"}, "`localhost`, `9464`", "Where `OTEL_METRICS_EXPORTER=prometheus` serves `/metrics` for scraping."},
-	{[]string{"OTEL_METRIC_EXPORT_INTERVAL"}, "`60000`", "Milliseconds between two exports of the `otlp` and `console` metrics exporters, each reading the resources' status; `prometheus` reads it at each scrape."},
-	{[]string{"OTEL_METRIC_EXPORT_TIMEOUT"}, "`30000`", "Milliseconds a metric export may take."},
+	{[]string{"OTEL_METRIC_EXPORT_INTERVAL"}, "", "Milliseconds between two exports of the `otlp` and `console` metrics exporters, each reading the resources' status; `prometheus` reads it at each scrape."},
+	{[]string{"OTEL_METRIC_EXPORT_TIMEOUT"}, "", "Milliseconds a metric export may take."},
 	{[]string{"OTEL_TRACES_SAMPLER", "OTEL_TRACES_SAMPLER_ARG"}, "`parentbased_always_on`", "Which reconcile spans are kept."},
 }
 

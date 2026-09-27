@@ -1,4 +1,5 @@
-controllers := "cluster-controller auth-controller jetstream-controller"
+# The controllers are the commands under cmd/ named *-controller.
+controllers := `cd cmd && echo *-controller`
 envtest_k8s_version := env("ENVTEST_K8S_VERSION", "1.36.x")
 bin := justfile_directory() / "bin"
 

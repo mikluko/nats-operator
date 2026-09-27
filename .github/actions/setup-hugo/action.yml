@@ -1,0 +1,13 @@
+name: setup-hugo
+description: Installs the Hugo extended release the documentation site is built with.
+runs:
+  using: composite
+  steps:
+    - name: Install Hugo
+      shell: bash
+      env:
+        HUGO_VERSION: 0.166.0
+      run: |
+        curl -fsSLo "$RUNNER_TEMP/hugo.deb" \
+          "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.deb"
+        sudo dpkg -i "$RUNNER_TEMP/hugo.deb"

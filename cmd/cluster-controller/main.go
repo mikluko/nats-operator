@@ -3,7 +3,9 @@
 package main
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -31,16 +33,10 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
 	log := ctrl.Log.WithName("cluster-controller")
 
-	scheme := runtime.NewScheme()
-	for _, add := range []func(*runtime.Scheme) error{
-		clientgoscheme.AddToScheme,
-		natsv1beta1.AddToScheme,
-		clusterv1beta1.AddToScheme,
-	} {
-		if err := add(scheme); err != nil {
-			log.Error(err, "build scheme")
-			os.Exit(1)
-		}
+	scheme, err := newScheme()
+	if err != nil {
+		log.Error(err, "build scheme")
+		os.Exit(1)
 	}
 
 	mgr, err := manager.New(opts, scheme)
@@ -53,14 +49,40 @@ func main() {
 		log.Error(err, "set up telemetry")
 		os.Exit(1)
 	}
-	if err := telemetry.RegisterCluster(otel.Meter(telemetry.ClusterController), mgr.GetClient()); err != nil {
-		log.Error(err, "register instruments")
+	if err := setup(ctx, mgr); err != nil {
+		log.Error(err, "set up controllers")
 		os.Exit(1)
+	}
+	if err := mgr.Start(ctx); err != nil {
+		log.Error(err, "run")
+		os.Exit(1)
+	}
+}
+
+// newScheme is the cluster controller's scheme.
+func newScheme() (*runtime.Scheme, error) {
+	scheme := runtime.NewScheme()
+	for _, add := range []func(*runtime.Scheme) error{
+		clientgoscheme.AddToScheme,
+		natsv1beta1.AddToScheme,
+		clusterv1beta1.AddToScheme,
+	} {
+		if err := add(scheme); err != nil {
+			return nil, err
+		}
+	}
+	return scheme, nil
+}
+
+// setup registers the cluster controller's instruments and adds the
+// connection pool and the NatsCluster reconciler to mgr.
+func setup(ctx context.Context, mgr ctrl.Manager) error {
+	if err := telemetry.RegisterCluster(otel.Meter(telemetry.ClusterController), mgr.GetClient()); err != nil {
+		return fmt.Errorf("register instruments: %w", err)
 	}
 	pool := natsconn.NewPool()
 	if err := mgr.Add(pool); err != nil {
-		log.Error(err, "add connection pool")
-		os.Exit(1)
+		return fmt.Errorf("add connection pool: %w", err)
 	}
 	sys := &natscluster.SystemConnections{
 		Client:   mgr.GetClient(),
@@ -76,11 +98,7 @@ func main() {
 		Recorder: mgr.GetEventRecorder(telemetry.ClusterController),
 	}
 	if err := r.SetupWithManager(ctx, mgr); err != nil {
-		log.Error(err, "set up natscluster reconciler")
-		os.Exit(1)
+		return fmt.Errorf("set up NatsCluster reconciler: %w", err)
 	}
-	if err := mgr.Start(ctx); err != nil {
-		log.Error(err, "run")
-		os.Exit(1)
-	}
+	return nil
 }

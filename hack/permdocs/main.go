@@ -52,11 +52,8 @@ Every reply comes back on ` + "`_INBOX.>`" + `, so each user below also subscrib
 
 	b.WriteString("\n## User presets\n\nA `NatsUser` with `spec.preset` gets exactly these claims, and sets neither `spec.permissions` nor `spec.connectionTypes`.\n")
 	for _, p := range jwtplane.UserPresets() {
-		g, _ := jwtplane.UserPresetGrant(p)
-		fmt.Fprintf(&b, "\n### %s\n\n%s\n", p, holders(g))
-		fmt.Fprintf(&b, "\nPublish: %s.\n\nSubscribe: %s.\n", subjects(g.Publish), subjects(g.Subscribe))
-		if len(g.ConnectionTypes) > 0 {
-			fmt.Fprintf(&b, "\nConnection types: %s.\n", subjects(g.ConnectionTypes))
+		if err := userPreset(&b, p); err != nil {
+			return "", err
 		}
 	}
 
@@ -72,6 +69,21 @@ Every reply comes back on ` + "`_INBOX.>`" + `, so each user below also subscrib
 		fmt.Fprintf(&b, "| `%s` | `%s` | `%s` |\n", e.Name, e.Subject, imports[i].LocalSubject)
 	}
 	return b.String(), nil
+}
+
+// userPreset writes the section of preset p, and fails for a p jwtplane
+// does not define.
+func userPreset(b *strings.Builder, p jwtplane.UserPreset) error {
+	g, ok := jwtplane.UserPresetGrant(p)
+	if !ok {
+		return fmt.Errorf("user preset %q has no grant", p)
+	}
+	fmt.Fprintf(b, "\n### %s\n\n%s\n", p, holders(g))
+	fmt.Fprintf(b, "\nPublish: %s.\n\nSubscribe: %s.\n", subjects(g.Publish), subjects(g.Subscribe))
+	if len(g.ConnectionTypes) > 0 {
+		fmt.Fprintf(b, "\nConnection types: %s.\n", subjects(g.ConnectionTypes))
+	}
+	return nil
 }
 
 func code(sources []string) string {

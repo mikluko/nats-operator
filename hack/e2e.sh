@@ -276,15 +276,16 @@ quietly() {
 	fi
 }
 
-# build_images builds all three controller images with ko into tarballs on
+# build_images builds every controller image with ko into tarballs on
 # the host, imports each and loads it, tagged by its image digest so an
 # unchanged image keeps its tag and a changed one rolls the Deployment. It
 # prints one "<key> <repository> <tag>" line per controller.
 build_images() {
-	local key name tarball ref tag
+	local dir key name tarball ref tag
 	mkdir -p "$work/images"
-	for key in cluster auth jetstream; do
-		name=$key-controller
+	for dir in "$root"/cmd/*-controller; do
+		name=${dir##*/}
+		key=${name%-controller}
 		tarball=$work/images/$name.tar
 		if ! ref=$(cd "$root" && KO_DOCKER_REPO=$image_repo ko build --push=false -B \
 			--platform "linux/$arch" --tags e2e --tarball "$tarball" "./cmd/$name" 2>"$work/ko.log"); then

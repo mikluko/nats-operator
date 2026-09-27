@@ -1,0 +1,23 @@
+package main
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/mikluko/nats-operator/internal/manager/managertest"
+	"github.com/mikluko/nats-operator/internal/telemetry"
+)
+
+// TestReconciledKinds pins telemetry.ClusterKinds, whose conditions the
+// condition gauge reports, to the reconcilers setup registers.
+func TestReconciledKinds(t *testing.T) {
+	scheme, err := newScheme()
+	require.NoError(t, err)
+	got := managertest.ReconciledKinds(t, scheme, setup)
+	var want []string
+	for _, k := range telemetry.ClusterKinds {
+		want = append(want, k.Name)
+	}
+	require.ElementsMatch(t, want, got)
+}

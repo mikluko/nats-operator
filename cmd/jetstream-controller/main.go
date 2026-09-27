@@ -34,16 +34,10 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
 	log := ctrl.Log.WithName("jetstream-controller")
 
-	scheme := runtime.NewScheme()
-	for _, add := range []func(*runtime.Scheme) error{
-		clientgoscheme.AddToScheme,
-		natsv1beta1.AddToScheme,
-		jetstreamv1beta1.AddToScheme,
-	} {
-		if err := add(scheme); err != nil {
-			log.Error(err, "build scheme")
-			os.Exit(1)
-		}
+	scheme, err := newScheme()
+	if err != nil {
+		log.Error(err, "build scheme")
+		os.Exit(1)
 	}
 
 	mgr, err := manager.New(opts, scheme)
@@ -64,6 +58,21 @@ func main() {
 		log.Error(err, "run")
 		os.Exit(1)
 	}
+}
+
+// newScheme is the JetStream controller's scheme.
+func newScheme() (*runtime.Scheme, error) {
+	scheme := runtime.NewScheme()
+	for _, add := range []func(*runtime.Scheme) error{
+		clientgoscheme.AddToScheme,
+		natsv1beta1.AddToScheme,
+		jetstreamv1beta1.AddToScheme,
+	} {
+		if err := add(scheme); err != nil {
+			return nil, err
+		}
+	}
+	return scheme, nil
 }
 
 // setup registers the JetStream controller's instruments and adds the

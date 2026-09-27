@@ -1,4 +1,4 @@
-// The auth controller owns auth.nats.mikluko.io and reads nats.mikluko.io.
+// The auth controller owns authctl.nats.mikluko.io and reads nats.mikluko.io.
 package main
 
 import (
@@ -34,16 +34,10 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
 	log := ctrl.Log.WithName("auth-controller")
 
-	scheme := runtime.NewScheme()
-	for _, add := range []func(*runtime.Scheme) error{
-		clientgoscheme.AddToScheme,
-		natsv1beta1.AddToScheme,
-		authv1beta1.AddToScheme,
-	} {
-		if err := add(scheme); err != nil {
-			log.Error(err, "build scheme")
-			os.Exit(1)
-		}
+	scheme, err := newScheme()
+	if err != nil {
+		log.Error(err, "build scheme")
+		os.Exit(1)
 	}
 
 	mgr, err := manager.New(opts, scheme)
@@ -56,17 +50,44 @@ func main() {
 		log.Error(err, "set up telemetry")
 		os.Exit(1)
 	}
-	if err := telemetry.RegisterAuth(otel.Meter(telemetry.AuthController), mgr.GetClient()); err != nil {
-		log.Error(err, "register instruments")
+	if err := setup(ctx, mgr, *systemConnection); err != nil {
+		log.Error(err, "set up controllers")
 		os.Exit(1)
+	}
+	if err := mgr.Start(ctx); err != nil {
+		log.Error(err, "run")
+		os.Exit(1)
+	}
+}
+
+// newScheme is the auth controller's scheme.
+func newScheme() (*runtime.Scheme, error) {
+	scheme := runtime.NewScheme()
+	for _, add := range []func(*runtime.Scheme) error{
+		clientgoscheme.AddToScheme,
+		natsv1beta1.AddToScheme,
+		authv1beta1.AddToScheme,
+	} {
+		if err := add(scheme); err != nil {
+			return nil, err
+		}
+	}
+	return scheme, nil
+}
+
+// setup registers the auth controller's instruments and adds its
+// reconcilers to mgr; with systemConnection set, as namespace/name, it adds
+// the connection pool and resolvers that reach NATS through it.
+func setup(ctx context.Context, mgr ctrl.Manager, systemConnection string) error {
+	if err := telemetry.RegisterAuth(otel.Meter(telemetry.AuthController), mgr.GetClient()); err != nil {
+		return fmt.Errorf("register instruments: %w", err)
 	}
 	var d authctl.Distributor
 	var s authctl.Sessions
-	if *systemConnection != "" {
-		name, err := namespacedName(*systemConnection)
+	if systemConnection != "" {
+		name, err := namespacedName(systemConnection)
 		if err != nil {
-			log.Error(err, "parse --system-connection")
-			os.Exit(1)
+			return fmt.Errorf("parse --system-connection: %w", err)
 		}
 		pool := natsconn.NewPool()
 		conn := &authctl.SystemConnection{Reader: mgr.GetClient(), Pool: pool, Name: name}
@@ -75,20 +96,15 @@ func main() {
 			Start(ctx context.Context) error
 		}{pool, resolvers} {
 			if err := mgr.Add(r); err != nil {
-				log.Error(err, "add runnable")
-				os.Exit(1)
+				return fmt.Errorf("add runnable: %w", err)
 			}
 		}
 		d, s = resolvers, authctl.ConnSessions{Resolvers: resolvers}
 	}
 	if err := authctl.Setup(ctx, mgr, d, s, mgr.GetEventRecorder(telemetry.AuthController)); err != nil {
-		log.Error(err, "set up reconcilers")
-		os.Exit(1)
+		return fmt.Errorf("set up reconcilers: %w", err)
 	}
-	if err := mgr.Start(ctx); err != nil {
-		log.Error(err, "run")
-		os.Exit(1)
-	}
+	return nil
 }
 
 // namespacedName parses namespace/name.

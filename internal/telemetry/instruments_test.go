@@ -82,8 +82,10 @@ func fakeReader(t *testing.T) client.Reader {
 }
 
 // collected is one controller's instruments as a collection reads them:
-// by name, the unit and each point's value by its attributes.
+// by name, the type its data has, the unit and each point's value by its
+// attributes.
 type collected map[string]struct {
+	typ    InstrumentType
 	unit   string
 	points map[string]int64
 }
@@ -103,12 +105,16 @@ func collect(t *testing.T, register func(metric.Meter) error, after func()) coll
 	for _, sm := range rm.ScopeMetrics {
 		for _, m := range sm.Metrics {
 			points := map[string]int64{}
+			var typ InstrumentType
 			switch d := m.Data.(type) {
 			case metricdata.Gauge[int64]:
+				typ = Gauge
 				for _, p := range d.DataPoints {
 					points[key(p.Attributes.ToSlice())] = p.Value
 				}
 			case metricdata.Sum[int64]:
+				require.True(t, d.IsMonotonic, "%s is a sum that may decrease", m.Name)
+				typ = Counter
 				for _, p := range d.DataPoints {
 					points[key(p.Attributes.ToSlice())] = p.Value
 				}
@@ -116,9 +122,10 @@ func collect(t *testing.T, register func(metric.Meter) error, after func()) coll
 				t.Fatalf("%s is a %T", m.Name, m.Data)
 			}
 			out[m.Name] = struct {
+				typ    InstrumentType
 				unit   string
 				points map[string]int64
-			}{m.Unit, points}
+			}{typ, m.Unit, points}
 		}
 	}
 	return out
@@ -139,7 +146,7 @@ func key(attrs []attribute.KeyValue) string {
 func registered(t *testing.T) map[string]collected {
 	t.Helper()
 	r := fakeReader(t)
-	var j *JetStream
+	var j *JetStreamInstruments
 	return map[string]collected{
 		ClusterController: collect(t, func(m metric.Meter) error { return RegisterCluster(m, r) }, nil),
 		AuthController:    collect(t, func(m metric.Meter) error { return RegisterAuth(m, r) }, nil),
@@ -199,8 +206,8 @@ func TestInstruments(t *testing.T) {
 }
 
 // TestInstrumentsListed pins Instruments, which the telemetry page lists,
-// to what each controller registers: the same names and units, and no
-// attribute an instrument's entry does not name.
+// to what each controller registers: the same names, types and units, and
+// no attribute an instrument's entry does not name.
 func TestInstrumentsListed(t *testing.T) {
 	got := registered(t)
 	for _, controller := range []string{ClusterController, AuthController, JetStreamController} {
@@ -212,6 +219,7 @@ func TestInstrumentsListed(t *testing.T) {
 			want = append(want, in.Name)
 			m, ok := got[controller][in.Name]
 			require.True(t, ok, "%s does not register %s", controller, in.Name)
+			require.Equal(t, in.Type, m.typ, in.Name)
 			require.Equal(t, in.Unit, m.unit, in.Name)
 			for k := range m.points {
 				for _, pair := range strings.Split(k, ",") {
@@ -236,4 +244,14 @@ func attrKey(kvs map[string]string) string {
 	}
 	sort.Strings(pairs)
 	return strings.Join(pairs, ",")
+}
+
+// TestInstrumentTypeBuilt pins that an instrument is built only as its
+// Type says.
+func TestInstrumentTypeBuilt(t *testing.T) {
+	m := sdkmetric.NewMeterProvider().Meter("test")
+	_, err := gauge(m, BalancerHeldPasses)
+	require.ErrorContains(t, err, "is a counter, not a gauge")
+	_, err = counter(m, Condition)
+	require.ErrorContains(t, err, "is a gauge, not a counter")
 }

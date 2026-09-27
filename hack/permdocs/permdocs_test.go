@@ -273,3 +273,11 @@ func TestPageCurrent(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, want, string(got), "%s is stale: run just perm-docs", page)
 }
+
+// TestUserPresetUnknown pins that a preset without a grant fails the page
+// rather than rendering as unrestricted.
+func TestUserPresetUnknown(t *testing.T) {
+	var b strings.Builder
+	require.ErrorContains(t, userPreset(&b, jwtplane.UserPreset("no-such-preset")), "no-such-preset")
+	require.Empty(t, b.String())
+}

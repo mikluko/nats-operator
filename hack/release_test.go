@@ -85,11 +85,27 @@ func TestReleasePlan(t *testing.T) {
 	}
 }
 
+type step struct {
+	Uses string            `json:"uses"`
+	Run  string            `json:"run"`
+	Env  map[string]string `json:"env"`
+}
+
 type workflow struct {
 	Env  map[string]string `json:"env"`
 	Jobs map[string]struct {
-		Env map[string]string `json:"env"`
+		Env   map[string]string `json:"env"`
+		Steps []step            `json:"steps"`
 	} `json:"jobs"`
+}
+
+func readWorkflow(t *testing.T, name string) workflow {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("../.github/workflows", name))
+	require.NoError(t, err)
+	var wf workflow
+	require.NoError(t, yaml.Unmarshal(b, &wf))
+	return wf
 }
 
 type controllerValues struct {
@@ -104,15 +120,26 @@ type chartValues struct {
 	JetStream controllerValues `json:"jetstream"`
 }
 
-// TestRelease_PublishesWhatTheChartPulls holds the release workflow's image
-// names and chart destination to the chart's default image repositories.
-func TestRelease_PublishesWhatTheChartPulls(t *testing.T) {
-	b, err := os.ReadFile("../.github/workflows/release.yml")
+// controllers are the commands under cmd/ named *-controller, which the
+// Justfile, the release workflow and hack/e2e.sh build.
+func controllers(t *testing.T) []string {
+	t.Helper()
+	dirs, err := filepath.Glob("../cmd/*-controller")
 	require.NoError(t, err)
-	var wf workflow
-	require.NoError(t, yaml.Unmarshal(b, &wf))
+	names := make([]string, len(dirs))
+	for i, d := range dirs {
+		names[i] = filepath.Base(d)
+	}
+	return names
+}
 
-	b, err = os.ReadFile("../charts/nats-operator/values.yaml")
+// TestRelease_PublishesWhatTheChartPulls holds the images the release
+// workflow publishes, one per controller under cmd/, and its chart
+// destination to the chart's default image repositories.
+func TestRelease_PublishesWhatTheChartPulls(t *testing.T) {
+	wf := readWorkflow(t, "release.yml")
+
+	b, err := os.ReadFile("../charts/nats-operator/values.yaml")
 	require.NoError(t, err)
 	var values chartValues
 	require.NoError(t, yaml.Unmarshal(b, &values))
@@ -126,9 +153,57 @@ func TestRelease_PublishesWhatTheChartPulls(t *testing.T) {
 	registry := wf.Env["REGISTRY"]
 	require.Equal(t, "ghcr.io/mikluko/nats-operator", registry)
 	var pushed []string
-	for _, c := range strings.Fields(wf.Jobs["images"].Env["CONTROLLERS"]) {
+	for _, c := range controllers(t) {
 		pushed = append(pushed, registry+"/"+c)
 	}
 	require.ElementsMatch(t, pulled, pushed)
 	require.Equal(t, "oci://"+registry+"/charts", wf.Env["CHART_REPOSITORY"])
+}
+
+// TestControllerList pins the Justfile's controller list to cmd/.
+func TestControllerList(t *testing.T) {
+	just, err := exec.LookPath("just")
+	if err != nil {
+		t.Skip("just is not on PATH")
+	}
+	out, err := exec.Command(just, "--justfile", "../Justfile", "--evaluate", "controllers").Output()
+	require.NoError(t, err)
+	require.ElementsMatch(t, controllers(t), strings.Fields(string(out)))
+}
+
+// setupHugo is the action every workflow installs Hugo with.
+const setupHugo = "./.github/actions/setup-hugo"
+
+// TestHugoInstalledOnce pins the Hugo release to the setup-hugo action: the
+// workflows that build the site use it, and none names a version of its own.
+func TestHugoInstalledOnce(t *testing.T) {
+	b, err := os.ReadFile("../.github/actions/setup-hugo/action.yml")
+	require.NoError(t, err)
+	var action struct {
+		Runs struct {
+			Steps []step `json:"steps"`
+		} `json:"runs"`
+	}
+	require.NoError(t, yaml.Unmarshal(b, &action))
+	require.Len(t, action.Runs.Steps, 1)
+	require.Regexp(t, `^\d+\.\d+\.\d+$`, action.Runs.Steps[0].Env["HUGO_VERSION"])
+
+	for _, tc := range []struct{ workflow, job string }{
+		{"ci.yml", "go"},
+		{"docs.yml", "build"},
+	} {
+		t.Run(tc.workflow, func(t *testing.T) {
+			wf := readWorkflow(t, tc.workflow)
+			require.NotContains(t, wf.Env, "HUGO_VERSION")
+			var uses bool
+			for name, job := range wf.Jobs {
+				require.NotContains(t, job.Env, "HUGO_VERSION", name)
+				for _, s := range job.Steps {
+					require.NotContains(t, s.Env, "HUGO_VERSION", name)
+					uses = uses || (name == tc.job && s.Uses == setupHugo)
+				}
+			}
+			require.True(t, uses, "job %s does not use %s", tc.job, setupHugo)
+		})
+	}
 }

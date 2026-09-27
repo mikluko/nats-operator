@@ -8,9 +8,6 @@ on:
 permissions:
   contents: read
 
-env:
-  HUGO_VERSION: 0.166.0
-
 jobs:
   go:
     runs-on: ubuntu-latest
@@ -25,11 +22,7 @@ jobs:
           version: v4.3.0
       - name: Install helm-unittest
         run: helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.0.3
-      - name: Install Hugo
-        run: |
-          curl -fsSLo "$RUNNER_TEMP/hugo.deb" \
-            "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.deb"
-          sudo dpkg -i "$RUNNER_TEMP/hugo.deb"
+      - uses: ./.github/actions/setup-hugo
       - run: just verify
       - run: just chart
       - run: just build

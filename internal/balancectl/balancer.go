@@ -69,7 +69,7 @@ type BalancerReconciler struct {
 	// Recorder records moves started; nil records none.
 	Recorder events.EventRecorder
 	// Telemetry counts held passes; nil counts none.
-	Telemetry *telemetry.JetStream
+	Telemetry *telemetry.JetStreamInstruments
 
 	mu      sync.Mutex
 	keepers map[types.NamespacedName]keeperOf
