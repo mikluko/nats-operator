@@ -291,7 +291,7 @@ func (e *env) testStory5(t *testing.T) {
 	})
 	require.Equal(t, []authv1beta1.ImportStatus{
 		{Export: "monitoring/check-results", Subject: "monitoring.results.>", LocalSubject: "upstream.results.>", Type: authv1beta1.ExportTypeStream},
-		{Export: "monitoring/execute", Subject: "monitoring.execute", Type: authv1beta1.ExportTypeService, Activation: auth.ActivationSigned},
+		{Export: "monitoring/execute", Subject: "monitoring.execute", Type: authv1beta1.ExportTypeService, Activation: authv1beta1.ActivationSigned},
 	}, core.Status.Imports)
 
 	mc, err := jwt.DecodeAccountClaims(monitoring.Status.JWT)

@@ -259,9 +259,9 @@ type StreamTransfer struct {
 
 // TransferConsumers counts the consumers moved with a stream.
 type TransferConsumers struct {
-	// Migrated is the number moved.
+	// Moved is the number moved.
 	// +optional
-	Migrated int32 `json:"migrated,omitempty"`
+	Moved int32 `json:"moved,omitempty"`
 
 	// Total is the number to move.
 	// +optional

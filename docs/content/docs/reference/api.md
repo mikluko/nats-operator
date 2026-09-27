@@ -46,6 +46,13 @@ Appears on: [Export](#Export), [Import](#Import), [NatsUserSpec](#NatsUserSpec).
 | `kind` | [{{< type "AccountKind" >}}](#AccountKind) | Yes | Kind of the account. |
 | `name` | {{< type "string" >}} | Yes | Name of the referenced object. |
 | `namespace` | {{< type "string" >}} | No | Namespace of the referenced object, the referrer's own when omitted. Another namespace is admitted only by a NatsReferenceGrant there. |
+### ActivationState {#ActivationState}
+ActivationState is the state of an import's activation token.\
+Type: {{< type "string" >}}\
+Appears on: [ImportStatus](#ImportStatus).
+| Value | Description |
+| :---- | :---------- |
+| `Signed` | ActivationSigned is an activation token the auth controller minted. |
 ### ConnectionType {#ConnectionType}
 ConnectionType is a NATS connection type a user may connect as.\
 Type: {{< type "string" >}}\
@@ -132,7 +139,7 @@ Appears on: [NatsAccountStatus](#NatsAccountStatus).
 | `subject` | {{< type "string" >}} | No | Subject is the exported subject. |
 | `localSubject` | {{< type "string" >}} | No | LocalSubject is where the import appears in this account. |
 | `type` | [{{< type "ExportType" >}}](#ExportType) | No | Type of the export. |
-| `activation` | {{< type "string" >}} | No | Activation is the state of the activation token of a Private export. |
+| `activation` | [{{< type "ActivationState" >}}](#ActivationState) | No | Activation is the state of the activation token of a Private export. |
 ### Keys {#Keys}
 Keys adopts existing seeds; omitted, the auth controller generates keys into Secrets it owns.\
 Appears on: [NatsAccountSpec](#NatsAccountSpec), [NatsOperatorSpec](#NatsOperatorSpec), [NatsSystemAccountSpec](#NatsSystemAccountSpec).
@@ -390,6 +397,12 @@ Appears on: [NatsClusterStatus](#NatsClusterStatus).
 | `client` | {{< type "string" >}} | No | Client is the client URL, what a NatsConnection's servers is copied from. |
 | `monitor` | {{< type "string" >}} | No | Monitor is the monitoring URL. |
 | `gateway` | {{< type "string" >}} | No | Gateway is the advertised gateway address. |
+### Exporter {#Exporter}
+Exporter is the prometheus-nats-exporter sidecar in every server's pod, serving metrics on port 7777.\
+Appears on: [NatsClusterSpec](#NatsClusterSpec).
+| Field | Type | Required | Description |
+| :---- | :--- | :------: | :---------- |
+| `enabled` | {{< type "bool" >}} | No | Enabled turns the sidecar off when false. Default: `true`. |
 ### Gateway {#Gateway}
 Gateway joins a NATS cluster into a supercluster.\
 Appears on: [NatsClusterSpec](#NatsClusterSpec).
@@ -455,12 +468,11 @@ Appears on: [NatsClusterStatus](#NatsClusterStatus).
 | `metaLeader` | {{< type "string" >}} | No | MetaLeader is the server leading the meta group. |
 | `limits` | [{{< type "JetStreamLimits" >}}](#JetStreamLimits) | No | Limits are the effective store limits. |
 ### LeafRemote {#LeafRemote}
-LeafRemote is a hub a leaf dials, and the local account it binds.\
+LeafRemote is a hub a leaf dials, and the local account it binds. With neither localAccountTrustRef nor localSystemAccount it binds the global account.\
 Appears on: [NatsClusterSpec](#NatsClusterSpec).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `connectionRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | ConnectionRef names the NatsConnection holding the hub's URL, CA and credentials. |
-| `localAccount` | {{< type "string" >}} | No | LocalAccount names the local account the remote binds, on a leaf with several and no auth plane. |
 | `localAccountTrustRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | No | LocalAccountTrustRef names the NatsAccountTrust of the local account the remote binds. |
 | `localSystemAccount` | {{< type "bool" >}} | No | LocalSystemAccount binds the remote to the leaf's system account. |
 ### LeafRemoteStatus {#LeafRemoteStatus}
@@ -468,7 +480,8 @@ LeafRemoteStatus is the connection to one hub.\
 Appears on: [NatsClusterStatus](#NatsClusterStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `connectionRef` | {{< type "string" >}} | No | ConnectionRef is the name of the remote's NatsConnection. |
+| `connectionNamespace` | {{< type "string" >}} | Yes | ConnectionNamespace is the namespace of the remote's NatsConnection. |
+| `connectionName` | {{< type "string" >}} | Yes | ConnectionName is the name of the remote's NatsConnection. |
 | `connected` | {{< type "int32" >}} | No | Connected is the number of servers connected to the hub. |
 | `account` | {{< type "string" >}} | No | Account is the public key of the hub account the credentials sign into. |
 ### Leafnodes {#Leafnodes}
@@ -507,6 +520,7 @@ Appears on: [NatsCluster](#NatsCluster).
 | `jetstream` | [{{< type "JetStream" >}}](#JetStream) | No | JetStream enables JetStream on every server. |
 | `serverTags` | {{< type "map[string]string" >}} | No | ServerTags are rendered as key:value server tags. |
 | `podTemplate` | [{{< type "PodTemplate" >}}](#PodTemplate) | No | PodTemplate is merged into every server's pod. |
+| `exporter` | [{{< type "Exporter" >}}](#Exporter) | No | Exporter configures the prometheus-nats-exporter sidecar; absent, it runs. |
 | `routes` | [{{< type "Routes" >}}](#Routes) | No | Routes configures the route listener; absent, route TLS is on and self-signed. |
 | `auth` | [{{< type "Auth" >}}](#Auth) | No | Auth puts the NATS cluster under a NATS operator; absent, servers run with no accounts and no client auth. |
 | `gateway` | [{{< type "Gateway" >}}](#Gateway) | No | Gateway joins the NATS cluster into a supercluster under its own name, the NatsCluster's name. |
@@ -529,7 +543,6 @@ Appears on: [NatsCluster](#NatsCluster).
 | `jetstream` | [{{< type "JetStreamStatus" >}}](#JetStreamStatus) | No | JetStream is the JetStream state of the cluster. |
 | `gateways` | [{{< type "[]GatewayStatus" >}}](#GatewayStatus) | No | Gateways are the connections to the other supercluster members. |
 | `leafRemotes` | [{{< type "[]LeafRemoteStatus" >}}](#LeafRemoteStatus) | No | LeafRemotes are the connections to hubs. |
-| `resolver` | [{{< type "ResolverStatus" >}}](#ResolverStatus) | No | Resolver is the account resolver's state. |
 | `servers` | [{{< type "[]ServerStatus" >}}](#ServerStatus) | No | Servers has one entry per server. |
 ### PodTemplate {#PodTemplate}
 PodTemplate is merged into the pod the cluster controller renders.\
@@ -538,13 +551,6 @@ Appears on: [NatsClusterSpec](#NatsClusterSpec).
 | :---- | :--- | :------: | :---------- |
 | `metadata` | [{{< type "EmbeddedObjectMetadata" >}}](#EmbeddedObjectMetadata) | No |  |
 | `spec` | [{{< type "PodSpec" >}}](https://pkg.go.dev/k8s.io/api/core/v1#PodSpec) | No | Spec is a partial pod spec merged over the rendered one; the API server does not validate it. |
-### ResolverStatus {#ResolverStatus}
-ResolverStatus is the account resolver's state.\
-Appears on: [NatsClusterStatus](#NatsClusterStatus).
-| Field | Type | Required | Description |
-| :---- | :--- | :------: | :---------- |
-| `accounts` | {{< type "int32" >}} | No | Accounts is the number of account JWTs held. |
-| `lastSyncTime` | [{{< type "Time" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Time) | No | LastSyncTime is when the resolver last synced from its peers. |
 ### ResolverType {#ResolverType}
 ResolverType is a NATS account resolver type.\
 Type: {{< type "string" >}}\
@@ -648,8 +654,8 @@ Appears on: [NatsSystemBalancerStatus](#NatsSystemBalancerStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `placement` | {{< type "bool" >}} | No | Placement reports whether placement moves are possible. |
-| `leader` | [{{< type "LeaderCapability" >}}](#LeaderCapability) | No | Leader is partial while some accounts carry no jetstream-stepdown export. |
-| `leaderReason` | {{< type "string" >}} | No | LeaderReason explains a leader capability short of full. |
+| `leader` | [{{< type "LeaderCapability" >}}](#LeaderCapability) | No | Leader is Partial while some accounts carry no jetstream-stepdown export. |
+| `leaderReason` | {{< type "string" >}} | No | LeaderReason explains a leader capability short of Full. |
 ### ConsumerConfig {#ConsumerConfig}
 ConsumerConfig is nats-server's ConsumerConfig: a push consumer when DeliverSubject is set, a pull consumer otherwise. An omitted field takes the server's value.\
 Appears on: [NatsConsumerSpec](#NatsConsumerSpec).
@@ -753,7 +759,7 @@ Appears on: [NatsKeyValueSpec](#NatsKeyValueSpec).
 | `history` | {{< type "int32" >}} | No |  |
 | `ttl` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No |  |
 | `maxBytes` | [{{< type "Quantity" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity) | No |  |
-| `storage` | [{{< type "StorageType" >}}](#StorageType) | No |  |
+| `storage` | [{{< type "StorageType" >}}](#StorageType) | No | Storage is immutable: a bucket is a stream. |
 | `replicas` | {{< type "int32" >}} | No |  |
 | `placement` | [{{< type "Placement" >}}](#Placement) | No |  |
 | `republish` | [{{< type "Republish" >}}](#Republish) | No |  |
@@ -768,9 +774,9 @@ Type: {{< type "string" >}}\
 Appears on: [Capabilities](#Capabilities).
 | Value | Description |
 | :---- | :---------- |
-| `full` |  |
-| `none` |  |
-| `partial` |  |
+| `Full` |  |
+| `None` |  |
+| `Partial` |  |
 ### Move {#Move}
 Move is a leader or placement move.\
 Appears on: [NatsSystemBalancerStatus](#NatsSystemBalancerStatus).
@@ -939,7 +945,7 @@ Appears on: [NatsKeyValue](#NatsKeyValue).
 | `history` | {{< type "int32" >}} | No |  |
 | `ttl` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No |  |
 | `maxBytes` | [{{< type "Quantity" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity) | No |  |
-| `storage` | [{{< type "StorageType" >}}](#StorageType) | No |  |
+| `storage` | [{{< type "StorageType" >}}](#StorageType) | No | Storage is immutable: a bucket is a stream. |
 | `replicas` | {{< type "int32" >}} | No |  |
 | `placement` | [{{< type "Placement" >}}](#Placement) | No |  |
 | `republish` | [{{< type "Republish" >}}](#Republish) | No |  |
@@ -981,7 +987,7 @@ Appears on: [NatsObjectStore](#NatsObjectStore).
 | `description` | {{< type "string" >}} | No |  |
 | `ttl` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No |  |
 | `maxBytes` | [{{< type "Quantity" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity) | No |  |
-| `storage` | [{{< type "StorageType" >}}](#StorageType) | No |  |
+| `storage` | [{{< type "StorageType" >}}](#StorageType) | No | Storage is immutable: a bucket is a stream. |
 | `replicas` | {{< type "int32" >}} | No |  |
 | `placement` | [{{< type "Placement" >}}](#Placement) | No |  |
 | `compression` | {{< type "bool" >}} | No |  |
@@ -1103,7 +1109,7 @@ Appears on: [NatsObjectStoreSpec](#NatsObjectStoreSpec).
 | `description` | {{< type "string" >}} | No |  |
 | `ttl` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No |  |
 | `maxBytes` | [{{< type "Quantity" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity) | No |  |
-| `storage` | [{{< type "StorageType" >}}](#StorageType) | No |  |
+| `storage` | [{{< type "StorageType" >}}](#StorageType) | No | Storage is immutable: a bucket is a stream. |
 | `replicas` | {{< type "int32" >}} | No |  |
 | `placement` | [{{< type "Placement" >}}](#Placement) | No |  |
 | `compression` | {{< type "bool" >}} | No |  |
@@ -1369,7 +1375,7 @@ TransferConsumers counts the consumers moved with a stream.\
 Appears on: [StreamTransfer](#StreamTransfer).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `migrated` | {{< type "int32" >}} | No | Migrated is the number moved. |
+| `moved` | {{< type "int32" >}} | No | Moved is the number moved. |
 | `total` | {{< type "int32" >}} | No | Total is the number to move. |
 ## nats.mikluko.io/v1beta1
 Package v1beta1 is the nats.mikluko.io API group: the kinds every controller reads and none owns.

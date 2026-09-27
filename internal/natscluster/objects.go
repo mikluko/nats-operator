@@ -201,9 +201,12 @@ func podTemplate(nc *clusterv1beta1.NatsCluster, server string, limits Limits) (
 		ObjectMeta: metav1.ObjectMeta{Labels: serverLabels(nc, server)},
 		Spec: corev1.PodSpec{
 			TerminationGracePeriodSeconds: ptr.To[int64](terminationGracePeriod),
-			Containers:                    []corev1.Container{natsContainer(nc, limits), exporterContainer()},
+			Containers:                    []corev1.Container{natsContainer(nc, limits)},
 			Volumes:                       volumes(nc, server),
 		},
+	}
+	if exporterEnabled(&nc.Spec) {
+		t.Spec.Containers = append(t.Spec.Containers, exporterContainer())
 	}
 	pt := nc.Spec.PodTemplate
 	if pt == nil {
@@ -332,6 +335,12 @@ func healthz(path string) corev1.ProbeHandler {
 	return corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: path, Port: intstr.FromString("monitor")}}
 }
 
+// exporterEnabled reports whether servers run the exporter sidecar: on
+// unless exporter.enabled is false.
+func exporterEnabled(spec *clusterv1beta1.NatsClusterSpec) bool {
+	return spec.Exporter == nil || spec.Exporter.Enabled == nil || *spec.Exporter.Enabled
+}
+
 func exporterContainer() corev1.Container {
 	return corev1.Container{
 		Name:  "exporter",
@@ -381,9 +390,11 @@ func headlessService(nc *clusterv1beta1.NatsCluster) *corev1.Service {
 				servicePort("client", PortClient),
 				servicePort("route", PortRoute),
 				servicePort("monitor", PortMonitor),
-				servicePort("metrics", PortMetrics),
 			},
 		},
+	}
+	if exporterEnabled(&nc.Spec) {
+		svc.Spec.Ports = append(svc.Spec.Ports, servicePort("metrics", PortMetrics))
 	}
 	if nc.Spec.Gateway != nil {
 		svc.Spec.Ports = append(svc.Spec.Ports, servicePort("gateway", PortGateway))

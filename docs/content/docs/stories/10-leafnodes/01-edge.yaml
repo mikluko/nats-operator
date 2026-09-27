@@ -41,7 +41,7 @@ spec:
     - connectionRef:
         name: hub
       # With no auth plane on the leaf there is one local account, the
-      # global one; `localAccount` names another when the leaf has several.
+      # global one, and the remote binds it.
 ---
 # A local buffer that keeps accepting while the link is down, and a source
 # on the hub side is how it drains; that part is ordinary JetStream config

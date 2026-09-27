@@ -404,6 +404,8 @@ spec:
                     activation:
                       description: Activation is the state of the activation token
                         of a Private export.
+                      enum:
+                      - Signed
                       type: string
                     export:
                       description: Export is the export taken, as account/export.

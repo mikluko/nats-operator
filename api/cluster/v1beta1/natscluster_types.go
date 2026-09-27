@@ -59,6 +59,11 @@ type NatsClusterSpec struct {
 	// +optional
 	PodTemplate *PodTemplate `json:"podTemplate,omitempty"`
 
+	// Exporter configures the prometheus-nats-exporter sidecar; absent, it
+	// runs.
+	// +optional
+	Exporter *Exporter `json:"exporter,omitempty"`
+
 	// Routes configures the route listener; absent, route TLS is on and
 	// self-signed.
 	// +optional
@@ -319,18 +324,14 @@ type Leafnodes struct {
 }
 
 // LeafRemote is a hub a leaf dials, and the local account it binds.
-// +kubebuilder:validation:XValidation:rule="[has(self.localAccount), has(self.localAccountTrustRef), has(self.localSystemAccount) && self.localSystemAccount].filter(x, x).size() <= 1",message="localAccount, localAccountTrustRef and localSystemAccount are mutually exclusive"
+// With neither localAccountTrustRef nor localSystemAccount it binds the
+// global account.
+// +kubebuilder:validation:XValidation:rule="!(has(self.localAccountTrustRef) && has(self.localSystemAccount) && self.localSystemAccount)",message="localAccountTrustRef and localSystemAccount are mutually exclusive"
 type LeafRemote struct {
 	// ConnectionRef names the NatsConnection holding the hub's URL, CA and
 	// credentials.
 	// +required
 	ConnectionRef natsv1beta1.ObjectReference `json:"connectionRef"`
-
-	// LocalAccount names the local account the remote binds, on a leaf with
-	// several and no auth plane.
-	// +optional
-	// +kubebuilder:validation:MinLength=1
-	LocalAccount string `json:"localAccount,omitempty"`
 
 	// LocalAccountTrustRef names the NatsAccountTrust of the local account
 	// the remote binds.
@@ -340,6 +341,15 @@ type LeafRemote struct {
 	// LocalSystemAccount binds the remote to the leaf's system account.
 	// +optional
 	LocalSystemAccount bool `json:"localSystemAccount,omitempty"`
+}
+
+// Exporter is the prometheus-nats-exporter sidecar in every server's pod,
+// serving metrics on port 7777.
+type Exporter struct {
+	// Enabled turns the sidecar off when false.
+	// +optional
+	// +kubebuilder:default=true
+	Enabled *bool `json:"enabled,omitempty"`
 }
 
 // Rollout steers a NATS cluster's one-server-at-a-time restarts.
@@ -398,11 +408,10 @@ type NatsClusterStatus struct {
 
 	// LeafRemotes are the connections to hubs.
 	// +optional
+	// +listType=map
+	// +listMapKey=connectionNamespace
+	// +listMapKey=connectionName
 	LeafRemotes []LeafRemoteStatus `json:"leafRemotes,omitempty"`
-
-	// Resolver is the account resolver's state.
-	// +optional
-	Resolver *ResolverStatus `json:"resolver,omitempty"`
 
 	// Servers has one entry per server.
 	// +optional
@@ -518,9 +527,13 @@ type GatewayStatus struct {
 
 // LeafRemoteStatus is the connection to one hub.
 type LeafRemoteStatus struct {
-	// ConnectionRef is the name of the remote's NatsConnection.
-	// +optional
-	ConnectionRef string `json:"connectionRef,omitempty"`
+	// ConnectionNamespace is the namespace of the remote's NatsConnection.
+	// +required
+	ConnectionNamespace string `json:"connectionNamespace"`
+
+	// ConnectionName is the name of the remote's NatsConnection.
+	// +required
+	ConnectionName string `json:"connectionName"`
 
 	// Connected is the number of servers connected to the hub.
 	// +optional
@@ -530,17 +543,6 @@ type LeafRemoteStatus struct {
 	// into.
 	// +optional
 	Account string `json:"account,omitempty"`
-}
-
-// ResolverStatus is the account resolver's state.
-type ResolverStatus struct {
-	// Accounts is the number of account JWTs held.
-	// +optional
-	Accounts int32 `json:"accounts,omitempty"`
-
-	// LastSyncTime is when the resolver last synced from its peers.
-	// +optional
-	LastSyncTime *metav1.Time `json:"lastSyncTime,omitempty"`
 }
 
 // ServerStatus is one server's state.

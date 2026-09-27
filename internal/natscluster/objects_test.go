@@ -3,6 +3,7 @@ package natscluster
 import (
 	"crypto/x509"
 	"encoding/pem"
+	"slices"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 )
@@ -74,6 +76,44 @@ func TestRender_Story1(t *testing.T) {
 	require.Equal(t, "demo", p.ClientService.Name)
 	require.Equal(t, intstr.FromInt32(1), *p.PDB.Spec.MaxUnavailable)
 	require.Equal(t, map[string]string{LabelCluster: "demo"}, p.PDB.Spec.Selector.MatchLabels)
+}
+
+// TestRender_Exporter pins the exporter sidecar and the headless Service's
+// metrics port: both present unless exporter.enabled is false.
+func TestRender_Exporter(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		exporter *clusterv1beta1.Exporter
+		want     bool
+	}{
+		{"absent", nil, true},
+		{"enabled unset", &clusterv1beta1.Exporter{}, true},
+		{"enabled", &clusterv1beta1.Exporter{Enabled: ptr.To(true)}, true},
+		{"disabled", &clusterv1beta1.Exporter{Enabled: ptr.To(false)}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			nc := storyCluster(t)
+			nc.Spec.Exporter = tt.exporter
+			p, err := Render(nc, Inputs{})
+			require.NoError(t, err)
+			for _, s := range p.Servers {
+				var names []string
+				for _, c := range s.StatefulSet.Spec.Template.Spec.Containers {
+					names = append(names, c.Name)
+				}
+				if tt.want {
+					require.Equal(t, []string{"nats", "exporter"}, names)
+				} else {
+					require.Equal(t, []string{"nats"}, names)
+				}
+			}
+			var ports []string
+			for _, sp := range p.HeadlessService.Spec.Ports {
+				ports = append(ports, sp.Name)
+			}
+			require.Equal(t, tt.want, slices.Contains(ports, "metrics"), ports)
+		})
+	}
 }
 
 func TestRender_Revision(t *testing.T) {

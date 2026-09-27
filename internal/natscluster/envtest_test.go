@@ -537,12 +537,12 @@ func TestEnvtestReconcile(t *testing.T) {
 
 	t.Run("unsupported fields are refused", func(t *testing.T) {
 		nc := newCluster(t, "unsupported", func(nc *clusterv1beta1.NatsCluster) {
-			nc.Spec.LeafRemotes = []clusterv1beta1.LeafRemote{{ConnectionRef: natsv1beta1.ObjectReference{Name: "hub"}, LocalAccount: "A"}}
+			nc.Spec.LeafRemotes = []clusterv1beta1.LeafRemote{{ConnectionRef: natsv1beta1.ObjectReference{Name: "hub"}, LocalSystemAccount: true}}
 			nc.Spec.JetStream = nil
 		})
 		_, got := reconcile(t, nc)
 		condition(t, got, ConditionProgressing, metav1.ConditionFalse, ReasonUnsupportedSpec)
-		require.Contains(t, meta.FindStatusCondition(got.Status.Conditions, ConditionProgressing).Message, "leafRemotes[0].localAccount")
+		require.Contains(t, meta.FindStatusCondition(got.Status.Conditions, ConditionProgressing).Message, "leafRemotes[0].localSystemAccount without auth")
 		require.Empty(t, statefulSets(t, "unsupported"))
 	})
 

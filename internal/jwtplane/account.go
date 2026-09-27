@@ -46,11 +46,9 @@ type Account struct {
 
 // Limits are an account's limits. Zero is unlimited throughout.
 type Limits struct {
-	Connections         int64
-	LeafNodeConnections int64
-	Subscriptions       int64
-	Payload             int64
-	Data                int64
+	Connections   int64
+	Subscriptions int64
+	Payload       int64
 	// JetStream nil disables JetStream for the account.
 	JetStream *JetStreamLimits
 }
@@ -96,15 +94,12 @@ type Import struct {
 type Revocation struct {
 	PublicKey string
 	At        time.Time
-	// Expires is when the revoked user's JWT expires; zero is never. A
-	// revocation is dropped once its user's JWT would have expired.
-	Expires time.Time
 }
 
 // SignAccount returns the account JWT, signed by the operator's active
 // signing key and expiring TTL after now.
 func SignAccount(a Account, operator Keys, now time.Time) (string, error) {
-	c, err := accountClaims(a.Name, a.Keys, a.Revocations, now)
+	c, err := accountClaims(a.Name, a.Keys, a.Revocations)
 	if err != nil {
 		return "", err
 	}
@@ -147,7 +142,7 @@ type SystemAccount struct {
 // SignSystemAccount returns the system account JWT, signed by the operator's
 // active signing key. It never expires and has JetStream disabled.
 func SignSystemAccount(s SystemAccount, operator Keys, now time.Time) (string, error) {
-	c, err := accountClaims(s.Name, s.Keys, s.Revocations, now)
+	c, err := accountClaims(s.Name, s.Keys, s.Revocations)
 	if err != nil {
 		return "", err
 	}
@@ -163,7 +158,7 @@ func SignSystemAccount(s SystemAccount, operator Keys, now time.Time) (string, e
 	return signAccountClaims(c, operator)
 }
 
-func accountClaims(name string, keys Keys, revs []Revocation, now time.Time) (*jwt.AccountClaims, error) {
+func accountClaims(name string, keys Keys, revs []Revocation) (*jwt.AccountClaims, error) {
 	pub, err := keys.publicKey(nkeys.PrefixByteAccount)
 	if err != nil {
 		return nil, err
@@ -178,9 +173,6 @@ func accountClaims(name string, keys Keys, revs []Revocation, now time.Time) (*j
 	for _, r := range revs {
 		if !nkeys.IsValidPublicUserKey(r.PublicKey) {
 			return nil, fmt.Errorf("%w: revoked %q is not a user public key", ErrWrongKeyType, r.PublicKey)
-		}
-		if !r.Expires.IsZero() && !r.Expires.After(now) {
-			continue
 		}
 		c.RevokeAt(r.PublicKey, r.At)
 	}
@@ -212,10 +204,8 @@ func applyLimits(dst *jwt.OperatorLimits, l Limits) error {
 	}
 	errs := []error{
 		set(&dst.Conn, l.Connections, "connections"),
-		set(&dst.LeafNodeConn, l.LeafNodeConnections, "leafnode connections"),
 		set(&dst.Subs, l.Subscriptions, "subscriptions"),
 		set(&dst.Payload, l.Payload, "payload"),
-		set(&dst.Data, l.Data, "data"),
 	}
 	if js := l.JetStream; js != nil {
 		errs = append(errs,

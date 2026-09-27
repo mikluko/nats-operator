@@ -12,7 +12,8 @@ status:
       reason: AllRemotesConnected
       message: 3 of 3 servers connected to 1 remote
   leafRemotes:
-    - connectionRef: hub
+    - connectionNamespace: nats-system
+      connectionName: hub
       connected: 3
       account: !any ATELEMETRY...   # the hub account the credentials sign into
   endpoints:

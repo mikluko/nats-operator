@@ -30,9 +30,6 @@ import (
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
-// ActivationSigned is an ImportStatus activation whose token was minted.
-const ActivationSigned = "signed"
-
 // AccountReconciler signs a NatsAccount's JWT with its operator's active
 // signing key and writes it to status, generating the keys spec omits.
 //
@@ -474,7 +471,7 @@ func (r *AccountReconciler) resolveImports(ctx context.Context, acc *authv1beta1
 				return out, err
 			}
 			ji.Token = token
-			status.Activation = ActivationSigned
+			status.Activation = authv1beta1.ActivationSigned
 		}
 		out.imports = append(out.imports, ji)
 		out.statuses = append(out.statuses, status)

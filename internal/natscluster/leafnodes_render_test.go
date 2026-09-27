@@ -262,6 +262,13 @@ func TestReadLeafRemotes_Refusals(t *testing.T) {
 			nc.Spec.LeafRemotes[0].ConnectionRef.Namespace = "hubs"
 			return nc
 		}, nil, "NoGrant", "leafRemotes[0]"},
+		{"one NatsConnection named twice", func(t *testing.T) *clusterv1beta1.NatsCluster {
+			nc := storyLeafCluster(t, "edge.yaml", "edge-site-1")
+			again := nc.Spec.LeafRemotes[0]
+			again.ConnectionRef.Namespace = "nats-system"
+			nc.Spec.LeafRemotes = append(nc.Spec.LeafRemotes, again)
+			return nc
+		}, nil, ReasonUnsupportedSpec, "leafRemotes[0] and leafRemotes[1] both name NatsConnection nats-system/hub"},
 		{"creds Secret missing", func(t *testing.T) *clusterv1beta1.NatsCluster {
 			return storyLeafCluster(t, "edge.yaml", "edge-site-1")
 		}, func(t *testing.T, c client.Client) {
@@ -335,7 +342,6 @@ func TestUnsupportedLeafFields(t *testing.T) {
 		want   []string
 	}{
 		{"global account", nil, remote(func(*clusterv1beta1.LeafRemote) {}), nil},
-		{"local account by name", nil, remote(func(r *clusterv1beta1.LeafRemote) { r.LocalAccount = "A" }), []string{"leafRemotes[0].localAccount"}},
 		{"system account without auth", nil, remote(func(r *clusterv1beta1.LeafRemote) { r.LocalSystemAccount = true }), []string{"leafRemotes[0].localSystemAccount without auth"}},
 		{"account trust without auth", nil, remote(func(r *clusterv1beta1.LeafRemote) {
 			r.LocalAccountTrustRef = &natsv1beta1.ObjectReference{Name: "t"}
@@ -400,9 +406,9 @@ func TestLeafStatus(t *testing.T) {
 	nc := storyLeafCluster(t, "edge.yaml", "edge-site-1")
 	nc.Generation = 4
 	remotes := []LeafRemote{
-		{Ref: natsv1beta1.ObjectReference{Name: "hub"}, HubAccount: "ATEL"},
-		{Ref: natsv1beta1.ObjectReference{Name: "hub-orders"}, HubAccount: "AORD"},
-		{Ref: natsv1beta1.ObjectReference{Name: "hub-system"}, LocalAccount: "ASYS", HubAccount: "ASYS"},
+		{Connection: types.NamespacedName{Namespace: "nats-system", Name: "hub"}, HubAccount: "ATEL"},
+		{Connection: types.NamespacedName{Namespace: "orders", Name: "hub"}, HubAccount: "AORD"},
+		{Connection: types.NamespacedName{Namespace: "nats-system", Name: "hub-system"}, LocalAccount: "ASYS", HubAccount: "ASYS"},
 	}
 	plan, err := Render(nc, Inputs{})
 	require.NoError(t, err)
@@ -414,9 +420,9 @@ func TestLeafStatus(t *testing.T) {
 		var st clusterv1beta1.NatsClusterStatus
 		leafStatus(&st, nc, plan, map[string][]sysobs.Leaf{"edge-site-1-0": all, "edge-site-1-1": all, "edge-site-1-2": all}, nil)
 		require.Equal(t, []clusterv1beta1.LeafRemoteStatus{
-			{ConnectionRef: "hub", Connected: 3, Account: "ATEL"},
-			{ConnectionRef: "hub-orders", Connected: 3, Account: "AORD"},
-			{ConnectionRef: "hub-system", Connected: 3, Account: "ASYS"},
+			{ConnectionNamespace: "nats-system", ConnectionName: "hub", Connected: 3, Account: "ATEL"},
+			{ConnectionNamespace: "orders", ConnectionName: "hub", Connected: 3, Account: "AORD"},
+			{ConnectionNamespace: "nats-system", ConnectionName: "hub-system", Connected: 3, Account: "ASYS"},
 		}, st.LeafRemotes)
 		c := meta.FindStatusCondition(st.Conditions, ConditionLeafnodesConnected)
 		require.Equal(t, metav1.ConditionTrue, c.Status)
@@ -433,19 +439,22 @@ func TestLeafStatus(t *testing.T) {
 		c := meta.FindStatusCondition(st.Conditions, ConditionLeafnodesConnected)
 		require.Equal(t, metav1.ConditionFalse, c.Status)
 		require.Equal(t, ReasonRemotesDisconnected, c.Reason)
-		require.Equal(t, "hub: 1 of 3 servers connected; hub-orders: 1 of 3 servers connected; hub-system: 2 of 3 servers connected", c.Message)
+		require.Equal(t, "nats-system/hub: 1 of 3 servers connected; orders/hub: 1 of 3 servers connected; nats-system/hub-system: 2 of 3 servers connected", c.Message)
 	})
-	t.Run("no observation keeps the counts", func(t *testing.T) {
-		st := clusterv1beta1.NatsClusterStatus{LeafRemotes: []clusterv1beta1.LeafRemoteStatus{{ConnectionRef: "hub", Connected: 2}}}
+	t.Run("no observation keeps each remote's count", func(t *testing.T) {
+		st := clusterv1beta1.NatsClusterStatus{LeafRemotes: []clusterv1beta1.LeafRemoteStatus{
+			{ConnectionNamespace: "nats-system", ConnectionName: "hub", Connected: 2},
+			{ConnectionNamespace: "orders", ConnectionName: "hub", Connected: 1},
+		}}
 		leafStatus(&st, nc, plan, nil, errors.New("no answer"))
-		require.Equal(t, int32(2), st.LeafRemotes[0].Connected)
+		require.Equal(t, []int32{2, 1, 0}, []int32{st.LeafRemotes[0].Connected, st.LeafRemotes[1].Connected, st.LeafRemotes[2].Connected})
 		require.Equal(t, "ATEL", st.LeafRemotes[0].Account)
 		c := meta.FindStatusCondition(st.Conditions, ConditionLeafnodesConnected)
 		require.Equal(t, metav1.ConditionUnknown, c.Status)
 		require.Equal(t, "no answer", c.Message)
 	})
 	t.Run("no remotes clears both", func(t *testing.T) {
-		st := clusterv1beta1.NatsClusterStatus{LeafRemotes: []clusterv1beta1.LeafRemoteStatus{{ConnectionRef: "hub"}}}
+		st := clusterv1beta1.NatsClusterStatus{LeafRemotes: []clusterv1beta1.LeafRemoteStatus{{ConnectionNamespace: "nats-system", ConnectionName: "hub"}}}
 		setCondition(&st, metav1.Condition{Type: ConditionLeafnodesConnected, Status: metav1.ConditionTrue, Reason: ReasonAllRemotesConnected}, 1)
 		plan := &Plan{}
 		(&Reconciler{Observer: &fakeObserver{}}).observeLeafs(context.Background(), nc, plan, &st)

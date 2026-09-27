@@ -137,7 +137,7 @@ func TestEnvtestLeafnodes(t *testing.T) {
 		cond := condition(t, got, ConditionLeafnodesConnected, metav1.ConditionTrue, ReasonAllRemotesConnected)
 		require.Equal(t, "3 of 3 servers connected to 1 remote", cond.Message)
 		require.Equal(t, got.Generation, cond.ObservedGeneration)
-		require.Equal(t, []clusterv1beta1.LeafRemoteStatus{{ConnectionRef: "hub", Connected: 3, Account: publicKey(t, telemetry.Identity)}}, got.Status.LeafRemotes)
+		require.Equal(t, []clusterv1beta1.LeafRemoteStatus{{ConnectionNamespace: "edge", ConnectionName: "hub", Connected: 3, Account: publicKey(t, telemetry.Identity)}}, got.Status.LeafRemotes)
 
 		t.Run("a missing creds Secret stops rendering", func(t *testing.T) {
 			require.NoError(t, c.Delete(ctx, secret))

@@ -165,14 +165,11 @@ func preloads(remotes []LeafRemote) bool {
 }
 
 // unsupportedLeafFields names the leafRemotes fields nc cannot render: a
-// local account by name, since without an auth plane only the global
-// account exists, and a system account or account trust without one.
+// system account or account trust without an auth plane.
 func unsupportedLeafFields(spec *clusterv1beta1.NatsClusterSpec) []string {
 	var out []string
 	for i, r := range spec.LeafRemotes {
 		switch {
-		case r.LocalAccount != "":
-			out = append(out, fmt.Sprintf("leafRemotes[%d].localAccount", i))
 		case spec.Auth == nil && r.LocalSystemAccount:
 			out = append(out, fmt.Sprintf("leafRemotes[%d].localSystemAccount without auth", i))
 		case spec.Auth == nil && r.LocalAccountTrustRef != nil:
@@ -198,19 +195,24 @@ func leafRefNamespaces(nc *clusterv1beta1.NatsCluster) []string {
 // exactly when nc has no auth plane. A remote whose NatsConnection, its
 // Secrets or its NatsAccountTrust is absent, not admitted, not yet filled
 // in or invalid returns nil and the Progressing condition saying so; so
-// does a leaf preloading accounts into a Full resolver with no
-// jetstream.volumeClaimTemplate to keep it on.
+// do two remotes naming one NatsConnection, and a leaf preloading accounts
+// into a Full resolver with no jetstream.volumeClaimTemplate to keep it on.
 func readLeafRemotes(ctx context.Context, r client.Reader, nc *clusterv1beta1.NatsCluster, trust *Trust) ([]LeafRemote, *metav1.Condition, error) {
 	notProgressing := func(reason, format string, args ...any) *metav1.Condition {
 		return &metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: reason, Message: fmt.Sprintf(format, args...)}
 	}
 	from := grant.Referrer{Group: clusterv1beta1.GroupVersion.Group, Kind: "NatsCluster", Namespace: nc.Namespace}
 	var out []LeafRemote
+	seen := map[types.NamespacedName]int{}
 	for i, spec := range nc.Spec.LeafRemotes {
 		lr := LeafRemote{Ref: spec.ConnectionRef, Connection: types.NamespacedName{Namespace: spec.ConnectionRef.Namespace, Name: spec.ConnectionRef.Name}}
 		if lr.Connection.Namespace == "" {
 			lr.Connection.Namespace = nc.Namespace
 		}
+		if j, ok := seen[lr.Connection]; ok {
+			return nil, notProgressing(ReasonUnsupportedSpec, "leafRemotes[%d] and leafRemotes[%d] both name NatsConnection %s", j, i, lr.Connection), nil
+		}
+		seen[lr.Connection] = i
 		denied, err := grant.Admit(ctx, r, from, grant.Target{Group: natsv1beta1.GroupVersion.Group, Kind: natsconn.Kind, Namespace: lr.Connection.Namespace, Name: lr.Connection.Name})
 		if err != nil {
 			return nil, nil, err
@@ -583,9 +585,9 @@ func (r *Reconciler) observeLeafs(ctx context.Context, nc *clusterv1beta1.NatsCl
 // condition is Unknown.
 func leafStatus(st *clusterv1beta1.NatsClusterStatus, nc *clusterv1beta1.NatsCluster, plan *Plan, leafs map[string][]sysobs.Leaf, observeErr error) {
 	gen := nc.Generation
-	prev := map[string]int32{}
+	prev := map[types.NamespacedName]int32{}
 	for _, s := range st.LeafRemotes {
-		prev[s.ConnectionRef] = s.Connected
+		prev[types.NamespacedName{Namespace: s.ConnectionNamespace, Name: s.ConnectionName}] = s.Connected
 	}
 	account := func(lr *LeafRemote) string {
 		if lr.LocalAccount == "" {
@@ -617,12 +619,17 @@ func leafStatus(st *clusterv1beta1.NatsClusterStatus, nc *clusterv1beta1.NatsClu
 	var short []string
 	for i := range plan.LeafRemotes {
 		lr := &plan.LeafRemotes[i]
-		rs := clusterv1beta1.LeafRemoteStatus{ConnectionRef: lr.Ref.Name, Account: lr.HubAccount, Connected: prev[lr.Ref.Name]}
+		rs := clusterv1beta1.LeafRemoteStatus{
+			ConnectionNamespace: lr.Connection.Namespace,
+			ConnectionName:      lr.Connection.Name,
+			Account:             lr.HubAccount,
+			Connected:           prev[lr.Connection],
+		}
 		if leafs != nil {
 			rs.Connected = held[account(lr)]
 		}
 		if rs.Connected < replicas {
-			short = append(short, fmt.Sprintf("%s: %d of %d servers connected", rs.ConnectionRef, rs.Connected, replicas))
+			short = append(short, fmt.Sprintf("%s: %d of %d servers connected", lr.Connection, rs.Connected, replicas))
 		}
 		st.LeafRemotes = append(st.LeafRemotes, rs)
 	}

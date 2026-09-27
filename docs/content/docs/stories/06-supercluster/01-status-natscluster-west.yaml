@@ -16,10 +16,6 @@ status:
       connected: true
       inbound: 3
       outbound: 3
-  resolver:
-    # Account JWTs held here, synced from peers; none are declared in west.
-    accounts: !any 7
-    lastSyncTime: !any "2026-09-26T11:20:44Z"
   endpoints:
     client: nats://west.nats-system.svc:4222
     gateway: nats-west.example.net:7222

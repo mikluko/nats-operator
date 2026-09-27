@@ -22,7 +22,7 @@ status:
         current: !any false
         lag: !any 18231
     consumers:
-      migrated: !any 3
+      moved: !any 3
       total: !any 4
   server:
     leader: !any east-1

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -12,6 +13,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/yaml"
+
+	"github.com/mikluko/nats-operator/internal/e2e"
 )
 
 // TestEnvtest installs the generated CRDs into a real API server and pins
@@ -49,6 +52,7 @@ func TestEnvtest(t *testing.T) {
 			})
 		}
 	})
+	t.Run("StoryStatuses", func(t *testing.T) { testStoryStatuses(t, c) })
 	t.Run("CreateRules", func(t *testing.T) { testCreateRules(t, c) })
 	t.Run("TransitionRules", func(t *testing.T) { testTransitionRules(t, c) })
 	t.Run("Defaults", func(t *testing.T) { testDefaults(t, c) })
@@ -86,6 +90,63 @@ var apiVersions = map[string]string{
 	"NatsObjectStore":    "jetstream.nats.mikluko.io/v1beta1",
 	"NatsBalancer":       "jetstream.nats.mikluko.io/v1beta1",
 	"NatsSystemBalancer": "jetstream.nats.mikluko.io/v1beta1",
+
+	"NatsClusterEvacuation": "jetstream.nats.mikluko.io/v1beta1",
+}
+
+// statusSpecs are admissible specs, one per kind a story status file names.
+var statusSpecs = map[string]string{
+	"NatsCluster":           "{version: 2.15.0, replicas: 1}",
+	"NatsOperator":          "{systemAccountRef: {name: sys}}",
+	"NatsAccount":           "{operatorRef: {name: o}}",
+	"NatsUser":              "{accountRef: {kind: NatsAccount, name: a}}",
+	"NatsStream":            "{connectionRef: {name: c}}",
+	"NatsBalancer":          "{connectionRef: {name: c}}",
+	"NatsSystemBalancer":    "{connectionRef: {name: c}}",
+	"NatsClusterEvacuation": "{connectionRef: {name: c}, from: {cluster: a}, to: {serverTags: [b]}}",
+}
+
+// testStoryStatuses writes every story status file, placeholders' example
+// values included, through the status subresource, so the schema's enums,
+// formats and list keys judge it. A status file lists conditions without
+// the lastTransitionTime and message the schema requires; those are filled
+// in.
+func testStoryStatuses(t *testing.T, c client.Client) {
+	s := apiScheme(t)
+	_, statuses := storyFiles(t)
+	for i, path := range statuses {
+		rel, err := filepath.Rel(storiesDir, path)
+		require.NoError(t, err)
+		t.Run(rel, func(t *testing.T) {
+			kind := statusKind(t, s, path).Kind
+			spec, ok := statusSpecs[kind]
+			require.True(t, ok, "no spec for %s", kind)
+			obj := parse(t, manifest(kind, fmt.Sprintf("status-%d", i), spec))
+			require.NoError(t, c.Create(t.Context(), obj))
+			t.Cleanup(func() { require.NoError(t, c.Delete(context.Background(), obj)) })
+
+			raw, err := os.ReadFile(path)
+			require.NoError(t, err)
+			raw, err = e2e.StripPlaceholders(raw)
+			require.NoError(t, err)
+			var doc struct {
+				Status map[string]any `json:"status"`
+			}
+			require.NoError(t, yaml.UnmarshalStrict(raw, &doc))
+			conditions, _ := doc.Status["conditions"].([]any)
+			for _, cond := range conditions {
+				m := cond.(map[string]any)
+				if _, ok := m["lastTransitionTime"]; !ok {
+					m["lastTransitionTime"] = "2026-09-26T11:20:44Z"
+				}
+				if _, ok := m["message"]; !ok {
+					m["message"] = ""
+				}
+			}
+			obj.Object["status"] = doc.Status
+			require.NoError(t, c.Status().Update(t.Context(), obj, client.FieldValidation("Strict")))
+		})
+	}
 }
 
 // manifest renders an object of kind in the rules namespace, its spec given
@@ -126,12 +187,14 @@ func testCreateRules(t *testing.T, c client.Client) {
 		{"operator trust with neither form", manifest("NatsOperatorTrust", "t", "{}"), "set exactly one of operatorRef"},
 		{"operator trust with half the literal form", manifest("NatsOperatorTrust", "t", "{operatorJWT: x}"), "operatorJWT and systemAccountJWT are set together"},
 		{"account trust with both forms", manifest("NatsAccountTrust", "t", "{accountRef: {name: a}, publicKey: A}"), "set exactly one of accountRef and publicKey"},
+		{"account trust with neither form", manifest("NatsAccountTrust", "t", "{}"), "set exactly one of accountRef and publicKey"},
 		{"account trust with jwt beside accountRef", manifest("NatsAccountTrust", "t", "{accountRef: {name: a}, jwt: x}"), "jwt is set only beside publicKey"},
 
 		{"version below minimum", manifest("NatsCluster", "c", "{version: 2.14.9, replicas: 1}"), "2.15.0 or later"},
 		{"version not semver", manifest("NatsCluster", "c", "{version: latest, replicas: 1}"), "2.15.0 or later"},
 		{"leaf JetStream without domain", cluster(", jetstream: {}, leafRemotes: [{connectionRef: {name: hub}}]"), "must set jetstream.domain"},
-		{"leaf remote binding two accounts", cluster(", leafRemotes: [{connectionRef: {name: hub}, localAccount: A, localSystemAccount: true}]"), "localAccount, localAccountTrustRef and localSystemAccount are mutually exclusive"},
+		{"leaf remote binding two accounts", cluster(", leafRemotes: [{connectionRef: {name: hub}, localAccountTrustRef: {name: t}, localSystemAccount: true}]"), "localAccountTrustRef and localSystemAccount are mutually exclusive"},
+		{"leaf remote naming a local account", cluster(", leafRemotes: [{connectionRef: {name: hub}, localAccount: A}]"), `unknown field "spec.leafRemotes[0].localAccount"`},
 		{"route TLS with two certificates", cluster(", routes: {tls: {secretRef: {name: s}, certManager: {issuerRef: {name: i}}}}"), "secretRef and certManager are mutually exclusive"},
 		{"disabled route TLS with a certificate", cluster(", routes: {tls: {enabled: false, secretRef: {name: s}}}"), "only while route TLS is enabled"},
 		{"gateway TLS without a certificate", cluster(", gateway: {discovery: Explicit, remotes: [{name: a, url: u}], tls: {}}"), "set exactly one of secretRef and certManager"},
@@ -145,6 +208,8 @@ func testCreateRules(t *testing.T, c client.Client) {
 		{"system account publicKey without signing key", account("NatsSystemAccount", ", publicKey: A"), "publicKey requires at least one signing key"},
 		{"export preset beside a name", account("NatsAccount", ", exports: [{preset: jetstream-stepdown, name: x}]"), "either preset alone"},
 		{"export without subject", account("NatsAccount", ", exports: [{name: x, type: Stream}]"), "either preset alone"},
+		{"export without name", account("NatsAccount", ", exports: [{type: Stream, subject: s}]"), "either preset alone"},
+		{"export without type", account("NatsAccount", ", exports: [{name: x, subject: s}]"), "either preset alone"},
 		{"response type on a stream export", account("NatsAccount", ", exports: [{name: x, type: Stream, subject: s, responseType: Singleton}]"), "responseType is set only on a Service export"},
 		{"importers on a public export", account("NatsAccount", ", exports: [{name: x, type: Service, subject: s, importers: [{kind: NatsAccount, name: a}]}]"), "importers are listed only on a Private export"},
 
@@ -233,6 +298,9 @@ func testTransitionRules(t *testing.T, c client.Client) {
 		{"ackWait changed", consumer(", ackWait: 30s"), consumer(", ackWait: 1m"), ""},
 
 		{"bucket renamed", manifest("NatsKeyValue", "kv", "{connectionRef: {name: c}, name: a}"), manifest("NatsKeyValue", "kv", "{connectionRef: {name: c}, name: b}"), "the bucket name is immutable"},
+		{"key-value storage changed", manifest("NatsKeyValue", "kv", "{connectionRef: {name: c}, storage: File}"), manifest("NatsKeyValue", "kv", "{connectionRef: {name: c}, storage: Memory}"), "storage is immutable"},
+		{"key-value storage late-initialized", manifest("NatsKeyValue", "kv", "{connectionRef: {name: c}}"), manifest("NatsKeyValue", "kv", "{connectionRef: {name: c}, storage: Memory}"), ""},
+		{"object store storage changed", manifest("NatsObjectStore", "os", "{connectionRef: {name: c}, storage: File}"), manifest("NatsObjectStore", "os", "{connectionRef: {name: c}, storage: Memory}"), "storage is immutable"},
 		{"object store renamed", manifest("NatsObjectStore", "os", "{connectionRef: {name: c}, name: a}"), manifest("NatsObjectStore", "os", "{connectionRef: {name: c}, name: b}"), "the bucket name is immutable"},
 	}
 	for _, tt := range tests {
@@ -262,6 +330,7 @@ func testDefaults(t *testing.T, c client.Client) {
 	}{
 		{"creds key", manifest("NatsConnection", "d", "{servers: [nats://x], credentials: {secretKeyRef: {name: s}}}"), []string{"spec", "credentials", "secretKeyRef", "key"}, "user.creds"},
 		{"CA key", manifest("NatsConnection", "d", "{servers: [nats://x], tls: {ca: {secretKeyRef: {name: s}}}}"), []string{"spec", "tls", "ca", "secretKeyRef", "key"}, "ca.crt"},
+		{"exporter on", manifest("NatsCluster", "d", "{version: 2.15.0, replicas: 1, exporter: {}}"), []string{"spec", "exporter", "enabled"}, true},
 		{"route TLS on", manifest("NatsCluster", "d", "{version: 2.15.0, replicas: 1, routes: {tls: {}}}"), []string{"spec", "routes", "tls", "enabled"}, true},
 		{"account JWT TTL", manifest("NatsAccount", "d", "{operatorRef: {name: o}}"), []string{"spec", "jwtTTL"}, "48h"},
 		{"stream adoption", manifest("NatsStream", "d", "{connectionRef: {name: c}}"), []string{"spec", "adoptionPolicy"}, "Never"},

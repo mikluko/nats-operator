@@ -113,6 +113,16 @@ spec:
                 required:
                 - trustRef
                 type: object
+              exporter:
+                description: |-
+                  Exporter configures the prometheus-nats-exporter sidecar; absent, it
+                  runs.
+                properties:
+                  enabled:
+                    default: true
+                    description: Enabled turns the sidecar off when false.
+                    type: boolean
+                type: object
               gateway:
                 description: |-
                   Gateway joins the NATS cluster into a supercluster under its own
@@ -466,8 +476,10 @@ spec:
                 description: LeafRemotes are the hubs this NATS cluster dials as a
                   leaf.
                 items:
-                  description: LeafRemote is a hub a leaf dials, and the local account
-                    it binds.
+                  description: |-
+                    LeafRemote is a hub a leaf dials, and the local account it binds.
+                    With neither localAccountTrustRef nor localSystemAccount it binds the
+                    global account.
                   properties:
                     connectionRef:
                       description: |-
@@ -486,12 +498,6 @@ spec:
                       required:
                       - name
                       type: object
-                    localAccount:
-                      description: |-
-                        LocalAccount names the local account the remote binds, on a leaf with
-                        several and no auth plane.
-                      minLength: 1
-                      type: string
                     localAccountTrustRef:
                       description: |-
                         LocalAccountTrustRef names the NatsAccountTrust of the local account
@@ -517,11 +523,10 @@ spec:
                   - connectionRef
                   type: object
                   x-kubernetes-validations:
-                  - message: localAccount, localAccountTrustRef and localSystemAccount
-                      are mutually exclusive
-                    rule: '[has(self.localAccount), has(self.localAccountTrustRef),
-                      has(self.localSystemAccount) && self.localSystemAccount].filter(x,
-                      x).size() <= 1'
+                  - message: localAccountTrustRef and localSystemAccount are mutually
+                      exclusive
+                    rule: '!(has(self.localAccountTrustRef) && has(self.localSystemAccount)
+                      && self.localSystemAccount)'
                 type: array
               leafnodes:
                 description: Leafnodes opens a listener for leaf connections.
@@ -933,11 +938,22 @@ spec:
                         the hub.
                       format: int32
                       type: integer
-                    connectionRef:
-                      description: ConnectionRef is the name of the remote's NatsConnection.
+                    connectionName:
+                      description: ConnectionName is the name of the remote's NatsConnection.
                       type: string
+                    connectionNamespace:
+                      description: ConnectionNamespace is the namespace of the remote's
+                        NatsConnection.
+                      type: string
+                  required:
+                  - connectionName
+                  - connectionNamespace
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - connectionNamespace
+                - connectionName
+                x-kubernetes-list-type: map
               observedGeneration:
                 description: ObservedGeneration is the generation the status describes.
                 format: int64
@@ -950,19 +966,6 @@ spec:
                 description: Replicas is the number of servers.
                 format: int32
                 type: integer
-              resolver:
-                description: Resolver is the account resolver's state.
-                properties:
-                  accounts:
-                    description: Accounts is the number of account JWTs held.
-                    format: int32
-                    type: integer
-                  lastSyncTime:
-                    description: LastSyncTime is when the resolver last synced from
-                      its peers.
-                    format: date-time
-                    type: string
-                type: object
               rollout:
                 description: Rollout is the rollout in progress.
                 properties:

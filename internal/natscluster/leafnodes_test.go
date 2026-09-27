@@ -379,7 +379,7 @@ func TestLeaf_AccountLess(t *testing.T) {
 	leaf := bootRendered(t, nc, nil, remotes, "")
 
 	st := leaf.waitConnected(t, remotes)
-	require.Equal(t, []clusterv1beta1.LeafRemoteStatus{{ConnectionRef: "hub", Connected: 3, Account: publicKey(t, h.telemetry.Identity)}}, st.LeafRemotes)
+	require.Equal(t, []clusterv1beta1.LeafRemoteStatus{{ConnectionNamespace: "nats-system", ConnectionName: "hub", Connected: 3, Account: publicKey(t, h.telemetry.Identity)}}, st.LeafRemotes)
 	require.Equal(t, "3 of 3 servers connected to 1 remote", meta.FindStatusCondition(st.Conditions, ConditionLeafnodesConnected).Message)
 
 	sub := h.subscribe(t, h.telemetry, "telemetry.>")
@@ -503,8 +503,8 @@ func TestLeaf_OperatorMode(t *testing.T) {
 
 	st := leaf.waitConnected(t, remotes)
 	require.Equal(t, []clusterv1beta1.LeafRemoteStatus{
-		{ConnectionRef: "hub-system", Connected: 3, Account: h.p.trust.SystemAccount},
-		{ConnectionRef: "hub-telemetry", Connected: 3, Account: telemetry},
+		{ConnectionNamespace: "nats-system", ConnectionName: "hub-system", Connected: 3, Account: h.p.trust.SystemAccount},
+		{ConnectionNamespace: "nats-system", ConnectionName: "hub-telemetry", Connected: 3, Account: telemetry},
 	}, st.LeafRemotes)
 
 	pool := natsconn.NewPool()

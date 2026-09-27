@@ -23,14 +23,14 @@ type NatsSystemBalancerSpec struct {
 }
 
 // LeaderCapability is how far a system balancer can make leader moves.
-// +kubebuilder:validation:Enum=full;partial;none
+// +kubebuilder:validation:Enum=Full;Partial;None
 type LeaderCapability string
 
 // Leader capabilities.
 const (
-	LeaderCapabilityFull    LeaderCapability = "full"
-	LeaderCapabilityPartial LeaderCapability = "partial"
-	LeaderCapabilityNone    LeaderCapability = "none"
+	LeaderCapabilityFull    LeaderCapability = "Full"
+	LeaderCapabilityPartial LeaderCapability = "Partial"
+	LeaderCapabilityNone    LeaderCapability = "None"
 )
 
 // Capabilities are the moves a system balancer can make.
@@ -39,12 +39,12 @@ type Capabilities struct {
 	// +optional
 	Placement bool `json:"placement,omitempty"`
 
-	// Leader is partial while some accounts carry no jetstream-stepdown
+	// Leader is Partial while some accounts carry no jetstream-stepdown
 	// export.
 	// +optional
 	Leader LeaderCapability `json:"leader,omitempty"`
 
-	// LeaderReason explains a leader capability short of full.
+	// LeaderReason explains a leader capability short of Full.
 	// +optional
 	LeaderReason string `json:"leaderReason,omitempty"`
 }

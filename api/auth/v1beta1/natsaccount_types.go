@@ -239,8 +239,18 @@ type ImportStatus struct {
 
 	// Activation is the state of the activation token of a Private export.
 	// +optional
-	Activation string `json:"activation,omitempty"`
+	Activation ActivationState `json:"activation,omitempty"`
 }
+
+// ActivationState is the state of an import's activation token.
+// +kubebuilder:validation:Enum=Signed
+type ActivationState string
+
+// Activation states.
+const (
+	// ActivationSigned is an activation token the auth controller minted.
+	ActivationSigned ActivationState = "Signed"
+)
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status

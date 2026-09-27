@@ -94,16 +94,16 @@ spec:
                 properties:
                   leader:
                     description: |-
-                      Leader is partial while some accounts carry no jetstream-stepdown
+                      Leader is Partial while some accounts carry no jetstream-stepdown
                       export.
                     enum:
-                    - full
-                    - partial
-                    - none
+                    - Full
+                    - Partial
+                    - None
                     type: string
                   leaderReason:
                     description: LeaderReason explains a leader capability short of
-                      full.
+                      Full.
                     type: string
                   placement:
                     description: Placement reports whether placement moves are possible.

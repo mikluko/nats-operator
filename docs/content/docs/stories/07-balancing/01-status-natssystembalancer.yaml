@@ -9,7 +9,7 @@ status:
       reason: Settled
   capabilities:
     placement: true
-    leader: partial
+    leader: Partial
     leaderReason: !any 3 of 7 accounts carry no jetstream-stepdown export; their leaders are not moved
   servers:
     - name: demo-0

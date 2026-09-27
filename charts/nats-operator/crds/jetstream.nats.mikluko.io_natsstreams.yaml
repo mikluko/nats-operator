@@ -565,8 +565,8 @@ spec:
                     description: Consumers is how many of the stream's consumers have
                       moved.
                     properties:
-                      migrated:
-                        description: Migrated is the number moved.
+                      moved:
+                        description: Moved is the number moved.
                         format: int32
                         type: integer
                       total:

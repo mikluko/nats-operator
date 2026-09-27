@@ -285,11 +285,14 @@ spec:
                   type: object
                 type: array
               storage:
-                description: StorageType is a JetStream storage backend.
+                description: 'Storage is immutable: a bucket is a stream.'
                 enum:
                 - File
                 - Memory
                 type: string
+                x-kubernetes-validations:
+                - message: storage is immutable
+                  rule: self == oldSelf
               terminalPolicy:
                 default: Hold
                 description: TerminalPolicy is what a Terminal condition waits for.

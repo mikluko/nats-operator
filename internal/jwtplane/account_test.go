@@ -259,19 +259,17 @@ func TestSignAccountRevocations(t *testing.T) {
 	op := newKeys(t, nkeys.PrefixByteOperator, "s")
 	acc := newKeys(t, nkeys.PrefixByteAccount, "s")
 	now := time.Now()
-	forever := pub(t, newPair(t, nkeys.PrefixByteUser))
-	live := pub(t, newPair(t, nkeys.PrefixByteUser))
-	lapsed := pub(t, newPair(t, nkeys.PrefixByteUser))
+	current := pub(t, newPair(t, nkeys.PrefixByteUser))
+	earlier := pub(t, newPair(t, nkeys.PrefixByteUser))
 
 	tok, err := jwtplane.SignAccount(jwtplane.Account{Keys: acc, Revocations: []jwtplane.Revocation{
-		{PublicKey: forever, At: now},
-		{PublicKey: live, At: now, Expires: now.Add(time.Hour)},
-		{PublicKey: lapsed, At: now.Add(-2 * time.Hour), Expires: now.Add(-time.Hour)},
+		{PublicKey: current, At: now},
+		{PublicKey: earlier, At: now.Add(-2 * time.Hour)},
 	}}, op, now)
 	require.NoError(t, err)
 	c, err := jwt.DecodeAccountClaims(tok)
 	require.NoError(t, err)
-	require.Equal(t, jwt.RevocationList{forever: now.Unix(), live: now.Unix()}, c.Revocations)
+	require.Equal(t, jwt.RevocationList{current: now.Unix(), earlier: now.Add(-2 * time.Hour).Unix()}, c.Revocations)
 
 	_, err = jwtplane.SignAccount(jwtplane.Account{Keys: acc, Revocations: []jwtplane.Revocation{{PublicKey: pub(t, acc.Identity), At: now}}}, op, now)
 	require.ErrorIs(t, err, jwtplane.ErrWrongKeyType)
