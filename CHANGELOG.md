@@ -51,7 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - With `auth.systemCredentials` the cluster controller reloads servers over `$SYS`; without it every config change restarts.
 - A self-signed route certificate is valid for one year and renewed under the same CA once a third of that remains; the CA is kept in the Secret `<name>-routes-ca`.
 - A `NatsCluster`'s client Service serves only the client port; the monitoring port is on the headless Service, which `status.endpoints.monitor` names.
-- A `NatsCluster` renders a NetworkPolicy admitting its monitoring port only from the cluster controller's namespace; `monitor.networkPolicy: false` renders none.
+- A `NatsCluster` renders a NetworkPolicy admitting its route port only from its own pods, its monitoring port only from the cluster controller's namespace, and its metrics port from there and the peers `spec.exporter.from` names; `monitor.networkPolicy: false` renders none.
+- `NatsCluster` `spec.exporter.from`, the NetworkPolicy peers admitted to the metrics port.
 - A `NatsCluster`'s pods meet the restricted Pod Security Standard and mount no ServiceAccount token; `podTemplate` can still escalate what the pod runs.
 - A change to the trusted NATS operator, `system_account` or the resolver restarts servers one at a time; a re-signed system account JWT reloads them.
 - `NatsCluster` `tls` puts the client listener under TLS, from a Secret or cert-manager, and `status.endpoints.client` then reads `tls://`.

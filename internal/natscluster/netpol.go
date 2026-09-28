@@ -36,19 +36,18 @@ func networkPolicyEnabled(spec *clusterv1beta1.NatsClusterSpec) bool {
 }
 
 // networkPolicy is the NetworkPolicy over nc's pods, or nil when
-// monitor.networkPolicy is false. It admits from anywhere every port the
-// servers listen on but the monitoring port, and the monitoring port only
-// from monitorNamespace; with monitorNamespace empty, from nowhere. The
-// exporter sidecar reaches the monitoring port over the pod's loopback,
-// which no NetworkPolicy governs.
+// monitor.networkPolicy is false. It admits the route port only from nc's
+// pods, the monitoring port only from monitorNamespace, the metrics port
+// from monitorNamespace and exporter.from, and every other port the servers
+// listen on from anywhere; with neither monitorNamespace nor exporter.from,
+// the monitoring and metrics ports are admitted from nowhere. The exporter
+// sidecar reaches the monitoring port over the pod's loopback, which no
+// NetworkPolicy governs.
 func networkPolicy(nc *clusterv1beta1.NatsCluster, monitorNamespace string) *networkingv1.NetworkPolicy {
 	if !networkPolicyEnabled(&nc.Spec) {
 		return nil
 	}
-	open := []int32{PortClient, PortRoute}
-	if exporterEnabled(&nc.Spec) {
-		open = append(open, PortMetrics)
-	}
+	open := []int32{PortClient}
 	if nc.Spec.Gateway != nil {
 		open = append(open, PortGateway)
 	}
@@ -59,14 +58,34 @@ func networkPolicy(nc *clusterv1beta1.NatsCluster, monitorNamespace string) *net
 	for _, p := range open {
 		ports = append(ports, policyPort(p))
 	}
-	rules := []networkingv1.NetworkPolicyIngressRule{{Ports: ports}}
+	rules := []networkingv1.NetworkPolicyIngressRule{
+		{Ports: ports},
+		{
+			Ports: []networkingv1.NetworkPolicyPort{policyPort(PortRoute)},
+			From:  []networkingv1.NetworkPolicyPeer{{PodSelector: &metav1.LabelSelector{MatchLabels: clusterSelector(nc)}}},
+		},
+	}
+	var monitors []networkingv1.NetworkPolicyPeer
 	if monitorNamespace != "" {
+		monitors = append(monitors, networkingv1.NetworkPolicyPeer{NamespaceSelector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{corev1.LabelMetadataName: monitorNamespace},
+		}})
 		rules = append(rules, networkingv1.NetworkPolicyIngressRule{
 			Ports: []networkingv1.NetworkPolicyPort{policyPort(PortMonitor)},
-			From: []networkingv1.NetworkPolicyPeer{{NamespaceSelector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{corev1.LabelMetadataName: monitorNamespace},
-			}}},
+			From:  monitors,
 		})
+	}
+	if exporterEnabled(&nc.Spec) {
+		scrapers := append([]networkingv1.NetworkPolicyPeer(nil), monitors...)
+		if nc.Spec.Exporter != nil {
+			scrapers = append(scrapers, nc.Spec.Exporter.From...)
+		}
+		if len(scrapers) > 0 {
+			rules = append(rules, networkingv1.NetworkPolicyIngressRule{
+				Ports: []networkingv1.NetworkPolicyPort{policyPort(PortMetrics)},
+				From:  scrapers,
+			})
+		}
 	}
 	return &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: networkPolicyName(nc), Namespace: nc.Namespace, Labels: labels(nc)},

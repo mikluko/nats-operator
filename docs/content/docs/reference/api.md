@@ -460,6 +460,7 @@ Appears on: [NatsClusterSpec](#NatsClusterSpec).
 | :---- | :--- | :------: | :---------- |
 | `enabled` | {{< type "bool" >}} | No | Enabled turns the sidecar off when false. Default: `true`. |
 | `image` | [{{< type "ExporterImage" >}}](#ExporterImage) | No | Image is the sidecar's image. |
+| `from` | [{{< type "[]NetworkPolicyPeer" >}}](https://pkg.go.dev/k8s.io/api/networking/v1#NetworkPolicyPeer) | No | From admits the metrics port from these peers besides the cluster controller's namespace, under monitor.networkPolicy. |
 
 ### ExporterImage {#ExporterImage}
 ExporterImage names the prometheus-nats-exporter sidecar's image.\
@@ -591,7 +592,7 @@ Monitor configures access to the monitoring port.\
 Appears on: [NatsClusterSpec](#NatsClusterSpec).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `networkPolicy` | {{< type "bool" >}} | No | NetworkPolicy renders a NetworkPolicy over the servers' pods that admits the monitoring port only from the cluster controller's namespace, and from anywhere the ports the cluster controller renders; a port podTemplate adds is not admitted. False renders none. Default: `true`. |
+| `networkPolicy` | {{< type "bool" >}} | No | NetworkPolicy renders a NetworkPolicy over the servers' pods that admits the route port only from those pods, the monitoring port only from the cluster controller's namespace, the metrics port from there and exporter.from, and from anywhere the other ports the cluster controller renders; a port podTemplate adds is not admitted. False renders none. Default: `true`. |
 
 ### NatsCluster {#NatsCluster}
 NatsCluster is a NATS cluster the cluster controller deploys, one StatefulSet per server.

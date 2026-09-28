@@ -7,6 +7,7 @@ package v1beta1
 import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -144,6 +145,13 @@ func (in *Exporter) DeepCopyInto(out *Exporter) {
 		in, out := &in.Image, &out.Image
 		*out = new(ExporterImage)
 		**out = **in
+	}
+	if in.From != nil {
+		in, out := &in.From, &out.From
+		*out = make([]networkingv1.NetworkPolicyPeer, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 }
 

@@ -2,6 +2,7 @@ package v1beta1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -374,6 +375,12 @@ type Exporter struct {
 	// Image is the sidecar's image.
 	// +optional
 	Image *ExporterImage `json:"image,omitempty"`
+
+	// From admits the metrics port from these peers besides the cluster
+	// controller's namespace, under monitor.networkPolicy.
+	// +optional
+	// +listType=atomic
+	From []networkingv1.NetworkPolicyPeer `json:"from,omitempty"`
 }
 
 // Image names the nats-server image of a NATS cluster's servers.
@@ -408,9 +415,11 @@ type ExporterImage struct {
 // Monitor configures access to the monitoring port.
 type Monitor struct {
 	// NetworkPolicy renders a NetworkPolicy over the servers' pods that
-	// admits the monitoring port only from the cluster controller's
-	// namespace, and from anywhere the ports the cluster controller renders;
-	// a port podTemplate adds is not admitted. False renders none.
+	// admits the route port only from those pods, the monitoring port only
+	// from the cluster controller's namespace, the metrics port from there
+	// and exporter.from, and from anywhere the other ports the cluster
+	// controller renders; a port podTemplate adds is not admitted. False
+	// renders none.
 	// +optional
 	// +kubebuilder:default=true
 	NetworkPolicy *bool `json:"networkPolicy,omitempty"`
