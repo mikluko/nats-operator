@@ -1,0 +1,46 @@
+suite: metrics-scraper
+templates:
+  - templates/metrics-scraper.yaml
+release:
+  name: rel
+  namespace: nats
+tests:
+  - it: renders nothing while metrics.scraper.serviceAccount is empty
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: renders a ClusterRole and its ClusterRoleBinding, with every controller disabled
+    set:
+      metrics.scraper.serviceAccount: monitoring/prometheus
+      cluster.enabled: false
+      auth.enabled: false
+      jetstream.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 2
+      - containsDocument: {kind: ClusterRole, apiVersion: rbac.authorization.k8s.io/v1, name: rel-metrics-scraper, any: true}
+      - containsDocument: {kind: ClusterRoleBinding, apiVersion: rbac.authorization.k8s.io/v1, name: rel-metrics-scraper, any: true}
+      - equal:
+          path: metadata.labels["app.kubernetes.io/component"]
+          value: metrics-scraper
+  - it: grants get on the non-resource URL /metrics and nothing else
+    set:
+      metrics.scraper.serviceAccount: monitoring/prometheus
+    documentSelector: {path: kind, value: ClusterRole}
+    asserts:
+      - equal:
+          path: rules
+          value:
+            - nonResourceURLs: [/metrics]
+              verbs: [get]
+  - it: binds its ClusterRole to the ServiceAccount the value names
+    set:
+      metrics.scraper.serviceAccount: monitoring/prometheus
+    documentSelector: {path: kind, value: ClusterRoleBinding}
+    asserts:
+      - equal:
+          path: roleRef
+          value: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: rel-metrics-scraper}
+      - equal:
+          path: subjects
+          value: [{kind: ServiceAccount, name: prometheus, namespace: monitoring}]

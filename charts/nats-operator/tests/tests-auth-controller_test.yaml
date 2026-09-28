@@ -34,7 +34,7 @@ tests:
     asserts:
       - hasDocuments:
           count: 0
-  - it: GETs /healthz through the test Service
+  - it: GETs /readyz through the test Service
     documentSelector: {path: kind, value: Pod}
     asserts:
       - equal:
@@ -59,7 +59,7 @@ tests:
                 echo "ok $url"
               done
             - check
-            - http://rel-auth-controller-test.nats.svc:8081/healthz
+            - http://rel-auth-controller-test.nats.svc:8081/readyz
   - it: pulls tests.image
     set:
       tests.image.repository: registry.example/busybox

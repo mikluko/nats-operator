@@ -12,6 +12,7 @@ tests:
     set:
       leaderElection.enabled: false
       auth.systemConnection: nats/auth-controller
+      metrics.scraper.serviceAccount: monitoring/prometheus
       cluster.image.tag: v9
       tests.image.tag: "1.36"
       annotations: {a: global}
@@ -42,6 +43,18 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "at '/auth/image': additional properties 'tga' not allowed"
+  - it: refuses a misspelled key under metrics.scraper
+    set:
+      metrics.scraper.serviceAcount: monitoring/prometheus
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/metrics/scraper': additional properties 'serviceAcount' not allowed"
+  - it: refuses a metrics.scraper.serviceAccount that is not namespace/name
+    set:
+      metrics.scraper.serviceAccount: prometheus
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/metrics/scraper/serviceAccount'"
   - it: refuses a misspelled key under tests
     set:
       tests.imag.tag: "1.36"

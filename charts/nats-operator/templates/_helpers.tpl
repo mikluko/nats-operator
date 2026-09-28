@@ -195,7 +195,7 @@ spec:
 
 {{/*
 nats-operator.test renders one controller's `helm test` hook: a Service on its
-probes port and a Pod that GETs /healthz through it. The Pod tries each URL
+probes port and a Pod that GETs /readyz through it. The Pod tries each URL
 30 times, two seconds apart, before it fails. It takes a dict of root (the
 chart context) and name (the controller's name).
 */}}
@@ -261,7 +261,7 @@ spec:
             echo "ok $url"
           done
         - check
-        - http://{{ $fullname }}-test.{{ $ns }}.svc:8081/healthz
+        - http://{{ $fullname }}-test.{{ $ns }}.svc:8081/readyz
       securityContext:
         allowPrivilegeEscalation: false
         readOnlyRootFilesystem: true

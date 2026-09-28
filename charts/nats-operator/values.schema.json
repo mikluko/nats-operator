@@ -100,6 +100,19 @@
       }
     },
     "jetstream": {"$ref": "#/definitions/controller"},
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scraper": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "serviceAccount": {"type": "string", "pattern": "^([a-z0-9-]+/[a-z0-9.-]+)?$"}
+          }
+        }
+      }
+    },
     "tests": {
       "type": "object",
       "additionalProperties": false,

@@ -40,7 +40,7 @@ To check the installed controllers:
 helm test nats-operator --namespace nats-operator --logs
 ```
 
-For each enabled controller this starts the Pod `<release>-<controller>-test`, which GETs the controller's `/healthz` on port `8081` through the Service `<release>-<controller>-test`, with 30 tries, two seconds apart. The test Pods and Services stay until the next `helm test` replaces them.
+For each enabled controller this starts the Pod `<release>-<controller>-test`, which GETs the controller's `/readyz` on port `8081` through the Service `<release>-<controller>-test`, with 30 tries, two seconds apart. The test Pods and Services stay until the next `helm test` replaces them.
 
 Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NATS cluster with JetStream.
 
@@ -87,6 +87,7 @@ The stories run end to end from a checkout of the repository with `just e2e`, on
 | `jetstream.annotations` | `{}` | Its Deployment's annotations, each key set over `annotations`. |
 | `jetstream.podAnnotations` | `{}` | Its pod's annotations, each key set over `podAnnotations`. |
 | `jetstream.affinity` | `{}` | Its pod's affinity, each of `nodeAffinity`, `podAffinity` and `podAntiAffinity` replacing the one under `affinity` whole. |
+| `metrics.scraper.serviceAccount` | `""` | A ServiceAccount, as `namespace/name`, granted the controllers' metrics under [RBAC](#rbac); empty, the chart grants them to no one. |
 | `tests.image.repository` | `busybox` | Image of the `helm test` pods. |
 | `tests.image.tag` | `"1.37.0"` | Its image tag. |
 | `tests.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
@@ -110,6 +111,8 @@ The flags below are the binaries' own. The chart sets only `--system-connection`
 ## RBAC
 
 Each controller's ClusterRole is named `<release>-<controller>`, for example `nats-operator-cluster-controller`, and is bound to the ServiceAccount of the same name in the release namespace. No controller can write another controller's API group. While `leaderElection.enabled` is on, each also gets the Role `<release>-<controller>-leader-election` in the release namespace: every verb on `coordination.k8s.io` `leases`, and `create` and `patch` on `""` `events`.
+
+While `metrics.scraper.serviceAccount` is set, the ClusterRole `<release>-metrics-scraper` holds `get` on the non-resource URL `/metrics` and is bound to that ServiceAccount, whose token then reads every controller's metrics. The same grant reads the Kubernetes API server's own `/metrics`.
 
 ### Every controller
 

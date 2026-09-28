@@ -1,0 +1,29 @@
+{{- with .Values.metrics.scraper.serviceAccount }}
+{{- $sa := splitList "/" . }}
+{{- $ctx := dict "root" $ "name" "metrics-scraper" }}
+{{- $fullname := include "nats-operator.fullname" $ctx }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "nats-operator.labels" $ctx | nindent 4 }}
+rules:
+  - nonResourceURLs: [/metrics]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "nats-operator.labels" $ctx | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $fullname }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ index $sa 1 }}
+    namespace: {{ index $sa 0 }}
+{{- end }}

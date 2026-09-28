@@ -76,6 +76,13 @@ jetstream:
   podAnnotations: {}
   affinity: {}
 
+metrics:
+  scraper:
+    # namespace/name of a ServiceAccount granted `get` on the non-resource URL
+    # /metrics, which the controllers' metrics endpoints require of a bearer
+    # token. Empty, the chart grants it to no one.
+    serviceAccount: ""
+
 # The image of the `helm test` pods, which need sh and wget.
 tests:
   image:
