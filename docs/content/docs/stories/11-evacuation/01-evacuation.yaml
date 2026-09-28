@@ -1,5 +1,5 @@
-# The new cluster, prod-east-2, a member beside prod-east with a placement
-# tag no other server carries; otherwise as prod-east.
+# The replacement NATS cluster, prod-east-2, a member beside prod-east with a
+# placement tag no other server carries; otherwise as prod-east.
 apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:

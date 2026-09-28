@@ -46,7 +46,9 @@ type ObjectStoreConfig struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
-// NatsObjectStoreSpec is the desired state of an object store.
+// NatsObjectStoreSpec is the desired state of an object store. A field with
+// no description is the like-named field of nats.go's
+// jetstream.ObjectStoreConfig, documented at https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#ObjectStoreConfig.
 type NatsObjectStoreSpec struct {
 	// ConnectionRef names the NatsConnection whose credentials decide the
 	// account.

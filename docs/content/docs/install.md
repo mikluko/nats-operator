@@ -42,11 +42,9 @@ To check the installed controllers:
 helm test nats-operator --namespace nats-operator --logs
 ```
 
-For each enabled controller this starts the Pod `<release>-<controller>-test`, which GETs the controller's `/readyz` on port `8081` through the Service `<release>-<controller>-test`, with 30 tries, two seconds apart. The test Pods and Services stay until the next `helm test` replaces them.
+For each enabled controller this starts the Pod `<release>-<controller>-test`, which GETs the controller's `/readyz` on port `8081` through the Service `<release>-<controller>-test`, with 30 tries, two seconds apart.
 
 Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NATS cluster with JetStream.
-
-The stories run end to end from a checkout of the repository with `just e2e`, on kind clusters it creates; [Running the stories]({{< relref "/docs/stories#running-the-stories" >}}) says what it needs.
 
 ## Values
 

@@ -5,8 +5,8 @@
 | `OTEL_SDK_DISABLED` | `false` | `true`, in any case, exports nothing whatever else is set; no exporter is built and no Prometheus listener opened. |
 | `OTEL_SERVICE_NAME` | the controller's name, such as `cluster-controller` | `service.name` of every metric and span. |
 | `OTEL_RESOURCE_ATTRIBUTES` | unset | Further resource attributes, as `key=value` pairs separated by commas. |
-| `OTEL_METRICS_EXPORTER` | `otlp` once metrics are on | `otlp`, `prometheus`, `console` or `none`; set to any of them, it turns metrics on. |
-| `OTEL_TRACES_EXPORTER` | `otlp` once traces are on | `otlp`, `console` or `none`; set to any of them, it turns traces on. |
+| `OTEL_METRICS_EXPORTER` | `otlp` once metrics are on | `otlp`, `prometheus`, `console` or `none`; set to any but `none`, it turns metrics on; `none` exports no metrics whatever else is set. |
+| `OTEL_TRACES_EXPORTER` | `otlp` once traces are on | `otlp`, `console` or `none`; set to any but `none`, it turns traces on; `none` exports no spans whatever else is set. |
 | `OTEL_EXPORTER_OTLP_PROTOCOL`<br>`OTEL_EXPORTER_OTLP_METRICS_PROTOCOL`<br>`OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` | `http/protobuf` | `http/protobuf` or `grpc`. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT`<br>`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`<br>`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | `https://localhost:4318` over `http/protobuf`, `https://localhost:4317` over `grpc` | Where OTLP is sent; set, it turns on the signals it applies to. An `http://` endpoint sends without TLS. |
 | `OTEL_EXPORTER_OTLP_INSECURE`<br>`OTEL_EXPORTER_OTLP_METRICS_INSECURE`<br>`OTEL_EXPORTER_OTLP_TRACES_INSECURE` | `false` | `true` sends OTLP without TLS. |

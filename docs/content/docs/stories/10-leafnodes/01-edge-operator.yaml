@@ -14,8 +14,9 @@ spec:
   systemAccountJWT: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...
 ---
 # Account JWTs come only through a remote bound to the system account:
-# without it the leaf cannot fetch an account it has not cached. The creds are a hub user in the system account; the hub recognises the account
-# by the JWT's issuer, not by name.
+# without it the leaf cannot fetch an account it has not cached. The creds are
+# a hub user in the system account; the hub recognises the account by the
+# JWT's issuer, not by name.
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:

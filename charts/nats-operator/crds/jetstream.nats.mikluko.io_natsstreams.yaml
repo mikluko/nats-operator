@@ -50,7 +50,10 @@ spec:
           metadata:
             type: object
           spec:
-            description: NatsStreamSpec is the desired state of a stream.
+            description: |-
+              NatsStreamSpec is the desired state of a stream. A field with no
+              description is the like-named field of nats.go's jetstream.StreamConfig,
+              documented at https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#StreamConfig.
             properties:
               adoptionPolicy:
                 default: Never

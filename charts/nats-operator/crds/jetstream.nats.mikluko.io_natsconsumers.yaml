@@ -54,7 +54,8 @@ spec:
               NatsConsumerSpec is the desired state of a consumer. deliverPolicy,
               ackPolicy, replayPolicy, optStartSeq, optStartTime, heartbeat,
               flowControl and maxWaiting are immutable unless recreateOnImmutableChange
-              is set.
+              is set. A field with no description is the like-named field of nats.go's
+              jetstream.ConsumerConfig, documented at https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#ConsumerConfig.
             properties:
               ackPolicy:
                 description: AckPolicy is how a consumer's messages are acknowledged.

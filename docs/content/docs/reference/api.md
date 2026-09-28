@@ -466,7 +466,7 @@ Appears on: [NatsClusterSpec](#NatsClusterSpec).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `discovery` | [{{< type "GatewayDiscovery" >}}](#GatewayDiscovery) | Yes | Discovery is how remotes are rendered: Explicit as gateway remotes with reject_unknown on, Gossip as seeds with reject_unknown off. |
-| `remotes` | [{{< type "[]GatewayRemote" >}}](#GatewayRemote) | Yes | Remotes are every member of the supercluster; this cluster's own entry is skipped. |
+| `remotes` | [{{< type "[]GatewayRemote" >}}](#GatewayRemote) | Yes | Remotes are every member of the supercluster; this NATS cluster's own entry is skipped. |
 | `tls` | [{{< type "ListenerTLS" >}}](#ListenerTLS) | No | TLS on the gateway listener; absent, gateways run in the clear. |
 | `service` | [{{< type "ServiceTemplate" >}}](#ServiceTemplate) | No | Service is the template of the external gateway Service. |
 | `advertise` | {{< type "string" >}} | No | Advertise is the host:port the servers advertise for gateways. |
@@ -486,7 +486,7 @@ Appears on: [Gateway](#Gateway).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `name` | {{< type "string" >}} | Yes | Name is the member's gateway name. |
-| `url` | {{< type "string" >}} | Yes | URL is where the member's gateway is dialled; on this cluster's own entry, its host is a name on the gateway certificate. |
+| `url` | {{< type "string" >}} | Yes | URL is where the member's gateway is dialled; on this NATS cluster's own entry, its host is a name on the gateway certificate. |
 
 ### GatewayStatus {#GatewayStatus}
 GatewayStatus is the connection to one supercluster member.\
@@ -608,11 +608,11 @@ Appears on: [NatsCluster](#NatsCluster).
 | `version` | {{< type "string" >}} | No | Version is the version every server has reached. |
 | `replicas` | {{< type "int32" >}} | No | Replicas is the number of servers. |
 | `readyReplicas` | {{< type "int32" >}} | No | ReadyReplicas is the number of ready servers. |
-| `endpoints` | [{{< type "Endpoints" >}}](#Endpoints) | No | Endpoints are the addresses clients and peers reach the cluster at. |
+| `endpoints` | [{{< type "Endpoints" >}}](#Endpoints) | No | Endpoints are the addresses clients and peers reach the NATS cluster at. |
 | `config` | [{{< type "ConfigStatus" >}}](#ConfigStatus) | No | Config is the rendered config revision and how it was applied. |
 | `rollout` | [{{< type "RolloutStatus" >}}](#RolloutStatus) | No | Rollout is the rollout in progress. |
 | `removals` | [{{< type "[]ServerRemoval" >}}](#ServerRemoval) | No | Removals are the servers whose removal or replacement has begun, and how far each has gone. |
-| `jetstream` | [{{< type "JetStreamStatus" >}}](#JetStreamStatus) | No | JetStream is the JetStream state of the cluster. |
+| `jetstream` | [{{< type "JetStreamStatus" >}}](#JetStreamStatus) | No | JetStream is the JetStream state of the NATS cluster. |
 | `gateways` | [{{< type "[]GatewayStatus" >}}](#GatewayStatus) | No | Gateways are the connections to the other supercluster members. |
 | `leafRemotes` | [{{< type "[]LeafRemoteStatus" >}}](#LeafRemoteStatus) | No | LeafRemotes are the connections to hubs. |
 | `servers` | [{{< type "[]ServerStatus" >}}](#ServerStatus) | No | Servers has one entry per server. |
@@ -761,7 +761,7 @@ Appears on: [NatsSystemBalancerStatus](#NatsSystemBalancerStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `placement` | {{< type "bool" >}} | No | Placement reports whether placement moves are possible. |
-| `leader` | [{{< type "LeaderCapability" >}}](#LeaderCapability) | No | Leader is Full when every account carries the jetstream-stepdown export, None when none does, and Partial otherwise. |
+| `leader` | [{{< type "LeaderCapability" >}}](#LeaderCapability) | No | Leader is Full when every account holding a stream carries the jetstream-stepdown export, None when none does, and Partial otherwise. |
 | `leaderReason` | {{< type "string" >}} | No | LeaderReason explains a leader capability short of Full. |
 
 ### ConsumerConfig {#ConsumerConfig}
@@ -983,10 +983,10 @@ Appears on: [NatsClusterEvacuation](#NatsClusterEvacuation).
 | `conditions` | [{{< type "[]Condition" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Condition) | No | Conditions: Ready, Progressing. |
 | `moved` | {{< type "int32" >}} | No | Moved is the number of streams moved. |
 | `inFlight` | {{< type "int32" >}} | No | InFlight is the number of moves in progress. |
-| `requested` | [{{< type "[]RequestedMove" >}}](#RequestedMove) | No | Requested are the moves requested that the source cluster has not yet seen complete; deleting the evacuation cancels them. |
-| `remaining` | {{< type "int32" >}} | No | Remaining is the number of streams still to leave the source cluster: in flight, waiting for a slot, or refused by the server in the last pass. Pinned streams and streams left for their owners are not counted. |
+| `requested` | [{{< type "[]RequestedMove" >}}](#RequestedMove) | No | Requested are the moves requested that the source NATS cluster has not yet seen complete; deleting the evacuation cancels them. |
+| `remaining` | {{< type "int32" >}} | No | Remaining is the number of streams still to leave the source NATS cluster: in flight, waiting for a slot, or refused by the server in the last pass. Pinned streams and streams left for their owners are not counted. |
 | `pinned` | [{{< type "[]PinnedObject" >}}](#PinnedObject) | No | Pinned are the resources left in place; the evacuation is not Ready while any remains. |
-| `stalePlacement` | [{{< type "[]ServerStream" >}}](#ServerStream) | No | StalePlacement are the streams moved that no resource owns and whose config still names the source cluster: while it exists, an update that changes their placement returns them to it. |
+| `stalePlacement` | [{{< type "[]ServerStream" >}}](#ServerStream) | No | StalePlacement are the streams moved that no resource owns and whose config still names the source NATS cluster: while it exists, an update that changes their placement returns them to it. |
 
 ### NatsConsumer {#NatsConsumer}
 NatsConsumer is a JetStream consumer.
@@ -999,7 +999,7 @@ NatsConsumer is a JetStream consumer.
 | `status` | [{{< type "NatsConsumerStatus" >}}](#NatsConsumerStatus) | No |  |
 
 ### NatsConsumerSpec {#NatsConsumerSpec}
-NatsConsumerSpec is the desired state of a consumer. deliverPolicy, ackPolicy, replayPolicy, optStartSeq, optStartTime, heartbeat, flowControl and maxWaiting are immutable unless recreateOnImmutableChange is set.\
+NatsConsumerSpec is the desired state of a consumer. deliverPolicy, ackPolicy, replayPolicy, optStartSeq, optStartTime, heartbeat, flowControl and maxWaiting are immutable unless recreateOnImmutableChange is set. A field with no description is the like-named field of nats.go's jetstream.ConsumerConfig, documented at https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#ConsumerConfig.\
 Appears on: [NatsConsumer](#NatsConsumer).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
@@ -1066,7 +1066,7 @@ NatsKeyValue is a JetStream key-value bucket.
 | `status` | [{{< type "NatsKeyValueStatus" >}}](#NatsKeyValueStatus) | No |  |
 
 ### NatsKeyValueSpec {#NatsKeyValueSpec}
-NatsKeyValueSpec is the desired state of a key-value bucket.\
+NatsKeyValueSpec is the desired state of a key-value bucket. A field with no description is the like-named field of nats.go's jetstream.KeyValueConfig, documented at https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#KeyValueConfig.\
 Appears on: [NatsKeyValue](#NatsKeyValue).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
@@ -1113,7 +1113,7 @@ NatsObjectStore is a JetStream object store.
 | `status` | [{{< type "NatsObjectStoreStatus" >}}](#NatsObjectStoreStatus) | No |  |
 
 ### NatsObjectStoreSpec {#NatsObjectStoreSpec}
-NatsObjectStoreSpec is the desired state of an object store.\
+NatsObjectStoreSpec is the desired state of an object store. A field with no description is the like-named field of nats.go's jetstream.ObjectStoreConfig, documented at https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#ObjectStoreConfig.\
 Appears on: [NatsObjectStore](#NatsObjectStore).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
@@ -1154,7 +1154,7 @@ NatsStream is a JetStream stream.
 | `status` | [{{< type "NatsStreamStatus" >}}](#NatsStreamStatus) | No |  |
 
 ### NatsStreamSpec {#NatsStreamSpec}
-NatsStreamSpec is the desired state of a stream.\
+NatsStreamSpec is the desired state of a stream. A field with no description is the like-named field of nats.go's jetstream.StreamConfig, documented at https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#StreamConfig.\
 Appears on: [NatsStream](#NatsStream).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
@@ -1288,7 +1288,7 @@ Appears on: [NatsStreamSpec](#NatsStreamSpec), [StreamConfig](#StreamConfig).
 | `Async` |  |
 
 ### PinnedObject {#PinnedObject}
-PinnedObject is a resource whose own spec pins the source cluster.\
+PinnedObject is a resource whose own spec pins the source NATS cluster.\
 Appears on: [NatsClusterEvacuationStatus](#NatsClusterEvacuationStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |

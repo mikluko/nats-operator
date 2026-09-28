@@ -38,7 +38,7 @@ type EvacuationTarget struct {
 	ServerTags []string `json:"serverTags"`
 }
 
-// PinnedObject is a resource whose own spec pins the source cluster.
+// PinnedObject is a resource whose own spec pins the source NATS cluster.
 type PinnedObject struct {
 	// Kind is NatsStream, NatsKeyValue or NatsObjectStore.
 	// +required
@@ -73,14 +73,15 @@ type NatsClusterEvacuationStatus struct {
 	// +optional
 	InFlight int32 `json:"inFlight,omitempty"`
 
-	// Requested are the moves requested that the source cluster has not yet
-	// seen complete; deleting the evacuation cancels them.
+	// Requested are the moves requested that the source NATS cluster has
+	// not yet seen complete; deleting the evacuation cancels them.
 	// +optional
 	Requested []RequestedMove `json:"requested,omitempty"`
 
-	// Remaining is the number of streams still to leave the source cluster:
-	// in flight, waiting for a slot, or refused by the server in the last
-	// pass. Pinned streams and streams left for their owners are not counted.
+	// Remaining is the number of streams still to leave the source NATS
+	// cluster: in flight, waiting for a slot, or refused by the server in the
+	// last pass. Pinned streams and streams left for their owners are not
+	// counted.
 	// +optional
 	Remaining int32 `json:"remaining,omitempty"`
 
@@ -90,8 +91,8 @@ type NatsClusterEvacuationStatus struct {
 	Pinned []PinnedObject `json:"pinned,omitempty"`
 
 	// StalePlacement are the streams moved that no resource owns and whose
-	// config still names the source cluster: while it exists, an update that
-	// changes their placement returns them to it.
+	// config still names the source NATS cluster: while it exists, an update
+	// that changes their placement returns them to it.
 	// +optional
 	StalePlacement []ServerStream `json:"stalePlacement,omitempty"`
 }

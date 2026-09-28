@@ -14,9 +14,8 @@ status:
   # Re-read on a resync period, not only on spec change, so drift shows.
   lastSyncedTime: !any "2026-09-25T16:10:40Z"
   # Ownership is a marker the controller writes into the stream's own
-  # `metadata` map (StreamConfig and ConsumerConfig both carry one, nats-server
-  # 2.15.0 stream.go:129, consumer.go:133) naming this resource's UID; a stream
-  # without it is not the controller's to update or delete.
+  # `metadata` map naming this resource's UID; a stream without it is not the
+  # controller's to update or delete.
   ownership:
     origin: Created   # Created | Adopted
     uid: !any 5b1e0c4a-2f7d-4c0e-9a51-0d6f3e2b7c19

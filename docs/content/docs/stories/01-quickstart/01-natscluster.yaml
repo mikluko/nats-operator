@@ -6,8 +6,6 @@ metadata:
   name: demo
   namespace: nats-system
 spec:
-  # The controller keeps a reload allow-list per nats-server version,
-  # so the version is a field it reads, not a tag it parses out of an image.
   # `image` overrides the repository only.
   version: 2.15.0
   replicas: 3

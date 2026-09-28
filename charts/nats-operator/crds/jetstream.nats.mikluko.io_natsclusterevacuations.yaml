@@ -179,7 +179,7 @@ spec:
                   while any remains.
                 items:
                   description: PinnedObject is a resource whose own spec pins the
-                    source cluster.
+                    source NATS cluster.
                   properties:
                     kind:
                       description: Kind is NatsStream, NatsKeyValue or NatsObjectStore.
@@ -198,15 +198,16 @@ spec:
                 type: array
               remaining:
                 description: |-
-                  Remaining is the number of streams still to leave the source cluster:
-                  in flight, waiting for a slot, or refused by the server in the last
-                  pass. Pinned streams and streams left for their owners are not counted.
+                  Remaining is the number of streams still to leave the source NATS
+                  cluster: in flight, waiting for a slot, or refused by the server in the
+                  last pass. Pinned streams and streams left for their owners are not
+                  counted.
                 format: int32
                 type: integer
               requested:
                 description: |-
-                  Requested are the moves requested that the source cluster has not yet
-                  seen complete; deleting the evacuation cancels them.
+                  Requested are the moves requested that the source NATS cluster has
+                  not yet seen complete; deleting the evacuation cancels them.
                 items:
                   description: RequestedMove is a stream an evacuation asked the server
                     to move.
@@ -230,8 +231,8 @@ spec:
               stalePlacement:
                 description: |-
                   StalePlacement are the streams moved that no resource owns and whose
-                  config still names the source cluster: while it exists, an update that
-                  changes their placement returns them to it.
+                  config still names the source NATS cluster: while it exists, an update
+                  that changes their placement returns them to it.
                 items:
                   description: ServerStream names a stream on the server.
                   properties:

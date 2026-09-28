@@ -58,7 +58,7 @@ type Runner struct {
 	// logs nothing.
 	Report time.Duration
 	// Namespaces are watched for stuck pods and failed Jobs in every
-	// cluster, besides the story's own.
+	// Kubernetes cluster, besides the story's own.
 	Namespaces []string
 	Log        io.Writer
 	// Publish, where set, runs with Clients at the start of every round of
@@ -174,8 +174,8 @@ type runPlan struct {
 
 // plan returns how b runs on r's Kubernetes clusters, reading none of
 // them. It fails with skipped where b's SkipReason is not "" or b places
-// files in more clusters than r.Clients reach, and otherwise where an
-// expectation names no object of its cluster.
+// files in more Kubernetes clusters than r.Clients reach, and otherwise
+// where an expectation names no object of its Kubernetes cluster.
 func (r *Runner) plan(b *Bundle) (runPlan, error) {
 	if reason := b.SkipReason(); reason != "" {
 		return runPlan{}, skipped(reason)

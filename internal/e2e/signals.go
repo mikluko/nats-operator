@@ -84,7 +84,7 @@ func conditionSignal(live *unstructured.Unstructured, want map[string]any) strin
 }
 
 // signal returns why the shares' expectations will not be met, or "";
-// namespaces is indexed by a share's cluster.
+// namespaces is indexed by a share's Kubernetes cluster.
 func (r *Runner) signal(ctx context.Context, shares []share, namespaces [][]string) (string, error) {
 	for _, sh := range shares {
 		for i, e := range sh.step.Expectations {

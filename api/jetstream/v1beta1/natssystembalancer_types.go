@@ -39,8 +39,8 @@ type Capabilities struct {
 	// +optional
 	Placement bool `json:"placement,omitempty"`
 
-	// Leader is Full when every account carries the jetstream-stepdown
-	// export, None when none does, and Partial otherwise.
+	// Leader is Full when every account holding a stream carries the
+	// jetstream-stepdown export, None when none does, and Partial otherwise.
 	// +optional
 	Leader LeaderCapability `json:"leader,omitempty"`
 

@@ -95,8 +95,8 @@ spec:
     secretKeyRef:
       name: edge-site-1-leaf-creds
 ---
-# For an operator-mode leaf (01-edge-operator.yaml): the system-account leaf
-# user its account lookups travel over.
+# For a leaf under a NATS operator (01-edge-operator.yaml): the system-account
+# leaf user its account lookups travel over.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:

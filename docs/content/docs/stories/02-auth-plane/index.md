@@ -23,6 +23,8 @@ The auth controller generates the NATS operator's keys and keeps each seed in a 
 
 The system account is a kind of its own so RBAC can grant it to the platform team alone. An ordinary account's limits are signed into its JWT, and the auth controller configures nothing about JetStream beyond that.
 
+Whoever writes a `NatsAccount` sets its limits. A limit left out or set to 0 is unlimited, and an account without `limits.jetstream` has no JetStream. A `NatsReferenceGrant` admitting `NatsAccount`s from another namespace to a `NatsOperator` therefore lets that namespace set its own accounts' limits.
+
 {{< manifest "01-natsaccounts.yaml" >}}
 
 An account change is pushed to the servers' resolvers without a restart; status says how many servers hold the current JWT.

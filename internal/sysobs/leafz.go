@@ -15,7 +15,7 @@ type Leaf struct {
 	// public key under a NATS operator, $G without one.
 	Account string
 	// Spoke is whether this server dialed the connection, as a leaf does
-	// its remotes; a hub's accepted connections are not spokes.
+	// its remotes, rather than accepted it as a hub does.
 	Spoke bool
 	// Remote is the server_name at the other end.
 	Remote string

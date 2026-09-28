@@ -50,7 +50,10 @@ spec:
           metadata:
             type: object
           spec:
-            description: NatsObjectStoreSpec is the desired state of an object store.
+            description: |-
+              NatsObjectStoreSpec is the desired state of an object store. A field with
+              no description is the like-named field of nats.go's
+              jetstream.ObjectStoreConfig, documented at https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#ObjectStoreConfig.
             properties:
               adoptionPolicy:
                 default: Never

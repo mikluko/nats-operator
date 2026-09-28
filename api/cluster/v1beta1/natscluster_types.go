@@ -255,7 +255,7 @@ type Gateway struct {
 	// +required
 	Discovery GatewayDiscovery `json:"discovery"`
 
-	// Remotes are every member of the supercluster; this cluster's own
+	// Remotes are every member of the supercluster; this NATS cluster's own
 	// entry is skipped.
 	// +required
 	// +kubebuilder:validation:MinItems=1
@@ -293,8 +293,8 @@ type GatewayRemote struct {
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
-	// URL is where the member's gateway is dialled; on this cluster's own
-	// entry, its host is a name on the gateway certificate.
+	// URL is where the member's gateway is dialled; on this NATS cluster's
+	// own entry, its host is a name on the gateway certificate.
 	// +required
 	// +kubebuilder:validation:MinLength=1
 	URL string `json:"url"`
@@ -389,7 +389,8 @@ type NatsClusterStatus struct {
 	// +optional
 	ReadyReplicas int32 `json:"readyReplicas,omitempty"`
 
-	// Endpoints are the addresses clients and peers reach the cluster at.
+	// Endpoints are the addresses clients and peers reach the NATS cluster
+	// at.
 	// +optional
 	Endpoints *Endpoints `json:"endpoints,omitempty"`
 
@@ -408,7 +409,7 @@ type NatsClusterStatus struct {
 	// +listMapKey=name
 	Removals []ServerRemoval `json:"removals,omitempty"`
 
-	// JetStream is the JetStream state of the cluster.
+	// JetStream is the JetStream state of the NATS cluster.
 	// +optional
 	JetStream *JetStreamStatus `json:"jetstream,omitempty"`
 

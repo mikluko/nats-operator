@@ -3,7 +3,7 @@
 apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:
-  name: prod-east   # home cluster
+  name: prod-east   # in the home cluster
   namespace: nats-system
 spec:
   version: 2.15.0

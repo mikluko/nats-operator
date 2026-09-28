@@ -95,8 +95,8 @@ spec:
                 properties:
                   leader:
                     description: |-
-                      Leader is Full when every account carries the jetstream-stepdown
-                      export, None when none does, and Partial otherwise.
+                      Leader is Full when every account holding a stream carries the
+                      jetstream-stepdown export, None when none does, and Partial otherwise.
                     enum:
                     - Full
                     - Partial

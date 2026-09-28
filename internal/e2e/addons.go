@@ -67,9 +67,10 @@ func checkSHA256(raw []byte, want string) error {
 	return nil
 }
 
-// PoolRange returns the ten addresses of subnet that cluster number i, from
-// 0, hands to LoadBalancer Services: host addresses 100+10i to 109+10i, clear
-// of the node addresses podman assigns from the bottom of the subnet.
+// PoolRange returns the ten addresses of subnet that Kubernetes cluster
+// number i, from 0, hands to LoadBalancer Services: host addresses 100+10i to
+// 109+10i, clear of the node addresses podman assigns from the bottom of the
+// subnet.
 func PoolRange(subnet netip.Prefix, i int) (first, last netip.Addr, err error) {
 	if !subnet.Addr().Is4() || subnet.Bits() > 24 {
 		return first, last, fmt.Errorf("subnet %s is not an IPv4 subnet of /24 or wider", subnet)
@@ -136,8 +137,8 @@ spec:
   ipAddressPools: [e2e]
 `
 
-// Corefile is kube-system/coredns's Corefile on every cluster: kind's with
-// a hosts plugin reading HostsKey ahead of the rest.
+// Corefile is kube-system/coredns's Corefile on every Kubernetes cluster:
+// kind's with a hosts plugin reading HostsKey ahead of the rest.
 const Corefile = `.:53 {
     errors
     health {

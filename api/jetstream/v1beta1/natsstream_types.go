@@ -205,7 +205,9 @@ type StreamConsumerLimits struct {
 	MaxAckPending *int64 `json:"maxAckPending,omitempty"`
 }
 
-// NatsStreamSpec is the desired state of a stream.
+// NatsStreamSpec is the desired state of a stream. A field with no
+// description is the like-named field of nats.go's jetstream.StreamConfig,
+// documented at https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#StreamConfig.
 type NatsStreamSpec struct {
 	// ConnectionRef names the NatsConnection whose credentials decide the
 	// account.

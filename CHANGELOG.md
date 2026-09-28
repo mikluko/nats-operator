@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Licensed under Apache-2.0; the chart carries `artifacthub.io/license: Apache-2.0`.
 - Vulnerabilities are reported through the repository's GitHub private vulnerability reporting, as `SECURITY.md` states.
+- `SECURITY.md` states the supported versions, the acknowledgement time for a report, and how to verify a release's signatures and provenance.
 - Each release's controller images and chart are signed keylessly with cosign and carry a GitHub build provenance attestation.
 - The cluster controller caches only the StatefulSets, ConfigMaps, Services, PersistentVolumeClaims and PodDisruptionBudgets labelled `cluster.nats.mikluko.io/cluster`; every controller reads Secrets from the API server rather than its cache.
 - A controller's `/readyz` passes once its cache is synced.
@@ -27,7 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The chart refuses a value key it does not know, checked against `values.schema.json`.
 - Chart values `nodeSelector`, `annotations`, `podAnnotations` and `affinity`, globally and per controller.
 - Chart value `auth.systemConnection`, passed to the auth controller as `--system-connection`.
-- `helm test` checks every enabled controller's `/healthz`.
 - Each release publishes the three controller images for linux/amd64 and linux/arm64, the chart as an OCI artifact, and a GitHub release carrying the version's changelog entry.
 - Documentation site at <https://mikluko.github.io/nats-operator/>: the stories, the design and the ADRs.
 - Documentation page `/docs/install/`: installing the chart, its values, the controllers' flags and RBAC, upgrade and uninstall.
@@ -90,6 +90,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - The `cluster-controller`, `jetstream-controller` and `auth-controller` presets subscribe only to their own inbox, `_INBOX.<preset>.>`; a JetStream controller account user whose `permissions` restrict subscriptions must allow `_INBOX.jetstream-controller.>`.
-- The `cluster-controller` preset no longer grants `$SYS.REQ.SERVER.*.STATSZ`, `$SYS.REQ.SERVER.*.JSZ`, `$SYS.REQ.SERVER.*.HEALTHZ` or the stepdown imports, and the `auth-controller` preset no longer subscribes to `$SYS.SERVER.*.STATSZ`.
 
 [Unreleased]: https://github.com/mikluko/nats-operator/commits/main

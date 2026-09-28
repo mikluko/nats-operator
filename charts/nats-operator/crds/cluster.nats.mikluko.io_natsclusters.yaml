@@ -142,7 +142,7 @@ spec:
                     type: string
                   remotes:
                     description: |-
-                      Remotes are every member of the supercluster; this cluster's own
+                      Remotes are every member of the supercluster; this NATS cluster's own
                       entry is skipped.
                     items:
                       description: GatewayRemote is one member of a supercluster.
@@ -153,8 +153,8 @@ spec:
                           type: string
                         url:
                           description: |-
-                            URL is where the member's gateway is dialled; on this cluster's own
-                            entry, its host is a name on the gateway certificate.
+                            URL is where the member's gateway is dialled; on this NATS cluster's
+                            own entry, its host is a name on the gateway certificate.
                           minLength: 1
                           type: string
                       required:
@@ -876,8 +876,9 @@ spec:
                     type: string
                 type: object
               endpoints:
-                description: Endpoints are the addresses clients and peers reach the
-                  cluster at.
+                description: |-
+                  Endpoints are the addresses clients and peers reach the NATS cluster
+                  at.
                 properties:
                   client:
                     description: Client is the client URL.
@@ -918,7 +919,7 @@ spec:
                 - name
                 x-kubernetes-list-type: map
               jetstream:
-                description: JetStream is the JetStream state of the cluster.
+                description: JetStream is the JetStream state of the NATS cluster.
                 properties:
                   limits:
                     description: Limits are the effective store limits.

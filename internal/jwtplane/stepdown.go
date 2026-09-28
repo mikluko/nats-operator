@@ -44,7 +44,7 @@ func StepdownImports(account string) []Import {
 }
 
 // StepdownPrefix is the prefix a system user puts before an account's
-// stepdown API subject to reach it through the account's import.
+// leader-move API subject to reach it through the account's import.
 func StepdownPrefix(account string) string {
 	return stepdownPrefix + account + "."
 }

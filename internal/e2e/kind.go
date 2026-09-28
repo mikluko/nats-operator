@@ -74,8 +74,8 @@ func pingPodman(ctx context.Context, socket string, dial func(context.Context) (
 // KindNetwork.
 type Kind struct {
 	provider *cluster.Provider
-	// kubeconfig is the file kind merges each cluster it creates into and
-	// removes each one it deletes from.
+	// kubeconfig is the file kind merges each Kubernetes cluster it creates
+	// into and removes each one it deletes from.
 	kubeconfig string
 }
 
@@ -88,9 +88,10 @@ func NewKind(logger log.Logger, kubeconfig string) *Kind {
 	}
 }
 
-// Up creates each cluster in names that does not exist, from KindNodeImage
-// with one node, and returns a kubeconfig with one context per name, named
-// after it and reaching its API server from this host, names[0] current.
+// Up creates each Kubernetes cluster in names that does not exist, from
+// KindNodeImage with one node, and returns a kubeconfig with one context per
+// name, named after it and reaching its API server from this host, names[0]
+// current.
 func (k *Kind) Up(names []string) (*clientcmdapi.Config, error) {
 	existing, err := k.provider.List()
 	if err != nil {
@@ -151,7 +152,7 @@ func mergeKubeconfigs(names, raws []string) (*clientcmdapi.Config, error) {
 	return out, nil
 }
 
-// Down deletes every cluster in names that exists.
+// Down deletes every Kubernetes cluster in names that exists.
 func (k *Kind) Down(names []string) error {
 	existing, err := k.provider.List()
 	if err != nil {
@@ -169,8 +170,8 @@ func (k *Kind) Down(names []string) error {
 }
 
 // LoadImage imports the image archive at path into every node of each
-// cluster in names, and tags the image named source it holds as each of
-// tags.
+// Kubernetes cluster in names, and tags the image named source it holds as
+// each of tags.
 func (k *Kind) LoadImage(names []string, path, source string, tags ...string) error {
 	for _, n := range names {
 		nodes, err := k.provider.ListInternalNodes(n)

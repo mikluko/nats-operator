@@ -54,7 +54,7 @@ params:
         patch: {spec: {podTemplate: {spec: {nodeSelector: null}}}}
 ---
 
-Everything from the earlier stories at once, modelled on a real deployment with its names invented and its five NATS clusters reduced to the three that differ: a larger home cluster, a development cluster pinned to one zone, and a production cluster in another region whose placement tag is not its name. Four services run in two environments, each service an account.
+Everything from the earlier stories at once, across three NATS clusters in three Kubernetes clusters: a five-server one in the home cluster, a development NATS cluster pinned to one zone, and a production NATS cluster in another region whose placement tag is not its name. Four services run in two environments, each service an account.
 
 ## Trust roots and clusters
 
@@ -82,7 +82,7 @@ Every account reaches every server of the supercluster through the resolver.
 
 {{< manifest "01-status-natsaccount-monitoring-prod.yaml" >}}
 
-Every account carries a `service` and a `readonly` user, and every remote cluster two controller users.
+Every account carries a `service` and a `readonly` user, and every other Kubernetes cluster two controller users.
 
 {{< manifest "01-users.yaml" >}}
 

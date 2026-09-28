@@ -1,6 +1,5 @@
-# resources.limits.memory changed 4Gi -> 8Gi. A change to the pod template is
-# restart-only, so the rollout restarts one server at a time, gating each on
-# Settled.
+# resources.limits.memory changed 4Gi -> 8Gi: the rollout restarts one server
+# at a time, gating each on Settled.
 status:
   observedGeneration: 2
   version: 2.15.0

@@ -23,9 +23,9 @@ const HostsKey = "e2e.hosts"
 // clients reach: it maps every hostname a LoadBalancer Service in any of
 // them carries in HostnameAnnotation to that Service's ingress IPs, and
 // writes the mapping, in hosts file form, to HostsKey of kube-system/coredns
-// in each. A Service with no ingress IP yet is left out; a cluster without
-// that ConfigMap is left alone, and one whose ConfigMap changed underneath
-// the write is left for the next call.
+// in each. A Service with no ingress IP yet is left out; a Kubernetes cluster
+// without that ConfigMap is left alone, and one whose ConfigMap changed
+// underneath the write is left for the next call.
 func PublishHosts(ctx context.Context, clients []client.Client) error {
 	var lines []string
 	for _, c := range clients {

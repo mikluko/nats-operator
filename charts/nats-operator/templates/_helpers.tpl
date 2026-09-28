@@ -40,11 +40,10 @@ Both empty, it returns nothing.
 {{/*
 nats-operator.controller renders one controller's ServiceAccount, RBAC and
 Deployment. It takes a dict of root (the chart context), name (the
-controller's name, which is also its binary and image), group (its API group,
-which is also its leader election lease), values (its block of values) and,
-optionally, args (flags appended to the controller's own). Its ClusterRole's
-rules are those of files/rbac/<name>.yaml, a copy of the role controller-gen
-generates for it.
+controller's, and its image's), group (its API group and lease), values (its
+block of values) and, optionally, args (flags appended to the controller's
+own). Its ClusterRole's rules are those of files/rbac/<name>.yaml, a copy of
+the role controller-gen generates for it.
 */}}
 {{- define "nats-operator.controller" -}}
 {{- $fullname := include "nats-operator.fullname" . -}}

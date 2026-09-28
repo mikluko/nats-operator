@@ -117,8 +117,8 @@ func newClients(kc *clientcmdapi.Config, names []string) ([]client.Client, error
 	return clients, nil
 }
 
-// addons gives cluster number i of clients MetalLB with address pool i on
-// the kind network, and a CoreDNS serving the hostnames the runner
+// addons gives Kubernetes cluster number i of clients MetalLB with address
+// pool i on the kind network, and a CoreDNS serving the hostnames the runner
 // publishes.
 func addons(ctx context.Context, clients []client.Client, names []string) error {
 	subnet, err := e2e.KindSubnet(ctx, e2e.KindNetwork)

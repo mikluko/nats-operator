@@ -10,10 +10,11 @@
 // Linux, brings up the Apple container machine E2E_MACHINE, ships the
 // working tree and both builds into it, and runs there.
 //
-// Every cluster is on kind's one podman network, with MetalLB handing out
-// LoadBalancer addresses from its own slice of that network, so a Service's
-// address is reachable from every cluster; the runner publishes the
-// hostnames such Services carry to every cluster's CoreDNS.
+// Every Kubernetes cluster is on kind's one podman network, with MetalLB
+// handing out LoadBalancer addresses from its own slice of that network, so a
+// Service's address is reachable from every Kubernetes cluster; the runner
+// publishes the hostnames such Services carry to every Kubernetes cluster's
+// CoreDNS.
 //
 //	E2E_MACHINE           the darwin container machine              nats-operator-e2e
 //	E2E_DNS               nameserver the machine resolves by        9.9.9.9

@@ -26,7 +26,7 @@ const (
 	ExporterImage = "natsio/prometheus-nats-exporter:0.17.3"
 )
 
-// A server in lame-duck mode steps down every Raft leader it holds, tells
+// A server in lame-duck mode hands off every Raft leadership it holds, tells
 // its clients after lameDuckGracePeriod, spreads their disconnects over the
 // rest of lameDuckDuration and exits; terminationGracePeriod, in seconds,
 // must outlast all of it.

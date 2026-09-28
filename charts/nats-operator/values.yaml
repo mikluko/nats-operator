@@ -6,8 +6,7 @@ imagePullSecrets: []
 leaderElection:
   enabled: true
 
-# Every controller's Deployment takes these four, each merged key by key under
-# the same value of its own block, whose keys win.
+# Every controller's defaults, merged under its own block's, which win.
 nodeSelector: {}
 # On the Deployment.
 annotations: {}
@@ -37,11 +36,8 @@ cluster:
 auth:
   enabled: true
   replicas: 1
-  # namespace/name of the NatsConnection passed as --system-connection: a user
-  # of a NatsOperator's system account holding the auth-controller preset.
-  # Empty, account JWTs are signed but never pushed to the servers, a deleted
-  # NatsUser keeps its connections, and accounts and users read Distributed
-  # False, reason NoSystemConnection.
+  # namespace/name of a NatsConnection as the system account, passed as
+  # --system-connection; empty, no server receives an account JWT.
   systemConnection: ""
   image:
     repository: ghcr.io/mikluko/nats-operator/auth-controller

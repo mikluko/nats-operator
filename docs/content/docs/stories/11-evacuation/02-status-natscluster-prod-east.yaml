@@ -1,5 +1,5 @@
-# prod-east once deleted: deletion waits while the cluster still holds
-# JetStream data. The one-shot annotation cluster.nats.mikluko.io/force-delete
+# prod-east once deleted: deletion waits while its NATS cluster still holds
+# JetStream data. The annotation cluster.nats.mikluko.io/force-delete
 # overrides it.
 status:
   conditions:

@@ -41,7 +41,7 @@ A NATS cluster joined to a hub by leafnode connections, bridging accounts withou
 _Avoid_: edge cluster, satellite, spoke
 
 **Hub**:
-The NATS cluster a leaf connects to. Not the home cluster, which is a hub only if leaves happen to connect to it.
+The NATS cluster a leaf connects to. Not the home cluster's NATS cluster, which is a hub only if leaves happen to connect to it.
 _Avoid_: upstream, parent
 
 **Home cluster**:

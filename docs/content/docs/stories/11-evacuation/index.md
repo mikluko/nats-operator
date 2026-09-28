@@ -8,7 +8,7 @@ params:
     substitutions:
       - files: [01-natscluster-prod-east.yaml, 01-evacuation.yaml]
         kind: NatsCluster
-        reason: six servers share one kind node, on a host every cluster of the run shares
+        reason: six servers share one kind node, on a host every Kubernetes cluster of the run shares
         patch:
           spec:
             replicas: 3
@@ -47,25 +47,25 @@ params:
               advertise: nats-prod-east-2.example.net:7222
 ---
 
-The infra team replaces `prod-east`: it rolls out `prod-east-2` beside it in the same supercluster, moves every JetStream asset across, and only then deletes the old cluster.
+The platform team retires the NATS cluster `prod-east`: it rolls out `prod-east-2` beside it in the same supercluster, moves every stream across, and only then deletes `prod-east`.
 
 ## The evacuation
 
-The old cluster:
+The NATS cluster to retire:
 
 {{< manifest "01-natscluster-prod-east.yaml" >}}
 
-A new cluster with a tag of its own, and one system-level evacuation of the whole old cluster.
+Its replacement, with a tag of its own, and one system-level evacuation of the whole of `prod-east`.
 
 {{< manifest "01-evacuation.yaml" >}}
 
-Resources whose own spec pins the old cluster are left alone and listed; the evacuation is not Ready until their owners move them. A moved stream that no resource owns keeps a config naming the old cluster, and is listed under `stalePlacement`: while `prod-east` exists, an update that changes that stream's placement moves it back there.
+Resources whose own spec pins `prod-east` are left alone and listed; the evacuation is not Ready until their owners move them. A moved stream that no resource owns keeps a config naming `prod-east`, and is listed under `stalePlacement`: while `prod-east` exists, an update that changes that stream's placement moves it back there.
 
 {{< manifest "01-status-natsclusterevacuation.yaml" >}}
 
-## Deleting the old cluster
+## Deleting `prod-east`
 
-Deletion waits while the cluster still holds JetStream data.
+Deletion waits while its NATS cluster still holds JetStream data.
 
 {{< manifest "02-delete-natscluster-prod-east.yaml" >}}
 
