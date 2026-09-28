@@ -80,7 +80,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A generated identity Secret lost after `status.publicKey` recorded its key reads `Ready` False, reason `SeedLost`, and no new identity is minted.
 - A key a `NatsUser` stops holding is revoked in its account and listed in `status.replacedKeys` until the account JWT carries the revocation.
 - Revocation recovery reads the servers' JWT only when every server of the roster answers.
+- A `NatsAccount`, `NatsSystemAccount` or `NatsUser` reads `Distributed` False, reason `NoSystemConnection`, while the auth controller runs without `--system-connection`.
 - `NatsClusterEvacuation` makes no move while any server of its NATS system is down or the meta group has no leader, reporting `Ready` and `Progressing` False with reason `ServersDown`.
 - The `NatsSystemBalancer` and the `NatsBalancer`s of one NATS cluster move one at a time; while one's move is in flight the others read `Holding`, reason `MoveLeaseHeld`.
+
+### Security
+
+- The `cluster-controller`, `jetstream-controller` and `auth-controller` presets subscribe only to their own inbox, `_INBOX.<preset>.>`; a JetStream controller account user whose `permissions` restrict subscriptions must allow `_INBOX.jetstream-controller.>`.
+- The `cluster-controller` preset no longer grants `$SYS.REQ.SERVER.*.STATSZ`, `$SYS.REQ.SERVER.*.JSZ`, `$SYS.REQ.SERVER.*.HEALTHZ` or the stepdown imports, and the `auth-controller` preset no longer subscribes to `$SYS.SERVER.*.STATSZ`.
 
 [Unreleased]: https://github.com/mikluko/nats-operator/commits/main

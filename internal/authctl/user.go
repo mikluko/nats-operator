@@ -10,6 +10,7 @@ import (
 	"github.com/nats-io/nkeys"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -71,6 +72,7 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req reconcile.Request) (
 	}
 	before := u.Status.DeepCopy()
 	res, err := r.reconcile(ctx, &u)
+	r.recordSystemConnection(&u)
 	u.Status.ObservedGeneration = u.Generation
 	return result(res, updateStatus(ctx, r.Client, &u, before, &u.Status, err))
 }
@@ -140,6 +142,21 @@ func (r *UserReconciler) reconcile(ctx context.Context, u *authv1beta1.NatsUser)
 		return reconcile.Result{RequeueAfter: time.Second}, nil
 	}
 	return reconcile.Result{}, nil
+}
+
+// recordSystemConnection sets Distributed False, reason NoSystemConnection,
+// on u while Sessions is nil, and removes Distributed otherwise.
+func (r *UserReconciler) recordSystemConnection(u *authv1beta1.NatsUser) {
+	if r.Sessions != nil {
+		meta.RemoveStatusCondition(&u.Status.Conditions, ConditionDistributed)
+		return
+	}
+	conditions.Set(&u.Status.Conditions, u.Generation, metav1.Condition{
+		Type:    ConditionDistributed,
+		Status:  metav1.ConditionFalse,
+		Reason:  ReasonNoSystemConnection,
+		Message: "the auth controller runs without --system-connection: deleting this user revokes it in an account JWT no server receives, and closes none of its connections",
+	})
 }
 
 // errInvalidClaims wraps a user spec jwtplane refuses to sign.

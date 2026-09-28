@@ -74,7 +74,8 @@ var identities = []identity{
 	{
 		Heading: "JetStream controller, as an account user",
 		Connection: "Connects through the `NatsConnection` a `NatsStream`, `NatsConsumer`, `NatsKeyValue`, `NatsObjectStore` or `NatsBalancer` names in `connectionRef`, " +
-			"as a user of the account that owns the resources. No preset grants these subjects: the user's `permissions` must allow them, or the user sets none.",
+			"as a user of the account that owns the resources. No preset grants these subjects: the user's `permissions` must allow them and a subscription to `" +
+			jwtplane.InboxPrefix(jwtplane.PresetJetStreamController) + ".>`, or the user sets none.",
 		Calls: []call{
 			{"$JS.API.STREAM.INFO.*", "Reads a stream, or the stream behind a bucket.", []string{"internal/lifecycle"}},
 			{"$JS.API.STREAM.CREATE.*", "Creates a `NatsStream`'s stream.", []string{"internal/lifecycle"}},

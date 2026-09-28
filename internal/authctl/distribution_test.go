@@ -7,10 +7,17 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
+	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 )
 
 // countingDistributor answers Current with current until a Push, and with
@@ -103,9 +110,46 @@ func TestDistribute(t *testing.T) {
 		dist, cond, again, err := distribute(t.Context(), nil, types.NamespacedName{Name: "op"}, "jwt", prev)
 		require.NoError(t, err)
 		require.Same(t, prev, dist)
-		require.Empty(t, cond.Type)
+		require.Equal(t, ConditionDistributed, cond.Type)
+		require.Equal(t, metav1.ConditionFalse, cond.Status)
+		require.Equal(t, ReasonNoSystemConnection, cond.Reason)
 		require.Zero(t, again)
+
+		_, cond, _, err = distribute(t.Context(), nil, types.NamespacedName{Name: "op"}, "", prev)
+		require.NoError(t, err)
+		require.Empty(t, cond.Type, "an account with no JWT has nothing to distribute")
 	})
+}
+
+// TestUserReconciler_NoSystemConnection pins that a reconciled user reads
+// Distributed False, reason NoSystemConnection, while no Sessions reach
+// the servers, and carries no Distributed condition once one does.
+func TestUserReconciler_NoSystemConnection(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, authv1beta1.AddToScheme(scheme))
+	require.NoError(t, corev1.AddToScheme(scheme))
+	u := &authv1beta1.NatsUser{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "u"},
+		Spec: authv1beta1.NatsUserSpec{AccountRef: authv1beta1.AccountReference{
+			Kind: authv1beta1.AccountKindAccount, ObjectReference: natsv1beta1.ObjectReference{Name: "missing"},
+		}},
+	}
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(u).WithStatusSubresource(u).Build()
+	req := reconcile.Request{NamespacedName: client.ObjectKeyFromObject(u)}
+	distributed := func(r *UserReconciler) *metav1.Condition {
+		_, err := r.Reconcile(t.Context(), req)
+		require.NoError(t, err)
+		var got authv1beta1.NatsUser
+		require.NoError(t, c.Get(t.Context(), req.NamespacedName, &got))
+		return meta.FindStatusCondition(got.Status.Conditions, ConditionDistributed)
+	}
+
+	cond := distributed(&UserReconciler{Client: c})
+	require.NotNil(t, cond)
+	require.Equal(t, metav1.ConditionFalse, cond.Status)
+	require.Equal(t, ReasonNoSystemConnection, cond.Reason)
+
+	require.Nil(t, distributed(&UserReconciler{Client: c, Sessions: ConnSessions{}}))
 }
 
 func TestRecordDistribution(t *testing.T) {

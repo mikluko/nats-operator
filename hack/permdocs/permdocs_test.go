@@ -242,10 +242,36 @@ func TestPresetsGrantCalls(t *testing.T) {
 			g, ok := jwtplane.UserPresetGrant(id.Preset)
 			require.True(t, ok)
 			require.True(t, g.SystemAccount, "%s is not a system account preset", id.Preset)
-			require.True(t, slices.ContainsFunc(g.Subscribe, func(grant string) bool { return covers(grant, "_INBOX.>") }), "%s does not grant _INBOX.>", id.Preset)
+			inbox := jwtplane.InboxPrefix(id.Preset) + ".>"
+			require.True(t, slices.ContainsFunc(g.Subscribe, func(grant string) bool { return covers(grant, inbox) }), "%s does not grant %s", id.Preset, inbox)
 			for _, c := range id.Calls {
 				require.True(t, slices.ContainsFunc(g.Publish, func(grant string) bool { return covers(grant, c.Subject) }), "%s does not grant %s", id.Preset, c.Subject)
 			}
+		})
+	}
+}
+
+// TestPresetsGrantNoMore pins that each preset the page names for an
+// identity publishes to nothing but the calls of the identities naming it,
+// and subscribes to nothing but its inbox.
+func TestPresetsGrantNoMore(t *testing.T) {
+	calls := map[jwtplane.UserPreset][]string{}
+	for _, id := range identities {
+		if id.Preset == "" {
+			continue
+		}
+		for _, c := range id.Calls {
+			calls[id.Preset] = append(calls[id.Preset], c.Subject)
+		}
+	}
+	for preset, subjects := range calls {
+		t.Run(string(preset), func(t *testing.T) {
+			g, ok := jwtplane.UserPresetGrant(preset)
+			require.True(t, ok)
+			for _, grant := range g.Publish {
+				require.True(t, slices.ContainsFunc(subjects, func(s string) bool { return covers(s, grant) }), "%s grants %s, beyond every call of the page", preset, grant)
+			}
+			require.Equal(t, []string{jwtplane.InboxPrefix(preset) + ".>"}, g.Subscribe)
 		})
 	}
 }

@@ -68,7 +68,7 @@ func setup(ctx context.Context, mgr ctrl.Manager, resync time.Duration) error {
 		return fmt.Errorf("register instruments: %w", err)
 	}
 	rec := mgr.GetEventRecorder(telemetry.JetStreamController)
-	pool := natsconn.NewPool()
+	pool := balancectl.NewPool()
 	if err := mgr.Add(pool); err != nil {
 		return fmt.Errorf("add connection pool: %w", err)
 	}

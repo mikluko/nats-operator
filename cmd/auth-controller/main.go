@@ -18,7 +18,6 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/authctl"
 	"github.com/mikluko/nats-operator/internal/manager"
-	"github.com/mikluko/nats-operator/internal/natsconn"
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
@@ -71,7 +70,7 @@ func setup(ctx context.Context, mgr ctrl.Manager, systemConnection string) error
 		if err != nil {
 			return fmt.Errorf("parse --system-connection: %w", err)
 		}
-		pool := natsconn.NewPool()
+		pool := authctl.NewPool()
 		conn := &authctl.SystemConnection{Reader: mgr.GetClient(), Pool: pool, Name: name}
 		resolvers := &authctl.Resolvers{Conn: conn.Conn, Log: ctrl.Log.WithName("resolvers")}
 		for _, r := range []interface {

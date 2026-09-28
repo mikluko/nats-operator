@@ -64,7 +64,9 @@ func startPlane(t *testing.T) plane {
 	sign("a-readonly", jwtplane.User{Preset: jwtplane.PresetReadonly}, a)
 	sign("a-leaf", jwtplane.User{Preset: jwtplane.PresetLeafnode}, a)
 	sign("b", jwtplane.User{}, b)
-	sign("sys-jetstream", jwtplane.User{Preset: jwtplane.PresetJetStreamController, SystemAccount: true}, sys)
+	for _, preset := range controllerPresets {
+		sign("sys-"+string(preset), jwtplane.User{Preset: preset, SystemAccount: true}, sys)
+	}
 
 	aJWT, err := jwtplane.SignAccount(jwtplane.Account{
 		Name:        "A",
@@ -176,7 +178,7 @@ func TestPlaneServed(t *testing.T) {
 		_, err = js.AddStream(&nats.StreamConfig{Name: "S", Subjects: []string{"s.>"}, Storage: nats.MemoryStorage})
 		require.NoError(t, err)
 
-		nc, err := p.connect(t, "sys-jetstream")
+		nc, err := p.connect(t, "sys-jetstream-controller", nats.CustomInboxPrefix(jwtplane.InboxPrefix(jwtplane.PresetJetStreamController)))
 		require.NoError(t, err)
 		reply, err := nc.Request(jwtplane.StreamStepdownSubject(p.a, "S"), nil, 2*time.Second)
 		require.NoError(t, err)
@@ -189,4 +191,42 @@ func TestPlaneServed(t *testing.T) {
 		_, err = nc.Request(jwtplane.StreamStepdownSubject(pub(t, newPair(t, nkeys.PrefixByteAccount)), "S"), nil, time.Second)
 		require.True(t, errors.Is(err, nats.ErrNoResponders) || errors.Is(err, nats.ErrTimeout), "an account without the preset is unreachable: %v", err)
 	})
+}
+
+var controllerPresets = []jwtplane.UserPreset{jwtplane.PresetClusterController, jwtplane.PresetJetStreamController, jwtplane.PresetAuthController}
+
+// TestControllerInboxes pins that a system user holding a controller preset
+// takes replies under that preset's inbox prefix and may subscribe to no
+// other inbox, another controller preset's among them.
+func TestControllerInboxes(t *testing.T) {
+	p := startPlane(t)
+	for _, own := range controllerPresets {
+		t.Run(string(own), func(t *testing.T) {
+			violations := make(chan error, 1)
+			nc, err := p.connect(t, "sys-"+string(own),
+				nats.CustomInboxPrefix(jwtplane.InboxPrefix(own)),
+				nats.ErrorHandler(func(_ *nats.Conn, _ *nats.Subscription, err error) { violations <- err }))
+			require.NoError(t, err)
+			_, err = nc.Request("$SYS.REQ.SERVER.PING.STATSZ", nil, 2*time.Second)
+			require.NoError(t, err)
+
+			refused := []string{"_INBOX.>"}
+			for _, other := range controllerPresets {
+				if other != own {
+					refused = append(refused, jwtplane.InboxPrefix(other)+".>")
+				}
+			}
+			for _, subject := range refused {
+				sub, err := nc.SubscribeSync(subject)
+				require.NoError(t, err)
+				select {
+				case err := <-violations:
+					require.ErrorIs(t, err, nats.ErrPermissionViolation, subject)
+				case <-time.After(2 * time.Second):
+					t.Fatalf("subscription to %s was not refused", subject)
+				}
+				require.NoError(t, sub.Unsubscribe())
+			}
+		})
+	}
 }

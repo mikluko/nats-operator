@@ -22,7 +22,6 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/manager"
 	"github.com/mikluko/nats-operator/internal/natscluster"
-	"github.com/mikluko/nats-operator/internal/natsconn"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
@@ -78,7 +77,7 @@ func setup(ctx context.Context, mgr ctrl.Manager) error {
 	if err := telemetry.RegisterCluster(otel.Meter(telemetry.ClusterController), mgr.GetClient()); err != nil {
 		return fmt.Errorf("register instruments: %w", err)
 	}
-	pool := natsconn.NewPool()
+	pool := natscluster.NewPool()
 	if err := mgr.Add(pool); err != nil {
 		return fmt.Errorf("add connection pool: %w", err)
 	}

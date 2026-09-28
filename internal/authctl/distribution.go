@@ -20,13 +20,17 @@ const distributionRecheck = 5 * time.Second
 
 // distribute pushes token again where a server trusting operator lacks it
 // and returns the account's distribution, the Distributed condition and how
-// soon to look again. With d nil or no token the condition has no Type.
+// soon to look again. With no token the condition has no Type; with d nil
+// it is False, reason NoSystemConnection.
 func distribute(ctx context.Context, d Distributor, operator types.NamespacedName, token string, prev *authv1beta1.Distribution) (*authv1beta1.Distribution, metav1.Condition, time.Duration, error) {
-	if d == nil || token == "" {
-		return prev, metav1.Condition{}, 0, nil
-	}
 	cond := func(status metav1.ConditionStatus, reason, msg string) metav1.Condition {
 		return metav1.Condition{Type: ConditionDistributed, Status: status, Reason: reason, Message: msg}
+	}
+	switch {
+	case token == "":
+		return prev, metav1.Condition{}, 0, nil
+	case d == nil:
+		return prev, cond(metav1.ConditionFalse, ReasonNoSystemConnection, "the auth controller runs without --system-connection: no server receives this JWT"), 0, nil
 	}
 	got, err := d.Current(ctx, operator, token)
 	if err == nil && got.Current < got.Servers {

@@ -48,7 +48,7 @@ func TestBalancerEnvtest(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, env.Stop()) })
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{Scheme: testScheme(t), Metrics: metricsserver.Options{BindAddress: "0"}})
 	require.NoError(t, err)
-	conns := natsconn.NewPool()
+	conns := NewPool()
 	require.NoError(t, mgr.Add(conns))
 	r := &BalancerReconciler{Client: mgr.GetClient(), Dialer: &natsconn.Dialer{Reader: mgr.GetClient(), Pool: conns}, PendingPoll: 200 * time.Millisecond, Leases: &MoveLeases{}}
 	require.NoError(t, r.SetupWithManager(t.Context(), mgr))

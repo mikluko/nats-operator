@@ -105,11 +105,18 @@ func dial(t *testing.T, url string, u jwtplane.User, keys jwtplane.Keys) (*nats.
 	u.PublicKey = pub
 	token, err := jwtplane.SignUser(u, keys)
 	require.NoError(t, err)
-	nc, err := nats.Connect(url, nats.UserJWTAndSeed(token, string(seed)), nats.NoReconnect())
+	opts := []nats.Option{nats.UserJWTAndSeed(token, string(seed)), nats.NoReconnect()}
+	if u.Preset != "" {
+		opts = append(opts, nats.CustomInboxPrefix(jwtplane.InboxPrefix(u.Preset)))
+	}
+	nc, err := nats.Connect(url, opts...)
 	require.NoError(t, err)
 	t.Cleanup(nc.Close)
 	return nc, pub
 }
+
+// authInbox is the inbox prefix the auth-controller preset grants.
+var authInbox = nats.CustomInboxPrefix(jwtplane.InboxPrefix(jwtplane.PresetAuthController))
 
 // TestConnSessions_Kick pins the kick pass of Q2182 against two routed
 // servers: the auth-controller preset suffices, only the named user's
@@ -175,7 +182,7 @@ func TestConnSessions_KickNoRoster(t *testing.T) {
 	require.NoError(t, err)
 	token, err := jwtplane.SignUser(jwtplane.User{Name: "ctl", PublicKey: pub, SystemAccount: true, Preset: jwtplane.PresetAuthController}, p.sys)
 	require.NoError(t, err)
-	sysNC, err := nats.Connect(srv.ClientURL(), nats.UserJWTAndSeed(token, string(seed)),
+	sysNC, err := nats.Connect(srv.ClientURL(), nats.UserJWTAndSeed(token, string(seed)), authInbox,
 		nats.MaxReconnects(-1), nats.ReconnectWait(time.Hour))
 	require.NoError(t, err)
 	t.Cleanup(sysNC.Close)

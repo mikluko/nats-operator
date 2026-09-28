@@ -75,7 +75,7 @@ func TestSignUser(t *testing.T) {
 					"$SYS.REQ.CLAIMS.UPDATE", "$SYS.REQ.CLAIMS.DELETE", "$SYS.REQ.ACCOUNT.*.CLAIMS.LOOKUP",
 					"$SYS.REQ.SERVER.PING.STATSZ", "$SYS.REQ.SERVER.PING.CONNZ", "$SYS.REQ.SERVER.*.KICK",
 				},
-				subAllow: []string{"_INBOX.>", "$SYS.SERVER.*.STATSZ"},
+				subAllow: []string{"_INBOX.auth-controller.>"},
 			},
 		},
 		{
@@ -87,7 +87,7 @@ func TestSignUser(t *testing.T) {
 					"$JS.API.ACCOUNT.STREAM.MOVE.*.*", "$JS.API.ACCOUNT.STREAM.CANCEL_MOVE.*.*",
 					"acc.*.$JS.API.STREAM.LEADER.STEPDOWN.*", "acc.*.$JS.API.CONSUMER.LEADER.STEPDOWN.*.*",
 				},
-				subAllow: []string{"_INBOX.>"},
+				subAllow: []string{"_INBOX.jetstream-controller.>"},
 			},
 		},
 		{
@@ -96,12 +96,10 @@ func TestSignUser(t *testing.T) {
 			want: want{
 				pubAllow: []string{
 					"$SYS.REQ.SERVER.PING.STATSZ", "$SYS.REQ.SERVER.PING.JSZ", "$SYS.REQ.SERVER.PING.GATEWAYZ", "$SYS.REQ.SERVER.PING.LEAFZ",
-					"$SYS.REQ.SERVER.*.STATSZ", "$SYS.REQ.SERVER.*.JSZ", "$SYS.REQ.SERVER.*.VARZ",
-					"$SYS.REQ.SERVER.*.HEALTHZ", "$SYS.REQ.SERVER.*.RELOAD",
+					"$SYS.REQ.SERVER.*.VARZ", "$SYS.REQ.SERVER.*.RELOAD",
 					"$JS.API.SERVER.EVACUATE", "$JS.API.SERVER.REMOVE", "$JS.API.META.LEADER.STEPDOWN",
-					"acc.*.$JS.API.STREAM.LEADER.STEPDOWN.*", "acc.*.$JS.API.CONSUMER.LEADER.STEPDOWN.*.*",
 				},
-				subAllow: []string{"_INBOX.>"},
+				subAllow: []string{"_INBOX.cluster-controller.>"},
 			},
 		},
 		{

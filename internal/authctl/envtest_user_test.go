@@ -297,7 +297,7 @@ func (e *env) testDeletion(t *testing.T) {
 	e.eventually(t, func(ct *assert.CollectT) {
 		sysToken, sysSeed, _ = e.creds(ct, key("nats-system", "auth-controller-creds"))
 	})
-	sysNC, err := nats.Connect(srv.ClientURL(), nats.UserJWTAndSeed(sysToken, sysSeed))
+	sysNC, err := nats.Connect(srv.ClientURL(), nats.UserJWTAndSeed(sysToken, sysSeed), authInbox)
 	require.NoError(t, err)
 	t.Cleanup(sysNC.Close)
 	e.sys.Store(sysNC)

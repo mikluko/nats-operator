@@ -39,7 +39,9 @@ auth:
   replicas: 1
   # namespace/name of the NatsConnection passed as --system-connection: a user
   # of a NatsOperator's system account holding the auth-controller preset.
-  # Empty, account JWTs are signed but never pushed to the servers.
+  # Empty, account JWTs are signed but never pushed to the servers, a deleted
+  # NatsUser keeps its connections, and accounts and users read Distributed
+  # False, reason NoSystemConnection.
   systemConnection: ""
   image:
     repository: ghcr.io/mikluko/nats-operator/auth-controller

@@ -77,7 +77,7 @@ func startRemovalCluster(t *testing.T, replicas int32) *removalCluster {
 		ObjectMeta: metav1.ObjectMeta{Namespace: rc.nc.Namespace, Name: rc.nc.Spec.Auth.SystemCredentials.SecretKeyRef.Name},
 		Data:       map[string][]byte{natsconn.DefaultCredentialsKey: p.systemCreds(t, jwtplane.PresetClusterController)},
 	}
-	pool := natsconn.NewPool()
+	pool := NewPool()
 	t.Cleanup(pool.Close)
 	rc.sys = &SystemConnections{
 		Client:  fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build(),
@@ -96,7 +96,7 @@ func startRemovalCluster(t *testing.T, replicas int32) *removalCluster {
 	accJWT, err := jwtplane.SignAccount(jwtplane.Account{Name: "orders", Keys: account,
 		Limits: jwtplane.Limits{JetStream: &jwtplane.JetStreamLimits{}}}, p.op, time.Now())
 	require.NoError(t, err)
-	admin, err := natsconn.Dial(natsconn.Endpoint{Servers: []string{url}, Creds: p.systemCreds(t, jwtplane.PresetAuthController)})
+	admin, err := natsconn.Dial(natsconn.Endpoint{Servers: []string{url}, Creds: p.systemCreds(t, jwtplane.PresetAuthController)}, nats.CustomInboxPrefix(jwtplane.InboxPrefix(jwtplane.PresetAuthController)))
 	require.NoError(t, err)
 	defer admin.Close()
 	reply, err := admin.Request("$SYS.REQ.CLAIMS.UPDATE", []byte(accJWT), 2*time.Second)

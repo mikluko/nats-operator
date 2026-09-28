@@ -68,7 +68,7 @@ The stories run end to end from a checkout of the repository with `just e2e`, on
 | `cluster.affinity` | `{}` | Its pod's affinity, each of `nodeAffinity`, `podAffinity` and `podAntiAffinity` replacing the one under `affinity` whole. |
 | `auth.enabled` | `true` | Installs the auth controller. |
 | `auth.replicas` | `1` | Replicas of its Deployment. |
-| `auth.systemConnection` | `""` | `--system-connection` of the auth controller, as `namespace/name`; empty, the flag is not passed. |
+| `auth.systemConnection` | `""` | `--system-connection` of the auth controller, as `namespace/name`; empty, the flag is not passed, no server receives an account JWT and a deleted `NatsUser` keeps its connections; accounts and users then read `Distributed` `False`, reason `NoSystemConnection`. |
 | `auth.image.repository` | `ghcr.io/mikluko/nats-operator/auth-controller` | Its image. |
 | `auth.image.tag` | `""` | Its image tag; empty is the chart's `appVersion`. |
 | `auth.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
@@ -104,7 +104,7 @@ The flags below are the binaries' own. The chart sets only `--system-connection`
 | `--health-probe-bind-address` | all | `:8081` | Address of `/healthz`, which always passes, and `/readyz`, which passes once the controller's cache is synced. |
 | `--leader-elect` | all | `false` | Leader election, so that one replica reconciles. |
 | `--leader-election-id` | all | the controller's API group | Name of the leader election lease. |
-| `--system-connection` | auth | unset | `namespace/name` of a `NatsConnection` whose creds are a user of a `NatsOperator`'s system account holding the `auth-controller` preset. Through it, account JWTs are pushed to the servers' resolvers and deleted from them, and a deleted user's connections are kicked. Unset, JWTs are signed and written to status, and nothing reaches the servers. |
+| `--system-connection` | auth | unset | `namespace/name` of a `NatsConnection` whose creds are a user of a `NatsOperator`'s system account holding the `auth-controller` preset. Through it, account JWTs are pushed to the servers' resolvers and deleted from them, and a deleted user's connections are kicked. Unset, JWTs are signed and written to status, nothing reaches the servers, a deleted user's connections stay open, and accounts and users read `Distributed` `False`, reason `NoSystemConnection`. |
 | `--resync-period` | JetStream | `10m` | How often a JetStream resource is compared to its server object. |
 | `--zap-log-level`, `--zap-encoder`, `--zap-devel`, `--zap-stacktrace-level`, `--zap-time-encoding` | all | production logging, JSON at `info` | Logging. |
 

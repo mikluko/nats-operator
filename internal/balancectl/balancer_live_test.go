@@ -102,7 +102,7 @@ func TestBalancer_Pools(t *testing.T) {
 		WithStatusSubresource(&js.NatsBalancer{}, &js.NatsSystemBalancer{}).
 		WithObjects(objs...).
 		Build()
-	conns := natsconn.NewPool()
+	conns := NewPool()
 	t.Cleanup(conns.Close)
 	rec := events.NewFakeRecorder(1000)
 	r := &BalancerReconciler{Client: c, Dialer: &natsconn.Dialer{Reader: c, Pool: conns}, PendingPoll: time.Millisecond, Recorder: rec, Leases: &MoveLeases{}}
@@ -271,7 +271,7 @@ func TestBalancers_OneMoveAtATime(t *testing.T) {
 		WithStatusSubresource(&js.NatsSystemBalancer{}, &js.NatsBalancer{}).
 		WithObjects(objs...).
 		Build()
-	conns := natsconn.NewPool()
+	conns := NewPool()
 	t.Cleanup(conns.Close)
 	dialer := &natsconn.Dialer{Reader: c, Pool: conns}
 	leases := &MoveLeases{}

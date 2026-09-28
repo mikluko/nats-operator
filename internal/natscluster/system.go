@@ -6,16 +6,25 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
+	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
 // PoolKind is the natsconn.Key kind of a NatsCluster's system connection.
 const PoolKind = "NatsCluster"
+
+// NewPool returns the cluster controller's connection pool, whose
+// connections take replies under the cluster-controller preset's inbox
+// prefix.
+func NewPool() *natsconn.Pool {
+	return natsconn.NewPool(natsconn.WithNATSOptions(nats.CustomInboxPrefix(jwtplane.InboxPrefix(jwtplane.PresetClusterController))))
+}
 
 // ErrNoSystemUser is returned for a NatsCluster that names no system user
 // to connect as: it has no auth plane, or no auth.systemCredentials.

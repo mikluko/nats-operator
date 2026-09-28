@@ -173,6 +173,13 @@ func UserPresetGrant(preset UserPreset) (PresetGrant, bool) {
 	}, true
 }
 
+// InboxPrefix is the prefix of the reply subjects a connection holding the
+// controller preset dials with, for nats.CustomInboxPrefix; the preset
+// grants subscribe under it and under no other inbox.
+func InboxPrefix(preset UserPreset) string {
+	return "_INBOX." + string(preset)
+}
+
 var stepdownImportSubjects = []string{
 	stepdownPrefix + "*." + streamStepdownSubject,
 	stepdownPrefix + "*." + consumerStepdownSubject,
@@ -182,21 +189,18 @@ var stepdownImportSubjects = []string{
 var userPresets = map[UserPreset]userPreset{
 	PresetClusterController: {
 		system: true,
-		pub: append([]string{
+		pub: []string{
 			"$SYS.REQ.SERVER.PING.STATSZ",
 			"$SYS.REQ.SERVER.PING.JSZ",
 			"$SYS.REQ.SERVER.PING.GATEWAYZ",
 			"$SYS.REQ.SERVER.PING.LEAFZ",
-			"$SYS.REQ.SERVER.*.STATSZ",
-			"$SYS.REQ.SERVER.*.JSZ",
 			"$SYS.REQ.SERVER.*.VARZ",
-			"$SYS.REQ.SERVER.*.HEALTHZ",
 			"$SYS.REQ.SERVER.*.RELOAD",
 			"$JS.API.SERVER.EVACUATE",
 			"$JS.API.SERVER.REMOVE",
 			"$JS.API.META.LEADER.STEPDOWN",
-		}, stepdownImportSubjects...),
-		sub: []string{"_INBOX.>"},
+		},
+		sub: []string{InboxPrefix(PresetClusterController) + ".>"},
 	},
 	PresetJetStreamController: {
 		system: true,
@@ -207,7 +211,7 @@ var userPresets = map[UserPreset]userPreset{
 			"$JS.API.ACCOUNT.STREAM.MOVE.*.*",
 			"$JS.API.ACCOUNT.STREAM.CANCEL_MOVE.*.*",
 		}, stepdownImportSubjects...),
-		sub: []string{"_INBOX.>"},
+		sub: []string{InboxPrefix(PresetJetStreamController) + ".>"},
 	},
 	PresetAuthController: {
 		system: true,
@@ -219,7 +223,7 @@ var userPresets = map[UserPreset]userPreset{
 			"$SYS.REQ.SERVER.PING.CONNZ",
 			"$SYS.REQ.SERVER.*.KICK",
 		},
-		sub: []string{"_INBOX.>", "$SYS.SERVER.*.STATSZ"},
+		sub: []string{InboxPrefix(PresetAuthController) + ".>"},
 	},
 	PresetReadonly: {
 		pub: []string{

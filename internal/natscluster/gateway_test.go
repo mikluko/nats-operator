@@ -396,7 +396,7 @@ func supercluster(t *testing.T, mutate func(east, west *clusterv1beta1.NatsClust
 
 	scheme := runtime.NewScheme()
 	require.NoError(t, clientgoscheme.AddToScheme(scheme))
-	pool := natsconn.NewPool()
+	pool := NewPool()
 	t.Cleanup(pool.Close)
 	start := func(name string) *member {
 		m := &member{nc: ncs[name]}

@@ -356,7 +356,7 @@ func startAuthCluster(t *testing.T) *authCluster {
 		ObjectMeta: metav1.ObjectMeta{Namespace: a.nc.Namespace, Name: a.nc.Spec.Auth.SystemCredentials.SecretKeyRef.Name},
 		Data:       map[string][]byte{natsconn.DefaultCredentialsKey: a.p.systemCreds(t, jwtplane.PresetClusterController)},
 	}
-	pool := natsconn.NewPool()
+	pool := NewPool()
 	t.Cleanup(pool.Close)
 	a.sys = &SystemConnections{
 		Client:  fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build(),
@@ -386,7 +386,7 @@ func pushAccount(t *testing.T, p testPlane, url string) error {
 	account := newTestKeys(t, nkeys.PrefixByteAccount)
 	accJWT, err := jwtplane.SignAccount(jwtplane.Account{Name: "orders", Keys: account}, p.op, time.Now())
 	require.NoError(t, err)
-	admin, err := natsconn.Dial(natsconn.Endpoint{Servers: []string{url}, Creds: p.systemCreds(t, jwtplane.PresetAuthController)})
+	admin, err := natsconn.Dial(natsconn.Endpoint{Servers: []string{url}, Creds: p.systemCreds(t, jwtplane.PresetAuthController)}, nats.CustomInboxPrefix(jwtplane.InboxPrefix(jwtplane.PresetAuthController)))
 	require.NoError(t, err)
 	defer admin.Close()
 	reply, err := admin.Request("$SYS.REQ.CLAIMS.UPDATE", []byte(accJWT), 2*time.Second)
@@ -404,8 +404,8 @@ func pushAccount(t *testing.T, p testPlane, url string) error {
 
 // TestAuthCluster_SettledOverSystemUser pins that story 2's rendered
 // config boots an operator-mode NATS cluster whose preloaded system account
-// takes the cluster controller's system user, which observes it Settled,
-// and whose full resolver serves an account pushed over $SYS.
+// takes the cluster controller's system user, a cluster-controller preset
+// user dialed from NewPool, which observes it Settled, and whose full resolver serves an account pushed over $SYS.
 func TestAuthCluster_SettledOverSystemUser(t *testing.T) {
 	a := startAuthCluster(t)
 	require.NoError(t, pushAccount(t, a.p, a.url))
@@ -444,7 +444,7 @@ func TestSystemConnections_NoSystemUser(t *testing.T) {
 	require.NoError(t, clientgoscheme.AddToScheme(scheme))
 	fallback := &fakeObserver{}
 	fallback.set(&sysobs.Snapshot{Servers: []sysobs.Server{{Name: "demo-0"}}})
-	pool := natsconn.NewPool()
+	pool := NewPool()
 	t.Cleanup(pool.Close)
 	sys := &SystemConnections{Client: fake.NewClientBuilder().WithScheme(scheme).Build(), Pool: pool, Fallback: fallback}
 	ctx := context.Background()

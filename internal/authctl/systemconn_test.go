@@ -2,6 +2,7 @@ package authctl_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nkeys"
@@ -21,7 +22,8 @@ import (
 
 // TestSystemConnection_Conn pins which operators the one system connection
 // serves: those whose system account issued the user its creds carry, and
-// no other.
+// no other; and that a connection from NewPool takes replies as an
+// auth-controller preset user.
 func TestSystemConnection_Conn(t *testing.T) {
 	p := newPlane(t)
 	srv := startServers(t, p, 1)[0]
@@ -89,7 +91,7 @@ func TestSystemConnection_Conn(t *testing.T) {
 			if tt.operator != nil {
 				objs = append(objs, tt.operator)
 			}
-			pool := natsconn.NewPool()
+			pool := authctl.NewPool()
 			t.Cleanup(pool.Close)
 			conn := &authctl.SystemConnection{
 				Reader: fake.NewClientBuilder().WithScheme(s).WithObjects(objs...).Build(),
@@ -102,7 +104,8 @@ func TestSystemConnection_Conn(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.True(t, nc.IsConnected())
+			_, err = nc.Request("$SYS.REQ.SERVER.PING.STATSZ", nil, 2*time.Second)
+			require.NoError(t, err, "no reply reaches the auth-controller preset's inbox")
 		})
 	}
 }
