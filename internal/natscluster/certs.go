@@ -177,7 +177,8 @@ func (r *Reconciler) ensureCertSecret(ctx context.Context, nc *clusterv1beta1.Na
 // ensureSelfSignedRouteSecret issues the self-signed route certificate
 // Secret and its CA Secret when the route Secret is missing, or nc controls
 // it and it is due for renewal. A renewal keeps the CA's key, so servers
-// still holding the previous certificates accept the renewed ones.
+// still holding the previous certificates accept the renewed ones. A CA
+// Secret nc does not control is refused with a *notControlledError.
 func (r *Reconciler) ensureSelfSignedRouteSecret(ctx context.Context, nc *clusterv1beta1.NatsCluster) error {
 	name := routesSecret(nc)
 	if name == "" || name != routesSecretName(nc) || certManagerIssuer(nc) != nil {
@@ -193,6 +194,9 @@ func (r *Reconciler) ensureSelfSignedRouteSecret(ctx context.Context, nc *cluste
 	caSecret, err := r.getSecret(ctx, nc.Namespace, routesCASecretName(nc))
 	if err != nil {
 		return err
+	}
+	if caSecret != nil && !metav1.IsControlledBy(caSecret, nc) {
+		return r.notControlled(caSecret)
 	}
 	var ca *x509.Certificate
 	var key *ecdsa.PrivateKey
@@ -261,10 +265,9 @@ func (r *Reconciler) applyCertificate(ctx context.Context, nc *clusterv1beta1.Na
 	cert.SetGroupVersionKind(want.GroupVersionKind())
 	cert.SetName(want.GetName())
 	cert.SetNamespace(want.GetNamespace())
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, cert, func() error {
+	err := r.createOrUpdate(ctx, nc, cert, func() {
 		cert.SetLabels(merged(cert.GetLabels(), want.GetLabels()))
 		cert.Object["spec"] = want.Object["spec"]
-		return controllerutil.SetControllerReference(nc, cert, r.Client.Scheme())
 	})
 	if meta.IsNoMatchError(err) {
 		return "cert-manager Certificate is not a known kind: cert-manager is not installed", nil

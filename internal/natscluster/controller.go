@@ -200,12 +200,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 }
 
 // reportFailure records err, the error a reconcile of nc failed with, as a
-// ReconcileFailed Warning event and as nc's Progressing condition.
+// ReconcileFailed Warning event and as nc's Progressing condition, and a
+// refusal to write an object nc does not control as its Ready condition.
 func (r *Reconciler) reportFailure(ctx context.Context, nc *clusterv1beta1.NatsCluster, err error) error {
 	telemetry.Emit(r.Recorder, nc, telemetry.ReconcileFailed, "%s", err)
 	orig := nc.DeepCopy()
 	conditions.Set(&nc.Status.Conditions, nc.Generation, metav1.Condition{
 		Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: ReasonReconcileFailed, Message: err.Error()})
+	if nce := (*notControlledError)(nil); errors.As(err, &nce) {
+		conditions.Set(&nc.Status.Conditions, nc.Generation, metav1.Condition{
+			Type: ConditionReady, Status: metav1.ConditionFalse, Reason: ReasonReconcileFailed, Message: nce.Error()})
+	}
 	return r.patchStatus(ctx, orig, nc)
 }
 
@@ -242,10 +247,14 @@ func (r *Reconciler) reconcile(ctx context.Context, nc *clusterv1beta1.NatsClust
 		return ctrl.Result{}, r.hold(ctx, orig, nc, unsupportedSpec(err.Error()))
 	}
 
-	if err := r.applyShared(ctx, nc, plan); err != nil {
+	var refused refusals
+	if err := refused.add(r.applyShared(ctx, nc, plan)); err != nil {
 		return ctrl.Result{}, err
 	}
-	if err := r.applyLeafnodes(ctx, nc, plan); err != nil {
+	if err := refused.add(r.applyLeafnodes(ctx, nc, plan)); err != nil {
+		return ctrl.Result{}, err
+	}
+	if err := refused.err(); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -331,7 +340,7 @@ func (r *Reconciler) patchStatus(ctx context.Context, orig, nc *clusterv1beta1.N
 }
 
 // applyShared creates or updates the Services, the PodDisruptionBudget and
-// the NetworkPolicy, and deletes the gateway Service once gateway.service is
+// the NetworkPolicy, past any it refuses to write, and deletes the gateway Service once gateway.service is
 // unset and the NetworkPolicy once monitor.networkPolicy is false.
 func (r *Reconciler) applyShared(ctx context.Context, nc *clusterv1beta1.NatsCluster, plan *Plan) error {
 	services := []*corev1.Service{plan.HeadlessService, plan.ClientService}
@@ -340,9 +349,10 @@ func (r *Reconciler) applyShared(ctx context.Context, nc *clusterv1beta1.NatsClu
 	} else if err := r.deleteOwned(ctx, nc, &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: gatewayServiceName(nc), Namespace: nc.Namespace}}); err != nil {
 		return err
 	}
+	var refused refusals
 	for _, want := range services {
 		svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: want.Name, Namespace: want.Namespace}}
-		if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, func() error {
+		if err := refused.add(r.createOrUpdate(ctx, nc, svc, func() {
 			svc.Labels = merged(svc.Labels, want.Labels)
 			svc.Annotations = merged(svc.Annotations, want.Annotations)
 			if svc.Spec.ClusterIP == "" {
@@ -352,28 +362,29 @@ func (r *Reconciler) applyShared(ctx context.Context, nc *clusterv1beta1.NatsClu
 			svc.Spec.Selector = want.Spec.Selector
 			svc.Spec.Ports = want.Spec.Ports
 			svc.Spec.PublishNotReadyAddresses = want.Spec.PublishNotReadyAddresses
-			return controllerutil.SetControllerReference(nc, svc, r.Client.Scheme())
-		}); err != nil {
+		})); err != nil {
 			return fmt.Errorf("apply service %s: %w", want.Name, err)
 		}
 	}
 	want := plan.PDB
 	pdb := &policyv1.PodDisruptionBudget{ObjectMeta: metav1.ObjectMeta{Name: want.Name, Namespace: want.Namespace}}
-	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, pdb, func() error {
+	if err := refused.add(r.createOrUpdate(ctx, nc, pdb, func() {
 		pdb.Labels = merged(pdb.Labels, want.Labels)
 		pdb.Spec.MaxUnavailable = want.Spec.MaxUnavailable
 		pdb.Spec.Selector = want.Spec.Selector
-		return controllerutil.SetControllerReference(nc, pdb, r.Client.Scheme())
-	}); err != nil {
+	})); err != nil {
 		return fmt.Errorf("apply pdb %s: %w", want.Name, err)
 	}
 	var np client.Object
 	if plan.NetworkPolicy != nil {
 		np = plan.NetworkPolicy
 	}
-	return r.applyOwned(ctx, nc, &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: networkPolicyName(nc), Namespace: nc.Namespace}}, np, func(have, want client.Object) {
+	if err := refused.add(r.applyOwned(ctx, nc, &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: networkPolicyName(nc), Namespace: nc.Namespace}}, np, func(have, want client.Object) {
 		have.(*networkingv1.NetworkPolicy).Spec = want.(*networkingv1.NetworkPolicy).Spec
-	})
+	})); err != nil {
+		return err
+	}
+	return refused.err()
 }
 
 // deleteOwned deletes obj when it exists and nc controls it.
@@ -417,11 +428,10 @@ func (r *Reconciler) statefulSets(ctx context.Context, nc *clusterv1beta1.NatsCl
 // StatefulSet, then the StatefulSet.
 func (r *Reconciler) createServer(ctx context.Context, nc *clusterv1beta1.NatsCluster, s Server) (*appsv1.StatefulSet, error) {
 	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: s.ConfigMap.Name, Namespace: s.ConfigMap.Namespace}}
-	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, cm, func() error {
+	if err := r.createOrUpdate(ctx, nc, cm, func() {
 		cm.Labels = s.ConfigMap.Labels
 		cm.Annotations = merged(cm.Annotations, s.ConfigMap.Annotations)
 		cm.Data = s.ConfigMap.Data
-		return controllerutil.SetControllerReference(nc, cm, r.Client.Scheme())
 	}); err != nil {
 		return nil, fmt.Errorf("apply configmap %s: %w", cm.Name, err)
 	}
@@ -431,7 +441,7 @@ func (r *Reconciler) createServer(ctx context.Context, nc *clusterv1beta1.NatsCl
 	}
 	if err := r.Client.Create(ctx, sts); err != nil {
 		if apierrors.IsAlreadyExists(err) {
-			return nil, fmt.Errorf("statefulset %s exists and is not this NatsCluster's: %w", sts.Name, err)
+			return nil, r.notControlled(sts)
 		}
 		return nil, fmt.Errorf("create statefulset %s: %w", sts.Name, err)
 	}

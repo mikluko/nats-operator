@@ -17,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
@@ -473,33 +472,33 @@ func (r *Reconciler) applyLeafnodes(ctx context.Context, nc *clusterv1beta1.Nats
 	if s := leafnodesService(nc); s != nil {
 		svc = s
 	}
-	if err := r.applyOwned(ctx, nc, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: leafRemotesSecretName(nc), Namespace: nc.Namespace}}, remotes, func(have, want client.Object) {
+	var refused refusals
+	if err := refused.add(r.applyOwned(ctx, nc, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: leafRemotesSecretName(nc), Namespace: nc.Namespace}}, remotes, func(have, want client.Object) {
 		have.(*corev1.Secret).Data = want.(*corev1.Secret).Data
-	}); err != nil {
+	})); err != nil {
 		return err
 	}
-	if err := r.applyOwned(ctx, nc, &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: leafnodesServiceName(nc), Namespace: nc.Namespace}}, svc, func(have, want client.Object) {
+	if err := refused.add(r.applyOwned(ctx, nc, &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: leafnodesServiceName(nc), Namespace: nc.Namespace}}, svc, func(have, want client.Object) {
 		h, w := have.(*corev1.Service), want.(*corev1.Service)
 		h.Annotations = merged(h.Annotations, w.Annotations)
 		h.Spec.Type = w.Spec.Type
 		h.Spec.Selector = w.Spec.Selector
 		h.Spec.Ports = w.Spec.Ports
-	}); err != nil {
+	})); err != nil {
 		return err
 	}
-	return nil
+	return refused.err()
 }
 
-// applyOwned creates or updates obj from want, owned by nc, copying what
-// update sets; with want nil it deletes obj if nc owns it.
+// applyOwned creates or updates obj from want, controlled by nc, copying
+// what update sets; with want nil it deletes obj if nc controls it.
 func (r *Reconciler) applyOwned(ctx context.Context, nc *clusterv1beta1.NatsCluster, obj, want client.Object, update func(have, want client.Object)) error {
 	if want == nil {
 		return r.deleteOwned(ctx, nc, obj)
 	}
-	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, obj, func() error {
+	if err := r.createOrUpdate(ctx, nc, obj, func() {
 		obj.SetLabels(merged(obj.GetLabels(), want.GetLabels()))
 		update(obj, want)
-		return controllerutil.SetControllerReference(nc, obj, r.Client.Scheme())
 	}); err != nil {
 		return fmt.Errorf("apply %s: %w", want.GetName(), err)
 	}

@@ -13,7 +13,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	"github.com/mikluko/nats-operator/internal/sysobs"
@@ -412,14 +411,13 @@ func (r *Reconciler) rollout(ctx context.Context, nc *clusterv1beta1.NatsCluster
 // the revision, so writing it restarts the pod.
 func (r *Reconciler) restartServer(ctx context.Context, nc *clusterv1beta1.NatsCluster, s Server, cur *appsv1.StatefulSet, reason string) (*appsv1.StatefulSet, error) {
 	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: s.ConfigMap.Name, Namespace: s.ConfigMap.Namespace}}
-	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, cm, func() error {
+	if err := r.createOrUpdate(ctx, nc, cm, func() {
 		cm.Labels = merged(cm.Labels, s.ConfigMap.Labels)
 		cm.Data = s.ConfigMap.Data
 		cm.Annotations = merged(cm.Annotations, s.ConfigMap.Annotations)
 		cm.Annotations[AnnotationConfigApply] = string(clusterv1beta1.ConfigAppliedByRestart)
 		cm.Annotations[AnnotationRestartReason] = reason
 		delete(cm.Annotations, AnnotationReloadSince)
-		return controllerutil.SetControllerReference(nc, cm, r.Client.Scheme())
 	}); err != nil {
 		return nil, fmt.Errorf("write configmap %s for restart: %w", cm.Name, err)
 	}

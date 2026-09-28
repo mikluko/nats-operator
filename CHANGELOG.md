@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chart values `networkPolicy.enabled` and `networkPolicy.from` render a NetworkPolicy over each controller's pods admitting its metrics ports `8080` and `9464` from the peers named alone.
 - `helm test` on the chart checks every enabled controller's `/readyz`.
 - A failed `NatsCluster` reconcile reads `Progressing=False, reason: ReconcileFailed` and records a `ReconcileFailed` Warning event.
+- The cluster controller leaves untouched any object of a name it renders that it does not control, and the `NatsCluster` reads `Ready=False, reason: ReconcileFailed` naming each one.
 - `NatsCluster` `status.removals` names each server being removed or replaced, its phase and since when; a replaced server is recreated only once its old volume claim is gone.
 - CRDs for every kind at `v1beta1`, under `config/crd/`, in the API groups `nats.mikluko.io`, `cluster.nats.mikluko.io`, `auth.nats.mikluko.io` and `jetstream.nats.mikluko.io`.
 - The API server refuses mutually exclusive fields set together, a `NatsCluster` version below 2.15.0 or a move of more than one minor, and changes nats-server would refuse to the immutable fields of JetStream objects.

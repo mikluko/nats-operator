@@ -9,6 +9,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
@@ -83,6 +84,9 @@ func (r *Reconciler) applyConfig(ctx context.Context, nc *clusterv1beta1.NatsClu
 		}
 		if err != nil {
 			return a, fmt.Errorf("get configmap %s: %w", s.ConfigMap.Name, err)
+		}
+		if !metav1.IsControlledBy(cm, nc) {
+			return a, r.notControlled(cm)
 		}
 
 		if cm.Annotations[AnnotationConfigRevision] != plan.Revision {

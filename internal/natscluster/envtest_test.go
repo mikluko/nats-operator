@@ -578,6 +578,50 @@ func TestEnvtestReconcile(t *testing.T) {
 		require.Empty(t, statefulSets(t, "unsupported"))
 	})
 
+	t.Run("objects it does not control are left untouched", func(t *testing.T) {
+		ns := "uncontrolled"
+		require.NoError(t, c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}))
+		svc := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: ns},
+			Spec: corev1.ServiceSpec{
+				Selector: map[string]string{"app": "other"},
+				Ports:    []corev1.ServicePort{{Name: "http", Port: 80}},
+			},
+		}
+		deny := &networkingv1.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: ns},
+			Spec:       networkingv1.NetworkPolicySpec{PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress}},
+		}
+		require.NoError(t, c.Create(ctx, svc))
+		require.NoError(t, c.Create(ctx, deny))
+		nc := storyCluster(t)
+		nc.Namespace = ns
+		require.NoError(t, c.Create(ctx, nc))
+
+		_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(nc)})
+		var nce *notControlledError
+		require.ErrorAs(t, err, &nce)
+		require.Equal(t, []string{"Service demo", "NetworkPolicy demo"}, nce.Objects)
+
+		got := &clusterv1beta1.NatsCluster{}
+		require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(nc), got))
+		condition(t, got, ConditionReady, metav1.ConditionFalse, ReasonReconcileFailed)
+		require.Equal(t, "not controlled by this NatsCluster: Service demo, NetworkPolicy demo", meta.FindStatusCondition(got.Status.Conditions, ConditionReady).Message)
+		condition(t, got, ConditionProgressing, metav1.ConditionFalse, ReasonReconcileFailed)
+
+		var haveSvc corev1.Service
+		require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(svc), &haveSvc))
+		require.Empty(t, haveSvc.OwnerReferences)
+		require.Equal(t, svc.Spec.Selector, haveSvc.Spec.Selector)
+		require.Equal(t, svc.Spec.Ports[0].Port, haveSvc.Spec.Ports[0].Port)
+		require.Len(t, haveSvc.Spec.Ports, 1)
+		var haveNP networkingv1.NetworkPolicy
+		require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(deny), &haveNP))
+		require.Empty(t, haveNP.OwnerReferences)
+		require.Equal(t, deny.Spec, haveNP.Spec)
+		require.Empty(t, statefulSets(t, ns))
+	})
+
 	t.Run("monitor.networkPolicy false deletes the NetworkPolicy", func(t *testing.T) {
 		nc := newCluster(t, "netpol", func(*clusterv1beta1.NatsCluster) {})
 		_, got := reconcile(t, nc)
