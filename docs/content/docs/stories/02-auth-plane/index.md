@@ -11,9 +11,9 @@ params:
 
 The platform engineer from the first story wants that cluster to run under a NATS operator the auth controller owns, with accounts and users declared as resources instead of minted by hand.
 
-## Operator and system account
+## NATS operator and system account
 
-The auth controller generates the operator's keys and keeps each seed in a Secret. The operator names exactly one system account; others may exist unreferenced, and flipping the reference is how one is rotated.
+The auth controller generates the NATS operator's keys and keeps each seed in a Secret. The NATS operator names exactly one system account; others may exist unreferenced, and flipping the reference is how one is rotated.
 
 {{< manifest "01-natsoperator.yaml" >}}
 
@@ -47,14 +47,25 @@ A user that brings its own key gets only a signed JWT, in status:
 
 ## The cluster and the stream
 
-The cluster gains an `auth` block. Its trust roots come through a trust object that points at the operator, and its controller connects with its own system user's creds.
+The cluster gains an `auth` block. Its trust roots come through a trust object that points at the NATS operator, and its controller connects with its own system user's creds.
 
 {{< manifest "01-natsoperatortrust.yaml" >}}
 
 {{< manifest "01-natscluster.yaml" >}}
 
-The stream moves into the account by changing its connection to one whose creds sign into that account.
+Pointing the stream's connection at one whose creds sign into the orders account creates a new, empty `ORDERS` stream in that account. Nothing deletes the stream story 1 created in the global account, or moves its messages.
 
 {{< manifest "01-natsconnection.yaml" >}}
 
 {{< manifest "01-natsstream.yaml" >}}
+
+## Connecting a client
+
+A client of the orders account connects with the creds the auth controller wrote for `orders-service`:
+
+```sh
+kubectl -n nats-system get secret orders-service-creds -o jsonpath='{.data.user\.creds}' | base64 -d > orders.creds
+kubectl -n nats-system port-forward svc/demo 4222:4222 &
+nats -s nats://localhost:4222 --creds orders.creds pub orders.created '{"id": 1}'
+nats -s nats://localhost:4222 --creds orders.creds stream info ORDERS
+```

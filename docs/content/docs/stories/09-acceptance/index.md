@@ -47,14 +47,8 @@ params:
                 - {name: prod-west, url: "nats://nats.prod-west.acme.example:7222"}
               tls: null
       - files: [01-prod-east.yaml]
-        reason: >-
-          nats 2.15.1 is not published; hack/e2e loads 2.15.0 as localhost/nats under both tags, which the kubelet does not pull.
-          A memory store of 10Gi does not fit a 192Mi server
-        patch:
-          spec:
-            image: localhost/nats
-            podTemplate: {spec: {containers: [{name: nats, imagePullPolicy: Never}]}}
-            jetstream: {limits: {maxMemoryStore: 64Mi}}
+        reason: a memory store of 10Gi does not fit a 192Mi server
+        patch: {spec: {jetstream: {limits: {maxMemoryStore: 64Mi}}}}
       - files: [01-dev-east.yaml]
         reason: the kind node carries no zone label
         patch: {spec: {podTemplate: {spec: {nodeSelector: null}}}}
@@ -80,7 +74,7 @@ Each NatsCluster reports every other member's gateways connected.
 
 ## The auth plane
 
-The operator, the system account, and the production account chain: checks exports a service to monitoring, which exports streams and services to core and to the collector.
+The NATS operator, the system account, and the production account chain: checks exports a service to monitoring, which exports streams and services to core and to the collector.
 
 {{< manifest "01-auth.yaml" >}}
 

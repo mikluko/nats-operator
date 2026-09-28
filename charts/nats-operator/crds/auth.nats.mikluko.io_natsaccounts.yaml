@@ -213,8 +213,8 @@ spec:
                           type: string
                         retiring:
                           description: |-
-                            Retiring marks the key for removal once everything it signed has
-                            been re-signed by another.
+                            Retiring keeps the key listed, so what it signed stays valid, and
+                            signs nothing new with it. Nothing removes a retiring key from the list.
                           type: boolean
                         secretKeyRef:
                           description: SecretKeyRef selects the seed.

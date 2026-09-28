@@ -25,9 +25,8 @@ spec:
     name: shared-payments
   # Adopt if it exists, create it if not: what a new environment and an old
   # one can share unchanged. The spec as written is applied to the server
-  # either way; fields it omits are filled in from the server afterwards
-  # (LateInitialized, as in ACK), with server-side apply keeping them apart
-  # from the fields a GitOps tool owns.
+  # either way; the controller then writes the fields it omits into spec from
+  # the server, as field manager jetstream-controller.
   adoptionPolicy: AdoptOrCreate
   name: REFUNDS
   subjects: ["refunds.>"]

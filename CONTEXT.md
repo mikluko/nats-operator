@@ -32,6 +32,10 @@ _Avoid_: cluster (unqualified), environment
 NATS clusters joined by gateways into one JetStream meta group, with no hub above them.
 _Avoid_: mesh, federation
 
+**NATS system**:
+A supercluster, or a NATS cluster in none: the servers a connection of one system account reaches.
+_Avoid_: installation, environment
+
 **Leaf**:
 A NATS cluster joined to a hub by leafnode connections, bridging accounts without joining the hub's supercluster or its JetStream meta group.
 _Avoid_: edge cluster, satellite, spoke
@@ -55,11 +59,11 @@ The NATS account through which servers are observed and administered, and the ac
 _Avoid_: SYS user, admin account
 
 **Identity key**:
-The key that names a NATS operator or an account; an operator's signs only the operator JWT, and neither needs to be present where signing happens.
+The key that names a NATS operator or an account; a NATS operator's signs only the NATS operator JWT, and neither needs to be present where signing happens.
 _Avoid_: root key, master key
 
 **Signing key**:
-A key an operator or account JWT lists as allowed to sign on its behalf, and the only kind of key a Kubernetes cluster has to hold.
+A key a NATS operator JWT or an account JWT lists as allowed to sign on its behalf, and the only kind of key a Kubernetes cluster has to hold.
 _Avoid_: secondary key
 
 **Trust roots**:

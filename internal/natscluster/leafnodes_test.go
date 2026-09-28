@@ -265,6 +265,7 @@ func startHub(t *testing.T) *hub {
 	h := &hub{p: mintPlane(t), telemetry: newTestKeys(t, nkeys.PrefixByteAccount)}
 	nc := storyLeafCluster(t, "hub.yaml", "prod-east")
 	nc.Spec.Replicas = 1
+	nc.Spec.Gateway, nc.Spec.JetStream = nil, nil
 	leafTLS := t.TempDir()
 	cert, err := selfSignedRouteSecret(nc, []string{"127.0.0.1"}, time.Now())
 	require.NoError(t, err)

@@ -38,8 +38,8 @@ type SigningKey struct {
 	// +required
 	SecretKeyRef SeedSecretKeySelector `json:"secretKeyRef"`
 
-	// Retiring marks the key for removal once everything it signed has
-	// been re-signed by another.
+	// Retiring keeps the key listed, so what it signed stays valid, and
+	// signs nothing new with it. Nothing removes a retiring key from the list.
 	// +optional
 	Retiring bool `json:"retiring,omitempty"`
 }

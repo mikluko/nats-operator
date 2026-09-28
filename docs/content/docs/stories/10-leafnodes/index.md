@@ -21,18 +21,14 @@ params:
         patch: {spec: {publicKey: ACN25U6DCEF2KXHQLKZERG774MXE56M7EDEU2655PJAD2F5XWV32N2G2, jwt: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ.eyJqdGkiOiJWSlhJUlhFM05aUElYM1NERlZVSVpMTkJBUkZEQzNPMjVFSFhTRVEzQ0NPRFZFUFBFSExBIiwiaWF0IjoxNzkwNDU4MDYxLCJpc3MiOiJPQ0I2TFY0WktMUk5UWUtLTk9IMzdZVjNHNTNNTExIWkhJTFVSU1BVRlRPT1ZCMjVBRTM3SDc2UyIsIm5hbWUiOiJ0ZWxlbWV0cnkiLCJzdWIiOiJBQ04yNVU2RENFRjJLWEhRTEtaRVJHNzc0TVhFNTZNN0VERVUyNjU1UEpBRDJGNVhXVjMyTjJHMiIsIm5hdHMiOnsibGltaXRzIjp7InN1YnMiOi0xLCJkYXRhIjotMSwicGF5bG9hZCI6LTEsImltcG9ydHMiOi0xLCJleHBvcnRzIjotMSwid2lsZGNhcmRzIjp0cnVlLCJjb25uIjotMSwibGVhZiI6LTF9LCJzaWduaW5nX2tleXMiOlsiQUE3SUxNSklBV0JCRUdSRkZMWU42Q1pUNVNJS1k1SU1FQk9MUVNaWFhBM1RER1NOTVVQUVRIR1AiXSwiZGVmYXVsdF9wZXJtaXNzaW9ucyI6eyJwdWIiOnt9LCJzdWIiOnt9fSwiYXV0aG9yaXphdGlvbiI6e30sInR5cGUiOiJhY2NvdW50IiwidmVyc2lvbiI6Mn19.523SspTzkXsV099jNd5Cwu_AVCsePj6MH6PAPqPxbyQQoPvynE_Ho9M-CNOBxr_tNswimO8PPh0DRSb1kZk5BQ}}
       - files: [01-hub.yaml, 01-edge.yaml, 01-edge-operator.yaml]
         kind: NatsCluster
-        reason: >-
-          nats 2.15.1 is not published; hack/e2e loads 2.15.0 as localhost/nats under both tags, which
-          the kubelet does not pull. A Kubernetes cluster is one kind node, on a host every cluster of the run shares.
-        patch:
-          spec:
-            image: localhost/nats
-            podTemplate: {spec: {containers: [{name: nats, imagePullPolicy: Never}]}}
-            resources: {requests: {cpu: 100m, memory: 192Mi}, limits: {memory: 192Mi}}
+        reason: a Kubernetes cluster is one kind node, on a host every cluster of the run shares
+        patch: {spec: {resources: {requests: {cpu: 100m, memory: 192Mi}, limits: {memory: 192Mi}}}}
       - files: [01-hub.yaml]
         kind: NatsCluster
-        reason: one kind node, on a host every cluster of the run shares, holds three servers; no cert-manager, so the leafnode listener runs without TLS
-        patch: {spec: {replicas: 3, leafnodes: {tls: null}}}
+        reason: >-
+          one kind node, on a host every cluster of the run shares, holds three servers, without JetStream and without
+          the rest of story 9's supercluster; no cert-manager, so the leafnode listener runs without TLS
+        patch: {spec: {replicas: 3, jetstream: null, gateway: null, leafnodes: {tls: null}}}
       - files: [01-edge.yaml]
         kind: NatsConnection
         name: hub
@@ -54,7 +50,7 @@ An edge site runs a small NATS cluster in its own Kubernetes cluster. It joins t
 
 ## The hub
 
-The hub's NatsCluster gains a leafnode listener, and the edge site gets a user in the account its traffic belongs to, usable only as a leaf.
+The hub is story 9's `prod-east`, whose NatsCluster gains a leafnode listener, and the edge site gets a user in the account its traffic belongs to, usable only as a leaf.
 
 {{< manifest "01-hub.yaml" >}}
 

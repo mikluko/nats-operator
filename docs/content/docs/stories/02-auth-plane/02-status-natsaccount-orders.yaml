@@ -11,7 +11,7 @@ status:
   publicKey: !any AORDERS...
   jwtHash: !any 9c41e7
   # Built by the auth controller: the server roster from STATSZ, each server's
-  # CLAIMS.LOOKUP compared to jwtHash (Q2068 found no server-side primitive).
+  # CLAIMS.LOOKUP compared to jwtHash; the server offers no aggregate.
   distribution:
     servers: 3
     current: 3

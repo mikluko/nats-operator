@@ -1,19 +1,59 @@
-# In the hub's Kubernetes cluster: prod-east from story 9, now accepting leaf
-# connections. Only `leafnodes` is new on the NatsCluster.
+# In the hub's Kubernetes cluster: prod-east as story 9 declares it, with a
+# leafnode listener under `leafnodes`.
 apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:
   name: prod-east
   namespace: nats-system
 spec:
-  version: 2.15.1
+  version: 2.15.0
   replicas: 5
+  resources:
+    requests:
+      cpu: "6"
+      memory: 29Gi
+    limits:
+      memory: 29Gi
+  jetstream:
+    # Overrides the memory store derived from limits.memory.
+    limits:
+      maxMemoryStore: 10Gi
+    volumeClaimTemplate:
+      spec:
+        storageClassName: gp3
+        resources:
+          requests:
+            storage: 500Gi
+  serverTags:
+    cluster: prod-east
+    region: us-east-2
   auth:
     trustRef:
       name: acme
     systemCredentials:
       secretKeyRef:
         name: cluster-controller-creds
+  gateway:
+    discovery: Explicit
+    remotes:
+      - name: prod-east
+        url: tls://nats.prod-east.acme.example:7222
+      - name: dev-east
+        url: tls://nats.dev-east.acme.example:7222
+      - name: prod-west
+        url: tls://nats.prod-west.acme.example:7222
+    tls:
+      certManager:
+        issuerRef:
+          kind: ClusterIssuer
+          name: letsencrypt
+    service:
+      type: LoadBalancer
+      annotations:
+        service.beta.kubernetes.io/aws-load-balancer-type: external
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+        external-dns.alpha.kubernetes.io/hostname: nats.prod-east.acme.example
+    advertise: nats.prod-east.acme.example:7222
   leafnodes:
     # Optional, as on every listener.
     tls:
@@ -28,7 +68,6 @@ spec:
         service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
         external-dns.alpha.kubernetes.io/hostname: leaf.prod-east.acme.example
     advertise: leaf.prod-east.acme.example:7422
-  # ...the rest as in story 9.
 ---
 # What the edge site authenticates as: an ordinary user in the account its
 # traffic lands in, usable only for a leafnode connection. Its Secret is
@@ -56,7 +95,7 @@ spec:
     secretKeyRef:
       name: edge-site-1-leaf-creds
 ---
-# For an operator-mode leaf (edge-operator.yaml): the system-account leaf
+# For an operator-mode leaf (01-edge-operator.yaml): the system-account leaf
 # user its account lookups travel over.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser

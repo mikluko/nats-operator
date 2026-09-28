@@ -1,7 +1,35 @@
+{{- /* A story file: its name, its YAML without the harness's !any tags, and for a file the reader applies or deletes, the kubectl command, once per Kubernetes cluster the story places it in. */ -}}
 {{- $name := .Get 0 -}}
-{{- with .Page.Resources.Get $name -}}
+{{- $page := .Page -}}
+{{- with $page.Resources.Get $name -}}
 <p><code>{{ $name }}</code></p>
-{{ highlight .Content "yaml" "" }}
+{{- $yaml := replace .Content " !any " " " -}}
+{{- $yaml = replaceRE `(?m) !any$` "" $yaml }}
+{{ highlight $yaml "yaml" "" }}
+{{- $verb := "" -}}
+{{- if findRE `^[0-9]+-delete-` $name -}}
+{{- $verb = "delete" -}}
+{{- else if not (findRE `^[0-9]+-(status|live)-` $name) -}}
+{{- $verb = "apply" -}}
+{{- end -}}
+{{- with $verb -}}
+{{- $contexts := slice -}}
+{{- with $page.Params.e2e -}}
+{{- range .clusters -}}
+{{- if in .files $name -}}
+{{- $contexts = $contexts | append (printf "--context %s " .name) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if not $contexts -}}
+{{- $contexts = slice "" -}}
+{{- end -}}
+{{- $lines := slice -}}
+{{- range $contexts -}}
+{{- $lines = $lines | append (printf "kubectl %s%s -f %s" . $verb ($page.Resources.Get $name).Permalink) -}}
+{{- end }}
+{{ highlight (delimit $lines "\n") "sh" "" }}
+{{- end -}}
 {{- else -}}
 {{- errorf "manifest %q is not a file in %s" $name .Page.File.Dir -}}
 {{- end -}}

@@ -35,7 +35,7 @@ spec:
     # the same one, kept alike by GitOps (a shared component). Explicit
     # renders each entry as a gateway remote with reject_unknown on; Gossip
     # renders them as seeds with reject_unknown off. Either way a change
-    # restarts servers: gateway config is not reloadable (Q2070). A cluster's
+    # restarts servers: gateway config is not reloadable. A cluster's
     # own entry is allowed and skipped.
     discovery: Explicit
     remotes:

@@ -1,5 +1,5 @@
-# Every account carries the same two users, `service` and `readonly`: sixteen
-# NatsUsers for eight accounts. One account's pair is written out.
+# Every account carries the same two users, `service` and `readonly`. The
+# monitoring team's live in its own namespace, admitted by the grant below.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:
@@ -37,6 +37,102 @@ spec:
     secretKeyRef:
       name: nats-readonly-creds
 ---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsUser
+metadata:
+  name: checks-prod-service
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsAccount
+    name: checks-prod
+  permissions:
+    publish:
+      allow: [">"]
+    subscribe:
+      allow: [">"]
+  credentials:
+    secretKeyRef:
+      name: checks-prod-service-creds
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsUser
+metadata:
+  name: checks-prod-readonly
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsAccount
+    name: checks-prod
+  preset: readonly
+  credentials:
+    secretKeyRef:
+      name: checks-prod-readonly-creds
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsUser
+metadata:
+  name: core-prod-service
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsAccount
+    name: core-prod
+  permissions:
+    publish:
+      allow: [">"]
+    subscribe:
+      allow: [">"]
+  credentials:
+    secretKeyRef:
+      name: core-prod-service-creds
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsUser
+metadata:
+  name: core-prod-readonly
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsAccount
+    name: core-prod
+  preset: readonly
+  credentials:
+    secretKeyRef:
+      name: core-prod-readonly-creds
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsUser
+metadata:
+  name: collector-prod-service
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsAccount
+    name: collector-prod
+  permissions:
+    publish:
+      allow: [">"]
+    subscribe:
+      allow: [">"]
+  credentials:
+    secretKeyRef:
+      name: collector-prod-service-creds
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsUser
+metadata:
+  name: collector-prod-readonly
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsAccount
+    name: collector-prod
+  preset: readonly
+  credentials:
+    secretKeyRef:
+      name: collector-prod-readonly-creds
+---
 # The remote clusters' controllers, two per remote (story 6).
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
@@ -55,6 +151,20 @@ spec:
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:
+  name: dev-east-jetstream-controller
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsSystemAccount
+    name: sys
+  preset: jetstream-controller
+  credentials:
+    secretKeyRef:
+      name: dev-east-jetstream-controller-creds
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsUser
+metadata:
   name: prod-west-cluster-controller
   namespace: nats-system
 spec:
@@ -65,7 +175,20 @@ spec:
   credentials:
     secretKeyRef:
       name: prod-west-cluster-controller-creds
-# ...and the matching jetstream-controller users.
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsUser
+metadata:
+  name: prod-west-jetstream-controller
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsSystemAccount
+    name: sys
+  preset: jetstream-controller
+  credentials:
+    secretKeyRef:
+      name: prod-west-jetstream-controller-creds
 ---
 # What lets the monitoring namespace's users reach the accounts in
 # nats-system.

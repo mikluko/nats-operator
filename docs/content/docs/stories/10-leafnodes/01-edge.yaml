@@ -18,7 +18,7 @@ metadata:
   name: edge-site-1
   namespace: nats-system
 spec:
-  version: 2.15.1
+  version: 2.15.0
   replicas: 3
   resources:
     requests:
@@ -35,8 +35,10 @@ spec:
         resources:
           requests:
             storage: 20Gi
-  # A leaf is a NatsCluster that dials out. Remotes are added and removed by
-  # config reload (nats-server 2.15.0 reload.go:931), so no restart.
+  # A leaf is a NatsCluster that dials out. nats-server reloads added and
+  # removed remotes (2.15.0 reload.go:931), but the controller reloads over
+  # the system user in auth.systemCredentials; this leaf has none, so any
+  # change to its remotes restarts its servers.
   leafRemotes:
     - connectionRef:
         name: hub

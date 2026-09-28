@@ -3,7 +3,7 @@ title: Stories
 weight: 2
 ---
 
-The resource API, told as user stories. Each page is the API section of the design (`docs/design/v1.md`) for the part it covers.
+The resource API, told as user stories. Each page is the API section of [the design]({{< relref "/docs/design/v1" >}}) for the part it covers.
 
 Each story is a page bundle: this narrative, and beside it the manifests as real YAML files that the page renders.
 
@@ -16,34 +16,16 @@ API groups, all `v1beta1`, every kind namespaced:
 | `auth.nats.mikluko.io` | `NatsOperator`, `NatsSystemAccount`, `NatsAccount`, `NatsUser` |
 | `jetstream.nats.mikluko.io` | `NatsStream`, `NatsConsumer`, `NatsKeyValue`, `NatsObjectStore`, `NatsBalancer`, `NatsSystemBalancer`, `NatsClusterEvacuation` |
 
-## Steps and expectations
+## Following a story
 
-`just e2e` runs the stories against Kubernetes clusters, `E2E_CLUSTERS` of them (see [Running the stories](#running-the-stories)). Every file name starts with a step number, and a step applies its manifests, deletes the objects its `NN-delete-*.yaml` files name, then waits until the live objects match its expectations:
+Every manifest on a story's page is followed by the `kubectl` command that applies it, or deletes what it names; a status file is what `kubectl get -o yaml` shows once the controllers have acted, and values that differ from one cluster to the next are examples. The manifests name their namespaces, `nats-system` and in some stories `orders`, `payments` or `monitoring`, which must exist first:
 
-- `NN-status-<kind>[-<qualifier>].yaml` is the `status` stanza `kubectl get -o yaml` would show for the object it names: the story's only object of that kind, or else the one the qualifier names.
-- `NN-live-<kind>[-<qualifier>].yaml` is the whole object as `kubectl get -o yaml` shows it.
+```sh
+for ns in nats-system orders payments monitoring; do kubectl create namespace "$ns"; done
+```
 
-A live object matches when it holds every field the file states. A field the file states as `0`, `false`, `""` or `null` matches an object that lacks it, as the API server leaves such fields out, and so does a map or list holding nothing else. Conditions are matched by type, and only their status is compared. A value tagged `!any` is an example: it differs from run to run, and any value there matches.
-
-A step waits 90 seconds for its expectations, `E2E_WAIT` to change that for the run, and logs the fields still unmatched every 15 seconds; a story therefore fails within the sum of its steps' waits. A step fails at once, naming the cause, when:
-
-- a container in the story's namespaces or the chart's `nats-operator` namespace, other than a Job's, waits as `CrashLoopBackOff`, `ImagePullBackOff`, `ErrImageNeverPull` or `InvalidImageName`;
-- a Job there has failed;
-- an object the step reads has `Terminal` True, or `Ready` False for a reason the controllers give a spec they will not act on until it is edited, such as `Rejected`, `UnsupportedSpec` or `DuplicateBalancer`; unless the step's own file expects that condition at that status.
-
-A story's front matter may set `params.e2e.after`, the number of the story whose end state it starts from, `params.e2e.skip`, why the harness does not run it, and `params.e2e.waits`, a list of `{step, wait, reason}` giving a slow step a longer wait than the default, `wait` a Go duration such as `4m`. A story spanning Kubernetes clusters places each of its files with `params.e2e.clusters`, a list of `{name, files}`, the home cluster first; its files are applied to, deleted from and read in their own cluster, and the story is skipped when the run has fewer clusters.
-
-Where a manifest cannot run on the harness's clusters as written, such as its resource requests or storage class, `params.e2e.substitutions` changes it for the run alone: a list of `{files, reason, patch}`, each patch a JSON merge patch applied to every document of the files it names, a status file's under its `status` key; `kind` and `name` narrow one to the manifests they match. The page still shows the file as written.
-
-
-
-What a story assumes already exists, such as a NATS cluster nobody here deployed, is stood up by files in its `e2e/` directory, named and run as the story's own files are; the page does not show them. `hack/e2e-fixtures` generates those that hold keys.
+A story spanning Kubernetes clusters names each cluster in its commands with `--context`, the kubeconfig context of the cluster the manifest goes to, and needs the namespaces in each.
 
 ## Running the stories
 
-`just e2e` runs them on kind clusters over rootful podman, each Kubernetes cluster one kind node, all of them on kind's podman network with MetalLB handing out LoadBalancer addresses on it:
-
-- On Linux it runs in place, as root, with podman answering on `/run/podman/podman.sock` (`systemctl enable --now podman.socket`), and `helm` and `ko` on the path.
-- On darwin only the builds run on the host: `ko` builds the controller images and `go` builds the harness for Linux, and both ship with the working tree into the Apple `container` machine `nats-operator-e2e`, where the harness runs. A machine that does not exist is created from `hack/machine.Containerfile`; `hack/e2e/machine.sh` installs podman, helm and kind in it on every run.
-
-The clusters stay for the next run; `just e2e-down` deletes them. `hack/e2e` lists the `E2E_*` variables it reads, such as `E2E_STORIES`, the story numbers to run.
+The stories run end to end on kind clusters, from a checkout of the repository, with `just e2e`; [`hack/e2e`](https://github.com/mikluko/nats-operator/tree/main/hack/e2e) says what the harness needs and how a story tells it what to expect.

@@ -17,7 +17,7 @@ type NatsSystemBalancerSpec struct {
 	// +kubebuilder:default={}
 	Moves *Moves `json:"moves,omitempty"`
 
-	// Interval paces moves, one per pass.
+	// Interval is the least time between two moves, 1m when omitted.
 	// +optional
 	Interval *metav1.Duration `json:"interval,omitempty"`
 }
@@ -39,8 +39,8 @@ type Capabilities struct {
 	// +optional
 	Placement bool `json:"placement,omitempty"`
 
-	// Leader is Partial while some accounts carry no jetstream-stepdown
-	// export.
+	// Leader is Full when every account carries the jetstream-stepdown
+	// export, None when none does, and Partial otherwise.
 	// +optional
 	Leader LeaderCapability `json:"leader,omitempty"`
 

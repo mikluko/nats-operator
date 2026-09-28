@@ -37,12 +37,12 @@ type NatsOperatorTrustStatus struct {
 	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
-	// OperatorJWT is the referenced operator's JWT, written by the auth
+	// OperatorJWT is the referenced NATS operator's JWT, written by the auth
 	// controller in the reference form.
 	// +optional
 	OperatorJWT string `json:"operatorJWT,omitempty"`
 
-	// SystemAccountJWT is the referenced operator's system account JWT,
+	// SystemAccountJWT is the referenced NATS operator's system account JWT,
 	// written by the auth controller in the reference form.
 	// +optional
 	SystemAccountJWT string `json:"systemAccountJWT,omitempty"`

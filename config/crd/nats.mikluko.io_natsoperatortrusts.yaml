@@ -151,12 +151,12 @@ spec:
                 type: integer
               operatorJWT:
                 description: |-
-                  OperatorJWT is the referenced operator's JWT, written by the auth
+                  OperatorJWT is the referenced NATS operator's JWT, written by the auth
                   controller in the reference form.
                 type: string
               systemAccountJWT:
                 description: |-
-                  SystemAccountJWT is the referenced operator's system account JWT,
+                  SystemAccountJWT is the referenced NATS operator's system account JWT,
                   written by the auth controller in the reference form.
                 type: string
             type: object

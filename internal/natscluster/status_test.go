@@ -8,7 +8,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 
@@ -88,7 +90,7 @@ func TestComputeStatus_AtRest(t *testing.T) {
 }
 
 // TestComputeStatus_MidRollout pins the status story 1 shows in the middle
-// of a version bump, its revisions aside, as the rollout decides it.
+// of a memory raise, its revisions aside, as the rollout decides it.
 func TestComputeStatus_MidRollout(t *testing.T) {
 	b, err := os.ReadFile("../../docs/content/docs/stories/01-quickstart/02-status-natscluster-mid-rollout.yaml")
 	require.NoError(t, err)
@@ -99,7 +101,9 @@ func TestComputeStatus_MidRollout(t *testing.T) {
 
 	nc := storyCluster(t)
 	nc.Generation = 2
-	nc.Spec.Version = "2.15.1"
+	eight := resource.MustParse("8Gi")
+	nc.Spec.Resources.Requests[corev1.ResourceMemory] = eight
+	nc.Spec.Resources.Limits[corev1.ResourceMemory] = eight
 	plan, err := Render(nc, Inputs{})
 	require.NoError(t, err)
 	const old = "3f9a1c"
@@ -126,7 +130,7 @@ func TestComputeStatus_MidRollout(t *testing.T) {
 
 	snap := &sysobs.Snapshot{}
 	for _, s := range []struct{ name, version, revision string }{
-		{"demo-0", "2.15.0", old}, {"demo-1", "2.15.1", plan.Revision}, {"demo-2", "2.15.1", plan.Revision},
+		{"demo-0", "2.15.0", old}, {"demo-1", "2.15.0", plan.Revision}, {"demo-2", "2.15.0", plan.Revision},
 	} {
 		snap.Servers = append(snap.Servers, sysobs.Server{Name: s.name, Version: s.version, JetStream: true,
 			Metadata: map[string]string{MetadataConfigRevision: s.revision}})
@@ -140,7 +144,7 @@ func TestComputeStatus_MidRollout(t *testing.T) {
 	o := Observed{
 		StatefulSets: sets,
 		Snapshot:     snap,
-		Apply:        configApply{Restart: map[string]string{"demo-0": "version 2.15.0 -> 2.15.1 is restart-only"}},
+		Apply:        configApply{Restart: map[string]string{"demo-0": "the StatefulSet spec is restart-only"}},
 	}
 	r := &Reconciler{Now: func() time.Time { return want.Status.Rollout.Gate.Since.Add(time.Minute) }}
 	o.Rollout = decide(r.rolloutState(nc, plan, o))

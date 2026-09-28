@@ -14,13 +14,13 @@ type NatsOperatorSpec struct {
 	// +optional
 	Keys *Keys `json:"keys,omitempty"`
 
-	// JWT is an operator JWT signed elsewhere, keeping the identity key
+	// JWT is a NATS operator JWT signed elsewhere, keeping the identity key
 	// offline.
 	// +optional
 	// +kubebuilder:validation:MinLength=1
 	JWT string `json:"jwt,omitempty"`
 
-	// SystemAccountRef names the NatsSystemAccount the operator JWT names.
+	// SystemAccountRef names the NatsSystemAccount the NATS operator JWT names.
 	// +required
 	SystemAccountRef natsv1beta1.ObjectReference `json:"systemAccountRef"`
 }
@@ -31,7 +31,7 @@ type NatsOperatorStatus struct {
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	// Conditions describe the operator's state.
+	// Conditions describe the NATS operator's state.
 	// +optional
 	// +listType=map
 	// +listMapKey=type
@@ -49,11 +49,11 @@ type NatsOperatorStatus struct {
 	// +optional
 	SeedSecrets *SeedSecrets `json:"seedSecrets,omitempty"`
 
-	// JWT is the operator JWT.
+	// JWT is the NATS operator JWT.
 	// +optional
 	JWT string `json:"jwt,omitempty"`
 
-	// SystemAccount is the system account the operator JWT names.
+	// SystemAccount is the system account the NATS operator JWT names.
 	// +optional
 	SystemAccount *SystemAccountStatus `json:"systemAccount,omitempty"`
 
@@ -89,7 +89,7 @@ type SeedSecrets struct {
 	Signing []string `json:"signing,omitempty"`
 }
 
-// SystemAccountStatus is the system account an operator JWT names.
+// SystemAccountStatus is the system account a NATS operator JWT names.
 type SystemAccountStatus struct {
 	// Name of the NatsSystemAccount spec.systemAccountRef resolves to.
 	// +optional

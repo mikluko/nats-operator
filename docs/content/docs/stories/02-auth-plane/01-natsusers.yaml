@@ -35,8 +35,8 @@ spec:
     publish:
       allow: ["orders.batch.>"]
 ---
-# What the JetStream controller acts as inside the orders account (Q2067: the
-# system account cannot touch another account's streams). An ordinary user,
+# What the JetStream controller acts as inside the orders account: the
+# system account cannot touch another account's streams. An ordinary user,
 # declared like any other; the auth controller knows nothing of its purpose.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
@@ -56,7 +56,7 @@ spec:
     secretKeyRef:
       name: orders-jetstream-creds
 ---
-# The cluster controller's own identity in this Kubernetes cluster (Q2075).
+# The cluster controller's own identity in this Kubernetes cluster.
 # An explicit NatsUser with a permission preset, not a user minted
 # automatically from the NatsCluster. The preset expands to the subjects that
 # controller calls; `permissions` would be refused beside it.

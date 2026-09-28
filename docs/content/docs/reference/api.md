@@ -218,8 +218,8 @@ Appears on: [NatsOperator](#NatsOperator).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `keys` | [{{< type "Keys" >}}](#Keys) | No | Keys adopts existing seeds. |
-| `jwt` | {{< type "string" >}} | No | JWT is an operator JWT signed elsewhere, keeping the identity key offline. |
-| `systemAccountRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | SystemAccountRef names the NatsSystemAccount the operator JWT names. |
+| `jwt` | {{< type "string" >}} | No | JWT is a NATS operator JWT signed elsewhere, keeping the identity key offline. |
+| `systemAccountRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | SystemAccountRef names the NatsSystemAccount the NATS operator JWT names. |
 
 ### NatsOperatorStatus {#NatsOperatorStatus}
 NatsOperatorStatus is the observed state of a NATS operator.\
@@ -227,12 +227,12 @@ Appears on: [NatsOperator](#NatsOperator).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `observedGeneration` | {{< type "int64" >}} | No | ObservedGeneration is the generation the status describes. |
-| `conditions` | [{{< type "[]Condition" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Condition) | No | Conditions describe the operator's state. |
+| `conditions` | [{{< type "[]Condition" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Condition) | No | Conditions describe the NATS operator's state. |
 | `publicKey` | {{< type "string" >}} | No | PublicKey is the identity key's public key. |
 | `signingKeys` | {{< type "[]string" >}} | No | SigningKeys are the signing keys' public keys. |
 | `seedSecrets` | [{{< type "SeedSecrets" >}}](#SeedSecrets) | No | SeedSecrets name the Secrets holding the generated seeds. |
-| `jwt` | {{< type "string" >}} | No | JWT is the operator JWT. |
-| `systemAccount` | [{{< type "SystemAccountStatus" >}}](#SystemAccountStatus) | No | SystemAccount is the system account the operator JWT names. |
+| `jwt` | {{< type "string" >}} | No | JWT is the NATS operator JWT. |
+| `systemAccount` | [{{< type "SystemAccountStatus" >}}](#SystemAccountStatus) | No | SystemAccount is the system account the NATS operator JWT names. |
 | `deletedAccounts` | [{{< type "[]DeletedAccount" >}}](#DeletedAccount) | No | DeletedAccounts are the accounts deleted while a server may still hold a valid JWT for one; the delete is re-sent to every server that joins, until that JWT would have expired. |
 
 ### NatsSystemAccount {#NatsSystemAccount}
@@ -348,7 +348,7 @@ Appears on: [Keys](#Keys).
 | :---- | :--- | :------: | :---------- |
 | `name` | {{< type "string" >}} | Yes | Name identifies the key within the list. |
 | `secretKeyRef` | [{{< type "SeedSecretKeySelector" >}}](#SeedSecretKeySelector) | Yes | SecretKeyRef selects the seed. |
-| `retiring` | {{< type "bool" >}} | No | Retiring marks the key for removal once everything it signed has been re-signed by another. |
+| `retiring` | {{< type "bool" >}} | No | Retiring keeps the key listed, so what it signed stays valid, and signs nothing new with it. Nothing removes a retiring key from the list. |
 
 ### SubjectPermissions {#SubjectPermissions}
 SubjectPermissions allow and deny subjects.\
@@ -359,7 +359,7 @@ Appears on: [Permissions](#Permissions).
 | `deny` | {{< type "[]string" >}} | No | Deny are the subjects refused, even where Allow matches them. |
 
 ### SystemAccountStatus {#SystemAccountStatus}
-SystemAccountStatus is the system account an operator JWT names.\
+SystemAccountStatus is the system account a NATS operator JWT names.\
 Appears on: [NatsOperatorStatus](#NatsOperatorStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
@@ -752,7 +752,7 @@ Appears on: [NatsSystemBalancerStatus](#NatsSystemBalancerStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `placement` | {{< type "bool" >}} | No | Placement reports whether placement moves are possible. |
-| `leader` | [{{< type "LeaderCapability" >}}](#LeaderCapability) | No | Leader is Partial while some accounts carry no jetstream-stepdown export. |
+| `leader` | [{{< type "LeaderCapability" >}}](#LeaderCapability) | No | Leader is Full when every account carries the jetstream-stepdown export, None when none does, and Partial otherwise. |
 | `leaderReason` | {{< type "string" >}} | No | LeaderReason explains a leader capability short of Full. |
 
 ### ConsumerConfig {#ConsumerConfig}
@@ -934,7 +934,7 @@ Appears on: [NatsBalancer](#NatsBalancer).
 | `connectionRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | ConnectionRef names the NatsConnection whose credentials decide the account. |
 | `pools` | [{{< type "[]Pool" >}}](#Pool) | No | Pools are judged apart; a stream matching several belongs to the first. With none declared the account is one pool. |
 | `moves` | [{{< type "Moves" >}}](#Moves) | No | Moves selects the kinds of move made. Default: `{}`. |
-| `interval` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No | Interval paces moves, one per pass. |
+| `interval` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No | Interval is the least time between two moves, 1m when omitted. |
 
 ### NatsBalancerStatus {#NatsBalancerStatus}
 NatsBalancerStatus is the observed state of an account balancer.\
@@ -1170,7 +1170,7 @@ Appears on: [NatsStream](#NatsStream).
 | `noAck` | {{< type "bool" >}} | No |  |
 | `duplicates` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No |  |
 | `placement` | [{{< type "Placement" >}}](#Placement) | No | Placement pins the stream; a changed cluster moves it. |
-| `mirror` | [{{< type "StreamSource" >}}](#StreamSource) | No | Mirror cannot change; removing it promotes the mirror to a stream. |
+| `mirror` | [{{< type "StreamSource" >}}](#StreamSource) | No | Mirror cannot change once set; omitting it leaves the server's mirror in place. |
 | `sources` | [{{< type "[]StreamSource" >}}](#StreamSource) | No |  |
 | `sealed` | {{< type "bool" >}} | No | Sealed cannot be unset. |
 | `denyDelete` | {{< type "bool" >}} | No | DenyDelete cannot be unset. |
@@ -1222,7 +1222,7 @@ Appears on: [NatsSystemBalancer](#NatsSystemBalancer).
 | :---- | :--- | :------: | :---------- |
 | `connectionRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | ConnectionRef names a NatsConnection with system credentials. |
 | `moves` | [{{< type "Moves" >}}](#Moves) | No | Moves selects the kinds of move made. Default: `{}`. |
-| `interval` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No | Interval paces moves, one per pass. |
+| `interval` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No | Interval is the least time between two moves, 1m when omitted. |
 
 ### NatsSystemBalancerStatus {#NatsSystemBalancerStatus}
 NatsSystemBalancerStatus is the observed state of a system balancer.\
@@ -1443,7 +1443,7 @@ Appears on: [NatsStreamSpec](#NatsStreamSpec).
 | `noAck` | {{< type "bool" >}} | No |  |
 | `duplicates` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No |  |
 | `placement` | [{{< type "Placement" >}}](#Placement) | No | Placement pins the stream; a changed cluster moves it. |
-| `mirror` | [{{< type "StreamSource" >}}](#StreamSource) | No | Mirror cannot change; removing it promotes the mirror to a stream. |
+| `mirror` | [{{< type "StreamSource" >}}](#StreamSource) | No | Mirror cannot change once set; omitting it leaves the server's mirror in place. |
 | `sources` | [{{< type "[]StreamSource" >}}](#StreamSource) | No |  |
 | `sealed` | {{< type "bool" >}} | No | Sealed cannot be unset. |
 | `denyDelete` | {{< type "bool" >}} | No | DenyDelete cannot be unset. |
@@ -1680,8 +1680,8 @@ Appears on: [NatsOperatorTrust](#NatsOperatorTrust).
 | :---- | :--- | :------: | :---------- |
 | `observedGeneration` | {{< type "int64" >}} | No | ObservedGeneration is the generation the conditions describe. |
 | `conditions` | [{{< type "[]Condition" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Condition) | No | Conditions describe the trust object's state. |
-| `operatorJWT` | {{< type "string" >}} | No | OperatorJWT is the referenced operator's JWT, written by the auth controller in the reference form. |
-| `systemAccountJWT` | {{< type "string" >}} | No | SystemAccountJWT is the referenced operator's system account JWT, written by the auth controller in the reference form. |
+| `operatorJWT` | {{< type "string" >}} | No | OperatorJWT is the referenced NATS operator's JWT, written by the auth controller in the reference form. |
+| `systemAccountJWT` | {{< type "string" >}} | No | SystemAccountJWT is the referenced NATS operator's system account JWT, written by the auth controller in the reference form. |
 
 ### NatsReferenceGrant {#NatsReferenceGrant}
 NatsReferenceGrant admits references into its own namespace from the namespaces it lists; it has no status.

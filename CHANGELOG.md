@@ -11,70 +11,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Licensed under Apache-2.0; the chart carries `artifacthub.io/license: Apache-2.0`.
 - Vulnerabilities are reported through the repository's GitHub private vulnerability reporting, as `SECURITY.md` states.
-- The cluster controller caches only the StatefulSets, ConfigMaps, Services, PersistentVolumeClaims and PodDisruptionBudgets labelled `cluster.nats.mikluko.io/cluster`; no controller caches a Secret's data or annotations, and each reads Secrets from the API server.
+- Each release's controller images and chart are signed keylessly with cosign and carry a GitHub build provenance attestation.
+- The cluster controller caches only the StatefulSets, ConfigMaps, Services, PersistentVolumeClaims and PodDisruptionBudgets labelled `cluster.nats.mikluko.io/cluster`; every controller reads Secrets from the API server rather than its cache.
 - A controller's `/readyz` passes once its cache is synced.
-- Every controller's OpenTelemetry resource carries its host name, the pod's name in Kubernetes, as `service.instance.id`, unless `OTEL_RESOURCE_ATTRIBUTES` sets it.
-- Every controller serves its Prometheus metrics over HTTPS, only to a bearer token of a user allowed `get` on the non-resource URL `/metrics`; each controller's ClusterRole holds `create` on `authentication.k8s.io` `tokenreviews` and `authorization.k8s.io` `subjectaccessreviews`.
-- `helm test` on the chart checks every enabled controller's `/readyz` from a pod of chart value `tests.image` (`busybox:1.37.0`).
-- Chart value `metrics.scraper.serviceAccount`, the `namespace/name` of a ServiceAccount the ClusterRole `<release>-metrics-scraper` binds to `get` on the non-resource URL `/metrics`.
-- The chart validates its values against `values.schema.json`: `helm install`, `helm upgrade` and `helm lint` refuse a key the chart does not know.
+- Every controller's OpenTelemetry resource carries its host name as `service.instance.id`, unless `OTEL_RESOURCE_ATTRIBUTES` sets one.
+- Every controller serves its Prometheus metrics over HTTPS, to a bearer token of a user allowed `get` on the non-resource URL `/metrics`.
+- Chart value `metrics.scraper.serviceAccount`, the `namespace/name` of a ServiceAccount granted `get` on `/metrics`.
+- `helm test` on the chart checks every enabled controller's `/readyz`.
+- A failed `NatsCluster` reconcile reads `Progressing=False, reason: ReconcileFailed` and records a `ReconcileFailed` Warning event.
+- `NatsCluster` `status.removals` names each server being removed or replaced, its phase and since when; a replaced server is recreated only once its old volume claim is gone.
+- CRDs for every kind at `v1beta1`, under `config/crd/`, in the API groups `nats.mikluko.io`, `cluster.nats.mikluko.io`, `auth.nats.mikluko.io` and `jetstream.nats.mikluko.io`.
+- The API server refuses mutually exclusive fields set together, a `NatsCluster` version below 2.15.0 or a move of more than one minor, and changes nats-server would refuse to the immutable fields of JetStream objects.
+- Helm chart `charts/nats-operator` installing the CRDs and any subset of the three controllers, each with its own ServiceAccount and a ClusterRole holding only the verbs it uses.
 - The chart requires Kubernetes 1.29 or later.
-- Documentation site at <https://mikluko.github.io/nats-operator/>: the stories, the design and the ADRs under `/docs/`.
-- Chart values `nodeSelector`, `annotations` (on the Deployment), `podAnnotations` and `affinity`, globally and under `cluster`, `auth` and `jetstream`; a controller's keys are set over the global ones.
-- The chart carries no telemetry configuration: the OpenTelemetry Operator instruments the controllers through `instrumentation.opentelemetry.io/inject-sdk` and `sidecar.opentelemetry.io/inject` in `podAnnotations`.
-- Chart value `auth.systemConnection`, the `namespace/name` of the `NatsConnection` passed to the auth controller as `--system-connection`.
-- Documentation page `/docs/install/`: prerequisites, installing the chart and its values, the controllers' flags, the RBAC each controller holds, upgrade and uninstall.
-- Documentation page `/docs/reference/api/`: every kind, field and enum value of the four API groups, with each field's type, whether it is required, and its schema default.
-- Documentation page `/docs/reference/telemetry/`: the environment variables that configure the controllers' OpenTelemetry export, every instrument with its unit, attributes and the status field it reads, the reconcile spans, the Kubernetes events by reason, and how the OpenTelemetry Operator sets that environment.
-- Each controller exports OpenTelemetry metrics and traces through the SDK's environment configuration, a signal only once `OTEL_<SIGNAL>_EXPORTER`, `OTEL_EXPORTER_OTLP_<SIGNAL>_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT` is set and none while `OTEL_SDK_DISABLED` is `true`: gauges of a rollout's pending servers and closed gate, balancer leader skew and pending moves, an evacuation's remaining streams and stale placements, and every resource's conditions; a counter of held balancer passes; and a span per reconcile.
-- The controllers record Kubernetes events `MoveStarted`, `MoveDone`, `MoveCancelled`, `MoveRefused`, `EvacuationRefused`, `RolloutStep`, `GateBlocked`, `ReconcileFailed`, `JWTPushed`, `JWTHeld` and `UserKicked`.
-- `NatsClusterEvacuation` `status.remaining` counts the streams still to leave the source cluster.
-- Documentation page `/docs/reference/nats-permissions/`: the nats-server subjects each controller requests, the `NatsUser` preset that grants them, and what each user preset and the `jetstream-stepdown` export preset expand to.
-- CRDs for every kind at `v1beta1`, under `config/crd/`: `NatsReferenceGrant`, `NatsOperatorTrust`, `NatsAccountTrust` and `NatsConnection` in `nats.mikluko.io`; `NatsCluster` in `cluster.nats.mikluko.io`; `NatsOperator`, `NatsSystemAccount`, `NatsAccount` and `NatsUser` in `auth.nats.mikluko.io`; `NatsStream`, `NatsConsumer`, `NatsKeyValue`, `NatsObjectStore`, `NatsBalancer`, `NatsSystemBalancer` and `NatsClusterEvacuation` in `jetstream.nats.mikluko.io`.
-- The API server refuses mutually exclusive fields set together, a `NatsCluster` version below 2.15.0 or moving more than one minor at once, and changes nats-server would refuse to the immutable fields of a stream, a consumer, a key-value bucket or an object store.
-- Helm chart `charts/nats-operator` installing the CRDs and any subset of the cluster, auth and JetStream controllers through `cluster.enabled`, `auth.enabled` and `jetstream.enabled`, each with its own ServiceAccount and a ClusterRole holding only the verbs its code uses, on its own API group, `nats.mikluko.io` and the core objects it uses; images default to `ghcr.io/mikluko/nats-operator/<controller>` at the chart's `appVersion`.
-- Each release publishes the three controller images for linux/amd64 and linux/arm64 at `ghcr.io/mikluko/nats-operator/<controller>:<version>`, the chart at `oci://ghcr.io/mikluko/nats-operator/charts/nats-operator` with that version as its version and `appVersion`, and a GitHub release carrying the version's changelog entry.
-- Each release's controller images and chart are signed keylessly with cosign and carry a GitHub build provenance attestation in the registry; the images are built on `cgr.dev/chainguard/static` pinned by digest.
-- The cluster controller deploys a `NatsCluster`: one StatefulSet and ConfigMap per server, client and headless Services, a PodDisruptionBudget with `maxUnavailable: 1`, route TLS self-signed unless a certificate is named, and a `prometheus-nats-exporter` sidecar unless `exporter.enabled` is false. Its status reports `Ready`, `Settled`, `Progressing`, `endpoints`, the config revision and one entry per server.
-- `NatsCluster` rolls a restart-only change, such as a version bump, one server at a time: highest ordinal first and the meta leader's server last, each step waiting until every server is Ready, every server on the new revision reports it, and the NATS cluster is Settled. `status.rollout` names the updated, current and pending servers and what the gate waits for; `Progressing` reads `RollingRestart`, `GateBlocked` once the gate has been closed for ten minutes, or `RolloutPaused`. `spec.rollout.paused` holds the next step, and the annotation `cluster.nats.mikluko.io/force-step: "<server>"` restarts that server at once.
-- Servers render `lame_duck_duration: 2m` and `lame_duck_grace_period: 10s`, inside the pod's 300-second termination grace period.
-- A failed `NatsCluster` reconcile reads `Progressing=False, reason: ReconcileFailed` with the error, and records a `ReconcileFailed` Warning event.
-- `NatsCluster` `status.removals` names each server being removed or replaced, the phase it has reached and since when. A replaced server is recreated only once its old data volume claim is gone.
-- `NatsCluster` `status.config.restartReason` names what makes a spec change restart-only, such as `version 2.15.0 -> 2.15.1 is restart-only`.
-- A `NatsCluster` with `auth` renders `operator`, `system_account` and the account resolver from the `NatsOperatorTrust` its `auth.trustRef` names, in either form, with the system account JWT preloaded. `auth.resolver` is `Full` (the default) or `Cache`. `Progressing` reads `TrustNotFound`, `TrustNotReady`, `TrustInvalid` or `NoGrant` while the trust roots cannot be read, and nothing is rendered.
-- With `auth.systemCredentials`, the cluster controller observes the NATS cluster and reloads its servers as that system user over `$SYS`; without it, every config change restarts.
+- The chart refuses a value key it does not know, checked against `values.schema.json`.
+- Chart values `nodeSelector`, `annotations`, `podAnnotations` and `affinity`, globally and per controller.
+- Chart value `auth.systemConnection`, passed to the auth controller as `--system-connection`.
+- `helm test` checks every enabled controller's `/healthz`.
+- Each release publishes the three controller images for linux/amd64 and linux/arm64, the chart as an OCI artifact, and a GitHub release carrying the version's changelog entry.
+- Documentation site at <https://mikluko.github.io/nats-operator/>: the stories, the design and the ADRs.
+- Documentation page `/docs/install/`: installing the chart, its values, the controllers' flags and RBAC, upgrade and uninstall.
+- Documentation page `/docs/reference/api/`: every kind, field and enum value of the four API groups.
+- Documentation page `/docs/reference/nats-permissions/`: the nats-server subjects each controller requests and the presets that grant them.
+- Documentation page `/docs/reference/telemetry/`: the controllers' OpenTelemetry configuration, instruments, spans and Kubernetes events.
+- Each controller exports OpenTelemetry metrics and traces once the SDK's environment names an exporter or endpoint.
+- The controllers record Kubernetes events for balancer moves, evacuations, rollout steps, JWT pushes and user kicks.
+- The cluster controller deploys a `NatsCluster` as one StatefulSet and ConfigMap per server, with Services, a PodDisruptionBudget, route TLS and a `prometheus-nats-exporter` sidecar.
+- `NatsCluster` rolls a restart-only change one server at a time, each step gated on the NATS cluster being Settled.
+- `spec.rollout.paused` holds a `NatsCluster` rollout, and the annotation `cluster.nats.mikluko.io/force-step` restarts one waiting server at once.
+- Servers render `lame_duck_duration: 2m` and `lame_duck_grace_period: 10s`.
+- `NatsCluster` `status.config.restartReason` names what makes a spec change restart-only.
+- A `NatsCluster` with `auth` renders its trust roots and account resolver from the `NatsOperatorTrust` that `auth.trustRef` names.
+- With `auth.systemCredentials` the cluster controller reloads servers over `$SYS`; without it every config change restarts.
 - A change to the trust roots, `system_account` or the resolver restarts servers one at a time.
-- `NatsCluster` `gateway` joins a supercluster. Every entry of `gateway.remotes` but the cluster's own is rendered as a gateway remote, with `reject_unknown` on under `discovery: Explicit` and off under `Gossip`. Gateway TLS comes from `secretRef` or `certManager`, and peers are verified against the Secret's `ca.crt` both ways when it holds one. `gateway.service` renders the Service `<name>-gateway`, which serves servers before they are Ready, and `gateway.advertise` is the address servers advertise. Status reports `GatewaysConnected`, `status.gateways` with each member's inbound and outbound connections, and `endpoints.gateway`. Any gateway change restarts servers one at a time.
-- A `NatsCluster` with `leafnodes` accepts leaf connections on port 7422, with an optional certificate from a named Secret or cert-manager, `advertise`, and an external Service from `leafnodes.service`.
-- A `NatsCluster` with `leafRemotes` dials each hub through the `NatsConnection` it names, bound to the global account, to its system account with `localSystemAccount: true`, or to the account a `NatsAccountTrust` names with `localAccountTrustRef`, whose JWT it preloads. Remotes are added and removed by reload. Two remotes naming one `NatsConnection` read `Progressing=False, reason: UnsupportedSpec`.
-- `auth.resolver` defaults to `Cache` on a leaf that preloads no account. A leaf preloading an account into a `Full` resolver needs `jetstream.volumeClaimTemplate`.
-- A leaf's status reports `LeafnodesConnected` and, per remote, `status.leafRemotes` keyed by the `NatsConnection`'s namespace and name, with the number of servers connected and the hub account its credentials sign into. `Progressing` reads `LeafRemoteNotFound`, `LeafRemoteNotReady`, `LeafRemoteInvalid` or `NoGrant` while a remote cannot be read, and `LeafnodesCertificateNotReady` while the listener's certificate is missing.
-- A renewed route, gateway or leafnode certificate reaches running servers: a change to a mounted TLS Secret reloads every server, and the reload counts as applied once the server reports the new certificate's expiry.
-- The cluster controller deletes a cert-manager `Certificate` it created once `certManager` is unset or the listener's TLS is removed; its ClusterRole holds `delete` on `certificates`.
+- `NatsCluster` `gateway` joins a supercluster, and status reports `GatewaysConnected`.
+- `NatsCluster` `leafnodes` accepts leaf connections on port 7422.
+- `NatsCluster` `leafRemotes` dials hubs as a leaf through `NatsConnection`s, and status reports `LeafnodesConnected`.
+- A renewed route, gateway or leafnode certificate reaches running servers by reload.
+- The cluster controller deletes a cert-manager `Certificate` it created once its listener no longer names it.
 - The `cluster-controller` user preset may request `$SYS.REQ.SERVER.PING.GATEWAYZ` and `$SYS.REQ.SERVER.PING.LEAFZ`.
-- Lowering `NatsCluster` `replicas` removes servers one at a time, highest ordinal first: each is evacuated, removed from the JetStream meta group, and deleted with its PVC and ConfigMap. A stream with more replicas than the new size blocks it with `Progressing=False, reason: ScaleDownBlocked`, as does JetStream without `auth.systemCredentials`.
-- A change to `jetstream.volumeClaimTemplate`, or the annotation `cluster.nats.mikluko.io/replace-server: "<server>"`, replaces servers one at a time under the same name: evacuated, removed, deleted with its PVC and recreated, and the next step waits until the JetStream meta leader counts the recreated server as a peer, also when that leader is in another NATS cluster of the supercluster. `Progressing` reads `ScalingDown` or `ReplacingServer` while a step runs, `ClaimTerminating` while a server waits for its old PVC to be deleted, and `ReplacementBlocked` without `auth.systemCredentials`.
-- Deleting a `NatsCluster` with JetStream waits while its NATS cluster holds stream groups, reporting `Deleting=True, reason: JetStreamDataRemains`; the annotation `cluster.nats.mikluko.io/force-delete` lets it proceed.
-- The auth controller signs `NatsOperator`, `NatsSystemAccount` and `NatsAccount` JWTs, adopting the keys `keys` names and generating the rest into Secrets it owns, and writes them to status; a reference-form `NatsOperatorTrust` or `NatsAccountTrust` mirrors them in its own status.
-- `NatsAccount.status.jwt` carries the account JWT, and `jwtTTL: 0s` signs one that never expires.
-- `NatsAccount` imports are signed in with activation tokens for private exports, and only while a `NatsReferenceGrant` admits a cross-namespace one; `status.imports` and the `ReferencesResolved` condition report each.
-- A `NatsAccount` import from a `NatsAccount` under a different `NatsOperator` is left out of the JWT, and the importer reports `ReferencesResolved` and `Ready` False with reason `ImportsUnresolved`.
-- Signing keys marked `retiring` stay listed while every account is re-signed with another; the `NatsOperator` condition `RetiringKeysInUse` says when one can be removed.
-- The auth controller signs `NatsUser`s: creds land in the Secret `credentials` names, or `<name>-creds`, under `user.creds`; a user with `publicKey` gets its JWT in `status.jwt` and no Secret; `preset` signs the named permission set.
-- `NatsUser.spec.accountRef` cannot change once set.
-- A `NatsUser` whose `NatsReferenceGrant` is deleted is revoked in its account's JWT, and re-signed once a grant admits it again.
-- Deleting a `NatsUser` holds it until its account's JWT revokes its key and, with `--system-connection` set, until every server holds that JWT and no connection of the user remains; then its creds Secret is removed.
-- `--system-connection` on the auth controller names a `NatsConnection` whose creds are a system user holding the `auth-controller` preset; through it account JWTs are pushed to the servers' resolvers on every change and at half their `jwtTTL`, and `status.distribution` and the `Distributed` condition report how many servers hold the current one.
-- Deleting a `NatsAccount` deletes it from the servers' resolvers, and again from every server that joins later; `NatsOperator.status.deletedAccounts` lists such accounts until their last JWT expires.
-- `NatsAccount` and `NatsSystemAccount` `status.revocations` list the user keys the account revokes; a revocation is dropped once every signing key that may have issued a revoked JWT is removed from the account.
-- A `NatsAccount` or `NatsSystemAccount` whose status has lost both its JWT and `status.revocations` takes its revocations back from the JWT the servers hold before it is signed again. While no server can be asked, one whose `status.distribution` records it distributed is not signed (Ready `False`, reason `RecoveringRevocations`); any other is signed with the condition `RevocationsUnrecovered` `True`, on the `NatsOperator` for its system account, until a server answers.
-- The JetStream controller creates, updates and deletes the streams and consumers `NatsStream` and `NatsConsumer` declare, through their `NatsConnection`: it adopts existing ones under `adoptionPolicy`, goes Terminal on one it does not own, keeps or deletes them on resource deletion per `deletionPolicy`, and corrects drift every `--resync-period` (default 10m); status is read again every 15 seconds while the object's Raft group has no leader or a member that is not current.
-- While a `NatsStream`'s stream moves to another NATS cluster, `status.transfer` reports the cluster it leaves and the one it moves to, when the move began, each new replica's `current` and `lag`, and how many of the stream's consumers have moved; `Synced` reads False, reason `Moving`, and status is read again every 5 seconds until the move ends.
-- Deleting a `NatsStream`, `NatsConsumer`, `NatsKeyValue` or `NatsObjectStore` whose `NatsConnection` no longer exists, or no longer has a `NatsReferenceGrant` admitting it, removes the resource and leaves its server object, whatever its `deletionPolicy`.
-- The JetStream controller manages the key-value buckets and object stores `NatsKeyValue` and `NatsObjectStore` declare, under the same policies, keeping them on resource deletion by default. `placement.preferred` on either kind goes Terminal.
-- A stream, consumer, key-value bucket or object store the servers refuse as invalid goes Terminal; one they cannot place for want of online peers or room is retried.
-- The JetStream controller runs `NatsSystemBalancer`: on system credentials it evens stream and consumer leaders, and with `moves.placement` stream copies, across the servers of the NATS cluster its `NatsConnection` reaches, over every account. It makes one move per `interval` (default 1m), none while that NATS cluster is not Settled, and none of a stream a `NatsClusterEvacuation` of that NATS cluster moves, a cluster of the same name in another NATS system aside; it moves leaders only for accounts carrying the `jetstream-stepdown` export, reporting the rest as `leader: Partial` in `status.capabilities`; it never moves a stream whose `placement.cluster` names another NATS cluster; and a second `NatsSystemBalancer` for the same NATS cluster goes `Ready=False` with reason `DuplicateBalancer`. `status.lastMove` and `status.pending` name each move's `account`, `stream` and, for a consumer's leader, `consumer`.
-- The JetStream controller runs `NatsBalancer`: on the account's own `NatsConnection`, whose user needs to publish on `$JS.API.>` alone, it evens stream and consumer leaders, and with `moves.placement` stream copies, within each pool of the account's streams in the NATS cluster that connection reaches. A pool selects `NatsStream`, `NatsKeyValue` and `NatsObjectStore` resources in the balancer's namespace on the same connection by label; a stream several pools select is balanced in the first and reported as `Overlapping`; the rest of the account's streams, with or without a resource, form the pool `(default)`. `status.pools` reports each pool's streams and leader skew. It makes one move per `interval` (default 1m) after the time of `status.lastMove`, none while that NATS cluster is not Settled, none of a stream a `NatsClusterEvacuation` of that NATS cluster moves, a cluster of the same name in another NATS system aside, and none while a `NatsSystemBalancer` has a move pending on one of the account's streams (`Holding`, reason `YieldingToSystemBalancer`).
-- The JetStream controller runs `NatsClusterEvacuation`: on system credentials it moves every stream, key-value bucket and object store in every account off `from.cluster` to servers carrying `to.serverTags`, with their consumers, a few at a time. It makes no move while a server of `from.cluster` carries every target tag (`TargetTagsInSource`); it never moves a stream whose resource declares `placement.cluster`, listing those that pin `from.cluster` and whose stream it holds in `status.pinned` and staying `Ready=False` with reason `PinnedObjects` while any remains; it lists moved streams that no resource owns and whose config still names `from.cluster` in `status.stalePlacement`; and deleting it before it is Ready cancels the moves `status.requested` lists.
+- Lowering `NatsCluster` `replicas` evacuates and removes servers one at a time.
+- A change to `jetstream.volumeClaimTemplate`, or the annotation `cluster.nats.mikluko.io/replace-server`, replaces servers one at a time under the same name.
+- Deleting a `NatsCluster` waits while its NATS cluster holds JetStream data, unless annotated `cluster.nats.mikluko.io/force-delete`.
+- The auth controller signs `NatsOperator`, `NatsSystemAccount` and `NatsAccount` JWTs from adopted or generated keys.
+- `NatsAccount` `jwtTTL: 0s` signs a JWT that never expires.
+- `NatsAccount` imports carry activation tokens for private exports, and cross namespaces only where a `NatsReferenceGrant` admits them.
+- A `NatsAccount` import from an account under another `NatsOperator` is left out, with `Ready` False, reason `ImportsUnresolved`.
+- The `NatsOperator` condition `RetiringKeysInUse` says when a `retiring` signing key can be removed.
+- The auth controller signs `NatsUser`s into creds Secrets, or into `status.jwt` for a user with `publicKey`.
+- `NatsUser` `spec.accountRef` cannot change once set.
+- A `NatsUser` whose `NatsReferenceGrant` is deleted is revoked.
+- Deleting a `NatsUser` revokes it and, with `--system-connection` set, closes its connections before its creds Secret is removed.
+- `--system-connection` on the auth controller pushes account JWTs to the servers, and `status.distribution` reports how many hold the current one.
+- Deleting a `NatsAccount` deletes it from the servers' resolvers, also on servers that join later.
+- `NatsAccount` and `NatsSystemAccount` `status.revocations` list the user keys the account revokes.
+- An account whose status lost its JWT and revocations recovers them from the servers before it is signed again.
+- The JetStream controller creates, adopts, updates and deletes the streams and consumers `NatsStream` and `NatsConsumer` declare, and corrects drift every `--resync-period`.
+- `NatsStream` `status.transfer` reports a move to another NATS cluster while it runs.
+- Deleting a JetStream resource whose `NatsConnection` is gone or no longer admitted leaves its server object.
+- The JetStream controller manages the key-value buckets and object stores `NatsKeyValue` and `NatsObjectStore` declare.
+- A JetStream object the servers refuse as invalid goes Terminal; one they cannot place is retried.
+- `NatsSystemBalancer` evens leaders, and optionally copies, across the servers of one NATS cluster over every account.
+- `NatsBalancer` evens leaders, and optionally copies, within pools of one account's streams.
+- `NatsClusterEvacuation` moves every JetStream object off one NATS cluster to servers carrying the target tags.
+- `NatsClusterEvacuation` `status.remaining` counts the streams still to leave the source cluster.
 
 [Unreleased]: https://github.com/mikluko/nats-operator/commits/main

@@ -1,21 +1,66 @@
-# The new cluster, prod-east-2, is already a member beside prod-east, with a
-# placement tag no other server carries.
+# The new cluster, prod-east-2, a member beside prod-east with a placement
+# tag no other server carries; otherwise as prod-east.
 apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:
   name: prod-east-2
   namespace: nats-system
 spec:
-  version: 2.15.1
+  version: 2.15.0
   replicas: 5
+  resources:
+    requests:
+      cpu: "6"
+      memory: 29Gi
+    limits:
+      memory: 29Gi
+  jetstream:
+    # Overrides the memory store derived from limits.memory.
+    limits:
+      maxMemoryStore: 10Gi
+    volumeClaimTemplate:
+      spec:
+        storageClassName: gp3
+        resources:
+          requests:
+            storage: 500Gi
   serverTags:
     cluster: prod-east-2
-  # ...gateway remotes and auth as every member (story 9).
+    region: us-east-2
+  auth:
+    trustRef:
+      name: acme
+    systemCredentials:
+      secretKeyRef:
+        name: cluster-controller-creds
+  gateway:
+    discovery: Explicit
+    remotes:
+      - name: prod-east
+        url: tls://nats.prod-east.acme.example:7222
+      - name: dev-east
+        url: tls://nats.dev-east.acme.example:7222
+      - name: prod-west
+        url: tls://nats.prod-west.acme.example:7222
+      - name: prod-east-2
+        url: tls://nats.prod-east-2.acme.example:7222
+    tls:
+      certManager:
+        issuerRef:
+          kind: ClusterIssuer
+          name: letsencrypt
+    service:
+      type: LoadBalancer
+      annotations:
+        service.beta.kubernetes.io/aws-load-balancer-type: external
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+        external-dns.alpha.kubernetes.io/hostname: nats.prod-east-2.acme.example
+    advertise: nats.prod-east-2.acme.example:7222
 ---
 # Empties prod-east of every stream, key-value bucket and object store, in
 # every account, with their consumers. System-level and whole-cluster only.
-# Each stream is moved by $JS.API.ACCOUNT.STREAM.MOVE with the target tags
-# (Q2140); there is no bulk primitive, so the controller enumerates.
+# Each stream is moved by $JS.API.ACCOUNT.STREAM.MOVE with the target tags;
+# there is no bulk primitive, so the controller enumerates.
 apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsClusterEvacuation
 metadata:

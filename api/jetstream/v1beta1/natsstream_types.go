@@ -112,7 +112,8 @@ type StreamConfig struct {
 	// +optional
 	Placement *Placement `json:"placement,omitempty"`
 
-	// Mirror cannot change; removing it promotes the mirror to a stream.
+	// Mirror cannot change once set; omitting it leaves the server's mirror
+	// in place.
 	// +optional
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="mirror cannot change"
 	Mirror *StreamSource `json:"mirror,omitempty"`

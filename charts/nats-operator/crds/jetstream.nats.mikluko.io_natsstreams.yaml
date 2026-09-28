@@ -187,8 +187,9 @@ spec:
                   owns.
                 type: object
               mirror:
-                description: Mirror cannot change; removing it promotes the mirror
-                  to a stream.
+                description: |-
+                  Mirror cannot change once set; omitting it leaves the server's mirror
+                  in place.
                 properties:
                   consumer:
                     description: Consumer is a durable consumer on the origin used

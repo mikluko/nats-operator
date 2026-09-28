@@ -53,7 +53,7 @@ type NatsBalancerSpec struct {
 	// +kubebuilder:default={}
 	Moves *Moves `json:"moves,omitempty"`
 
-	// Interval paces moves, one per pass.
+	// Interval is the least time between two moves, 1m when omitted.
 	// +optional
 	Interval *metav1.Duration `json:"interval,omitempty"`
 }

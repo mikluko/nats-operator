@@ -6,7 +6,7 @@ metadata:
   name: prod-east   # home cluster
   namespace: nats-system
 spec:
-  version: 2.15.1
+  version: 2.15.0
   replicas: 5
   resources:
     requests:

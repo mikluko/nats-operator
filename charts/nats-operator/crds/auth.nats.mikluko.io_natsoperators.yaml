@@ -48,7 +48,7 @@ spec:
             properties:
               jwt:
                 description: |-
-                  JWT is an operator JWT signed elsewhere, keeping the identity key
+                  JWT is a NATS operator JWT signed elsewhere, keeping the identity key
                   offline.
                 minLength: 1
                 type: string
@@ -87,8 +87,8 @@ spec:
                           type: string
                         retiring:
                           description: |-
-                            Retiring marks the key for removal once everything it signed has
-                            been re-signed by another.
+                            Retiring keeps the key listed, so what it signed stays valid, and
+                            signs nothing new with it. Nothing removes a retiring key from the list.
                           type: boolean
                         secretKeyRef:
                           description: SecretKeyRef selects the seed.
@@ -115,8 +115,8 @@ spec:
                     x-kubernetes-list-type: map
                 type: object
               systemAccountRef:
-                description: SystemAccountRef names the NatsSystemAccount the operator
-                  JWT names.
+                description: SystemAccountRef names the NatsSystemAccount the NATS
+                  operator JWT names.
                 properties:
                   name:
                     description: Name of the referenced object.
@@ -143,7 +143,7 @@ spec:
             description: NatsOperatorStatus is the observed state of a NATS operator.
             properties:
               conditions:
-                description: Conditions describe the operator's state.
+                description: Conditions describe the NATS operator's state.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -227,7 +227,7 @@ spec:
                 - publicKey
                 x-kubernetes-list-type: map
               jwt:
-                description: JWT is the operator JWT.
+                description: JWT is the NATS operator JWT.
                 type: string
               observedGeneration:
                 description: ObservedGeneration is the generation the status describes.
@@ -254,8 +254,8 @@ spec:
                   type: string
                 type: array
               systemAccount:
-                description: SystemAccount is the system account the operator JWT
-                  names.
+                description: SystemAccount is the system account the NATS operator
+                  JWT names.
                 properties:
                   jwt:
                     description: JWT of the system account.

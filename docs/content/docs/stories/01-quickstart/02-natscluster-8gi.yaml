@@ -1,4 +1,4 @@
-# The same NatsCluster with spec.version raised from 2.15.0; nothing else
+# The same NatsCluster with its memory raised from 4Gi to 8Gi; nothing else
 # changes.
 apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
@@ -6,14 +6,14 @@ metadata:
   name: demo
   namespace: nats-system
 spec:
-  version: 2.15.1
+  version: 2.15.0
   replicas: 3
   resources:
     requests:
       cpu: "1"
-      memory: 4Gi
+      memory: 8Gi
     limits:
-      memory: 4Gi
+      memory: 8Gi
   jetstream:
     volumeClaimTemplate:
       spec:

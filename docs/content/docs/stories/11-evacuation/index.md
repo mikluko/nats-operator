@@ -8,52 +8,42 @@ params:
     substitutions:
       - files: [01-natscluster-prod-east.yaml, 01-evacuation.yaml]
         kind: NatsCluster
-        reason: >-
-          nats 2.15.1 is not published; hack/e2e loads 2.15.0 as localhost/nats under both tags, which
-          the kubelet does not pull. Six servers share one kind node, on a host every cluster of the run shares.
+        reason: six servers share one kind node, on a host every cluster of the run shares
         patch:
           spec:
-            image: localhost/nats
-            podTemplate: {spec: {containers: [{name: nats, imagePullPolicy: Never}]}}
             replicas: 3
             resources: {requests: {cpu: 100m, memory: 192Mi}, limits: {memory: 192Mi}}
       - files: [01-natscluster-prod-east.yaml]
         kind: NatsCluster
         name: prod-east
         reason: >-
-          what every member of story 9's supercluster carries, which the story leaves out: JetStream, the
-          auth plane and the gateways, in one Kubernetes cluster and without TLS
+          two members of story 9's supercluster in one Kubernetes cluster, with one storage class; a memory store of
+          10Gi does not fit a 192Mi server; no cert-manager, so the gateways run without TLS
         patch:
           spec:
-            jetstream: {volumeClaimTemplate: {spec: {storageClassName: standard, resources: {requests: {storage: 2Gi}}}}}
-            auth: {trustRef: {name: acme}, systemCredentials: {secretKeyRef: {name: cluster-controller-creds}}}
+            jetstream: {limits: null, volumeClaimTemplate: {spec: {storageClassName: standard, resources: {requests: {storage: 2Gi}}}}}
             gateway:
-              discovery: Explicit
               remotes:
                 - {name: prod-east, url: "nats://nats-prod-east.example.net:7222"}
                 - {name: prod-east-2, url: "nats://nats-prod-east-2.example.net:7222"}
-              service:
-                type: LoadBalancer
-                annotations: {external-dns.alpha.kubernetes.io/hostname: nats-prod-east.example.net}
+              tls: null
+              service: {annotations: {external-dns.alpha.kubernetes.io/hostname: nats-prod-east.example.net}}
               advertise: nats-prod-east.example.net:7222
       - files: [01-evacuation.yaml]
         kind: NatsCluster
         name: prod-east-2
         reason: >-
-          what every member of story 9's supercluster carries, which the story leaves out: JetStream, the
-          auth plane and the gateways, in one Kubernetes cluster and without TLS
+          two members of story 9's supercluster in one Kubernetes cluster, with one storage class; a memory store of
+          10Gi does not fit a 192Mi server; no cert-manager, so the gateways run without TLS
         patch:
           spec:
-            jetstream: {volumeClaimTemplate: {spec: {storageClassName: standard, resources: {requests: {storage: 2Gi}}}}}
-            auth: {trustRef: {name: acme}, systemCredentials: {secretKeyRef: {name: cluster-controller-creds}}}
+            jetstream: {limits: null, volumeClaimTemplate: {spec: {storageClassName: standard, resources: {requests: {storage: 2Gi}}}}}
             gateway:
-              discovery: Explicit
               remotes:
                 - {name: prod-east, url: "nats://nats-prod-east.example.net:7222"}
                 - {name: prod-east-2, url: "nats://nats-prod-east-2.example.net:7222"}
-              service:
-                type: LoadBalancer
-                annotations: {external-dns.alpha.kubernetes.io/hostname: nats-prod-east-2.example.net}
+              tls: null
+              service: {annotations: {external-dns.alpha.kubernetes.io/hostname: nats-prod-east-2.example.net}}
               advertise: nats-prod-east-2.example.net:7222
 ---
 

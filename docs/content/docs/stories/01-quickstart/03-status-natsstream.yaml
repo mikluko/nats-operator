@@ -11,7 +11,7 @@ status:
       lastTransitionTime: !any "2026-09-25T15:58:40Z"
     # Terminal is absent while nothing blocks reconciling. It turns True, for
     # example, on a create that finds an existing stream it does not own.
-  # Re-read on a resync period, not only on spec change (NACK finding: drift).
+  # Re-read on a resync period, not only on spec change, so drift shows.
   lastSyncedTime: !any "2026-09-25T16:10:40Z"
   # Ownership is a marker the controller writes into the stream's own
   # `metadata` map (StreamConfig and ConsumerConfig both carry one, nats-server

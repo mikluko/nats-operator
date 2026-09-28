@@ -1,5 +1,5 @@
 # Declared in the home cluster for the remote one: the west controllers'
-# system users (Q2075). Scoped by preset, never expiring, removed by
+# system users. Scoped by preset, never expiring, removed by
 # revocation. Their Secrets are written here and carried to west.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser

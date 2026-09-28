@@ -4,4 +4,4 @@ Each server is its own StatefulSet with `replicas: 1`, its own ConfigMap and an 
 
 ## Considered options
 
-A single StatefulSet with `updateStrategy: OnDelete` (ruled first, then amended), partition stepping (fixes the order), and owning pods and PVCs directly (reimplements identity and PVC retention).
+A single StatefulSet with `updateStrategy: OnDelete` (still one ConfigMap and one volume template), partition stepping (fixes the order), and owning pods and PVCs directly (reimplements identity and PVC retention).

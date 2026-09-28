@@ -69,7 +69,8 @@ spec:
                 - name
                 type: object
               interval:
-                description: Interval paces moves, one per pass.
+                description: Interval is the least time between two moves, 1m when
+                  omitted.
                 type: string
               moves:
                 default: {}

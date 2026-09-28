@@ -79,7 +79,7 @@ func TestLoadBundles_Stories(t *testing.T) {
 		}},
 	}, steps)
 	require.Equal(t, "2.15.0", quickstart.Steps[0].Apply[0].Object["spec"].(map[string]any)["version"])
-	require.Equal(t, "2.15.1", quickstart.Steps[1].Apply[0].Object["spec"].(map[string]any)["version"])
+	require.Equal(t, "512Mi", quickstart.Steps[1].Apply[0].Object["spec"].(map[string]any)["resources"].(map[string]any)["limits"].(map[string]any)["memory"])
 }
 
 func writeBundle(t *testing.T, files map[string]string) string {

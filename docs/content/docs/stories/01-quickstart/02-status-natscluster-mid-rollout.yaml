@@ -1,5 +1,6 @@
-# spec.version changed 2.15.0 -> 2.15.1. A version change is restart-only,
-# so the rollout restarts one server at a time, gating each on Settled.
+# resources.limits.memory changed 4Gi -> 8Gi. A change to the pod template is
+# restart-only, so the rollout restarts one server at a time, gating each on
+# Settled.
 status:
   observedGeneration: 2
   version: 2.15.0
@@ -21,7 +22,7 @@ status:
   config:
     revision: !any 8b27e0
     appliedBy: Restart
-    restartReason: version 2.15.0 -> 2.15.1 is restart-only
+    restartReason: the StatefulSet spec is restart-only
   rollout:
     targetRevision: !any 8b27e0
     updated: !any [demo-2]
@@ -40,10 +41,10 @@ status:
       ready: !any true
       configRevision: !any 3f9a1c
     - name: demo-1
-      version: !any 2.15.1
+      version: !any 2.15.0
       ready: !any false
       configRevision: !any 8b27e0
     - name: demo-2
-      version: !any 2.15.1
+      version: !any 2.15.0
       ready: !any true
       configRevision: !any 8b27e0

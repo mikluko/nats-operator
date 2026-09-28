@@ -4,14 +4,12 @@ weight: 1
 params:
   e2e:
     substitutions:
-      - files: [01-natscluster.yaml, 02-natscluster-2.15.1.yaml]
+      - files: [01-natscluster.yaml]
         reason: three servers share one kind node, on a host every cluster of the run shares
         patch: {spec: {resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 256Mi}}}}
-      - files: [01-natscluster.yaml, 02-natscluster-2.15.1.yaml]
-        reason: >-
-          nats 2.15.1 is not published; hack/e2e loads 2.15.0 as localhost/nats under both tags, which
-          the kubelet does not pull
-        patch: {spec: {image: localhost/nats, podTemplate: {spec: {containers: [{name: nats, imagePullPolicy: Never}]}}}}
+      - files: [02-natscluster-8gi.yaml]
+        reason: three servers share one kind node, on a host every cluster of the run shares
+        patch: {spec: {resources: {requests: {cpu: 100m, memory: 512Mi}, limits: {memory: 512Mi}}}}
       - files: [01-status-natscluster-at-rest.yaml]
         reason: max_memory_store derives from the substituted 256Mi limit
         patch: {status: {jetstream: {limits: {maxMemoryStore: 192Mi}}}}
@@ -29,9 +27,9 @@ At rest it reports every server on the same config revision, and `Settled` once 
 
 {{< manifest "01-status-natscluster-at-rest.yaml" >}}
 
-Changing `spec.version` is restart-only, so the rollout restarts one server at a time and waits for `Settled` before the next.
+Raising the memory changes each server's pod template, which is restart-only, so the rollout restarts one server at a time and waits for `Settled` before the next. A `spec.version` change rolls the same way.
 
-{{< manifest "02-natscluster-2.15.1.yaml" >}}
+{{< manifest "02-natscluster-8gi.yaml" >}}
 
 {{< manifest "02-status-natscluster-mid-rollout.yaml" >}}
 
@@ -46,3 +44,13 @@ The JetStream controller reaches the cluster only through a connection, the same
 The stream's status is re-read on a resync period, so drift made outside Kubernetes shows up as `Synced=False`.
 
 {{< manifest "03-status-natsstream.yaml" >}}
+
+## Connecting a client
+
+With the [NATS CLI](https://github.com/nats-io/natscli), through a port-forward to the cluster's client Service:
+
+```sh
+kubectl -n nats-system port-forward svc/demo 4222:4222 &
+nats -s nats://localhost:4222 pub orders.created '{"id": 1}'
+nats -s nats://localhost:4222 stream info ORDERS
+```
