@@ -43,6 +43,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/authctl"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"github.com/mikluko/nats-operator/internal/manager"
 )
 
 const storiesDir = "../../docs/content/docs/stories"
@@ -164,6 +165,7 @@ func TestEnvtest(t *testing.T) {
 		Scheme:                 s,
 		Metrics:                metricsserver.Options{BindAddress: "0"},
 		HealthProbeBindAddress: "0",
+		Client:                 manager.ClientOptions(),
 	})
 	require.NoError(t, err)
 	e := &env{ctx: t.Context(), d: &recorder{}, log: &eventLog{}}

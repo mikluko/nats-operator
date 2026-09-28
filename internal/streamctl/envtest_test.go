@@ -30,6 +30,7 @@ import (
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
+	"github.com/mikluko/nats-operator/internal/manager"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
@@ -150,7 +151,7 @@ func syncStatus(o client.Object) (*js.SyncStatus, error) {
 
 func startManager(t *testing.T, cfg *rest.Config) {
 	t.Helper()
-	mgr, err := ctrl.NewManager(cfg, ctrl.Options{Scheme: testScheme(t), Metrics: metricsserver.Options{BindAddress: "0"}})
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{Scheme: testScheme(t), Metrics: metricsserver.Options{BindAddress: "0"}, Client: manager.ClientOptions()})
 	require.NoError(t, err)
 	pool := natsconn.NewPool()
 	require.NoError(t, mgr.Add(pool))

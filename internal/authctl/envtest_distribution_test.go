@@ -30,6 +30,7 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/authctl"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"github.com/mikluko/nats-operator/internal/manager"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
@@ -59,6 +60,7 @@ func TestEnvtestDistribution(t *testing.T) {
 		Metrics:                metricsserver.Options{BindAddress: "0"},
 		HealthProbeBindAddress: "0",
 		Controller:             config.Controller{SkipNameValidation: ptr.To(true)},
+		Client:                 manager.ClientOptions(),
 	})
 	require.NoError(t, err)
 	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetAuthController))

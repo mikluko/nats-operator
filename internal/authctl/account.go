@@ -525,7 +525,7 @@ func (r *AccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return b.
 		Named("natsaccount").
 		For(&authv1beta1.NatsAccount{}).
-		Watches(&corev1.Secret{}, refindex.EnqueueByField(c, &authv1beta1.NatsAccountList{}, seedSecretField)).
+		WatchesMetadata(&corev1.Secret{}, refindex.EnqueueByField(c, &authv1beta1.NatsAccountList{}, seedSecretField)).
 		Watches(&authv1beta1.NatsOperator{}, refindex.EnqueueByField(c, &authv1beta1.NatsAccountList{}, operatorField)).
 		Watches(&authv1beta1.NatsAccount{}, refindex.EnqueueByField(c, &authv1beta1.NatsAccountList{}, exporterField)).
 		Watches(&authv1beta1.NatsAccount{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {

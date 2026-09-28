@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Licensed under Apache-2.0; the chart carries `artifacthub.io/license: Apache-2.0`.
 - `SECURITY.md` states how to report a vulnerability through the repository's GitHub private vulnerability reporting, the acknowledgement time for a report, the supported versions, the trust boundaries between namespaces, and how to verify a release's signatures and provenance.
 - Each release's controller images and chart are signed keylessly with cosign and carry a GitHub build provenance attestation.
-- The cluster controller caches only the StatefulSets, ConfigMaps, Services, PersistentVolumeClaims, PodDisruptionBudgets and NetworkPolicies labelled `cluster.nats.mikluko.io/cluster`; every controller reads Secrets from the API server rather than its cache.
+- The cluster controller caches only the StatefulSets, ConfigMaps, Services, PersistentVolumeClaims, PodDisruptionBudgets and NetworkPolicies labelled `cluster.nats.mikluko.io/cluster`; every controller lists and watches only the metadata of Secrets and reads their data from the API server.
 - A controller's `/readyz` passes once it has listed and watched everything it reconciles from, on every replica, elected or not.
 - Every controller's OpenTelemetry resource carries its host name as `service.instance.id`, unless `OTEL_RESOURCE_ATTRIBUTES` sets one.
 - Every controller serves its Prometheus metrics over HTTPS, to a bearer token of a user allowed `get` on the non-resource URL `/metrics`; an allow is cached for five minutes and a denial for thirty seconds.

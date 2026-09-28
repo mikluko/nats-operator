@@ -136,7 +136,7 @@ func (r *SystemAccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return b.
 		Named("natssystemaccount").
 		For(&authv1beta1.NatsSystemAccount{}).
-		Watches(&corev1.Secret{}, refindex.EnqueueByField(c, &authv1beta1.NatsSystemAccountList{}, seedSecretField)).
+		WatchesMetadata(&corev1.Secret{}, refindex.EnqueueByField(c, &authv1beta1.NatsSystemAccountList{}, seedSecretField)).
 		Watches(&authv1beta1.NatsOperator{}, refindex.EnqueueByField(c, &authv1beta1.NatsSystemAccountList{}, operatorField)).
 		Watches(&authv1beta1.NatsUser{}, handler.EnqueueRequestsFromMapFunc(func(_ context.Context, obj client.Object) []reconcile.Request {
 			ref := obj.(*authv1beta1.NatsUser).Spec.AccountRef

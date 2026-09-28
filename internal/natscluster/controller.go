@@ -76,6 +76,8 @@ const (
 
 // Reconciler reconciles NatsCluster objects.
 type Reconciler struct {
+	// Client reads Secrets from the API server, as manager.ClientOptions
+	// sets, since the reconciler watches only their metadata.
 	Client   client.Client
 	Observer Observer
 	// Reloader reaches a NATS cluster's system account to reload its
@@ -149,7 +151,7 @@ func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) err
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.Service{}).
-		Owns(&corev1.Secret{}).
+		Owns(&corev1.Secret{}, builder.OnlyMetadata).
 		Owns(&policyv1.PodDisruptionBudget{}).
 		Owns(&networkingv1.NetworkPolicy{}).
 		Named("natscluster").

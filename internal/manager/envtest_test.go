@@ -24,6 +24,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	"github.com/mikluko/nats-operator/internal/manager/secretreads"
 )
 
 // startEnvtest starts an API server for the test, its admin's config in
@@ -71,14 +73,16 @@ func TestEnvtestStart(t *testing.T) {
 }
 
 // TestEnvtestCache pins that New's cache holds only labelled objects of an
-// owned kind and Secrets without data or annotations, kept current, while the
-// manager's client reads a Secret whole.
+// owned kind and the metadata of Secrets without annotations, kept current,
+// while the manager's client reads a Secret whole and never lists or watches
+// whole Secrets.
 func TestEnvtestCache(t *testing.T) {
 	cfg := startEnvtest(t).Config
 	scheme, err := NewScheme()
 	require.NoError(t, err)
 	owned := Owned{Label: "test.nats.mikluko.io/owner", Kinds: []client.Object{&corev1.ConfigMap{}}}
-	mgr, err := New(cfg, &Options{MetricsAddr: "0", ProbeAddr: "0"}, scheme, owned)
+	recorded, reads := secretreads.Record(cfg)
+	mgr, err := New(recorded, &Options{MetricsAddr: "0", ProbeAddr: "0"}, scheme, owned)
 	require.NoError(t, err)
 	_, err = mgr.GetCache().GetInformer(t.Context(), &corev1.ConfigMap{}, cache.BlockUntilSynced(false))
 	require.NoError(t, err)
@@ -114,16 +118,17 @@ func TestEnvtestCache(t *testing.T) {
 		secret.Data["key"] = []byte("v2")
 		require.NoError(t, c.Update(t.Context(), secret))
 		require.EventuallyWithT(t, func(ct *assert.CollectT) {
-			var cached corev1.Secret
-			if assert.NoError(ct, mgr.GetCache().Get(t.Context(), client.ObjectKeyFromObject(secret), &cached)) {
+			cached := &metav1.PartialObjectMetadata{}
+			cached.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Secret"))
+			if assert.NoError(ct, mgr.GetCache().Get(t.Context(), client.ObjectKeyFromObject(secret), cached)) {
 				assert.Equal(ct, secret.ResourceVersion, cached.ResourceVersion)
-				assert.Empty(ct, cached.Data)
 				assert.Empty(ct, cached.Annotations)
 			}
 		}, 10*time.Second, 50*time.Millisecond)
 		var read corev1.Secret
 		require.NoError(t, mgr.GetClient().Get(t.Context(), client.ObjectKeyFromObject(secret), &read))
 		require.Equal(t, []byte("v2"), read.Data["key"])
+		reads.RequireMetadataOnly(t)
 	})
 }
 

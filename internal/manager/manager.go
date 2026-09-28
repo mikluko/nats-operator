@@ -182,7 +182,7 @@ func managerOptions(o *Options, scheme *runtime.Scheme, owned Owned) (ctrl.Optio
 	return ctrl.Options{
 		Scheme:                 scheme,
 		Cache:                  cacheOpts,
-		Client:                 clientOptions(),
+		Client:                 ClientOptions(),
 		Controller:             config.Controller{EnableWarmup: new(true)},
 		Metrics:                metricsOptions(o.MetricsAddr),
 		HealthProbeBindAddress: o.ProbeAddr,

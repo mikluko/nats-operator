@@ -16,6 +16,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/manager"
 )
 
 // TestEnvtest runs the Reconciler in a manager against a real API server:
@@ -36,6 +37,7 @@ func TestEnvtest(t *testing.T) {
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:  testScheme(t),
 		Metrics: metricsserver.Options{BindAddress: "0"},
+		Client:  manager.ClientOptions(),
 	})
 	require.NoError(t, err)
 	p := NewPool()

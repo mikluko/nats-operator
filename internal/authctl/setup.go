@@ -11,7 +11,9 @@ import (
 
 // Setup registers the field indexes and every reconciler of this package
 // with mgr; d, s and rec may each be nil. Where d is a *Resolvers, the
-// system account and account reconcilers follow its roster changes.
+// system account and account reconcilers follow its roster changes. mgr's
+// client reads Secrets from the API server, as manager.ClientOptions sets,
+// since the reconcilers watch only their metadata.
 func Setup(ctx context.Context, mgr ctrl.Manager, d Distributor, s Sessions, rec events.EventRecorder) error {
 	if err := indexes(ctx, mgr.GetFieldIndexer()); err != nil {
 		return fmt.Errorf("register indexes: %w", err)

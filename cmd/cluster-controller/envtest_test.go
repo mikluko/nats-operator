@@ -20,6 +20,7 @@ import (
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	"github.com/mikluko/nats-operator/internal/manager"
 	"github.com/mikluko/nats-operator/internal/manager/managertest"
+	"github.com/mikluko/nats-operator/internal/manager/secretreads"
 	"github.com/mikluko/nats-operator/internal/natscluster"
 )
 
@@ -30,8 +31,8 @@ const (
 
 // TestEnvtestOwnedCache pins that setup, in a manager scoped to owned and to
 // story 1's namespace, brings story 1's NatsCluster up to date through that
-// cache, labels every owned object it renders, and never reconciles a
-// NatsCluster in another namespace.
+// cache, labels every owned object it renders, never reconciles a
+// NatsCluster in another namespace, and never lists or watches whole Secrets.
 func TestEnvtestOwnedCache(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")
@@ -49,7 +50,8 @@ func TestEnvtestOwnedCache(t *testing.T) {
 	require.NoError(t, yaml.UnmarshalStrict(b, nc))
 
 	opts := &manager.Options{MetricsAddr: "0", ProbeAddr: "0", WatchNamespaces: []string{nc.Namespace}}
-	mgr, err := manager.New(cfg, opts, scheme, owned)
+	recorded, reads := secretreads.Record(cfg)
+	mgr, err := manager.New(recorded, opts, scheme, owned)
 	require.NoError(t, err)
 	require.NoError(t, setup(t.Context(), mgr))
 	go func() { _ = mgr.Start(t.Context()) }()
@@ -112,6 +114,7 @@ func TestEnvtestOwnedCache(t *testing.T) {
 	require.Empty(t, got.Status.Conditions, "a NatsCluster outside the watched namespaces")
 	require.NoError(t, c.List(t.Context(), &sets, client.InNamespace(outside.Namespace)))
 	require.Empty(t, sets.Items, "StatefulSets outside the watched namespaces")
+	reads.RequireMetadataOnly(t)
 }
 
 // TestEnvtestReadyUnderRoles pins config/rbac/cluster-controller as enough

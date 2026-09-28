@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 )
@@ -67,17 +66,13 @@ func TestSecretMetadata(t *testing.T) {
 		OwnerReferences: []metav1.OwnerReference{{Name: "owner"}},
 		Finalizers:      []string{"f"},
 	}
-	in := &corev1.Secret{
-		ObjectMeta: *meta.DeepCopy(),
-		Type:       corev1.SecretTypeOpaque,
-		Data:       map[string][]byte{"k": []byte("v")},
-		StringData: map[string]string{"k": "v"},
-	}
+	typ := metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"}
+	in := &metav1.PartialObjectMetadata{TypeMeta: typ, ObjectMeta: *meta.DeepCopy()}
 	in.Annotations = map[string]string{"kubectl.kubernetes.io/last-applied-configuration": `{"data":{"k":"dg=="}}`}
 	in.ManagedFields = []metav1.ManagedFieldsEntry{{Manager: "kubectl"}}
 	got, err := secretMetadata(in)
 	require.NoError(t, err)
-	require.Equal(t, &corev1.Secret{ObjectMeta: meta, Type: corev1.SecretTypeOpaque}, got)
+	require.Equal(t, &metav1.PartialObjectMetadata{TypeMeta: typ, ObjectMeta: meta}, got)
 
 	tombstone := cache.DeletedFinalStateUnknown{Key: "ns/creds"}
 	got, err = secretMetadata(tombstone)

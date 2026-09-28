@@ -92,7 +92,7 @@ func (r *Reconciler) watchLeafRefs(b *builder.Builder) *builder.Builder {
 	return b.
 		Watches(&natsv1beta1.NatsConnection{}, refindex.EnqueueByField(r.Client, clusters, LeafConnectionField)).
 		Watches(&natsv1beta1.NatsAccountTrust{}, refindex.EnqueueByField(r.Client, clusters, LeafAccountTrustField)).
-		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.clustersReadingSecret))
+		WatchesMetadata(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.clustersReadingSecret))
 }
 
 // connectionsReading are the NatsConnections that read Secret s.

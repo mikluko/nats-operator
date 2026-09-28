@@ -319,8 +319,8 @@ func (r *OperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("natsoperator").
 		For(&authv1beta1.NatsOperator{}).
-		Watches(&corev1.Secret{}, refindex.EnqueueByField(c, &authv1beta1.NatsOperatorList{}, seedSecretField)).
-		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+		WatchesMetadata(&corev1.Secret{}, refindex.EnqueueByField(c, &authv1beta1.NatsOperatorList{}, seedSecretField)).
+		WatchesMetadata(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			return systemAccountOperators(ctx, c, refindex.Requests(ctx, c, &authv1beta1.NatsSystemAccountList{}, client.MatchingFields{seedSecretField: keyValue(client.ObjectKeyFromObject(obj))}))
 		})).
 		Watches(&authv1beta1.NatsSystemAccount{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {

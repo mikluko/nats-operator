@@ -48,6 +48,8 @@ const DefaultRetryAfter = 30 * time.Second
 // connections, closing the connection of one deleted or no longer
 // resolving.
 type Reconciler struct {
+	// Client reads Secrets from the API server, as manager.ClientOptions
+	// sets, since the reconciler watches only their metadata.
 	Client     client.Client
 	Pool       *Pool
 	RetryAfter time.Duration
@@ -172,7 +174,7 @@ func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) err
 	r.Pool.OnChange(r.enqueue)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&natsv1beta1.NatsConnection{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.connectionsReading)).
+		WatchesMetadata(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.connectionsReading)).
 		WatchesRawSource(source.Func(func(_ context.Context, q workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
 			r.queue.Store(&q)
 			return nil

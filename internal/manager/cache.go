@@ -20,8 +20,9 @@ type Owned struct {
 }
 
 // cacheOptions scopes a manager's cache: of each kind in owned.Kinds it holds
-// only the objects carrying owned.Label, whatever its value; of every Secret
-// it holds what secretMetadata keeps.
+// only the objects carrying owned.Label, whatever its value; of every Secret,
+// which the controllers watch metadata-only, it holds what secretMetadata
+// keeps.
 func cacheOptions(owned Owned) (cache.Options, error) {
 	by := map[client.Object]cache.ByObject{
 		&corev1.Secret{}: {Transform: secretMetadata},
@@ -40,34 +41,22 @@ func cacheOptions(owned Owned) (cache.Options, error) {
 	return cache.Options{ByObject: by}, nil
 }
 
-// clientOptions makes a manager's client read Secrets from the API server,
-// since its cache holds none of their data.
-func clientOptions() client.Options {
+// ClientOptions makes a manager's client read Secrets from the API server,
+// which a reconciler watching Secrets metadata-only needs: a cached read can
+// trail the event that triggered it.
+func ClientOptions() client.Options {
 	return client.Options{Cache: &client.CacheOptions{DisableFor: []client.Object{&corev1.Secret{}}}}
 }
 
-// secretMetadata keeps of a Secret only the metadata a watch on it maps to
-// requests, dropping the annotations too since kubectl's last-applied
-// configuration copies the data into them; anything else passes through.
+// secretMetadata drops the annotations and managed fields of a Secret's
+// metadata, since kubectl's last-applied configuration copies the data into
+// its annotations; anything else passes through.
 func secretMetadata(obj any) (any, error) {
-	s, ok := obj.(*corev1.Secret)
+	m, ok := obj.(*metav1.PartialObjectMetadata)
 	if !ok {
 		return obj, nil
 	}
-	return &corev1.Secret{
-		TypeMeta: s.TypeMeta,
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              s.Name,
-			Namespace:         s.Namespace,
-			UID:               s.UID,
-			ResourceVersion:   s.ResourceVersion,
-			Generation:        s.Generation,
-			CreationTimestamp: s.CreationTimestamp,
-			DeletionTimestamp: s.DeletionTimestamp,
-			Labels:            s.Labels,
-			OwnerReferences:   s.OwnerReferences,
-			Finalizers:        s.Finalizers,
-		},
-		Type: s.Type,
-	}, nil
+	m.Annotations = nil
+	m.ManagedFields = nil
+	return m, nil
 }
