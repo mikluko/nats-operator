@@ -25,9 +25,9 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 )
 
-// decodeDir strictly decodes every document of every file in dir into its
-// typed object, and returns the Secrets by name.
-func decodeDir(t *testing.T, dir string) map[string]*corev1.Secret {
+// fixtureScheme returns a scheme holding Kubernetes' kinds and every kind of
+// the four groups.
+func fixtureScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	scheme := runtime.NewScheme()
 	for _, add := range []func(*runtime.Scheme) error{
@@ -36,7 +36,14 @@ func decodeDir(t *testing.T, dir string) map[string]*corev1.Secret {
 	} {
 		require.NoError(t, add(scheme))
 	}
-	decoder := serializer.NewCodecFactory(scheme, serializer.EnableStrict).UniversalDeserializer()
+	return scheme
+}
+
+// decodeDir strictly decodes every document of every file in dir into its
+// typed object, and returns the Secrets by name.
+func decodeDir(t *testing.T, dir string) map[string]*corev1.Secret {
+	t.Helper()
+	decoder := serializer.NewCodecFactory(fixtureScheme(t), serializer.EnableStrict).UniversalDeserializer()
 
 	files, err := filepath.Glob(filepath.Join(dir, "*.yaml"))
 	require.NoError(t, err)

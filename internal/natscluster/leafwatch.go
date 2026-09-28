@@ -27,7 +27,7 @@ const (
 func leafConnectionKeys(nc *clusterv1beta1.NatsCluster) []string {
 	var out []string
 	for _, r := range nc.Spec.LeafRemotes {
-		out = append(out, refKey(nc, r.ConnectionRef))
+		out = append(out, r.ConnectionRef.ObjectKey(nc.Namespace).String())
 	}
 	return out
 }
@@ -36,19 +36,10 @@ func leafAccountTrustKeys(nc *clusterv1beta1.NatsCluster) []string {
 	var out []string
 	for _, r := range nc.Spec.LeafRemotes {
 		if r.LocalAccountTrustRef != nil {
-			out = append(out, refKey(nc, *r.LocalAccountTrustRef))
+			out = append(out, r.LocalAccountTrustRef.ObjectKey(nc.Namespace).String())
 		}
 	}
 	return out
-}
-
-// refKey is the namespace/name ref resolves to from nc.
-func refKey(nc *clusterv1beta1.NatsCluster, ref natsv1beta1.ObjectReference) string {
-	ns := ref.Namespace
-	if ns == "" {
-		ns = nc.Namespace
-	}
-	return ns + "/" + ref.Name
 }
 
 // ConnectionSecretField is the field index on NatsConnections of the

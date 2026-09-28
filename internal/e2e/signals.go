@@ -10,6 +10,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/mikluko/nats-operator/internal/authctl"
+	"github.com/mikluko/nats-operator/internal/balancectl"
+	"github.com/mikluko/nats-operator/internal/lifecycle"
+	"github.com/mikluko/nats-operator/internal/natscluster"
+	"github.com/mikluko/nats-operator/internal/natsconn"
+	"github.com/mikluko/nats-operator/internal/streamctl"
 )
 
 // stuckWaiting are the container waiting reasons that no wait ends.
@@ -18,9 +25,12 @@ var stuckWaiting = []string{"CrashLoopBackOff", "ImagePullBackOff", "ErrImageNev
 // terminalReasons are the Ready=False reasons the controllers give a spec
 // they will not act on until it is edited.
 var terminalReasons = []string{
-	"Terminal", "Rejected", "ImmutableField", "ExistsUnowned", "OwnedByOther", "NotABucket",
-	"UnsupportedSpec", "GatewayWithoutTLS", "DuplicateBalancer", "InvalidPool", "StreamsInSeveralPools", "TargetTagsInSource",
-	"InvalidKeys", "InvalidJWT", "TrustInvalid", "LeafRemoteInvalid", "InvalidSecret", "SecretConflict",
+	lifecycle.ReasonTerminal, lifecycle.ReasonRejected, lifecycle.ReasonExistsUnowned, lifecycle.ReasonOwnedByOther,
+	streamctl.ReasonImmutableField, streamctl.ReasonNotABucket,
+	natscluster.ReasonUnsupportedSpec, natscluster.ReasonGatewayWithoutTLS, natscluster.ReasonTrustInvalid, natscluster.ReasonLeafRemoteInvalid,
+	balancectl.ReasonDuplicate, balancectl.ReasonInvalidPool, balancectl.ReasonOverlapping, balancectl.ReasonTargetTagsInSource,
+	authctl.ReasonInvalidKeys, authctl.ReasonInvalidJWT, authctl.ReasonSecretConflict,
+	natsconn.ReasonInvalidSecret,
 }
 
 // podSignal returns why a pod of pods will not become ready, or "": a
@@ -75,7 +85,8 @@ func conditionSignal(live *unstructured.Unstructured, want map[string]any) strin
 		s, _ := m["status"].(string)
 		reason, _ := m["reason"].(string)
 		msg, _ := m["message"].(string)
-		terminal := (t == "Terminal" && s == "True") || (t == "Ready" && s == "False" && slices.Contains(terminalReasons, reason))
+		terminal := (t == lifecycle.ConditionTerminal && s == string(metav1.ConditionTrue)) ||
+			(t == lifecycle.ConditionReady && s == string(metav1.ConditionFalse) && slices.Contains(terminalReasons, reason))
 		if terminal && wanted[t] != s {
 			return fmt.Sprintf("%s %s: %s=%s %s: %s", live.GetKind(), key(live), t, s, reason, msg)
 		}

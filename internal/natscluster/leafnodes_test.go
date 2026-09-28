@@ -17,6 +17,7 @@ import (
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nkeys"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -229,8 +230,7 @@ func (b *booted) reload(t *testing.T, remotes []LeafRemote) {
 // leafStatusOf observes b's leafnode connections through the monitoring
 // endpoints, as the cluster controller does for a leaf without a system
 // user, and returns the status it computes.
-func (b *booted) leafStatusOf(t *testing.T, remotes []LeafRemote) clusterv1beta1.NatsClusterStatus {
-	t.Helper()
+func (b *booted) leafStatusOf(t require.TestingT, remotes []LeafRemote) clusterv1beta1.NatsClusterStatus {
 	plan, err := Render(b.nc, Inputs{Trust: b.trust}, remotes...)
 	require.NoError(t, err)
 	var st clusterv1beta1.NatsClusterStatus
@@ -243,9 +243,9 @@ func (b *booted) leafStatusOf(t *testing.T, remotes []LeafRemote) clusterv1beta1
 func (b *booted) waitConnected(t *testing.T, remotes []LeafRemote) clusterv1beta1.NatsClusterStatus {
 	t.Helper()
 	var st clusterv1beta1.NatsClusterStatus
-	require.Eventually(t, func() bool {
-		st = b.leafStatusOf(t, remotes)
-		return meta.IsStatusConditionTrue(st.Conditions, ConditionLeafnodesConnected)
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
+		st = b.leafStatusOf(ct, remotes)
+		assert.True(ct, meta.IsStatusConditionTrue(st.Conditions, ConditionLeafnodesConnected))
 	}, 30*time.Second, 200*time.Millisecond, "leaf remotes did not connect")
 	return st
 }

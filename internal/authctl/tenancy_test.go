@@ -104,7 +104,7 @@ func TestSystemAccountAccounts(t *testing.T) {
 			account("sys-ns", "elsewhere", natsv1beta1.ObjectReference{Name: "other"}),
 		).
 		WithIndex(&authv1beta1.NatsAccount{}, operatorField, func(o client.Object) []string {
-			return []string{keyValue(refKey(o.(*authv1beta1.NatsAccount).Spec.OperatorRef, o.GetNamespace()))}
+			return []string{keyValue(o.(*authv1beta1.NatsAccount).Spec.OperatorRef.ObjectKey(o.GetNamespace()))}
 		}).
 		Build()
 	sys := &authv1beta1.NatsSystemAccount{

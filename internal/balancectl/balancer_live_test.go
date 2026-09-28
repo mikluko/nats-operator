@@ -52,8 +52,8 @@ func reconciledAccount(t *testing.T, ctx context.Context, r *BalancerReconciler,
 	key := client.ObjectKey{Namespace: ns, Name: "payments"}
 	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
-		require.NoError(t, err)
-		require.NoError(t, r.Client.Get(ctx, key, &b))
+		require.NoError(ct, err)
+		require.NoError(ct, r.Client.Get(ctx, key, &b))
 		want(ct, &b)
 	}, 2*time.Minute, 50*time.Millisecond, msg)
 	return &b
@@ -278,16 +278,14 @@ func TestBalancers_OneMoveAtATime(t *testing.T) {
 	sr := &SystemBalancerReconciler{Client: c, Dialer: dialer, PendingPoll: time.Millisecond, Leases: leases}
 	ar := &BalancerReconciler{Client: c, Dialer: dialer, PendingPoll: time.Millisecond, Leases: leases}
 	sysKey, accKey := client.ObjectKey{Namespace: ns, Name: "demo"}, client.ObjectKey{Namespace: ns, Name: "logs"}
-	passSystem := func() *js.NatsSystemBalancer {
-		t.Helper()
+	passSystem := func(t require.TestingT) *js.NatsSystemBalancer {
 		_, err := sr.Reconcile(ctx, reconcile.Request{NamespacedName: sysKey})
 		require.NoError(t, err)
 		var b js.NatsSystemBalancer
 		require.NoError(t, c.Get(ctx, sysKey, &b))
 		return &b
 	}
-	passAccount := func() *js.NatsBalancer {
-		t.Helper()
+	passAccount := func(t require.TestingT) *js.NatsBalancer {
 		_, err := ar.Reconcile(ctx, reconcile.Request{NamespacedName: accKey})
 		require.NoError(t, err)
 		var b js.NatsBalancer
@@ -303,18 +301,18 @@ func TestBalancers_OneMoveAtATime(t *testing.T) {
 	}
 
 	var sys *js.NatsSystemBalancer
-	require.Eventually(t, func() bool { sys = passSystem(); return len(sys.Status.Pending) > 0 }, time.Minute, 20*time.Millisecond, "the system balancer made no move")
-	acc := passAccount()
+	require.EventuallyWithT(t, func(ct *assert.CollectT) { sys = passSystem(ct); assert.NotEmpty(ct, sys.Status.Pending) }, time.Minute, 20*time.Millisecond, "the system balancer made no move")
+	acc := passAccount(t)
 	require.Nil(t, acc.Status.LastMove, "the account balancer moved while the system balancer's move was in flight")
 	require.Equal(t, "NatsSystemBalancer nats-system/demo holds the move lease of NATS cluster C1", holdingFor(acc.Status.Conditions))
 	for _, name := range bStreams {
 		require.Equal(t, "C1-0", streamLeader(t, ctx, jsB, name))
 	}
 
-	require.Eventually(t, func() bool { sys = passSystem(); return len(sys.Status.Pending) == 0 }, time.Minute, 20*time.Millisecond, "the system balancer's move never completed")
+	require.EventuallyWithT(t, func(ct *assert.CollectT) { sys = passSystem(ct); assert.Empty(ct, sys.Status.Pending) }, time.Minute, 20*time.Millisecond, "the system balancer's move never completed")
 	last := sys.Status.LastMove
-	require.Eventually(t, func() bool { acc = passAccount(); return acc.Status.LastMove != nil }, time.Minute, 20*time.Millisecond, "the account balancer did not move once the lease was free")
-	sys = passSystem()
+	require.EventuallyWithT(t, func(ct *assert.CollectT) { acc = passAccount(ct); assert.NotNil(ct, acc.Status.LastMove) }, time.Minute, 20*time.Millisecond, "the account balancer did not move once the lease was free")
+	sys = passSystem(t)
 	require.Equal(t, last, sys.Status.LastMove, "the system balancer moved while the account balancer's move was in flight")
 	require.Equal(t, "NatsBalancer nats-system/logs holds the move lease of NATS cluster C1", holdingFor(sys.Status.Conditions))
 }

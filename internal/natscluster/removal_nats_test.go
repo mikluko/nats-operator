@@ -13,6 +13,7 @@ import (
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nkeys"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -31,6 +32,7 @@ import (
 // in-process, with its StatefulSets as the reconciler would hold them and
 // the cluster controller's system connection.
 type removalCluster struct {
+	ctx   context.Context
 	nc    *clusterv1beta1.NatsCluster
 	plan  *Plan
 	sys   *SystemConnections
@@ -48,7 +50,7 @@ type removalCluster struct {
 func startRemovalCluster(t *testing.T, replicas int32) *removalCluster {
 	t.Helper()
 	p := mintPlane(t)
-	rc := &removalCluster{nc: storyAuthCluster(t), srvs: map[string]*server.Server{}, files: map[string]string{}, sets: map[string]*appsv1.StatefulSet{}}
+	rc := &removalCluster{ctx: t.Context(), nc: storyAuthCluster(t), srvs: map[string]*server.Server{}, files: map[string]string{}, sets: map[string]*appsv1.StatefulSet{}}
 	rc.nc.Spec.Replicas = 5
 	all, err := Render(rc.nc, Inputs{Trust: p.trust})
 	require.NoError(t, err)
@@ -127,9 +129,8 @@ func (rc *removalCluster) addStream(t *testing.T, name string, replicas, n int) 
 
 // observe is one reconcile's view: the snapshot, and the rollout state the
 // reconciler would decide on.
-func (rc *removalCluster) observe(t *testing.T) (*sysobs.Snapshot, rolloutState) {
-	t.Helper()
-	snap, st, err := rc.state(t.Context())
+func (rc *removalCluster) observe(t require.TestingT) (*sysobs.Snapshot, rolloutState) {
+	snap, st, err := rc.state(rc.ctx)
 	require.NoError(t, err)
 	return snap, st
 }
@@ -146,8 +147,7 @@ func (rc *removalCluster) state(ctx context.Context) (*sysobs.Snapshot, rolloutS
 
 // step takes one decision and carries out its removal action against the
 // NATS cluster, stopping a deleted server.
-func (rc *removalCluster) step(t *testing.T, st rolloutState, log *[]string) rolloutDecision {
-	t.Helper()
+func (rc *removalCluster) step(t require.TestingT, st rolloutState, log *[]string) rolloutDecision {
 	d := decide(st)
 	require.Empty(t, d.Step)
 	if d.Remove == nil {
@@ -155,7 +155,7 @@ func (rc *removalCluster) step(t *testing.T, st rolloutState, log *[]string) rol
 	}
 	x := d.Remove.Server
 	*log = append(*log, string(d.Remove.Action)+" "+x)
-	ctx := t.Context()
+	ctx := rc.ctx
 	switch d.Remove.Action {
 	case actionEvacuate:
 		require.NoError(t, rc.admin.Evacuate(ctx, x))
@@ -184,9 +184,9 @@ func TestScaleDown_InProcess(t *testing.T) {
 	rc.addStream(t, "ORDERS", 3, 100)
 	rc.addStream(t, "WIDE", 5, 10)
 	var log []string
-	require.Eventually(t, func() bool {
-		snap, _ := rc.observe(t)
-		return snap.Verdict().Settled() && len(snap.Groups) == 3
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
+		snap, _ := rc.observe(ct)
+		assert.True(ct, snap.Verdict().Settled() && len(snap.Groups) == 3)
 	}, 30*time.Second, 200*time.Millisecond)
 	_, st := rc.observe(t)
 	d := rc.step(t, st, &log)
@@ -196,10 +196,10 @@ func TestScaleDown_InProcess(t *testing.T) {
 	require.NoError(t, rc.js.DeleteStream("WIDE"))
 	rc.addStream(t, "LOCAL", 1, 50)
 
-	require.Eventually(t, func() bool {
-		_, st := rc.observe(t)
-		d := rc.step(t, st, &log)
-		return d.Status == nil && d.Blocked == nil
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
+		_, st := rc.observe(ct)
+		d := rc.step(ct, st, &log)
+		assert.True(ct, d.Status == nil && d.Blocked == nil)
 	}, 90*time.Second, 300*time.Millisecond, "scale-down did not finish: %v", log)
 
 	var want []string
@@ -243,11 +243,11 @@ func TestReplace_InProcess(t *testing.T) {
 	rc.nc.Status.Removals = withRemoval(nil, "demo-3", clusterv1beta1.RemovalRequested, time.Now())
 	var log []string
 	var deleted bool
-	require.Eventually(t, func() bool {
-		_, st := rc.observe(t)
-		d := rc.step(t, st, &log)
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
+		_, st := rc.observe(ct)
+		d := rc.step(ct, st, &log)
 		deleted = d.Remove != nil && d.Remove.Action == actionDelete
-		return deleted
+		assert.True(ct, deleted)
 	}, 60*time.Second, 300*time.Millisecond, "replacement did not reach deletion: %v", log)
 
 	store := filepath.Join(filepath.Dir(rc.files["demo-3"]), "jetstream")
@@ -258,9 +258,9 @@ func TestReplace_InProcess(t *testing.T) {
 	rc.sets["demo-3"] = sts
 	rc.nc.Status.Removals = withRemoval(rc.nc.Status.Removals, "demo-3", clusterv1beta1.RemovalRejoining, time.Now())
 
-	require.Eventually(t, func() bool {
-		snap, _ := rc.observe(t)
-		return slices.ContainsFunc(snap.Servers, func(s sysobs.Server) bool { return s.Name == "demo-3" }) && !slices.Contains(snap.Silent, "demo-3")
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
+		snap, _ := rc.observe(ct)
+		assert.True(ct, slices.ContainsFunc(snap.Servers, func(s sysobs.Server) bool { return s.Name == "demo-3" }) && !slices.Contains(snap.Silent, "demo-3"))
 	}, 30*time.Second, 200*time.Millisecond, "the replaced server did not answer")
 	require.Never(t, func() bool {
 		_, st, err := rc.state(t.Context())

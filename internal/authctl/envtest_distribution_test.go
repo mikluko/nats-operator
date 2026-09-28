@@ -176,7 +176,7 @@ spec:
 		e.eventually(t, func(ct *assert.CollectT) {
 			e.get(ct, demo, op)
 			e.get(ct, key("nats-system", "sys"), sys)
-			assert.GreaterOrEqual(ct, issuedAt(t, op.Status.SystemAccount.JWT), issuedAt(t, lost))
+			assert.GreaterOrEqual(ct, issuedAt(ct, op.Status.SystemAccount.JWT), issuedAt(ct, lost))
 			distributed(ct, sys.Status.Conditions, sys.Status.Distribution)
 		})
 		for i := range cl.srvs {
@@ -393,8 +393,7 @@ func resignedLater(t *testing.T, e *env, accountJWT string) string {
 	return ""
 }
 
-func issuedAt(t *testing.T, accountJWT string) int64 {
-	t.Helper()
+func issuedAt(t require.TestingT, accountJWT string) int64 {
 	c, err := jwt.DecodeAccountClaims(accountJWT)
 	require.NoError(t, err)
 	return c.IssuedAt

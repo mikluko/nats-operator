@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
-	"github.com/mikluko/nats-operator/internal/e2e"
+	"github.com/mikluko/nats-operator/internal/e2e/placeholders"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
@@ -94,7 +94,7 @@ func TestComputeStatus_AtRest(t *testing.T) {
 func TestComputeStatus_MidRollout(t *testing.T) {
 	b, err := os.ReadFile("../../docs/content/docs/stories/01-quickstart/02-status-natscluster-mid-rollout.yaml")
 	require.NoError(t, err)
-	b, err = e2e.StripPlaceholders(b)
+	b, err = placeholders.Strip(b)
 	require.NoError(t, err)
 	var want clusterv1beta1.NatsCluster
 	require.NoError(t, yaml.UnmarshalStrict(b, &want))

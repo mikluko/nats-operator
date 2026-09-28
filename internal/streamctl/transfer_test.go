@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -158,17 +159,12 @@ func TestStreamMove(t *testing.T) {
 	restart := stallMove(t, f.js, sc["west"], "ORDERS", "west")
 	var seen *js.NatsStream
 	var recheck time.Duration
-	require.Eventually(t, func() bool {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		res, err := f.streams.Reconcile(t.Context(), requestFor("orders"))
-		if err != nil {
-			return false
-		}
-		s := f.stream("orders")
-		if s.Status.Transfer == nil || s.Status.Transfer.Consumers == nil || currentReplicas(s.Status.Transfer) > 1 {
-			return false
-		}
+		require.NoError(ct, err)
+		s := f.streamOn(ct, "orders")
+		require.True(ct, s.Status.Transfer != nil && s.Status.Transfer.Consumers != nil && currentReplicas(s.Status.Transfer) <= 1)
 		seen, recheck = s, res.RequeueAfter
-		return true
 	}, 30*time.Second, 50*time.Millisecond, "no transfer was reported with the stopped replicas not current")
 	require.Equal(t, lifecycle.MovingRecheck, recheck)
 	tr := seen.Status.Transfer
@@ -185,10 +181,11 @@ func TestStreamMove(t *testing.T) {
 	require.EqualValues(t, 2, seen.Status.ObservedGeneration)
 
 	restart()
-	require.Eventually(t, func() bool {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		_, err := f.streams.Reconcile(t.Context(), requestFor("orders"))
-		s := f.stream("orders")
-		return err == nil && s.Status.Transfer == nil && s.Status.Server != nil && strings.HasPrefix(s.Status.Server.Leader, "west-")
+		require.NoError(ct, err)
+		s := f.streamOn(ct, "orders")
+		assert.True(ct, s.Status.Transfer == nil && s.Status.Server != nil && strings.HasPrefix(s.Status.Server.Leader, "west-"))
 	}, time.Minute, 200*time.Millisecond, "the move never finished")
 	s = f.stream("orders")
 	condition(t, s.Status.Conditions, lifecycle.ConditionSynced, metav1.ConditionTrue, lifecycle.ReasonMatchesSpec)

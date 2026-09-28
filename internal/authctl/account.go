@@ -92,7 +92,7 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	opKey := refKey(acc.Spec.OperatorRef, acc.Namespace)
+	opKey := acc.Spec.OperatorRef.ObjectKey(acc.Namespace)
 	refused, err := admit(ctx, r.Client, authGroup, "NatsAccount", acc, "NatsOperator", opKey)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -233,7 +233,7 @@ func (r *AccountReconciler) deletionPending(ctx context.Context, acc *authv1beta
 	if err != nil {
 		return false, err
 	}
-	key := refKey(acc.Spec.OperatorRef, acc.Namespace)
+	key := acc.Spec.OperatorRef.ObjectKey(acc.Namespace)
 	var op authv1beta1.NatsOperator
 	if err := r.Get(ctx, key, &op); err != nil {
 		return false, client.IgnoreNotFound(err)
@@ -404,7 +404,7 @@ type resolvedImports struct {
 func (r *AccountReconciler) resolveImports(ctx context.Context, acc *authv1beta1.NatsAccount, pub string) (resolvedImports, error) {
 	var out resolvedImports
 	for _, imp := range acc.Spec.Imports {
-		exKey := refKey(imp.AccountRef.ObjectReference, acc.Namespace)
+		exKey := imp.AccountRef.ObjectKey(acc.Namespace)
 		label := importLabel(acc.Namespace, exKey, imp.Export)
 		skip := func(format string, args ...any) {
 			out.unresolved = append(out.unresolved, label+": "+fmt.Sprintf(format, args...))
@@ -430,7 +430,7 @@ func (r *AccountReconciler) resolveImports(ctx context.Context, acc *authv1beta1
 			}
 			return out, err
 		}
-		if exOp, op := refKey(exporter.Spec.OperatorRef, exporter.Namespace), refKey(acc.Spec.OperatorRef, acc.Namespace); exOp != op {
+		if exOp, op := exporter.Spec.OperatorRef.ObjectKey(exporter.Namespace), acc.Spec.OperatorRef.ObjectKey(acc.Namespace); exOp != op {
 			skip("NatsAccount %s is signed by NatsOperator %s, not %s", exKey, exOp, op)
 			continue
 		}
@@ -509,7 +509,7 @@ func findExport(exports []specExport, name string) (specExport, bool) {
 // listsImporter reports whether importers, listed in namespace, name acc.
 func listsImporter(importers []authv1beta1.AccountReference, namespace string, acc *authv1beta1.NatsAccount) bool {
 	for _, ref := range importers {
-		if ref.Kind == authv1beta1.AccountKindAccount && refKey(ref.ObjectReference, namespace) == client.ObjectKeyFromObject(acc) {
+		if ref.Kind == authv1beta1.AccountKindAccount && ref.ObjectKey(namespace) == client.ObjectKeyFromObject(acc) {
 			return true
 		}
 	}
@@ -540,7 +540,7 @@ func (r *AccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			if ref.Kind != authv1beta1.AccountKindAccount {
 				return nil
 			}
-			return []reconcile.Request{{NamespacedName: refKey(ref.ObjectReference, obj.GetNamespace())}}
+			return []reconcile.Request{{NamespacedName: ref.ObjectKey(obj.GetNamespace())}}
 		})).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, schema.GroupKind{Group: authGroup, Kind: "NatsAccount"}, &authv1beta1.NatsAccountList{})).
 		Complete(telemetry.Traced("NatsAccount", r))

@@ -10,6 +10,7 @@ import (
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nkeys"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -146,7 +147,9 @@ func TestConnSessions_Kick(t *testing.T) {
 	operator := types.NamespacedName{Namespace: "ns", Name: "op"}
 	s := authctl.ConnSessions{Resolvers: &authctl.Resolvers{
 		Conn: func(_ context.Context, got types.NamespacedName) (*nats.Conn, error) {
-			require.Equal(t, operator, got)
+			if !assert.Equal(t, operator, got) {
+				return nil, fmt.Errorf("no connection for %s", got)
+			}
 			return sysNC, nil
 		},
 		Wait: 500 * time.Millisecond,

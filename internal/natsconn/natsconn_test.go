@@ -3,7 +3,9 @@ package natsconn
 import (
 	"testing"
 
+	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nkeys"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -121,4 +123,42 @@ func TestDialReconnectsWithoutLimit(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(nc.Close)
 	require.Equal(t, -1, nc.Opts.MaxReconnect)
+}
+
+func TestCredentialsAccount(t *testing.T) {
+	acc := newKey(t, nkeys.CreateAccount)
+	accPub := publicKey(t, acc)
+	signing := newKey(t, nkeys.CreateAccount)
+	user := newKey(t, nkeys.CreateUser)
+	seed, err := user.Seed()
+	require.NoError(t, err)
+	creds := func(issuerAccount string, by nkeys.KeyPair) []byte {
+		uc := jwt.NewUserClaims(publicKey(t, user))
+		uc.IssuerAccount = issuerAccount
+		token, err := uc.Encode(by)
+		require.NoError(t, err)
+		b, err := jwt.FormatUserConfig(token, seed)
+		require.NoError(t, err)
+		return b
+	}
+	for _, tt := range []struct {
+		name  string
+		creds []byte
+		want  string
+	}{
+		{"signed by the account", creds("", acc), accPub},
+		{"signed by a signing key", creds(accPub, signing), accPub},
+		{"none", nil, ""},
+		{"not creds", []byte("garbage"), ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := CredentialsAccount(tt.creds)
+			if tt.want == "" {
+				require.ErrorIs(t, err, ErrInvalidCredentials)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
 }

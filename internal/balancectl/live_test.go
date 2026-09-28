@@ -73,8 +73,8 @@ func reconciled(t *testing.T, ctx context.Context, r *SystemBalancerReconciler, 
 	key := client.ObjectKey{Namespace: ns, Name: name}
 	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
-		require.NoError(t, err)
-		require.NoError(t, r.Client.Get(ctx, key, &b))
+		require.NoError(ct, err)
+		require.NoError(ct, r.Client.Get(ctx, key, &b))
 		want(ct, &b)
 	}, 2*time.Minute, 50*time.Millisecond, msg)
 	return &b
@@ -261,10 +261,10 @@ func TestSystemBalancer_ProbeFailsAfterMove(t *testing.T) {
 		}
 		return false
 	}
-	require.Eventually(t, func() bool {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
-		require.NoError(t, err)
-		return moved()
+		require.NoError(ct, err)
+		assert.True(ct, moved())
 	}, time.Minute, 50*time.Millisecond, "no leader of A moved")
 
 	var b js.NatsSystemBalancer

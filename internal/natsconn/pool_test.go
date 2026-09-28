@@ -2,6 +2,7 @@ package natsconn
 
 import (
 	"context"
+	"errors"
 	"net"
 	"sync"
 	"testing"
@@ -128,15 +129,15 @@ func TestPoolConcurrentGet(t *testing.T) {
 	p := NewPool()
 	t.Cleanup(p.Close)
 	conns := make([]*nats.Conn, 8)
+	errs := make([]error, len(conns))
 	var wg sync.WaitGroup
 	for i := range conns {
 		wg.Go(func() {
-			nc, err := p.Get(t.Context(), testKey, n.endpoint())
-			require.NoError(t, err)
-			conns[i] = nc
+			conns[i], errs[i] = p.Get(t.Context(), testKey, n.endpoint())
 		})
 	}
 	wg.Wait()
+	require.NoError(t, errors.Join(errs...))
 	for _, nc := range conns[1:] {
 		require.Same(t, conns[0], nc)
 	}
@@ -166,6 +167,7 @@ func TestPoolGetContext(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = ln.Close() })
+	accepted := make(chan struct{}, 1)
 	go func() {
 		for {
 			c, err := ln.Accept()
@@ -173,6 +175,10 @@ func TestPoolGetContext(t *testing.T) {
 				return
 			}
 			t.Cleanup(func() { _ = c.Close() })
+			select {
+			case accepted <- struct{}{}:
+			default:
+			}
 		}
 	}()
 	silent := Endpoint{Servers: []string{"nats://" + ln.Addr().String()}}
@@ -186,7 +192,11 @@ func TestPoolGetContext(t *testing.T) {
 		_, err := p.Get(ctx, testKey, silent)
 		dialing <- err
 	}()
-	time.Sleep(100 * time.Millisecond)
+	select {
+	case <-accepted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the first dial never reached the listener")
+	}
 
 	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 	defer cancel()

@@ -202,10 +202,7 @@ func readLeafRemotes(ctx context.Context, r client.Reader, nc *clusterv1beta1.Na
 	var out []LeafRemote
 	seen := map[types.NamespacedName]int{}
 	for i, spec := range nc.Spec.LeafRemotes {
-		lr := LeafRemote{Ref: spec.ConnectionRef, Connection: types.NamespacedName{Namespace: spec.ConnectionRef.Namespace, Name: spec.ConnectionRef.Name}}
-		if lr.Connection.Namespace == "" {
-			lr.Connection.Namespace = nc.Namespace
-		}
+		lr := LeafRemote{Ref: spec.ConnectionRef, Connection: spec.ConnectionRef.ObjectKey(nc.Namespace)}
 		if j, ok := seen[lr.Connection]; ok {
 			return nil, notProgressing(ReasonUnsupportedSpec, "leafRemotes[%d] and leafRemotes[%d] both name NatsConnection %s", j, i, lr.Connection), nil
 		}
@@ -235,7 +232,7 @@ func readLeafRemotes(ctx context.Context, r client.Reader, nc *clusterv1beta1.Na
 		}
 		lr.Servers, lr.CA, lr.Creds = ep.Servers, ep.CA, ep.Creds
 		if len(ep.Creds) > 0 {
-			if lr.HubAccount, err = credsAccount(ep.Creds); err != nil {
+			if lr.HubAccount, err = natsconn.CredentialsAccount(ep.Creds); err != nil {
 				return nil, notProgressing(ReasonLeafRemoteInvalid, "leafRemotes[%d]: NatsConnection %s: %v", i, lr.Connection, err), nil
 			}
 		}
@@ -269,10 +266,7 @@ func readLocalAccount(ctx context.Context, r client.Reader, from grant.Referrer,
 	notProgressing := func(reason, format string, args ...any) *metav1.Condition {
 		return &metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: reason, Message: fmt.Sprintf(format, args...)}
 	}
-	key := types.NamespacedName{Namespace: ref.Namespace, Name: ref.Name}
-	if key.Namespace == "" {
-		key.Namespace = nc.Namespace
-	}
+	key := ref.ObjectKey(nc.Namespace)
 	denied, err := grant.Admit(ctx, r, from, grant.Target{Group: natsv1beta1.GroupVersion.Group, Kind: "NatsAccountTrust", Namespace: key.Namespace, Name: key.Name})
 	if err != nil {
 		return nil, err
@@ -323,23 +317,6 @@ func checkAccountJWT(trust *Trust, pub, accJWT string) error {
 		return fmt.Errorf("jwt is signed by %s, not by operator %s or its signing keys", acc.Issuer, op.Subject)
 	}
 	return nil
-}
-
-// credsAccount is the public key of the account a creds file's user
-// belongs to.
-func credsAccount(creds []byte) (string, error) {
-	tok, err := jwt.ParseDecoratedJWT(creds)
-	if err != nil {
-		return "", err
-	}
-	u, err := jwt.DecodeUserClaims(tok)
-	if err != nil {
-		return "", fmt.Errorf("user jwt: %w", err)
-	}
-	if u.IssuerAccount != "" {
-		return u.IssuerAccount, nil
-	}
-	return u.Issuer, nil
 }
 
 // leafRemotesSecret is the Secret holding each remote's creds as

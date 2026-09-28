@@ -176,11 +176,7 @@ func trustKey(nc *clusterv1beta1.NatsCluster) string {
 	if nc.Spec.Auth == nil {
 		return ""
 	}
-	ns := nc.Spec.Auth.TrustRef.Namespace
-	if ns == "" {
-		ns = nc.Namespace
-	}
-	return ns + "/" + nc.Spec.Auth.TrustRef.Name
+	return nc.Spec.Auth.TrustRef.ObjectKey(nc.Namespace).String()
 }
 
 // Reconcile creates what a NatsCluster renders and reports its status.

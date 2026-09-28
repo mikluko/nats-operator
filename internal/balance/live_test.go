@@ -9,6 +9,7 @@ import (
 
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -155,11 +156,11 @@ func TestBalancer_SystemBalancerEvensOutAnAccountItReaches(t *testing.T) {
 
 	k := &Balancer{Observer: obs, Leaders: Stepdown{Conn: sys, Prefix: p.prefix}, Placement: StreamMove{Conn: sys}}
 	var got Passed
-	require.Eventually(t, func() bool {
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		var err error
 		got, err = k.Pass(ctx)
-		require.NoError(t, err)
-		return got.Held == "" && got.Moved == nil && got.Placed == nil
+		require.NoError(ct, err)
+		assert.True(ct, got.Held == "" && got.Moved == nil && got.Placed == nil)
 	}, 2*time.Minute, 300*time.Millisecond, "six leaders on one of three servers did not come to rest")
 	require.Equal(t, []PoolReport{{Name: DefaultPool, Streams: 6}}, got.Pools)
 	for _, l := range got.Servers {

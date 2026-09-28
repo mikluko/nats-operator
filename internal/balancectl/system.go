@@ -6,13 +6,11 @@ package balancectl
 import (
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"maps"
 	"slices"
 	"time"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -103,21 +101,8 @@ type SystemBalancerReconciler struct {
 
 // Reconcile runs one balancing pass for the NatsSystemBalancer req names.
 func (r *SystemBalancerReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
-	var b js.NatsSystemBalancer
-	if err := r.Client.Get(ctx, req.NamespacedName, &b); err != nil {
-		if apierrors.IsNotFound(err) {
-			r.balancers.forget(req.NamespacedName)
-			leasesOr(r.Leases).drop(holderName(SystemBalancerKind, req.NamespacedName))
-		}
-		return reconcile.Result{}, client.IgnoreNotFound(err)
-	}
-	base := b.DeepCopy()
-	res, err := r.balance(ctx, &b)
-	r.Telemetry.BalancerPass(ctx, SystemBalancerKind, &b, b.Status.Conditions)
-	if perr := lifecycle.PatchStatus(ctx, r.Client, base, &b, base.Status, b.Status); perr != nil {
-		return reconcile.Result{}, errors.Join(err, perr)
-	}
-	return res, err
+	return reconcileBalancer(ctx, req, SystemBalancerKind, r.Client, r.Telemetry, r.Leases, &r.balancers, r.balance,
+		func(b *js.NatsSystemBalancer) (any, []metav1.Condition) { return b.Status, b.Status.Conditions })
 }
 
 func (r *SystemBalancerReconciler) balance(ctx context.Context, b *js.NatsSystemBalancer) (reconcile.Result, error) {

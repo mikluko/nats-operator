@@ -7,7 +7,6 @@ import (
 
 	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nkeys"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -57,7 +56,7 @@ func (s *SystemConnection) Conn(ctx context.Context, operator types.NamespacedNa
 	if err != nil {
 		return nil, err
 	}
-	account, err := credsAccount(ep.Creds)
+	account, err := natsconn.CredentialsAccount(ep.Creds)
 	if err != nil {
 		return nil, fmt.Errorf("NatsConnection %s: %w", s.Name, err)
 	}
@@ -80,23 +79,4 @@ func signedSystemAccount(op *authv1beta1.NatsOperator) string {
 		return ""
 	}
 	return c.SystemAccount
-}
-
-// credsAccount returns the account whose user the creds file carries.
-func credsAccount(creds []byte) (string, error) {
-	if creds == nil {
-		return "", fmt.Errorf("%w: no credentials", natsconn.ErrInvalidCredentials)
-	}
-	token, err := nkeys.ParseDecoratedJWT(creds)
-	if err != nil {
-		return "", fmt.Errorf("%w: %w", natsconn.ErrInvalidCredentials, err)
-	}
-	c, err := jwt.DecodeUserClaims(token)
-	if err != nil {
-		return "", fmt.Errorf("%w: user JWT: %w", natsconn.ErrInvalidCredentials, err)
-	}
-	if c.IssuerAccount != "" {
-		return c.IssuerAccount, nil
-	}
-	return c.Issuer, nil
 }

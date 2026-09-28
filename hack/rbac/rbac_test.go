@@ -34,6 +34,7 @@ import (
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	jetstreamv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/manager"
 )
 
 const root = "../.."
@@ -82,7 +83,13 @@ func TestRBAC_MarkersMatchCode(t *testing.T) {
 	s := newScan(t)
 	for c := range owned {
 		t.Run(c, func(t *testing.T) {
-			required := s.required(t, c)
+			required, metadata := s.required(t, c)
+			require.Equal(t, metadataWatches[c], metadata, "metadata-only watches")
+			for _, verb := range []string{"list", "watch"} {
+				if pos, ok := required["/secrets"][verb]; ok {
+					require.Contains(t, metadata, sitePackage(t, pos), "%s on Secrets is first required at %s, which is no metadata-only watch", verb, pos)
+				}
+			}
 			granted := generatedRole(t, c)
 			for key, verbs := range required {
 				for verb, pos := range verbs {
@@ -170,9 +177,36 @@ func generatedRole(t *testing.T, c string) grants {
 	return g
 }
 
+// metadataWatches is, per controller, the package of each WatchesMetadata
+// call its command reaches, sorted, one entry per call.
+var metadataWatches = map[string][]string{
+	"auth-controller":      {"internal/authctl", "internal/authctl", "internal/authctl", "internal/authctl"},
+	"cluster-controller":   {"internal/natscluster"},
+	"jetstream-controller": {"internal/natsconn"},
+}
+
+// sitePackage returns the module-relative directory of the file position pos
+// names.
+func sitePackage(t *testing.T, pos string) string {
+	file, _, _ := strings.Cut(pos, ":")
+	rel, err := filepath.Rel(moduleDir(t), filepath.Dir(file))
+	require.NoError(t, err)
+	return filepath.ToSlash(rel)
+}
+
+// moduleDir returns root as the absolute, symlink-free path positions carry.
+func moduleDir(t *testing.T) string {
+	abs, err := filepath.Abs(root)
+	require.NoError(t, err)
+	abs, err = filepath.EvalSymlinks(abs)
+	require.NoError(t, err)
+	return abs
+}
+
 // scan is the SSA form of every controller command and what it links.
 type scan struct {
 	prog     *ssa.Program
+	uncached map[string]bool
 	mains    map[string]*ssa.Package
 	kinds    map[string]schema.GroupVersionKind
 	plurals  map[schema.GroupKind]string
@@ -195,6 +229,7 @@ func newScan(t *testing.T) *scan {
 	s := &scan{
 		prog:     prog,
 		mains:    map[string]*ssa.Package{},
+		uncached: uncachedKinds(),
 		kinds:    schemeKinds(t),
 		plurals:  crdPlurals(t),
 		fields:   map[string][]ssa.Value{},
@@ -282,6 +317,16 @@ func arrayBase(v ssa.Value) ssa.Value {
 	}
 }
 
+// uncachedKinds holds "pkgpath.Name" of every type manager.ClientOptions
+// makes the client read from the API server.
+func uncachedKinds() map[string]bool {
+	out := map[string]bool{}
+	for _, obj := range manager.ClientOptions().Cache.DisableFor {
+		out[typeName(reflect.TypeOf(obj).Elem())] = true
+	}
+	return out
+}
+
 // schemeKinds maps "pkgpath.Name" of every Go type the controllers' schemes
 // know to its GroupVersionKind, a list type to its item's.
 func schemeKinds(t *testing.T) map[string]schema.GroupVersionKind {
@@ -345,8 +390,9 @@ func (r requirement) add(key, pos string, verbs ...string) {
 	}
 }
 
-// required returns what the code controller c's command reaches requires.
-func (s *scan) required(t *testing.T, c string) requirement {
+// required returns what the code controller c's command reaches requires,
+// and the sorted package of each WatchesMetadata call it reaches.
+func (s *scan) required(t *testing.T, c string) (requirement, []string) {
 	t.Helper()
 	main := s.mains[c]
 	require.NotNil(t, main, c)
@@ -365,15 +411,17 @@ func (s *scan) required(t *testing.T, c string) requirement {
 			}
 		}
 	}
-	return w.req
+	slices.Sort(w.metadata)
+	return w.req, w.metadata
 }
 
 // walker reads one controller's reachable code.
 type walker struct {
 	*scan
-	t   *testing.T
-	cg  *callgraph.Graph
-	req requirement
+	t        *testing.T
+	cg       *callgraph.Graph
+	req      requirement
+	metadata []string
 }
 
 func (w *walker) inModule(fn *ssa.Function) bool {
@@ -381,10 +429,7 @@ func (w *walker) inModule(fn *ssa.Function) bool {
 	if !pos.IsValid() || strings.HasSuffix(pos.Filename, "_test.go") {
 		return false
 	}
-	abs, err := filepath.Abs(root)
-	require.NoError(w.t, err)
-	abs, err = filepath.EvalSymlinks(abs)
-	require.NoError(w.t, err)
+	abs := moduleDir(w.t)
 	for _, dir := range []string{"cmd", "internal"} {
 		if strings.HasPrefix(pos.Filename, filepath.Join(abs, dir)+string(filepath.Separator)) {
 			return true
@@ -471,6 +516,9 @@ func (w *walker) call(call ssa.CallInstruction) {
 		switch orig.Name() {
 		case "For", "Owns", "Watches":
 			w.object(common.Args[1], pos, "", "list", "watch")
+		case "WatchesMetadata":
+			w.object(common.Args[1], pos, "", "list", "watch")
+			w.metadata = append(w.metadata, sitePackage(w.t, pos))
 		}
 	case unstructuredPkg:
 		if orig.Name() == "SetGroupVersionKind" {
@@ -519,8 +567,7 @@ func (w *walker) subresource(v ssa.Value, pos string) string {
 }
 
 // object requires verbs on every resource v may be, or on its subresource
-// sub. A read of a typed object requires list and watch besides, for the
-// cache that serves it.
+// sub.
 func (w *walker) object(v ssa.Value, pos, sub string, verbs ...string) {
 	typs := w.resolve(v, pos, map[ssa.Value]bool{})
 	if len(typs) == 0 {
@@ -564,7 +611,7 @@ func (w *walker) resources(typ types.Type, pos string) ([]string, bool) {
 		gvr, _ := meta.UnsafeGuessKindToResource(gvk)
 		plural = gvr.Resource
 	}
-	return []string{gvk.Group + "/" + plural}, true
+	return []string{gvk.Group + "/" + plural}, !w.uncached[name]
 }
 
 // resolve returns the concrete types v may hold.

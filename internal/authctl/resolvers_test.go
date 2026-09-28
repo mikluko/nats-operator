@@ -110,7 +110,7 @@ func (c *fullCluster) held(i int, account string) string {
 	if os.IsNotExist(err) {
 		return ""
 	}
-	require.NoError(c.t, err)
+	assert.NoError(c.t, err)
 	return string(raw)
 }
 
@@ -149,7 +149,9 @@ func resolversOn(t *testing.T, c *fullCluster, operator types.NamespacedName) *a
 	nc, _ := dial(t, c.srvs[0].ClientURL(), jwtplane.User{Name: "auth-controller", SystemAccount: true, Preset: jwtplane.PresetAuthController}, c.p.sys)
 	return &authctl.Resolvers{
 		Conn: func(_ context.Context, got types.NamespacedName) (*nats.Conn, error) {
-			require.Equal(t, operator, got)
+			if !assert.Equal(t, operator, got) {
+				return nil, fmt.Errorf("no connection for %s", got)
+			}
 			return nc, nil
 		},
 		Wait:     500 * time.Millisecond,

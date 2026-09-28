@@ -1,5 +1,7 @@
 package v1beta1
 
+import "k8s.io/apimachinery/pkg/types"
+
 // ObjectReference names an object whose kind the referring field fixes.
 type ObjectReference struct {
 	// Name of the referenced object.
@@ -11,6 +13,14 @@ type ObjectReference struct {
 	// Another namespace is admitted only by a NatsReferenceGrant there.
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
+}
+
+// ObjectKey returns the object r names, in namespace when r names none.
+func (r ObjectReference) ObjectKey(namespace string) types.NamespacedName {
+	if r.Namespace != "" {
+		namespace = r.Namespace
+	}
+	return types.NamespacedName{Namespace: namespace, Name: r.Name}
 }
 
 // SecretReference names a Secret in the referrer's namespace.

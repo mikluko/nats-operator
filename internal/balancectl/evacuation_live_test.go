@@ -49,8 +49,8 @@ func evacuated(t *testing.T, ctx context.Context, r *EvacuationReconciler, name 
 	key := client.ObjectKey{Namespace: ns, Name: name}
 	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		_, err := restarted(r).Reconcile(ctx, reconcile.Request{NamespacedName: key})
-		require.NoError(t, err)
-		require.NoError(t, r.Client.Get(ctx, key, &e))
+		require.NoError(ct, err)
+		require.NoError(ct, r.Client.Get(ctx, key, &e))
 		want(ct, &e)
 	}, 2*time.Minute, 100*time.Millisecond, msg)
 	return &e
@@ -413,21 +413,20 @@ func TestEvacuation_ServerDown(t *testing.T) {
 	r := &EvacuationReconciler{Client: c, Dialer: &natsconn.Dialer{Reader: c, Pool: pool}, PendingPoll: time.Millisecond}
 	key := client.ObjectKey{Namespace: ns, Name: "retire-c1"}
 	var e js.NatsClusterEvacuation
-	pass := func() {
-		t.Helper()
+	pass := func(rt require.TestingT) {
 		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
-		require.NoError(t, err)
-		require.NoError(t, c.Get(ctx, key, &e))
-		require.False(t, meta.IsStatusConditionTrue(e.Status.Conditions, ConditionReady), "C1 read as evacuated with %s down", host)
+		require.NoError(rt, err)
+		require.NoError(rt, c.Get(ctx, key, &e))
+		assert.False(t, meta.IsStatusConditionTrue(e.Status.Conditions, ConditionReady), "C1 read as evacuated with %s down", host)
 	}
 	require.EventuallyWithT(t, func(ct *assert.CollectT) {
-		pass()
+		pass(ct)
 		evacCondition(ct, &e, ConditionReady, metav1.ConditionFalse, ReasonServersDown)
 		evacCondition(ct, &e, ConditionProgressing, metav1.ConditionFalse, ReasonServersDown)
 	}, 30*time.Second, 100*time.Millisecond, "the evacuation did not hold for %s", host)
 	require.Contains(t, []string{fmt.Sprintf("server %s is offline", host), "the meta group has no leader"}, meta.FindStatusCondition(e.Status.Conditions, ConditionReady).Message)
 	for range 5 {
-		pass()
+		pass(t)
 	}
 	require.Zero(t, e.Status.Moved)
 	require.Empty(t, e.Status.Requested)

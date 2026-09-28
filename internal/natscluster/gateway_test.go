@@ -23,7 +23,7 @@ import (
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/e2e"
+	"github.com/mikluko/nats-operator/internal/e2e/placeholders"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 	"github.com/mikluko/nats-operator/internal/sysobs"
@@ -300,7 +300,7 @@ func TestGatewayStatus(t *testing.T) {
 func TestComputeStatus_West(t *testing.T) {
 	b, err := os.ReadFile("../../docs/content/docs/stories/06-supercluster/01-status-natscluster-west.yaml")
 	require.NoError(t, err)
-	b, err = e2e.StripPlaceholders(b)
+	b, err = placeholders.Strip(b)
 	require.NoError(t, err)
 	var want clusterv1beta1.NatsCluster
 	require.NoError(t, yaml.UnmarshalStrict(b, &want))
@@ -457,7 +457,7 @@ func TestSupercluster_Explicit(t *testing.T) {
 
 	b, err := os.ReadFile("../../docs/content/docs/stories/06-supercluster/01-status-natscluster-west.yaml")
 	require.NoError(t, err)
-	b, err = e2e.StripPlaceholders(b)
+	b, err = placeholders.Strip(b)
 	require.NoError(t, err)
 	var want clusterv1beta1.NatsCluster
 	require.NoError(t, yaml.UnmarshalStrict(b, &want))

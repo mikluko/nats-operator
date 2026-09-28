@@ -77,7 +77,7 @@ func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta
 	}
 	st.PublicKey = pub
 
-	key := refKey(sys.Spec.OperatorRef, sys.Namespace)
+	key := sys.Spec.OperatorRef.ObjectKey(sys.Namespace)
 	cond, err := admit(ctx, r.Client, authGroup, "NatsSystemAccount", sys, "NatsOperator", key)
 	if err != nil {
 		return 0, err
@@ -93,7 +93,7 @@ func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta
 		}
 		return 0, err
 	}
-	if refKey(op.Spec.SystemAccountRef, op.Namespace) != client.ObjectKeyFromObject(sys) {
+	if op.Spec.SystemAccountRef.ObjectKey(op.Namespace) != client.ObjectKeyFromObject(sys) {
 		notReady(ReasonNotReferenced, fmt.Sprintf("NatsOperator %s names another system account", key))
 		return 0, nil
 	}
@@ -150,7 +150,7 @@ func (r *SystemAccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			if ref.Kind != authv1beta1.AccountKindSystemAccount {
 				return nil
 			}
-			return []reconcile.Request{{NamespacedName: refKey(ref.ObjectReference, obj.GetNamespace())}}
+			return []reconcile.Request{{NamespacedName: ref.ObjectKey(obj.GetNamespace())}}
 		})).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, schema.GroupKind{Group: authGroup, Kind: "NatsSystemAccount"}, &authv1beta1.NatsSystemAccountList{})).
 		Complete(telemetry.Traced("NatsSystemAccount", r))

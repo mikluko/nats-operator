@@ -150,11 +150,3 @@ func (w *wireGatewayz) gateways() *Gateways {
 type wirePeerRequest struct {
 	Server string `json:"peer"`
 }
-
-type wireJSAPIResponse struct {
-	Error *struct {
-		Code        int    `json:"code"`
-		ErrCode     int    `json:"err_code"`
-		Description string `json:"description"`
-	} `json:"error"`
-}

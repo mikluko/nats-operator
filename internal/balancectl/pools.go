@@ -32,7 +32,7 @@ type member struct {
 // namespace whose connectionRef names conn.
 func members(ctx context.Context, c client.Reader, namespace string, conn natsv1beta1.ObjectReference) ([]member, error) {
 	same := func(ref natsv1beta1.ObjectReference) bool {
-		return ref.Name == conn.Name && refNamespace(ref, namespace) == refNamespace(conn, namespace)
+		return ref.ObjectKey(namespace) == conn.ObjectKey(namespace)
 	}
 	var out []member
 	var streams js.NatsStreamList
@@ -66,13 +66,6 @@ func members(ctx context.Context, c client.Reader, namespace string, conn natsv1
 		}
 	}
 	return out, nil
-}
-
-func refNamespace(ref natsv1beta1.ObjectReference, own string) string {
-	if ref.Namespace == "" {
-		return own
-	}
-	return ref.Namespace
 }
 
 func newMember(o client.Object, p *js.Placement, conds []metav1.Condition) member {

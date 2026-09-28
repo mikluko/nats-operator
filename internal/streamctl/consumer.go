@@ -134,9 +134,7 @@ func object(ctx context.Context, cl client.Client, d *natsconn.Dialer, c *js.Nat
 		stream = streamName(s)
 		if c.Spec.ConnectionRef == nil {
 			connRef, from = s.Spec.ConnectionRef, streamKind.Referrer(s.Namespace)
-			if connRef.Namespace == "" {
-				connRef.Namespace = s.Namespace
-			}
+			connRef.Namespace = connRef.ObjectKey(s.Namespace).Namespace
 		}
 	}
 	api, why, err := lifecycle.Connect(ctx, d, from, connRef, st, gen)
@@ -151,10 +149,7 @@ func object(ctx context.Context, cl client.Client, d *natsconn.Dialer, c *js.Nat
 // no grant admits it.
 func streamRef(ctx context.Context, cl client.Client, c *js.NatsConsumer, ref natsv1beta1.ObjectReference, ready bool) (s *js.NatsStream, gone bool, err error) {
 	st, gen := &c.Status.SyncStatus, c.Generation
-	ns := ref.Namespace
-	if ns == "" {
-		ns = c.Namespace
-	}
+	ns := ref.ObjectKey(c.Namespace).Namespace
 	denied, err := grant.Admit(ctx, cl, consumerReferrer(c.Namespace), grant.Target{
 		Group: js.GroupVersion.Group, Kind: StreamKind, Namespace: ns, Name: ref.Name,
 	})
@@ -195,11 +190,7 @@ func watchStreamRefs(ctx context.Context, mgr ctrl.Manager, b *builder.Builder) 
 		if ref == nil {
 			return nil
 		}
-		ns := ref.Namespace
-		if ns == "" {
-			ns = o.GetNamespace()
-		}
-		return []string{types.NamespacedName{Namespace: ns, Name: ref.Name}.String()}
+		return []string{ref.ObjectKey(o.GetNamespace()).String()}
 	}); err != nil {
 		return nil, fmt.Errorf("index NatsConsumer stream refs: %w", err)
 	}

@@ -36,14 +36,6 @@ func accountValue(kind authv1beta1.AccountKind, k types.NamespacedName) string {
 	return string(kind) + ":" + keyValue(k)
 }
 
-// refKey returns ref's key, in namespace when ref names none.
-func refKey(ref natsv1beta1.ObjectReference, namespace string) types.NamespacedName {
-	if ref.Namespace != "" {
-		namespace = ref.Namespace
-	}
-	return types.NamespacedName{Namespace: namespace, Name: ref.Name}
-}
-
 func keyValue(k types.NamespacedName) string { return k.String() }
 
 // indexes registers every field index the reconcilers list by.
@@ -54,7 +46,7 @@ func indexes(ctx context.Context, idx client.FieldIndexer) error {
 		fn    client.IndexerFunc
 	}
 	nsOf := func(o client.Object, ref natsv1beta1.ObjectReference) []string {
-		return []string{keyValue(refKey(ref, o.GetNamespace()))}
+		return []string{keyValue(ref.ObjectKey(o.GetNamespace()))}
 	}
 	secrets := func(o client.Object, src keySource) []string {
 		var out []string
@@ -98,7 +90,7 @@ func indexes(ctx context.Context, idx client.FieldIndexer) error {
 		}},
 		{&authv1beta1.NatsUser{}, userAccountField, func(o client.Object) []string {
 			ref := o.(*authv1beta1.NatsUser).Spec.AccountRef
-			return []string{accountValue(ref.Kind, refKey(ref.ObjectReference, o.GetNamespace()))}
+			return []string{accountValue(ref.Kind, ref.ObjectKey(o.GetNamespace()))}
 		}},
 		{&authv1beta1.NatsOperator{}, seedSecretField, func(o client.Object) []string {
 			src, _ := operatorKeySource(o.(*authv1beta1.NatsOperator))

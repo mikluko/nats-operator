@@ -339,7 +339,7 @@ type userAccount struct {
 // use it yet, with Ready and ReferencesResolved set to say why.
 func (r *UserReconciler) account(ctx context.Context, u *authv1beta1.NatsUser, notReady func(reason, msg string)) (userAccount, bool, error) {
 	ref := u.Spec.AccountRef
-	key := refKey(ref.ObjectReference, u.Namespace)
+	key := ref.ObjectKey(u.Namespace)
 	cond, err := admit(ctx, r.Client, authGroup, "NatsUser", u, string(ref.Kind), key)
 	if err != nil {
 		return userAccount{}, false, err
@@ -367,13 +367,13 @@ func (r *UserReconciler) lookupAccount(ctx context.Context, kind authv1beta1.Acc
 			return out, false, client.IgnoreNotFound(err)
 		}
 		out.keys = systemAccountKeySource(&sys)
-		out.operator = refKey(sys.Spec.OperatorRef, sys.Namespace)
+		out.operator = sys.Spec.OperatorRef.ObjectKey(sys.Namespace)
 		out.publicKey = sys.Status.PublicKey
 		var op authv1beta1.NatsOperator
 		if err := r.Get(ctx, out.operator, &op); client.IgnoreNotFound(err) != nil {
 			return out, false, err
 		}
-		if s := op.Status.SystemAccount; s != nil && s.Name == sys.Name && s.PublicKey == sys.Status.PublicKey && refKey(op.Spec.SystemAccountRef, op.Namespace) == key {
+		if s := op.Status.SystemAccount; s != nil && s.Name == sys.Name && s.PublicKey == sys.Status.PublicKey && op.Spec.SystemAccountRef.ObjectKey(op.Namespace) == key {
 			out.jwt = s.JWT
 		}
 		if out.jwt != "" && sys.Status.JWTHash == JWTHash(out.jwt) {
@@ -385,7 +385,7 @@ func (r *UserReconciler) lookupAccount(ctx context.Context, kind authv1beta1.Acc
 			return out, false, client.IgnoreNotFound(err)
 		}
 		out.keys = accountKeySource(&acc)
-		out.operator = refKey(acc.Spec.OperatorRef, acc.Namespace)
+		out.operator = acc.Spec.OperatorRef.ObjectKey(acc.Namespace)
 		out.publicKey = acc.Status.PublicKey
 		out.jwt = acc.Status.JWT
 		out.distribution = acc.Status.Distribution
@@ -421,7 +421,7 @@ func (r *UserReconciler) drain(ctx context.Context, u *authv1beta1.NatsUser) (bo
 	waiting := func(reason, msg string) {
 		conditions.Set(&u.Status.Conditions, u.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: reason, Message: msg})
 	}
-	acc, found, err := r.lookupAccount(ctx, u.Spec.AccountRef.Kind, refKey(u.Spec.AccountRef.ObjectReference, u.Namespace))
+	acc, found, err := r.lookupAccount(ctx, u.Spec.AccountRef.Kind, u.Spec.AccountRef.ObjectKey(u.Namespace))
 	if err != nil {
 		return false, reconcile.Result{}, err
 	}
@@ -494,7 +494,7 @@ func (r *UserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		})).
 		Watches(&authv1beta1.NatsOperator{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			op := obj.(*authv1beta1.NatsOperator)
-			sys := refKey(op.Spec.SystemAccountRef, op.Namespace)
+			sys := op.Spec.SystemAccountRef.ObjectKey(op.Namespace)
 			return refindex.Requests(ctx, c, &authv1beta1.NatsUserList{}, client.MatchingFields{userAccountField: accountValue(authv1beta1.AccountKindSystemAccount, sys)})
 		})).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, schema.GroupKind{Group: authGroup, Kind: "NatsUser"}, &authv1beta1.NatsUserList{})).

@@ -14,6 +14,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -113,6 +114,6 @@ type unvalidated struct{ ctrlmanager.Manager }
 
 func (u unvalidated) GetControllerOptions() config.Controller {
 	o := u.Manager.GetControllerOptions()
-	o.SkipNameValidation = new(true)
+	o.SkipNameValidation = ptr.To(true)
 	return o
 }

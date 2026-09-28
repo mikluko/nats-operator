@@ -59,16 +59,16 @@ func TestEnvtest(t *testing.T) {
 	payments := grant.Referrer{Group: authGroup, Kind: "NatsUser", Namespace: "payments"}
 	orders := grant.Referrer{Group: authGroup, Kind: "NatsUser", Namespace: "orders"}
 	account := grant.Target{Group: authGroup, Kind: "NatsAccount", Namespace: "nats-system", Name: "payments"}
-	admitted := func(from grant.Referrer) func() bool {
-		return func() bool {
-			cond, err := grant.Admit(t.Context(), informers, from, account)
-			require.NoError(t, err)
-			return cond == nil
-		}
+	admitted := func(rt require.TestingT, from grant.Referrer) bool {
+		cond, err := grant.Admit(t.Context(), informers, from, account)
+		require.NoError(rt, err)
+		return cond == nil
 	}
 
-	require.Eventually(t, admitted(payments), 10*time.Second, 50*time.Millisecond)
-	require.False(t, admitted(orders)())
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
+		assert.True(ct, admitted(ct, payments))
+	}, 10*time.Second, 50*time.Millisecond)
+	require.False(t, admitted(t, orders))
 
 	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		q := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]())
@@ -83,5 +83,7 @@ func TestEnvtest(t *testing.T) {
 	}, 10*time.Second, 50*time.Millisecond)
 
 	require.NoError(t, c.Delete(t.Context(), g))
-	require.Eventually(t, func() bool { return !admitted(payments)() }, 10*time.Second, 50*time.Millisecond)
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
+		assert.False(ct, admitted(ct, payments))
+	}, 10*time.Second, 50*time.Millisecond)
 }

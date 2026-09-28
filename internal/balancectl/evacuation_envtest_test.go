@@ -21,7 +21,7 @@ import (
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/e2e"
+	"github.com/mikluko/nats-operator/internal/e2e/placeholders"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
@@ -114,7 +114,7 @@ func evacuationStoryStatus(t *testing.T, file string) js.NatsClusterEvacuationSt
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join(storiesDir, file))
 	require.NoError(t, err)
-	raw, err = e2e.StripPlaceholders(raw)
+	raw, err = placeholders.Strip(raw)
 	require.NoError(t, err)
 	var doc struct {
 		Status js.NatsClusterEvacuationStatus `json:"status"`

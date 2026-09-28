@@ -4,39 +4,15 @@ import (
 	"fmt"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/mikluko/nats-operator/internal/e2e/placeholders"
 )
 
-// PlaceholderTag marks a value in a status or live file as an example: the
-// page shows it, and the harness accepts whatever the live object holds
-// there, absence included.
-const PlaceholderTag = "!any"
-
-// placeholder stands in the expected tree for a value tagged PlaceholderTag.
+// placeholder stands in the expected tree for a value tagged placeholders.Tag.
 type placeholder struct{}
 
-// StripPlaceholders returns raw with every PlaceholderTag removed, so each
-// example value decodes as the type it is written as.
-func StripPlaceholders(raw []byte) ([]byte, error) {
-	var doc yaml.Node
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
-		return nil, err
-	}
-	untag(&doc)
-	return yaml.Marshal(&doc)
-}
-
-func untag(n *yaml.Node) {
-	if n.Tag == PlaceholderTag {
-		n.Tag = ""
-		n.Tag = n.ShortTag()
-	}
-	for _, c := range n.Content {
-		untag(c)
-	}
-}
-
 // decodeExpected decodes one YAML document into maps, lists and scalars,
-// with placeholder{} wherever PlaceholderTag stands.
+// with placeholder{} wherever placeholders.Tag stands.
 func decodeExpected(raw []byte) (map[string]any, error) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal(raw, &doc); err != nil {
@@ -57,7 +33,7 @@ func decodeExpected(raw []byte) (map[string]any, error) {
 }
 
 func decodeNode(n *yaml.Node) (any, error) {
-	if n.Tag == PlaceholderTag {
+	if n.Tag == placeholders.Tag {
 		return placeholder{}, nil
 	}
 	switch n.Kind {

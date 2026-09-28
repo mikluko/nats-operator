@@ -58,7 +58,7 @@ func (r *OperatorTrustReconciler) reconcile(ctx context.Context, t *natsv1beta1.
 		st.OperatorJWT, st.SystemAccountJWT = "", ""
 		conditions.Set(&st.Conditions, t.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: reason, Message: msg})
 	}
-	key := refKey(*t.Spec.OperatorRef, t.Namespace)
+	key := t.Spec.OperatorRef.ObjectKey(t.Namespace)
 	cond, err := admit(ctx, r.Client, natsGroup, "NatsOperatorTrust", t, "NatsOperator", key)
 	if err != nil {
 		return err
@@ -132,7 +132,7 @@ func (r *AccountTrustReconciler) reconcile(ctx context.Context, t *natsv1beta1.N
 		st.PublicKey, st.JWT = "", ""
 		conditions.Set(&st.Conditions, t.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: reason, Message: msg})
 	}
-	key := refKey(*t.Spec.AccountRef, t.Namespace)
+	key := t.Spec.AccountRef.ObjectKey(t.Namespace)
 	cond, err := admit(ctx, r.Client, natsGroup, "NatsAccountTrust", t, "NatsAccount", key)
 	if err != nil {
 		return err

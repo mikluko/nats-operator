@@ -32,11 +32,7 @@ func IndexConnections(ctx context.Context, indexer client.FieldIndexer, obj clie
 	return indexer.IndexField(ctx, obj, ConnectionField, func(o client.Object) []string {
 		var out []string
 		for _, r := range refs(o) {
-			ns := r.Namespace
-			if ns == "" {
-				ns = o.GetNamespace()
-			}
-			out = append(out, types.NamespacedName{Namespace: ns, Name: r.Name}.String())
+			out = append(out, r.ObjectKey(o.GetNamespace()).String())
 		}
 		return out
 	})

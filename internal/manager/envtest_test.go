@@ -256,9 +256,9 @@ func TestEnvtestReadyUnelected(t *testing.T) {
 		Complete(reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
 			return reconcile.Result{}, nil
 		})))
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+"/readyz", nil)
+	require.NoError(t, err)
 	ready := func() bool {
-		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+"/readyz", nil)
-		require.NoError(t, err)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			return false

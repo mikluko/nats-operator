@@ -20,6 +20,8 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+
+	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 )
 
 // TestEnvtest_Runner pins, against an API server with no controller running,
@@ -235,7 +237,7 @@ func TestEnvtest_ReleaseGuards(t *testing.T) {
 	for _, o := range []*unstructured.Unstructured{nc, consumer, stream} {
 		require.NoError(t, c.Get(t.Context(), client.ObjectKeyFromObject(o), o))
 	}
-	require.Contains(t, nc.GetAnnotations(), forceDeleteAnnotation)
+	require.Contains(t, nc.GetAnnotations(), clusterv1beta1.AnnotationForceDelete)
 	require.Equal(t, "Retain", consumer.Object["spec"].(map[string]any)["deletionPolicy"])
 	require.Equal(t, "Retain", stream.Object["spec"].(map[string]any)["deletionPolicy"])
 	require.NoError(t, releaseGuards(t.Context(), c, "empty"))

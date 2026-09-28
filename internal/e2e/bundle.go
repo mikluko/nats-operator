@@ -185,7 +185,7 @@ type Expectation struct {
 	File string
 	FileName
 	// Want is the file's document; a status file's is its status block
-	// alone. Values the file tags PlaceholderTag match anything.
+	// alone. Values the file tags placeholders.Tag match anything.
 	Want map[string]any
 }
 

@@ -35,16 +35,16 @@ func TestObserve_RemoteMetaLeaderListsItsPeers(t *testing.T) {
 		}
 		return false
 	}, 60*time.Second, 500*time.Millisecond, "the meta leader never moved to C2")
-	meta := func(t *testing.T) Group {
-		t.Helper()
+	meta := func(t require.TestingT) Group {
 		snap, err := o.Observe(ctx)
 		require.NoError(t, err)
+		require.NotEmpty(t, snap.Groups)
 		require.Equal(t, KindMeta, snap.Groups[0].Kind)
 		return snap.Groups[0]
 	}
-	require.Eventually(t, func() bool {
-		g := meta(t)
-		return strings.HasPrefix(g.Leader, "C2-") && !g.FromFollowers && len(g.Members) == 3
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
+		g := meta(ct)
+		assert.True(ct, strings.HasPrefix(g.Leader, "C2-") && !g.FromFollowers && len(g.Members) == 3)
 	}, 30*time.Second, 200*time.Millisecond, "C1's meta group not read from the leader in C2")
 
 	x := srvs["C1-2"]

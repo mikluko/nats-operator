@@ -224,7 +224,7 @@ func keysFailed(err error, notReady func(reason, msg string)) error {
 // false where the reference cannot be followed yet, with Ready set to say
 // why.
 func (r *OperatorReconciler) systemAccount(ctx context.Context, op *authv1beta1.NatsOperator, notReady func(reason, msg string)) (*authv1beta1.NatsSystemAccount, resolvedKeys, bool, error) {
-	key := refKey(op.Spec.SystemAccountRef, op.Namespace)
+	key := op.Spec.SystemAccountRef.ObjectKey(op.Namespace)
 	cond, err := admit(ctx, r.Client, authGroup, "NatsOperator", op, "NatsSystemAccount", key)
 	if err != nil {
 		return nil, resolvedKeys{}, false, err
@@ -240,7 +240,7 @@ func (r *OperatorReconciler) systemAccount(ctx context.Context, op *authv1beta1.
 		}
 		return nil, resolvedKeys{}, false, err
 	}
-	if refKey(sys.Spec.OperatorRef, sys.Namespace) != client.ObjectKeyFromObject(op) {
+	if sys.Spec.OperatorRef.ObjectKey(sys.Namespace) != client.ObjectKeyFromObject(op) {
 		notReady(ReasonOperatorMismatch, fmt.Sprintf("NatsSystemAccount %s names another NatsOperator", key))
 		return nil, resolvedKeys{}, false, nil
 	}
@@ -326,18 +326,18 @@ func (r *OperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&authv1beta1.NatsSystemAccount{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			sys := obj.(*authv1beta1.NatsSystemAccount)
 			reqs := refindex.Requests(ctx, c, &authv1beta1.NatsOperatorList{}, client.MatchingFields{systemAccountField: keyValue(client.ObjectKeyFromObject(sys))})
-			return append(reqs, reconcile.Request{NamespacedName: refKey(sys.Spec.OperatorRef, sys.Namespace)})
+			return append(reqs, reconcile.Request{NamespacedName: sys.Spec.OperatorRef.ObjectKey(sys.Namespace)})
 		})).
 		Watches(&authv1beta1.NatsAccount{}, handler.EnqueueRequestsFromMapFunc(func(_ context.Context, obj client.Object) []reconcile.Request {
 			acc := obj.(*authv1beta1.NatsAccount)
-			return []reconcile.Request{{NamespacedName: refKey(acc.Spec.OperatorRef, acc.Namespace)}}
+			return []reconcile.Request{{NamespacedName: acc.Spec.OperatorRef.ObjectKey(acc.Namespace)}}
 		}), builder.WithPredicates(accountSignedChange)).
 		Watches(&authv1beta1.NatsUser{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			ref := obj.(*authv1beta1.NatsUser).Spec.AccountRef
 			if ref.Kind != authv1beta1.AccountKindSystemAccount {
 				return nil
 			}
-			return systemAccountOperators(ctx, c, []reconcile.Request{{NamespacedName: refKey(ref.ObjectReference, obj.GetNamespace())}})
+			return systemAccountOperators(ctx, c, []reconcile.Request{{NamespacedName: ref.ObjectKey(obj.GetNamespace())}})
 		})).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, schema.GroupKind{Group: authGroup, Kind: "NatsOperator"}, &authv1beta1.NatsOperatorList{})).
 		Complete(telemetry.Traced("NatsOperator", r))
@@ -367,7 +367,7 @@ func systemAccountOperators(ctx context.Context, c client.Reader, reqs []reconci
 		if err := c.Get(ctx, req.NamespacedName, &sys); err != nil {
 			continue
 		}
-		out = append(out, reconcile.Request{NamespacedName: refKey(sys.Spec.OperatorRef, sys.Namespace)})
+		out = append(out, reconcile.Request{NamespacedName: sys.Spec.OperatorRef.ObjectKey(sys.Namespace)})
 	}
 	return out
 }

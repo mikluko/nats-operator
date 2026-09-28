@@ -132,6 +132,26 @@ func endpointOptions(ep Endpoint) ([]nats.Option, error) {
 	return opts, nil
 }
 
+// CredentialsAccount returns the public key of the account whose user creds
+// carries; its error wraps ErrInvalidCredentials.
+func CredentialsAccount(creds []byte) (string, error) {
+	if creds == nil {
+		return "", fmt.Errorf("%w: no credentials", ErrInvalidCredentials)
+	}
+	token, err := nkeys.ParseDecoratedJWT(creds)
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", ErrInvalidCredentials, err)
+	}
+	c, err := jwt.DecodeUserClaims(token)
+	if err != nil {
+		return "", fmt.Errorf("%w: user JWT: %w", ErrInvalidCredentials, err)
+	}
+	if c.IssuerAccount != "" {
+		return c.IssuerAccount, nil
+	}
+	return c.Issuer, nil
+}
+
 // validateCreds returns ErrInvalidCredentials unless creds carries a user JWT
 // and a seed.
 func validateCreds(creds []byte) error {

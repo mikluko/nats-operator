@@ -66,11 +66,11 @@ func accountKeyHolder(ctx context.Context, c client.Client, acc *authv1beta1.Nat
 		return "", fmt.Errorf("get NatsOperator %s: %w", operator, err)
 	default:
 		var sys authv1beta1.NatsSystemAccount
-		err := c.Get(ctx, refKey(op.Spec.SystemAccountRef, op.Namespace), &sys)
+		err := c.Get(ctx, op.Spec.SystemAccountRef.ObjectKey(op.Namespace), &sys)
 		if client.IgnoreNotFound(err) != nil {
 			return "", fmt.Errorf("get NatsSystemAccount: %w", err)
 		}
-		if err == nil && refKey(sys.Spec.OperatorRef, sys.Namespace) == operator {
+		if err == nil && sys.Spec.OperatorRef.ObjectKey(sys.Namespace) == operator {
 			held, err := isSystemKey(ctx, c, &sys, pub)
 			if err != nil {
 				return "", err
@@ -122,7 +122,7 @@ func systemAccountAccounts(ctx context.Context, c client.Reader, obj client.Obje
 	if !ok {
 		return nil
 	}
-	return refindex.Requests(ctx, c, &authv1beta1.NatsAccountList{}, client.MatchingFields{operatorField: keyValue(refKey(sys.Spec.OperatorRef, sys.Namespace))})
+	return refindex.Requests(ctx, c, &authv1beta1.NatsAccountList{}, client.MatchingFields{operatorField: keyValue(sys.Spec.OperatorRef.ObjectKey(sys.Namespace))})
 }
 
 // sameKeyAccounts returns a request for every other NatsAccount under the
@@ -133,7 +133,7 @@ func sameKeyAccounts(ctx context.Context, c client.Reader, obj client.Object) []
 		return nil
 	}
 	var list authv1beta1.NatsAccountList
-	if err := c.List(ctx, &list, client.MatchingFields{operatorField: keyValue(refKey(acc.Spec.OperatorRef, acc.Namespace))}); err != nil {
+	if err := c.List(ctx, &list, client.MatchingFields{operatorField: keyValue(acc.Spec.OperatorRef.ObjectKey(acc.Namespace))}); err != nil {
 		log.FromContext(ctx).Error(err, "list NatsAccounts by operator")
 		return nil
 	}
@@ -150,7 +150,7 @@ func sameKeyAccounts(ctx context.Context, c client.Reader, obj client.Object) []
 // userKeyHolder returns the other NatsUser of u's account holding pub
 // against u, per keyHolder.
 func userKeyHolder(ctx context.Context, c client.Reader, u *authv1beta1.NatsUser, pub string) (string, error) {
-	users, err := listUsers(ctx, c, u.Spec.AccountRef.Kind, refKey(u.Spec.AccountRef.ObjectReference, u.Namespace))
+	users, err := listUsers(ctx, c, u.Spec.AccountRef.Kind, u.Spec.AccountRef.ObjectKey(u.Namespace))
 	if err != nil {
 		return "", err
 	}
@@ -171,7 +171,7 @@ func sameKeyUsers(ctx context.Context, c client.Reader, obj client.Object) []rec
 	if !ok || u.Status.PublicKey == "" {
 		return nil
 	}
-	users, err := listUsers(ctx, c, u.Spec.AccountRef.Kind, refKey(u.Spec.AccountRef.ObjectReference, u.Namespace))
+	users, err := listUsers(ctx, c, u.Spec.AccountRef.Kind, u.Spec.AccountRef.ObjectKey(u.Namespace))
 	if err != nil {
 		log.FromContext(ctx).Error(err, "list NatsUsers by account")
 		return nil

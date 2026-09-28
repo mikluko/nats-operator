@@ -18,7 +18,7 @@ import (
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/e2e"
+	"github.com/mikluko/nats-operator/internal/e2e/placeholders"
 )
 
 // testStory8 runs story 8 on a two-cluster supercluster, holding the move
@@ -89,7 +89,7 @@ func assertStreamStatus(ct *assert.CollectT, s *js.NatsStream, file string) {
 	if !assert.NoError(ct, err) {
 		return
 	}
-	raw, err = e2e.StripPlaceholders(raw)
+	raw, err = placeholders.Strip(raw)
 	if !assert.NoError(ct, err) {
 		return
 	}

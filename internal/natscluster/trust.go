@@ -57,10 +57,7 @@ func readTrust(ctx context.Context, r client.Reader, nc *clusterv1beta1.NatsClus
 		return nil, nil, nil
 	}
 	ref := nc.Spec.Auth.TrustRef
-	ns := ref.Namespace
-	if ns == "" {
-		ns = nc.Namespace
-	}
+	ns := ref.ObjectKey(nc.Namespace).Namespace
 	notProgressing := func(reason, msg string) *metav1.Condition {
 		return &metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: reason, Message: msg}
 	}

@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"github.com/nats-io/nats.go/jetstream"
+
+	"github.com/mikluko/nats-operator/internal/jsapi"
 )
 
 const (
@@ -11,8 +15,8 @@ const (
 	subjServerRemove   = "$JS.API.SERVER.REMOVE"
 	subjMetaStepDown   = "$JS.API.META.LEADER.STEPDOWN"
 
-	errCodeNotMember      = 10044
-	errCodeChangeInflight = 10202
+	errCodeNotMember      jetstream.ErrorCode = 10044
+	errCodeChangeInflight jetstream.ErrorCode = 10202
 )
 
 // ErrNotMember is returned when the meta leader does not count the named
@@ -44,15 +48,18 @@ func (o *SystemClient) StepDownMeta(ctx context.Context) error {
 // jsAdmin sends a meta leader request and maps its error codes onto
 // ErrNotMember, ErrChangeInflight or ErrServer.
 func (o *SystemClient) jsAdmin(ctx context.Context, subject string, req any) error {
-	var r wireJSAPIResponse
-	if err := o.request(ctx, subject, req, &r); err != nil {
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, o.wait)
+		defer cancel()
+	}
+	_, err := jsapi.Request(ctx, o.nc, subject, req)
+	var apiErr *jetstream.APIError
+	if !errors.As(err, &apiErr) {
 		return err
 	}
-	if r.Error == nil {
-		return nil
-	}
 	var base error
-	switch r.Error.ErrCode {
+	switch apiErr.ErrorCode {
 	case errCodeNotMember:
 		base = ErrNotMember
 	case errCodeChangeInflight:
@@ -60,5 +67,5 @@ func (o *SystemClient) jsAdmin(ctx context.Context, subject string, req any) err
 	default:
 		base = ErrServer
 	}
-	return fmt.Errorf("%w: %s: %d %s", base, subject, r.Error.ErrCode, r.Error.Description)
+	return fmt.Errorf("%w: %s: %d %s", base, subject, apiErr.ErrorCode, apiErr.Description)
 }

@@ -85,18 +85,32 @@ type BalancerReconciler struct {
 
 // Reconcile runs one balancing pass for the NatsBalancer req names.
 func (r *BalancerReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
-	var b js.NatsBalancer
-	if err := r.Client.Get(ctx, req.NamespacedName, &b); err != nil {
+	return reconcileBalancer(ctx, req, BalancerKind, r.Client, r.Telemetry, r.Leases, &r.balancers, r.balance,
+		func(b *js.NatsBalancer) (any, []metav1.Condition) { return b.Status, b.Status.Conditions })
+}
+
+// reconcileBalancer is Reconcile for a balancer of kind: it runs balance on
+// the object req names and patches the status that status reads from it.
+func reconcileBalancer[T any, P interface {
+	*T
+	client.Object
+}](ctx context.Context, req reconcile.Request, kind string, c client.Client, tel *telemetry.JetStreamInstruments, leases *MoveLeases, set *balancerSet,
+	balance func(context.Context, P) (reconcile.Result, error), status func(P) (any, []metav1.Condition),
+) (reconcile.Result, error) {
+	b := P(new(T))
+	if err := c.Get(ctx, req.NamespacedName, b); err != nil {
 		if apierrors.IsNotFound(err) {
-			r.balancers.forget(req.NamespacedName)
-			leasesOr(r.Leases).drop(holderName(BalancerKind, req.NamespacedName))
+			set.forget(req.NamespacedName)
+			leasesOr(leases).drop(holderName(kind, req.NamespacedName))
 		}
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
-	base := b.DeepCopy()
-	res, err := r.balance(ctx, &b)
-	r.Telemetry.BalancerPass(ctx, BalancerKind, &b, b.Status.Conditions)
-	if perr := lifecycle.PatchStatus(ctx, r.Client, base, &b, base.Status, b.Status); perr != nil {
+	base := b.DeepCopyObject().(P)
+	res, err := balance(ctx, b)
+	old, _ := status(base)
+	cur, conds := status(b)
+	tel.BalancerPass(ctx, kind, b, conds)
+	if perr := lifecycle.PatchStatus(ctx, c, base, b, old, cur); perr != nil {
 		return reconcile.Result{}, errors.Join(err, perr)
 	}
 	return res, err

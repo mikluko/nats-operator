@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/yaml"
 
-	"github.com/mikluko/nats-operator/internal/e2e"
+	"github.com/mikluko/nats-operator/internal/e2e/placeholders"
 )
 
 // TestEnvtest pins, against the generated CRDs in a real API server, that
@@ -124,7 +124,7 @@ func testStoryStatuses(t *testing.T, c client.Client) {
 
 			raw, err := os.ReadFile(path)
 			require.NoError(t, err)
-			raw, err = e2e.StripPlaceholders(raw)
+			raw, err = placeholders.Strip(raw)
 			require.NoError(t, err)
 			var doc struct {
 				Status map[string]any `json:"status"`

@@ -41,10 +41,7 @@ func (d *Dialer) Connection(ctx context.Context, nc *natsv1beta1.NatsConnection)
 // names, or, where grant.Admit denies the reference, its condition and no
 // connection or error.
 func (d *Dialer) Reference(ctx context.Context, from grant.Referrer, ref natsv1beta1.ObjectReference) (*nats.Conn, *metav1.Condition, error) {
-	ns := ref.Namespace
-	if ns == "" {
-		ns = from.Namespace
-	}
+	ns := ref.ObjectKey(from.Namespace).Namespace
 	denied, err := grant.Admit(ctx, d.Reader, from, grant.Target{
 		Group:     natsv1beta1.GroupVersion.Group,
 		Kind:      Kind,

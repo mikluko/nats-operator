@@ -132,8 +132,13 @@ func (f *fixture) reconcileConsumer(name string) reconcile.Result {
 
 func (f *fixture) stream(name string) *js.NatsStream {
 	f.t.Helper()
+	return f.streamOn(f.t, name)
+}
+
+// streamOn is stream failing t, for a caller off the test goroutine.
+func (f *fixture) streamOn(t require.TestingT, name string) *js.NatsStream {
 	var s js.NatsStream
-	require.NoError(f.t, f.c.Get(f.t.Context(), types.NamespacedName{Namespace: testNamespace, Name: name}, &s))
+	require.NoError(t, f.c.Get(f.t.Context(), types.NamespacedName{Namespace: testNamespace, Name: name}, &s))
 	return &s
 }
 

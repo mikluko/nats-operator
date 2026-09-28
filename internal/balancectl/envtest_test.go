@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
-	"github.com/mikluko/nats-operator/internal/e2e"
+	"github.com/mikluko/nats-operator/internal/e2e/placeholders"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
@@ -120,7 +120,7 @@ func storyStatus(t *testing.T, file string) js.NatsSystemBalancerStatus {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join(storiesDir, file))
 	require.NoError(t, err)
-	raw, err = e2e.StripPlaceholders(raw)
+	raw, err = placeholders.Strip(raw)
 	require.NoError(t, err)
 	var doc struct {
 		Status js.NatsSystemBalancerStatus `json:"status"`
