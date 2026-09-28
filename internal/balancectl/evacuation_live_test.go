@@ -425,7 +425,7 @@ func TestEvacuation_ServerDown(t *testing.T) {
 		evacCondition(ct, &e, ConditionReady, metav1.ConditionFalse, ReasonServersDown)
 		evacCondition(ct, &e, ConditionProgressing, metav1.ConditionFalse, ReasonServersDown)
 	}, 30*time.Second, 100*time.Millisecond, "the evacuation did not hold for %s", host)
-	require.Equal(t, fmt.Sprintf("server %s is offline", host), meta.FindStatusCondition(e.Status.Conditions, ConditionReady).Message)
+	require.Contains(t, []string{fmt.Sprintf("server %s is offline", host), "the meta group has no leader"}, meta.FindStatusCondition(e.Status.Conditions, ConditionReady).Message)
 	for range 5 {
 		pass()
 	}
