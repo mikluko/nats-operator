@@ -43,12 +43,10 @@ func selfSignedRouteSecret(nc *clusterv1beta1.NatsCluster, hosts []string, now t
 	return routes, err
 }
 
-// issueRouteSecrets returns the CA Secret, a CA certificate self-signed
-// with caKeyPair beside that key, and the route Secret, the CA certificate
-// beside one it signs for hosts for server and client auth, both valid from
-// now for selfSignedValidity. A host that parses as an IP address is an IP
-// SAN. A certificate one call signs verifies against the CA of any other
-// call with the same nc and caKeyPair.
+// issueRouteSecrets returns the CA Secret of caKeyPair and the route Secret
+// of a certificate it signs for hosts, both valid from now for
+// selfSignedValidity. A certificate one call signs verifies against the CA
+// of any other call with the same nc and caKeyPair.
 func issueRouteSecrets(nc *clusterv1beta1.NatsCluster, hosts []string, caKeyPair *ecdsa.PrivateKey, now time.Time) (caSecret, routes *corev1.Secret, err error) {
 	caTmpl := &x509.Certificate{
 		SerialNumber:          serial(),
@@ -140,8 +138,7 @@ func routeCA(caSecret *corev1.Secret) (*x509.Certificate, *ecdsa.PrivateKey) {
 }
 
 // routeRenewalDue reports whether the route certificate in routes must be
-// reissued at now: it does not parse, ca did not sign it, or less than
-// selfSignedRenewBefore of it or of ca remains.
+// reissued at now under ca.
 func routeRenewalDue(routes *corev1.Secret, ca *x509.Certificate, now time.Time) bool {
 	b, _ := pem.Decode(routes.Data[corev1.TLSCertKey])
 	if b == nil {
@@ -260,8 +257,7 @@ var certificateGVK = schema.GroupVersionKind{Group: "cert-manager.io", Version: 
 var peerUsages = []string{"server auth", "client auth"}
 
 // certificate is a cert-manager Certificate named name, issued by issuer
-// into Secret secret for hosts with usages, a host that parses as an IP
-// address being an IP SAN.
+// into Secret secret for hosts with usages.
 func certificate(nc *clusterv1beta1.NatsCluster, name, secret string, issuer *clusterv1beta1.IssuerReference, hosts, usages []string) *unstructured.Unstructured {
 	kind := issuer.Kind
 	if kind == "" {

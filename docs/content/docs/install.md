@@ -13,6 +13,8 @@ The Helm chart `nats-operator` installs the CRDs of all four API groups and any 
 - **nats-server 2.15.0 or later.** The API server refuses a `NatsCluster` whose `spec.version` is below 2.15.0.
 - **cert-manager, optional.** Only the cluster controller uses it, and only for a `NatsCluster` that names `certManager` under `routes.tls`, `gateway.tls` or `leafnodes.tls`. Without cert-manager, such a `NatsCluster` reports `Progressing` with the message `cert-manager Certificate is not a known kind: cert-manager is not installed`, and its servers wait for the certificate. Route TLS with no certificate named is self-signed and needs no cert-manager.
 
+A `NatsCluster` offers no TLS on its client listener, port 4222: clients and the controllers reach its servers unencrypted, so that traffic stays private only where the network keeps it so.
+
 ## Install
 
 Each release publishes the chart at `oci://ghcr.io/mikluko/nats-operator/charts/nats-operator`, with the release's version as both its `version` and `appVersion`, and the three images at `ghcr.io/mikluko/nats-operator/<controller>:<version>`.

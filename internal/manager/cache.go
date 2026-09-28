@@ -12,8 +12,8 @@ import (
 )
 
 // Owned is what a controller creates: every object of Kinds it creates
-// carries Label. Secret is never among Kinds, since the controllers watch
-// Secrets they did not create.
+// carries Label. Kinds never holds Secret: the controllers watch Secrets they
+// did not create.
 type Owned struct {
 	Label string
 	Kinds []client.Object
@@ -46,11 +46,9 @@ func clientOptions() client.Options {
 	return client.Options{Cache: &client.CacheOptions{DisableFor: []client.Object{&corev1.Secret{}}}}
 }
 
-// secretMetadata keeps of a Secret what a watch on it maps to requests:
-// its identity, labels, owner references, finalizers and deletion
-// timestamp. Its data and annotations, which kubectl's last-applied
-// configuration copies the data into, are dropped. Anything else passes
-// through.
+// secretMetadata keeps of a Secret only the metadata a watch on it maps to
+// requests, dropping the annotations too since kubectl's last-applied
+// configuration copies the data into them; anything else passes through.
 func secretMetadata(obj any) (any, error) {
 	s, ok := obj.(*corev1.Secret)
 	if !ok {

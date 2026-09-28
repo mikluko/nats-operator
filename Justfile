@@ -124,8 +124,7 @@ verify: generate chart-crds chart-rbac api-docs perm-docs telemetry-docs
     git diff --exit-code -- api config charts docs/content/docs/reference
     test -z "$(git status --porcelain -- api config charts docs/content/docs/reference)"
 
-# envtest binaries for the API-server-backed tests; the tests themselves are
-# ordinary `go test` runs that read KUBEBUILDER_ASSETS.
+# The API-server-backed tests, with the envtest binaries they need.
 envtest:
     #!/usr/bin/env sh
     set -eu
@@ -133,9 +132,7 @@ envtest:
     KUBEBUILDER_ASSETS="$(go tool setup-envtest use {{ envtest_k8s_version }} --bin-dir "{{ bin }}" -p path)" \
         go test -race ./... -run Envtest
 
-# The story bundles end to end on kind over rootful podman: in place on
-# Linux, run as root; on darwin, inside an Apple `container` machine.
-# hack/e2e lists the E2E_* variables it reads.
+# The story bundles end to end on kind, on darwin inside a `container` machine.
 e2e:
     go run ./hack/e2e
 

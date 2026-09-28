@@ -17,14 +17,9 @@ type seeds struct {
 	WestCredsLines []string
 }
 
-// supercluster writes story 6's fixtures: in e2e/00-home.yaml, the home
-// cluster's auth plane, a NATS operator acme and system account sys adopting
-// generated keys, with the system users the east cluster and the auth
-// controller run as; in e2e/00-west.yaml, the creds a peer cluster's cluster
-// controller runs as, signed by the system account's signing key, as
-// External Secrets would carry them there. It prints the literal operator
-// and system account JWTs the story's NatsOperatorTrust takes, as the patch
-// of a substitution.
+// supercluster writes story 6's fixtures into dir and prints the NATS
+// operator and system account JWTs its NatsOperatorTrust takes as a
+// substitution's patch.
 func supercluster(dir string, out io.Writer) error {
 	var s seeds
 	op, opSeed, err := keys(nkeys.PrefixByteOperator)

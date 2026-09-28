@@ -40,7 +40,6 @@ func (s *balancerSet) of(obj client.Object) *tracked {
 	return t
 }
 
-// balancer is obj's Balancer.
 func (s *balancerSet) balancer(obj client.Object) *balance.Balancer {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -67,7 +66,6 @@ func (s *balancerSet) clusters() map[types.NamespacedName]string {
 	return out
 }
 
-// forget drops the resource key names.
 func (s *balancerSet) forget(key types.NamespacedName) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

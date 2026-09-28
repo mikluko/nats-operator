@@ -449,7 +449,7 @@ Endpoints are a NATS cluster's addresses.\
 Appears on: [NatsClusterStatus](#NatsClusterStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `client` | {{< type "string" >}} | No | Client is the client URL, what a NatsConnection's servers is copied from. |
+| `client` | {{< type "string" >}} | No | Client is the client URL. |
 | `monitor` | {{< type "string" >}} | No | Monitor is the monitoring URL, on the headless Service. |
 | `gateway` | {{< type "string" >}} | No | Gateway is the advertised gateway address. |
 
@@ -875,7 +875,7 @@ Appears on: [NatsKeyValueSpec](#NatsKeyValueSpec).
 | `history` | {{< type "int32" >}} | No |  |
 | `ttl` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No |  |
 | `maxBytes` | [{{< type "Quantity" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity) | No |  |
-| `storage` | [{{< type "StorageType" >}}](#StorageType) | No | Storage is immutable: a bucket is a stream. |
+| `storage` | [{{< type "StorageType" >}}](#StorageType) | No | Storage is immutable. |
 | `replicas` | {{< type "int32" >}} | No |  |
 | `placement` | [{{< type "Placement" >}}](#Placement) | No |  |
 | `republish` | [{{< type "Republish" >}}](#Republish) | No |  |
@@ -900,7 +900,7 @@ Move is a leader or placement move.\
 Appears on: [NatsBalancerStatus](#NatsBalancerStatus), [NatsSystemBalancerStatus](#NatsSystemBalancerStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `kind` | [{{< type "MoveKind" >}}](#MoveKind) | No | Kind is Leader for a leader stepdown, Placement for moving the stream's replicas off a server. |
+| `kind` | [{{< type "MoveKind" >}}](#MoveKind) | No | Kind is Leader for a leader move, Placement for a placement move. |
 | `account` | {{< type "string" >}} | No | Account is the public key of the account whose stream moved. |
 | `stream` | {{< type "string" >}} | No | Stream is the name of the stream moved, or of the stream whose consumer's leader moved. |
 | `consumer` | {{< type "string" >}} | No | Consumer is the name of the consumer whose leader moved; empty on a stream's move. |
@@ -1080,7 +1080,7 @@ Appears on: [NatsKeyValue](#NatsKeyValue).
 | `history` | {{< type "int32" >}} | No |  |
 | `ttl` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No |  |
 | `maxBytes` | [{{< type "Quantity" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity) | No |  |
-| `storage` | [{{< type "StorageType" >}}](#StorageType) | No | Storage is immutable: a bucket is a stream. |
+| `storage` | [{{< type "StorageType" >}}](#StorageType) | No | Storage is immutable. |
 | `replicas` | {{< type "int32" >}} | No |  |
 | `placement` | [{{< type "Placement" >}}](#Placement) | No |  |
 | `republish` | [{{< type "Republish" >}}](#Republish) | No |  |
@@ -1125,7 +1125,7 @@ Appears on: [NatsObjectStore](#NatsObjectStore).
 | `description` | {{< type "string" >}} | No |  |
 | `ttl` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No |  |
 | `maxBytes` | [{{< type "Quantity" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity) | No |  |
-| `storage` | [{{< type "StorageType" >}}](#StorageType) | No | Storage is immutable: a bucket is a stream. |
+| `storage` | [{{< type "StorageType" >}}](#StorageType) | No | Storage is immutable. |
 | `replicas` | {{< type "int32" >}} | No |  |
 | `placement` | [{{< type "Placement" >}}](#Placement) | No |  |
 | `compression` | {{< type "bool" >}} | No |  |
@@ -1255,7 +1255,7 @@ Appears on: [NatsObjectStoreSpec](#NatsObjectStoreSpec).
 | `description` | {{< type "string" >}} | No |  |
 | `ttl` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No |  |
 | `maxBytes` | [{{< type "Quantity" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity) | No |  |
-| `storage` | [{{< type "StorageType" >}}](#StorageType) | No | Storage is immutable: a bucket is a stream. |
+| `storage` | [{{< type "StorageType" >}}](#StorageType) | No | Storage is immutable. |
 | `replicas` | {{< type "int32" >}} | No |  |
 | `placement` | [{{< type "Placement" >}}](#Placement) | No |  |
 | `compression` | {{< type "bool" >}} | No |  |

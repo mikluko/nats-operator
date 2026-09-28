@@ -17,10 +17,9 @@ import (
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
-// TestStreamFinalize_StatusErrorNoRequeue deletes a NatsStream whose
-// deletion policy needs its connection while the connection fails, with
-// every status write failing, and finds the error returned with no
-// RequeueAfter, which controller-runtime would ignore beside it.
+// TestStreamFinalize_StatusErrorNoRequeue pins that a finalize failing on
+// its connection and its status write returns the error with no
+// RequeueAfter: controller-runtime ignores a Result beside one.
 func TestStreamFinalize_StatusErrorNoRequeue(t *testing.T) {
 	down := errors.New("the API server is down")
 	s := newStream("audit", "AUDIT", func(s *js.NatsStreamSpec) { s.DeletionPolicy = js.DeletionDelete })

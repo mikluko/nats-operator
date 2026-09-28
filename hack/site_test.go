@@ -35,7 +35,6 @@ func buildSite(t *testing.T) string {
 	return out
 }
 
-// page is what the checks read off one rendered HTML file.
 type page struct {
 	h1      int
 	refresh []string

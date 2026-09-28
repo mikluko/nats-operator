@@ -51,7 +51,6 @@ var owned = manager.Owned{
 	},
 }
 
-// newScheme is the cluster controller's scheme.
 func newScheme() (*runtime.Scheme, error) {
 	scheme := runtime.NewScheme()
 	for _, add := range []func(*runtime.Scheme) error{

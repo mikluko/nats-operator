@@ -147,10 +147,9 @@ func routeServer(t *testing.T, name string, routes *corev1.Secret, urls ...strin
 	return s
 }
 
-// TestRouteCertRenewal pins, on in-process servers, that a server on a
-// renewed route certificate routes with one still on the certificate it
-// replaces, as happens between two steps of the reload that carries a
-// renewal, and that a certificate from another CA is refused.
+// TestRouteCertRenewal pins that a server on a renewed route certificate
+// routes with one still on the certificate it replaces, and that a
+// certificate from another CA is refused.
 func TestRouteCertRenewal(t *testing.T) {
 	nc := limitedStoryCluster(t)
 	now := time.Now()

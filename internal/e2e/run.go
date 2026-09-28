@@ -231,10 +231,8 @@ func where(p Part) string {
 	return " in " + p.Cluster
 }
 
-// outcome is how a step's wait ended: diff is "" once every expectation
-// holds, and otherwise the diff of the last check, which is never "" when no
-// check completed, followed by the last error a round met; signal is why
-// the step stopped waiting before its deadline, or "".
+// outcome is how a step's wait ended: diff is "" only once every expectation
+// holds; signal is why the step stopped before its deadline, or "".
 type outcome struct {
 	diff   string
 	signal string

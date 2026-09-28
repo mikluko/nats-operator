@@ -19,7 +19,7 @@ import (
 )
 
 // ErrForeignConnection is returned by SystemConnection.Conn when the
-// connection's credentials are not those of a user of the operator's
+// connection's credentials are not those of a user of the NatsOperator's
 // system account.
 var ErrForeignConnection = errors.New("system connection is not a user of the operator's system account")
 
@@ -32,7 +32,7 @@ func NewPool() *natsconn.Pool {
 // SystemConnection is the auth controller's system connection: the
 // NatsConnection Name, pooled in Pool. It serves a NatsOperator only if the
 // connection's creds are those of a user of the system account the
-// operator signed, which for the auth controller is a NatsUser holding the
+// NatsOperator signed, which for the auth controller is a NatsUser holding the
 // auth-controller preset.
 type SystemConnection struct {
 	Reader client.Reader
@@ -78,7 +78,7 @@ func (s *SystemConnection) Conn(ctx context.Context, operator types.NamespacedNa
 }
 
 // signedSystemAccount returns the public key of op's system account as its
-// status records it, in status.systemAccount or else in the operator JWT,
+// status records it, in status.systemAccount or else in the NATS operator JWT,
 // or "" where it records none.
 func signedSystemAccount(op *authv1beta1.NatsOperator) string {
 	if sys := op.Status.SystemAccount; sys != nil && sys.PublicKey != "" {

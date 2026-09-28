@@ -13,9 +13,9 @@ import (
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
-// TestSync_ResolveResult pins that a failed Resolve returns its error
-// alone, which controller-runtime retries with backoff, and a Resolve
-// without a server object looks again after natsconn.DefaultRetryAfter.
+// TestSync_ResolveResult pins that a failed Resolve returns its error with no
+// requeue, and a Resolve without a server object requeues after
+// natsconn.DefaultRetryAfter.
 func TestSync_ResolveResult(t *testing.T) {
 	failed := errors.New("no responders")
 	tests := []struct {

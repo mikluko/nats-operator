@@ -20,7 +20,7 @@ func JWTHash(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// offlineOperatorSubject returns the identity an operator JWT names.
+// offlineOperatorSubject returns the identity a NATS operator JWT names.
 func offlineOperatorSubject(token string) (string, error) {
 	c, err := jwt.DecodeOperatorClaims(token)
 	if err != nil {
@@ -66,7 +66,7 @@ func lifetimeDiffers(accountJWT string, ttl time.Duration) bool {
 	return d > lifetimeTolerance || d < -lifetimeTolerance
 }
 
-// sameOperatorClaims reports whether two operator JWTs carry the same
+// sameOperatorClaims reports whether two NATS operator JWTs carry the same
 // claims, signed by the same key, whenever they were signed. A JWT that does
 // not decode is never the same.
 func sameOperatorClaims(a, b string) bool {

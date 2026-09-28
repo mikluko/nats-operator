@@ -96,7 +96,7 @@ type Revocation struct {
 	At        time.Time
 }
 
-// SignAccount returns the account JWT, signed by the operator's active
+// SignAccount returns the account JWT, signed by the NATS operator's active
 // signing key and expiring TTL after now.
 func SignAccount(a Account, operator Keys, now time.Time) (string, error) {
 	c, err := accountClaims(a.Name, a.Keys, a.Revocations)
@@ -139,8 +139,8 @@ type SystemAccount struct {
 	Revocations      []Revocation
 }
 
-// SignSystemAccount returns the system account JWT, signed by the operator's
-// active signing key. It never expires and has JetStream disabled.
+// SignSystemAccount returns the system account JWT, signed by the NATS
+// operator's active signing key. It never expires and has JetStream disabled.
 func SignSystemAccount(s SystemAccount, operator Keys, now time.Time) (string, error) {
 	c, err := accountClaims(s.Name, s.Keys, s.Revocations)
 	if err != nil {

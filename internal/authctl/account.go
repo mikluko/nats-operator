@@ -31,7 +31,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
-// AccountReconciler signs a NatsAccount's JWT with its operator's active
+// AccountReconciler signs a NatsAccount's JWT with its NatsOperator's active
 // signing key and writes it to status, generating the keys spec omits.
 // A jwtTTL of zero signs a JWT that never expires.
 type AccountReconciler struct {
@@ -46,6 +46,8 @@ type AccountReconciler struct {
 	RosterChanges <-chan event.GenericEvent
 }
 
+var _ reconcile.Reconciler = (*AccountReconciler)(nil)
+
 // AccountFinalizer holds a deleted NatsAccount until its NatsOperator
 // records the deletion.
 const AccountFinalizer = "auth.nats.mikluko.io/delete"
@@ -58,7 +60,7 @@ const AccountFinalizer = "auth.nats.mikluko.io/delete"
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create
 
-// Reconcile implements reconcile.Reconciler.
+// Reconcile signs and distributes the JWT of the NatsAccount req names.
 func (r *AccountReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	var acc authv1beta1.NatsAccount
 	if err := r.Get(ctx, req.NamespacedName, &acc); err != nil {
@@ -243,8 +245,8 @@ func listUsers(ctx context.Context, c client.Reader, kind authv1beta1.AccountKin
 	return list.Items, nil
 }
 
-// pushed is d once a new JWT was signed at now, and pushed if sent: no
-// server is known to hold it yet.
+// pushed returns the distribution of a JWT newly signed at now: d's server
+// count, no server current, and now as the last push if sent.
 func pushed(d *authv1beta1.Distribution, now time.Time, sent bool) *authv1beta1.Distribution {
 	out := &authv1beta1.Distribution{}
 	if sent {
@@ -516,8 +518,7 @@ func listsImporter(importers []authv1beta1.AccountReference, namespace string, a
 	return false
 }
 
-// SetupWithManager registers the reconciler with mgr. The indexes Setup
-// registers must be in place.
+// SetupWithManager registers r with mgr, which must already hold Setup's indexes.
 func (r *AccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c := mgr.GetClient()
 	b := ctrl.NewControllerManagedBy(mgr)

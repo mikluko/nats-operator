@@ -300,8 +300,7 @@ func (f *bundleFile) substitute(subs []Substitution) {
 	}
 }
 
-// mergePatch returns target with patch merged in per RFC 7386: a null in
-// patch deletes the key, a map merges into a map, anything else replaces.
+// mergePatch returns target with patch merged in per RFC 7386.
 func mergePatch(target, patch map[string]any) map[string]any {
 	if target == nil {
 		target = map[string]any{}
@@ -616,8 +615,6 @@ func (b *Bundle) Namespaces() []string {
 	return ns
 }
 
-// namespaces returns ns with the namespaces the objects steps apply are
-// declared in added, sorted.
 func namespaces(ns []string, steps []Step) []string {
 	for _, s := range steps {
 		for _, o := range s.Apply {

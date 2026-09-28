@@ -87,8 +87,7 @@ const (
 
 // Move is a leader or placement move.
 type Move struct {
-	// Kind is Leader for a leader stepdown, Placement for moving the
-	// stream's replicas off a server.
+	// Kind is Leader for a leader move, Placement for a placement move.
 	// +optional
 	Kind MoveKind `json:"kind,omitempty"`
 

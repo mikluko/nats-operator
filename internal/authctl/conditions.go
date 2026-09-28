@@ -1,6 +1,6 @@
 package authctl
 
-// Condition types.
+// The condition types the reconcilers of this package set in status.
 const (
 	ConditionReady = "Ready"
 	// ConditionRetiringKeysInUse is True on a NatsOperator while an account
@@ -8,7 +8,7 @@ const (
 	// removing that key would invalidate it.
 	ConditionRetiringKeysInUse = "RetiringKeysInUse"
 	// ConditionDistributed is True on an account while every server
-	// trusting its operator holds its current JWT. On a user it is only
+	// trusting its NATS operator holds its current JWT. On a user it is only
 	// ever False, reason NoSystemConnection.
 	ConditionDistributed = "Distributed"
 	// ConditionRevocationsUnrecovered is True on an account, or on a
@@ -17,7 +17,7 @@ const (
 	ConditionRevocationsUnrecovered = "RevocationsUnrecovered"
 )
 
-// Condition reasons.
+// The reasons those conditions carry.
 const (
 	ReasonSigned             = "Signed"
 	ReasonMirrored           = "Mirrored"

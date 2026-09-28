@@ -33,7 +33,7 @@ import (
 
 // TestEnvtestDistribution runs the reconcilers with Resolvers over the
 // SystemConnection cmd/auth-controller wires, against three routed
-// nats-servers with full resolvers booted from the operator the auth
+// nats-servers with full resolvers booted from the NatsOperator the auth
 // controller signed: story 2's status, re-signing at half the TTL, jwtTTL:
 // 0, and deletion.
 func TestEnvtestDistribution(t *testing.T) {
@@ -364,7 +364,7 @@ spec:
 }
 
 // resignedLater returns the claims of accountJWT signed again, by the
-// operator key in a Secret in nats-system that issued it, at least a second
+// NATS operator key in a Secret in nats-system that issued it, at least a second
 // after it was issued: the JWT a push leaves on the servers when the status
 // write recording it is lost.
 func resignedLater(t *testing.T, e *env, accountJWT string) string {

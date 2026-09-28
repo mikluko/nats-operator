@@ -164,10 +164,7 @@ func image(nc *clusterv1beta1.NatsCluster) string {
 	return repo + ":" + nc.Spec.Version
 }
 
-// statefulSet renders server's StatefulSet: one replica, the nats-server
-// container and the exporter sidecar, with spec.podTemplate merged over the
-// pod and the JetStream volume claim template when one is given, its access
-// mode ReadWriteOnce when it names none.
+// statefulSet renders server's one-replica StatefulSet.
 func statefulSet(nc *clusterv1beta1.NatsCluster, server string, limits Limits) (*appsv1.StatefulSet, error) {
 	pod, err := podTemplate(nc, server, limits)
 	if err != nil {
@@ -433,10 +430,9 @@ func headlessService(nc *clusterv1beta1.NatsCluster) *corev1.Service {
 }
 
 // gatewayService renders gateway.service over every server's gateway
-// port, or nil when it is unset. Its type and annotations are the
-// template's. It serves servers that are not Ready: a JetStream server is
-// Ready once it reaches a meta leader, which a supercluster elects over
-// these gateways.
+// port, or nil when it is unset. It serves servers that are not Ready: a
+// JetStream server is Ready once it reaches a meta leader, which a
+// supercluster elects over these gateways.
 func gatewayService(nc *clusterv1beta1.NatsCluster) *corev1.Service {
 	g := nc.Spec.Gateway
 	if g == nil || g.Service == nil {

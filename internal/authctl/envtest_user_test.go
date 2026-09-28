@@ -35,7 +35,7 @@ import (
 var errNoSystemConnection = errors.New("no system connection yet")
 
 // systemConn is the env's ConnSessions.Conn: the connection a subtest
-// stored, for any operator.
+// stored, for any NatsOperator.
 func (e *env) systemConn(context.Context, types.NamespacedName) (*nats.Conn, error) {
 	if nc := e.sys.Load(); nc != nil {
 		return nc, nil

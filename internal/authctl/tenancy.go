@@ -80,7 +80,7 @@ func accountKeyHolder(ctx context.Context, c client.Reader, acc *authv1beta1.Nat
 }
 
 // sameKeyAccounts returns a request for every other NatsAccount under the
-// operator obj names whose status records obj's public key.
+// NatsOperator obj names whose status records obj's public key.
 func sameKeyAccounts(ctx context.Context, c client.Reader, obj client.Object) []reconcile.Request {
 	acc, ok := obj.(*authv1beta1.NatsAccount)
 	if !ok || acc.Status.PublicKey == "" {

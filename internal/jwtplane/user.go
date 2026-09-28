@@ -13,8 +13,7 @@ import (
 // UserPreset names a fixed set of user claims that replaces Permissions.
 type UserPreset string
 
-// The user presets. The three controller presets are for system account users
-// only and readonly for ordinary accounts only; leafnode is for either.
+// The user presets.
 const (
 	PresetClusterController   UserPreset = "cluster-controller"
 	PresetJetStreamController UserPreset = "jetstream-controller"
@@ -185,7 +184,6 @@ var stepdownImportSubjects = []string{
 	stepdownPrefix + "*." + consumerStepdownSubject,
 }
 
-// userPresets are the claims each preset grants.
 var userPresets = map[UserPreset]userPreset{
 	PresetClusterController: {
 		system: true,

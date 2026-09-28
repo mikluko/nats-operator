@@ -22,12 +22,8 @@ type fixture struct {
 	Creds, CA, Cert, Key                                      string
 }
 
-// unmanaged writes e2e/00-messaging.yaml for story 3: three nats-server
-// pods in namespace messaging that none of the controllers deployed, in
-// operator mode with a memory resolver and serving clients over TLS, a Job
-// creating the streams its services would have created at runtime, and the
-// CA and creds Secrets the story's NatsConnection reads in namespace
-// payments.
+// unmanaged writes story 3's fixture into dir: a NATS cluster none of the
+// controllers deployed.
 func unmanaged(dir string, _ io.Writer) error {
 	var f fixture
 	op, err := nkeys.CreateOperator()

@@ -16,7 +16,6 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-// module is this repository's module path.
 const module = "github.com/mikluko/nats-operator"
 
 func main() {
@@ -45,10 +44,8 @@ func run() error {
 }
 
 // ownedPackages returns, by controller, the import paths whose markers make
-// its ClusterRole: its command under cmd/, and every package under internal/
-// that command imports and no other controller's does. A package two
-// controllers import carries no markers; each command declares what it needs
-// of it.
+// its ClusterRole: its command and the internal/ packages no other
+// controller imports. A package two controllers import must carry no markers.
 func ownedPackages(dir string) (map[string][]string, error) {
 	pkgs, err := packages.Load(&packages.Config{
 		Mode: packages.NeedName | packages.NeedImports | packages.NeedDeps,

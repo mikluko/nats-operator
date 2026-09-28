@@ -880,9 +880,7 @@ spec:
                   cluster at.
                 properties:
                   client:
-                    description: |-
-                      Client is the client URL, what a NatsConnection's servers is copied
-                      from.
+                    description: Client is the client URL.
                     type: string
                   gateway:
                     description: Gateway is the advertised gateway address.

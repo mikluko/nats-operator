@@ -12,9 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// stuckWaiting are the reasons a container waits with that no wait ends:
-// the kubelet backs off a crashing container or an image it cannot pull,
-// and one it may never pull or cannot parse it never starts.
+// stuckWaiting are the container waiting reasons that no wait ends.
 var stuckWaiting = []string{"CrashLoopBackOff", "ImagePullBackOff", "ErrImageNeverPull", "InvalidImageName"}
 
 // terminalReasons are the Ready=False reasons the controllers give a spec
@@ -85,10 +83,8 @@ func conditionSignal(live *unstructured.Unstructured, want map[string]any) strin
 	return ""
 }
 
-// signal returns why the shares' expectations will not be met, or "": a
-// target that is Terminal, or a stuck pod or failed Job in any of the
-// namespaces of its cluster in namespaces, the index of the share's
-// cluster.
+// signal returns why the shares' expectations will not be met, or "";
+// namespaces is indexed by a share's cluster.
 func (r *Runner) signal(ctx context.Context, shares []share, namespaces [][]string) (string, error) {
 	for _, sh := range shares {
 		for i, e := range sh.step.Expectations {

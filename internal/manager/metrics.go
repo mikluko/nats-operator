@@ -34,10 +34,9 @@ func metricsAuth(cfg *rest.Config, httpClient *http.Client) (metricsserver.Filte
 }
 
 // authorize serves a request through h only for a bearer token the API
-// server authenticates, of a user it allows the request's method, in lower
-// case, on the request's path as a non-resource URL. It answers 401 to a
-// request without an authenticated token, 403 to one without the grant, and
-// 500 when a review fails. Every request costs a TokenReview and a
+// server authenticates, of a user it allows the request's lower-cased method
+// on the request's path as a non-resource URL, and answers 401, 403 or, when
+// a review fails, 500 otherwise. Every request costs a TokenReview and a
 // SubjectAccessReview.
 func authorize(c client.Client, log logr.Logger, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

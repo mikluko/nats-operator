@@ -45,8 +45,8 @@ type Passed struct {
 	// Held is why the pass moved nothing because the NATS cluster was not
 	// Settled; nothing else is reported with it.
 	Held string
-	// Moved is the leader move the pass made, and Placed the placement move.
-	// A pass makes one or the other and never both.
+	// Moved is the leader move the pass made and Placed the placement move;
+	// at most one is set.
 	Moved  *LeaderMove
 	Placed *PlacementMove
 	// Servers is each roster server's load across every observed group.

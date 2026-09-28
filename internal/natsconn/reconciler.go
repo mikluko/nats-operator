@@ -54,7 +54,10 @@ type Reconciler struct {
 	queue atomic.Pointer[workqueue.TypedRateLimitingInterface[reconcile.Request]]
 }
 
-// Reconcile implements reconcile.Reconciler.
+var _ reconcile.Reconciler = (*Reconciler)(nil)
+
+// Reconcile sets Ready on the NatsConnection req names and forgets its pooled
+// connection once the NatsConnection is gone or being deleted.
 func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	key := ConnectionKey(req.NamespacedName)
 	var nc natsv1beta1.NatsConnection

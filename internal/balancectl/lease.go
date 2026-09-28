@@ -10,13 +10,10 @@ import (
 // moveLeaseTTL is how long a move lease outlives its holder's last pass.
 const moveLeaseTTL = time.Minute
 
-// MoveLeases holds one move lease per NATS cluster, by name: the balancer
-// holding it is the only one that may move on that NATS cluster, and holds it
-// from before its move until a pass of its own finds the move done. Exclusion
-// holds within the process alone, where every balancer of the JetStream
-// controller runs, and a lease no pass of its holder has renewed for
-// moveLeaseTTL lapses. Its zero value is ready, and it is safe for
-// concurrent use.
+// MoveLeases holds one move lease per NATS cluster: its holder is the only
+// balancer that may move on that NATS cluster, from before its move until a
+// pass of its own finds the move done. Exclusion holds within one process
+// only; the zero value is ready and safe for concurrent use.
 type MoveLeases struct {
 	mu   sync.Mutex
 	held map[string]moveLease

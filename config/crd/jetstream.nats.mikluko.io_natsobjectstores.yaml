@@ -131,7 +131,7 @@ spec:
                 minimum: 1
                 type: integer
               storage:
-                description: 'Storage is immutable: a bucket is a stream.'
+                description: Storage is immutable.
                 enum:
                 - File
                 - Memory

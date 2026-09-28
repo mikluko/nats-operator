@@ -53,10 +53,8 @@ func (o *SystemObserver) Last() *balance.Observation { return o.last }
 // placement names another NATS cluster is never moved.
 func (o *SystemObserver) Pinned(id balance.StreamID) string { return o.pinned[id] }
 
-// observation is snap as a balancer reads it. The NATS cluster is unsettled
-// while a roster server did not answer, the meta group has no leader, a group
-// is unsettled by [balance.Unsettled], or a member lags too far to take
-// leadership, as the copy a placement move is filling does.
+// observation is snap as a balancer reads it, unsettled while a member lags
+// too far to take leadership.
 func observation(cluster string, snap *sysobs.Snapshot) balance.Observation {
 	obs := balance.Observation{Cluster: cluster}
 	for _, s := range snap.Servers {

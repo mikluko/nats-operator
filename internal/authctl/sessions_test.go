@@ -17,7 +17,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
 
-// plane is an operator, its system account and one ordinary account, with
+// plane is a NATS operator, its system account and one ordinary account, with
 // the keys to sign users of either.
 type plane struct {
 	opJWT, sysJWT, accJWT string
@@ -50,7 +50,7 @@ func newPlane(t *testing.T) plane {
 	return p
 }
 
-// startServers starts n routed servers trusting p's operator.
+// startServers starts n routed servers trusting p's NATS operator.
 func startServers(t *testing.T, p plane, n int) []*server.Server {
 	t.Helper()
 	oc, err := jwt.DecodeOperatorClaims(p.opJWT)
@@ -118,7 +118,7 @@ func dial(t *testing.T, url string, u jwtplane.User, keys jwtplane.Keys) (*nats.
 // authInbox is the inbox prefix the auth-controller preset grants.
 var authInbox = nats.CustomInboxPrefix(jwtplane.InboxPrefix(jwtplane.PresetAuthController))
 
-// TestConnSessions_Kick pins the kick pass of Q2182 against two routed
+// TestConnSessions_Kick pins a kick pass against two routed
 // servers: the auth-controller preset suffices, only the named user's
 // connections close, on every server, and the next pass finds none.
 func TestConnSessions_Kick(t *testing.T) {

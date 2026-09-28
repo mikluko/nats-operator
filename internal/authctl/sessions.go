@@ -38,7 +38,9 @@ type ConnSessions struct {
 	Resolvers *Resolvers
 }
 
-// Kick implements Sessions over each server in the roster.
+var _ Sessions = ConnSessions{}
+
+// Kick is Sessions.Kick over each server in the roster.
 func (s ConnSessions) Kick(ctx context.Context, operator types.NamespacedName, account, user string) (int, error) {
 	r := s.Resolvers
 	st := r.state(operator)

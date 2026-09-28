@@ -26,13 +26,7 @@ const (
 	// authConnection is the NatsConnection the auth controller pushes
 	// through, the one story 2 declares.
 	authConnection = "nats-system/auth-controller"
-	// natsImage is loaded into every cluster as localhost/nats under each of
-	// natsTags: a story's rollout names a nats-server version that is not
-	// published, and its substitutions point spec.image here.
-	natsImage = "docker.io/library/nats:2.15.0"
 )
-
-var natsTags = []string{"localhost/nats:2.15.0", "localhost/nats:2.15.1"}
 
 // harness brings up the clusters and runs the stories on them, or with
 // down deletes them. It runs where podman does: on a Linux host, or inside
@@ -86,14 +80,6 @@ func harness(ctx context.Context, cfg config, root, imagesFile string, down bool
 		if err := kind.LoadImage(names, img.Archive, img.Source, img.Repository+":"+img.Tag); err != nil {
 			return err
 		}
-	}
-	logf("load image %s as %v", natsImage, natsTags)
-	natsArchive, err := saveNATS(ctx, work)
-	if err != nil {
-		return err
-	}
-	if err := kind.LoadImage(names, natsArchive, natsImage, natsTags...); err != nil {
-		return err
 	}
 	for i, n := range names {
 		enabled := cfg.controllers
@@ -157,21 +143,6 @@ func addons(ctx context.Context, clients []client.Client, names []string) error 
 		}
 	}
 	return nil
-}
-
-// saveNATS pulls natsImage with podman unless it is present, and saves it
-// to a tarball in work whose path it returns.
-func saveNATS(ctx context.Context, work string) (string, error) {
-	if err := exec.CommandContext(ctx, "podman", "image", "exists", natsImage).Run(); err != nil {
-		if err := quietly(exec.CommandContext(ctx, "podman", "pull", "-q", natsImage)); err != nil {
-			return "", err
-		}
-	}
-	path := filepath.Join(work, "nats.tar")
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return "", err
-	}
-	return path, quietly(exec.CommandContext(ctx, "podman", "save", "-q", "-o", path, natsImage))
 }
 
 // installChart installs the chart from root in context name of kubeconfig

@@ -9,12 +9,12 @@ import (
 	"github.com/nats-io/nkeys"
 )
 
-// ErrOfflineOperatorMismatch is returned when an operator JWT signed offline
+// ErrOfflineOperatorMismatch is returned when a NATS operator JWT signed offline
 // does not carry what the spec requires of it.
 var ErrOfflineOperatorMismatch = errors.New("offline operator JWT does not match spec")
 
 // Operator is a NATS operator. Exactly one of Keys.Identity and JWT is set:
-// JWT is an operator JWT signed offline.
+// JWT is a NATS operator JWT signed offline.
 type Operator struct {
 	Name string
 	Keys Keys
@@ -23,7 +23,7 @@ type Operator struct {
 	JWT           string
 }
 
-// SignOperator returns the operator JWT. With an identity key it is signed
+// SignOperator returns the NATS operator JWT. With an identity key it is signed
 // from spec, listing every signing key and never expiring. With an offline
 // JWT that JWT is returned unchanged once it is shown to be self-signed, to
 // name SystemAccount, and to list every signing key that is not retiring;

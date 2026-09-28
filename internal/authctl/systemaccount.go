@@ -25,7 +25,7 @@ import (
 
 // SystemAccountReconciler keeps a NatsSystemAccount's keys, revocations and
 // distribution; its JWT is signed into the status of the NatsOperator
-// naming it. The JWT is not pushed again while that operator's
+// naming it. The JWT is not pushed again while that NatsOperator's
 // RevocationsUnrecovered is True, so the servers keep the JWT the
 // revocations are recovered from.
 type SystemAccountReconciler struct {
@@ -38,6 +38,8 @@ type SystemAccountReconciler struct {
 	RosterChanges <-chan event.GenericEvent
 }
 
+var _ reconcile.Reconciler = (*SystemAccountReconciler)(nil)
+
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natssystemaccounts,verbs=get;list;watch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natssystemaccounts/status,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natssystemaccounts/finalizers,verbs=update
@@ -46,7 +48,8 @@ type SystemAccountReconciler struct {
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create
 
-// Reconcile implements reconcile.Reconciler.
+// Reconcile keeps the keys, revocations and distribution of the
+// NatsSystemAccount req names.
 func (r *SystemAccountReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	var sys authv1beta1.NatsSystemAccount
 	if err := r.Get(ctx, req.NamespacedName, &sys); err != nil {
@@ -123,8 +126,7 @@ func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta
 	return again, err
 }
 
-// SetupWithManager registers the reconciler with mgr. The indexes Setup
-// registers must be in place.
+// SetupWithManager registers r with mgr, which must already hold Setup's indexes.
 func (r *SystemAccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c := mgr.GetClient()
 	b := ctrl.NewControllerManagedBy(mgr)

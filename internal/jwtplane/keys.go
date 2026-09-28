@@ -21,7 +21,7 @@ var (
 	ErrIdentityConflict = errors.New("identity key pair and public key disagree")
 )
 
-// GenerateSeed returns a new seed for an operator, account or user key.
+// GenerateSeed returns a new seed for a NATS operator, account or user key.
 func GenerateSeed(kind nkeys.PrefixByte) ([]byte, error) {
 	if !validKind(kind) {
 		return nil, fmt.Errorf("%w: cannot generate %s keys", ErrWrongKeyType, kind)
@@ -53,7 +53,7 @@ func validKind(kind nkeys.PrefixByte) bool {
 	return false
 }
 
-// SigningKey is one signing key of an operator or account.
+// SigningKey is one signing key of a NATS operator or account.
 type SigningKey struct {
 	Name string
 	Pair nkeys.KeyPair
@@ -62,7 +62,7 @@ type SigningKey struct {
 	Retiring bool
 }
 
-// Keys are the keys of an operator or account. Identity is nil when the
+// Keys are the keys of a NATS operator or account. Identity is nil when the
 // identity is held offline; PublicKey then names it.
 type Keys struct {
 	Identity  nkeys.KeyPair

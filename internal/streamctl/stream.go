@@ -67,7 +67,6 @@ func streamName(s *js.NatsStream) string {
 	return s.Name
 }
 
-// streamObject is a NatsStream's stream.
 type streamObject struct {
 	api    *lifecycle.API
 	client client.Client

@@ -12,7 +12,7 @@ import (
 
 var (
 	// ErrUnreachable is wrapped by a Distributor's errors when no server
-	// trusting the operator could be asked: no system connection, or no
+	// trusting the NATS operator could be asked: no system connection, or no
 	// server answering on it.
 	ErrUnreachable = errors.New("no server reachable")
 
@@ -46,7 +46,7 @@ type Distributor interface {
 }
 
 // RosterNotifier is a Distributor that reports changes to the set of
-// servers trusting an operator.
+// servers trusting a NATS operator.
 type RosterNotifier interface {
 	// Subscribe returns a channel that receives a NatsOperator, carrying
 	// only its name, whenever the servers trusting it change. It is called

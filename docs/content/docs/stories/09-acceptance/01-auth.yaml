@@ -17,9 +17,7 @@ spec:
   operatorRef:
     name: acme
 ---
-# Four services in two environments: eight accounts. Only the prod chain is
-# written out; the dev accounts are the same with -dev names and smaller
-# limits.
+# The production chain of four services; the development chain is left out.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsAccount
 metadata:

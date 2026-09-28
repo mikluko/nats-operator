@@ -1,11 +1,5 @@
-// Package sysobs reaches one NATS cluster through a connection authenticated
-// as a user of the system account. It reads the roster, the Raft groups
-// across every account, whether the NATS cluster is Settled, and each
-// server's leader and replica counts; it writes by reloading a server's
-// configuration, evacuating a server, removing it from the meta group and
-// stepping the meta leader down. MonitorObserver reads a Snapshot and the
-// leafnode connections over each server's HTTP monitoring port, and writes
-// nothing.
+// Package sysobs observes and administers one NATS cluster as a user of the
+// system account, or observes it read-only over its HTTP monitoring ports.
 package sysobs
 
 import (

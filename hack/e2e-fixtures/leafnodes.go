@@ -12,14 +12,8 @@ import (
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
 
-// leafnodes writes story 10's fixtures: in e2e/00-hub.yaml, the hub's auth
-// plane, a NATS operator acme, system account sys and account telemetry
-// adopting generated keys, the trust object the hub reads, and the system
-// users the hub and the auth controller run as; in e2e/00-edge.yaml, the
-// leaf creds each edge site's connections read, signed by the accounts'
-// signing keys, as External Secrets would carry them there. It prints the
-// literal JWTs the edge's NatsOperatorTrust and NatsAccountTrust take, as
-// the patches of substitutions.
+// leafnodes writes story 10's fixtures into dir and prints the JWTs the
+// edge's NatsOperatorTrust and NatsAccountTrust take as substitution patches.
 func leafnodes(dir string, out io.Writer) error {
 	var h hub
 	op, opSeeds, err := keys(nkeys.PrefixByteOperator)

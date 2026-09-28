@@ -434,8 +434,7 @@ type NatsClusterStatus struct {
 
 // Endpoints are a NATS cluster's addresses.
 type Endpoints struct {
-	// Client is the client URL, what a NatsConnection's servers is copied
-	// from.
+	// Client is the client URL.
 	// +optional
 	Client string `json:"client,omitempty"`
 

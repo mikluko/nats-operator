@@ -14,9 +14,8 @@ var ErrReloadUnconfirmed = errors.New("reload not confirmed by VARZ")
 // ConfigState is the configuration a server has loaded, as its VARZ reports
 // it.
 type ConfigState struct {
-	Digest   string
-	LoadTime time.Time
-	// CertNotAfter is the expiry of the certificate each listener loaded.
+	Digest       string
+	LoadTime     time.Time
 	CertNotAfter CertNotAfter
 }
 

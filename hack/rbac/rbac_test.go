@@ -46,9 +46,7 @@ const (
 )
 
 // unstructuredKinds maps each package-level GroupVersionKind the scanned
-// code sets on an unstructured object to the resource it names. An
-// unstructured object requires every resource here, and the client does not
-// cache it, so a read on it requires get alone.
+// code sets on an unstructured object to the resource it names.
 var unstructuredKinds = map[string]string{
 	module + "/internal/natscluster.certificateGVK": "cert-manager.io/certificates",
 }
@@ -66,14 +64,9 @@ var clientVerbs = map[string]string{
 	"DeleteAllOf": "deletecollection",
 }
 
-// TestRBAC_MarkersMatchCode pins that each controller's generated ClusterRole
-// grants exactly what the code its command reaches requires: every
-// controller-runtime client call, CreateOrUpdate, controller reference,
-// watch and field index on a resource, and the events its recorder writes.
-// A read through the cached client requires list and watch besides; a
-// controller reference requires update on the owner's finalizers. Reach is
-// rapid type analysis from main, and a call whose object the scan cannot
-// trace to a type fails the test.
+// TestRBAC_MarkersMatchCode pins each controller's generated ClusterRole to
+// exactly what the code its command reaches requires. A call whose object
+// the scan cannot trace to a type fails the test.
 func TestRBAC_MarkersMatchCode(t *testing.T) {
 	owned, err := ownedPackages(root)
 	require.NoError(t, err)
@@ -767,9 +760,8 @@ func (w *walker) funcs(v ssa.Value, seen map[ssa.Value]bool) []*ssa.Function {
 }
 
 // fieldValues returns what may be stored in field i of base, a struct or a
-// pointer to one: the stores into the Allocs and Globals base comes from
-// where each is known, every store into that field of any value of its
-// type otherwise.
+// pointer to one; where base's roots are unknown, that is every store into
+// that field of its type.
 func (w *walker) fieldValues(base ssa.Value, i int) []ssa.Value {
 	roots, ok := w.roots(base, map[ssa.Value]bool{})
 	var out []ssa.Value

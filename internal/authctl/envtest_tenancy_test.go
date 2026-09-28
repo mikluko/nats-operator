@@ -30,7 +30,7 @@ func notReady(ct *assert.CollectT, conds []metav1.Condition, reason string) {
 }
 
 // testLostSeed deletes the generated identity Secrets of an account, a
-// system account and an operator already signed: each reads Ready False,
+// system account and a NatsOperator already signed: each reads Ready False,
 // SeedLost, keeps its public key, and no Secret is generated in its place.
 func (e *env) testLostSeed(t *testing.T) {
 	e.apply(t, `
@@ -86,7 +86,7 @@ spec:
 	}
 }
 
-// testAccountKeyHeld has a namespace granted the operator declare
+// testAccountKeyHeld has a namespace granted the NatsOperator declare
 // NatsAccounts with the public keys of an account and of the system
 // account already signed under it: each is refused, Ready False,
 // PublicKeyInUse naming the holder, records no key, and nothing signed

@@ -66,11 +66,9 @@ jetstream:
 
 `OTEL_SERVICE_NAME` is the Deployment's name, `<release>-<controller>`, unless the pod annotation `resource.opentelemetry.io/service.name` names another, as above ([Configure resource attributes](https://github.com/open-telemetry/opentelemetry-operator/blob/v0.159.0/docs/auto-instrumentation/resource-attributes.md)). The three controllers' pods share their `app.kubernetes.io/name` and `app.kubernetes.io/instance` labels, so `spec.defaults.useLabelsForResourceAttributes` alone gives all three one `service.name`.
 
-`instrumentation.opentelemetry.io/inject-go` does not apply: it is eBPF auto-instrumentation for a Go binary, run from a privileged sidecar as root ([Go auto-instrumentation](https://github.com/open-telemetry/opentelemetry-operator/blob/v0.159.0/docs/auto-instrumentation/languages/go.md)), and the controllers carry the SDK themselves.
-
 To send through a collector in each controller's pod instead, create an `OpenTelemetryCollector` (`opentelemetry.io/v1beta1`) with `mode: sidecar` in the release namespace, whose `otlp` receiver takes HTTP on port 4318; add `sidecar.opentelemetry.io/inject: "true"` to `podAnnotations`; and set the `Instrumentation`'s `spec.exporter.endpoint` to `http://localhost:4318` ([Sidecar injection](https://github.com/open-telemetry/opentelemetry-operator/blob/v0.159.0/docs/collector/sidecar-injection.md)).
 
-Both annotations are read off the pod: on the Deployment, under the chart's `annotations`, the operator does not see them. The fields and annotations here are those of OpenTelemetry Operator v0.159.0 ([`Instrumentation` API reference](https://github.com/open-telemetry/opentelemetry-operator/blob/v0.159.0/docs/api/instrumentations.md)).
+Both annotations are read off the pod: on the Deployment, under the chart's `annotations`, the OpenTelemetry Operator does not see them. The fields and annotations here are those of OpenTelemetry Operator v0.159.0 ([`Instrumentation` API reference](https://github.com/open-telemetry/opentelemetry-operator/blob/v0.159.0/docs/api/instrumentations.md)).
 
 ## Metrics
 

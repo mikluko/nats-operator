@@ -1,14 +1,8 @@
 #!/bin/sh
-# Brings a Debian root filesystem to what hack/e2e runs on: rootful podman
-# with its API socket enabled on boot, crun, helm and the kind CLI, and the
-# inotify limits a second cluster's kube-proxy needs. Each step is skipped
-# when its result is already there, so a running machine is brought up to
-# date by the same script that builds its image. On a booted system it also
-# points the resolver at M_DNS when that is set, applies the limits, starts
-# the socket, and stops a Docker Engine left over from an older image and
-# drops the iptables rules it left, whose FORWARD policy drops every packet
-# the kind nodes send. Given the argument versions, it prints the helm and
-# kind versions it installs and does nothing else.
+# Provisions a Debian root filesystem for hack/e2e, idempotently, so it both
+# builds the image and updates a running machine. On a booted system it
+# points the resolver at M_DNS when that is set. Given the argument versions,
+# it prints the helm and kind versions it installs and does nothing else.
 set -eu
 
 helm_version=v4.3.0

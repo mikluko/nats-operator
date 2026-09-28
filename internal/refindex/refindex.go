@@ -17,7 +17,6 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 )
 
-// Field indexes the controllers register.
 const (
 	// ConnectionField holds "namespace/name" of each NatsConnection a
 	// resource names.

@@ -10,7 +10,7 @@ import (
 
 // SignDelete returns the request that deletes accounts from a full
 // resolver with deletes allowed: a generic JWT listing them, self-signed by
-// the operator's active signing key.
+// the NATS operator's active signing key.
 func SignDelete(operator Keys, accounts []string) (string, error) {
 	signer, err := operator.signer(nkeys.PrefixByteOperator)
 	if err != nil {

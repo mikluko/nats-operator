@@ -13,7 +13,7 @@ spec:
   # only keeps the identity offline (spec section 5.1). Account JWTs are
   # signed with a signing key, never the identity key.
 
-  # The one system account the operator JWT names; NATS allows exactly one.
+  # The one system account the NATS operator JWT names; NATS allows exactly one.
   # Other NatsSystemAccounts may exist unreferenced: they are not signed and
   # their users get no creds. Flipping this ref is how a system account is
   # rotated, and `system_account` is restart-only (nats-server 2.15.0

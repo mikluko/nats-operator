@@ -140,8 +140,7 @@ func removalGate(step removalStep) gateState {
 }
 
 // scaleDownBlocked says why the servers beyond spec.replicas cannot be
-// removed, "" when they can: no system user to evacuate them over, or a
-// stream with more replicas than spec.replicas.
+// removed, "" when they can.
 func scaleDownBlocked(rm removalState) string {
 	if !rm.JetStream {
 		return ""
@@ -186,8 +185,7 @@ func groupsHeld(snap *sysobs.Snapshot, server string) int {
 }
 
 // metaMember reports whether snap's meta group lists server as a member,
-// with known false when the meta group is FromFollowers: it then lists
-// every server that answered, peer of its leader or not.
+// with known false when the meta group is FromFollowers.
 func metaMember(snap *sysobs.Snapshot, server string) (member, known bool) {
 	for _, g := range snap.Groups {
 		if g.Kind == sysobs.KindMeta {
@@ -388,10 +386,8 @@ func (r *Reconciler) setRemoval(ctx context.Context, nc *clusterv1beta1.NatsClus
 }
 
 // finishDeletions carries through every server whose removal reached
-// Deleting, deleting again whatever deleteServer left, and drops each
-// deleted StatefulSet from sets. A server of plan moves to Rejoining once
-// its data volume claim is gone; any other is forgotten. It returns the
-// servers of plan still waiting for their claim.
+// Deleting and drops each deleted StatefulSet from sets. It returns the
+// servers of plan still waiting for their data volume claim to go.
 func (r *Reconciler) finishDeletions(ctx context.Context, nc *clusterv1beta1.NatsCluster, plan *Plan, sets map[string]*appsv1.StatefulSet) ([]string, error) {
 	var waiting []string
 	for _, rv := range slices.Clone(nc.Status.Removals) {

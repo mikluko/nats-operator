@@ -65,7 +65,7 @@ func mintPlane(t *testing.T) testPlane {
 	return p
 }
 
-// sign signs the operator with keys op and the system account sys under it.
+// sign signs the NATS operator with keys op and the system account sys under it.
 func (p testPlane) sign(t *testing.T, op jwtplane.Keys, sys jwtplane.SystemAccount) *Trust {
 	t.Helper()
 	opJWT, err := jwtplane.SignOperator(jwtplane.Operator{Name: "demo", Keys: op, SystemAccount: publicKey(t, p.sys.Identity)})
@@ -261,7 +261,7 @@ func authCases(t *testing.T, p testPlane) []authCase {
 }
 
 // TestRestartReason_Auth pins the classification of trust changes: the
-// trusted operator and system_account are restart-only and nats-server
+// trusted NATS operator and system_account are restart-only and nats-server
 // refuses to reload them; the preloaded system account JWT is restart-only
 // because a reload does not apply it.
 func TestRestartReason_Auth(t *testing.T) {
@@ -330,7 +330,7 @@ func startFile(t *testing.T, f string) *server.Server {
 }
 
 // authCluster is story 2's NatsCluster booted in-process from its config
-// rendered under a hand-minted operator, and the cluster controller's
+// rendered under a hand-minted NATS operator, and the cluster controller's
 // system connections to it.
 type authCluster struct {
 	p     testPlane

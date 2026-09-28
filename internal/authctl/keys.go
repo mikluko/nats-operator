@@ -48,7 +48,7 @@ const (
 	roleAccount       = "account"
 )
 
-// keySource is where an operator's or account's keys come from.
+// keySource is where a NATS operator's or account's keys come from.
 type keySource struct {
 	// owner is the NatsOperator, NatsSystemAccount or NatsAccount; its
 	// namespace is where every seed Secret is read.
@@ -64,7 +64,6 @@ type keySource struct {
 	role     string
 }
 
-// resolvedKeys are the keys of one operator or account.
 type resolvedKeys struct {
 	jwtplane.Keys
 	// Generated names the Secrets the auth controller generated seeds into.
@@ -149,7 +148,6 @@ func resolveKeys(ctx context.Context, c client.Client, src keySource, generate b
 	return out, nil
 }
 
-// readSeed reads the seed under key in Secret namespace/name.
 func readSeed(ctx context.Context, c client.Reader, namespace, name, key string, prefix nkeys.PrefixByte) (nkeys.KeyPair, error) {
 	s, err := getSeedSecret(ctx, c, namespace, name)
 	if err != nil {
@@ -171,7 +169,8 @@ func getSeedSecret(ctx context.Context, c client.Reader, namespace, name string)
 	return &s, nil
 }
 
-// seedFrom parses the seed under key in s.
+// seedFrom parses the seed under key in s; a missing key wraps
+// errKeysPending, a seed of the wrong kind errInvalidSeed.
 func seedFrom(s *corev1.Secret, key string, prefix nkeys.PrefixByte) (nkeys.KeyPair, error) {
 	seed, ok := s.Data[key]
 	if !ok {
@@ -216,7 +215,7 @@ func generatedSeed(ctx context.Context, c client.Client, owner client.Object, na
 	return jwtplane.ParseSeed(seed, prefix)
 }
 
-// operatorKeySource is where op's keys come from; an operator JWT signed
+// operatorKeySource is where op's keys come from; a NATS operator JWT signed
 // offline names the identity.
 func operatorKeySource(op *authv1beta1.NatsOperator) (keySource, error) {
 	src := keySource{owner: op, keys: op.Spec.Keys, recorded: op.Status.PublicKey, prefix: nkeys.PrefixByteOperator, role: roleOperator}

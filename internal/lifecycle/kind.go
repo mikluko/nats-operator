@@ -19,8 +19,7 @@ import (
 )
 
 // A Kind adapts one JetStream object resource kind, P, to the reconcile loop
-// every such kind shares: the finalizer, Sync through the server object
-// Resolve returns, the status write, and the deletion policy.
+// every such kind shares.
 type Kind[P interface {
 	client.Object
 	DeepCopy() P
@@ -38,9 +37,8 @@ type Kind[P interface {
 	// without running its deletion policy. Nil resolves through Connection
 	// and Bind.
 	Resolve func(ctx context.Context, c client.Client, d *natsconn.Dialer, obj P, ready bool) (o Object, gone bool, err error)
-	// Connection is the NatsConnection reference obj makes, and Bind binds
-	// obj's server object to the API through it; they serve where Resolve is
-	// nil.
+	// Connection is the NatsConnection reference obj makes and Bind binds
+	// obj's server object through it, where Resolve is nil.
 	Connection func(obj P) natsv1beta1.ObjectReference
 	Bind       func(api *API, c client.Client, obj P) Object
 	// Record writes info, the server object as Sync read it, into obj's

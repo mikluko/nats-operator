@@ -239,9 +239,8 @@ spec:
                     description: From is the server moved off.
                     type: string
                   kind:
-                    description: |-
-                      Kind is Leader for a leader stepdown, Placement for moving the
-                      stream's replicas off a server.
+                    description: Kind is Leader for a leader move, Placement for a
+                      placement move.
                     enum:
                     - Leader
                     - Placement

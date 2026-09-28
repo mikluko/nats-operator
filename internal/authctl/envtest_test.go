@@ -404,7 +404,7 @@ func (e *env) testServed(t *testing.T) {
 	require.Equal(t, "upstream.results.http", msg.Subject)
 }
 
-// testCrossNamespaceImport pins the two consents of Q2074: a grant in the
+// testCrossNamespaceImport pins the two consents of an import: a grant in the
 // exporter's namespace for any import, and the importer listed for a
 // private export; dropping the grant drops the import from the JWT.
 func (e *env) testCrossNamespaceImport(t *testing.T) {
@@ -543,7 +543,7 @@ spec:
 	require.Empty(t, c.Imports)
 }
 
-// testNoExpiryAndAccountTrust pins jwtTTL: 0 (Q2181) and the reference form
+// testNoExpiryAndAccountTrust pins jwtTTL: 0 and the reference form
 // of NatsAccountTrust, within its namespace and, without a grant, across.
 func (e *env) testNoExpiryAndAccountTrust(t *testing.T) {
 	e.apply(t, `
@@ -588,9 +588,9 @@ spec:
 	require.Zero(t, c.Expires)
 }
 
-// testRotation adds a signing key to an operator with adopted keys, marks
+// testRotation adds a signing key to a NatsOperator with adopted keys, marks
 // the old one retiring, and removes it: accounts are re-signed with the new
-// key before the old one leaves the operator JWT.
+// key before the old one leaves the NATS operator JWT.
 func (e *env) testRotation(t *testing.T) {
 	seeds := map[string]nkeys.PrefixByte{"rot-id": nkeys.PrefixByteOperator, "rot-k1": nkeys.PrefixByteOperator, "rot-k2": nkeys.PrefixByteOperator}
 	pubs := map[string]string{}
@@ -662,7 +662,7 @@ spec:
 	e.eventually(t, signedBy([]string{pubs["rot-k2"]}, pubs["rot-k2"]))
 }
 
-// testOfflineIdentities pins an operator JWT signed offline, a system
+// testOfflineIdentities pins a NATS operator JWT signed offline, a system
 // account and an account whose identities are public keys only, and the
 // refusal of an offline JWT that names another system account.
 func (e *env) testOfflineIdentities(t *testing.T) {
@@ -781,7 +781,7 @@ spec:
 		"nothing is generated for identities held offline")
 }
 
-// testFlipAndStepdown flips an operator's systemAccountRef between two
+// testFlipAndStepdown flips a NatsOperator's systemAccountRef between two
 // NatsSystemAccounts, and signs the stepdown imports of an account carrying
 // the jetstream-stepdown preset into the system account JWT.
 func (e *env) testFlipAndStepdown(t *testing.T) {

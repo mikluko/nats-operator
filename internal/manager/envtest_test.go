@@ -76,10 +76,9 @@ func TestEnvtestStart(t *testing.T) {
 	require.NoError(t, <-done)
 }
 
-// TestEnvtestCache pins what New's cache holds: of an owned kind only the
-// objects carrying the owner label; of a Secret no data and no annotations,
-// kept current by its watch, while the manager's client reads the Secret
-// whole.
+// TestEnvtestCache pins that New's cache holds only labelled objects of an
+// owned kind and Secrets without data or annotations, kept current, while the
+// manager's client reads a Secret whole.
 func TestEnvtestCache(t *testing.T) {
 	cfg := startEnvtest(t)
 	scheme, err := newScheme()

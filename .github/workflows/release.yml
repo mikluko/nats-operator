@@ -4,9 +4,6 @@ name: release
 # newest CHANGELOG.md entry names a version no tag carries, publishes it at
 # the commit ci tested, and nothing else does. One workflow, because a tag
 # pushed with GITHUB_TOKEN triggers no other.
-#
-# A manual run builds and packages everything and publishes nothing unless
-# dry-run is switched off on main.
 on:
   workflow_run:
     workflows: [ci]

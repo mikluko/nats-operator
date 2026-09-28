@@ -106,11 +106,8 @@ var statusSpecs = map[string]string{
 	"NatsClusterEvacuation": "{connectionRef: {name: c}, from: {cluster: a}, to: {serverTags: [b]}}",
 }
 
-// testStoryStatuses writes every story status file, placeholders' example
-// values included, through the status subresource, so the schema's enums,
-// formats and list keys judge it. A status file lists conditions without
-// the lastTransitionTime and message the schema requires; those are filled
-// in.
+// testStoryStatuses pins every story status file, placeholders' example
+// values included, to the status subresource's schema.
 func testStoryStatuses(t *testing.T, c client.Client) {
 	s := apiScheme(t)
 	_, statuses := storyFiles(t)

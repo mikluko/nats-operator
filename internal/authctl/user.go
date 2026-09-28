@@ -51,6 +51,8 @@ type UserReconciler struct {
 	Recorder events.EventRecorder
 }
 
+var _ reconcile.Reconciler = (*UserReconciler)(nil)
+
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=get;list;watch;patch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers/status,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers/finalizers,verbs=update
@@ -58,7 +60,8 @@ type UserReconciler struct {
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;delete
 
-// Reconcile implements reconcile.Reconciler.
+// Reconcile signs the JWT of the NatsUser req names, and on its deletion
+// revokes it and closes its connections.
 func (r *UserReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	var u authv1beta1.NatsUser
 	if err := r.Get(ctx, req.NamespacedName, &u); err != nil {
@@ -179,7 +182,6 @@ func (r *UserReconciler) sign(u *authv1beta1.NatsUser, pub string, keys resolved
 	return token, nil
 }
 
-// userClaims maps u's spec to the claims jwtplane signs for pub.
 func userClaims(u *authv1beta1.NatsUser, pub string) jwtplane.User {
 	out := jwtplane.User{
 		Name:          u.Name,
@@ -325,7 +327,7 @@ type userAccount struct {
 	operator  types.NamespacedName
 	publicKey string
 	// jwt is the account JWT as signed; empty where it is not signed, as
-	// for a system account no operator names.
+	// for a system account no NatsOperator names.
 	jwt string
 	// distribution is how many servers hold jwt; nil where unknown, as for
 	// a system account whose status counts servers for another JWT.
@@ -471,8 +473,7 @@ func (r *UserReconciler) deleteCreds(ctx context.Context, u *authv1beta1.NatsUse
 	return client.IgnoreNotFound(r.Delete(ctx, &s, client.Preconditions{UID: &s.UID}))
 }
 
-// SetupWithManager registers the reconciler with mgr. The indexes Setup
-// registers must be in place.
+// SetupWithManager registers r with mgr, which must already hold Setup's indexes.
 func (r *UserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c := mgr.GetClient()
 	return ctrl.NewControllerManagedBy(mgr).

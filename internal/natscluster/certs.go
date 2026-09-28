@@ -34,8 +34,8 @@ type Certs struct {
 
 // MountedCert is what a render reads of a TLS Secret the servers mount.
 type MountedCert struct {
-	// Digest is a digest of the Secret's data: a rotation changes the
-	// revision, so it reaches running servers.
+	// Digest is a digest of the Secret's data, so a rotation changes the
+	// revision.
 	Digest string
 	// NotAfter is the expiry of the Secret's tls.crt, zero when it does not
 	// parse.
@@ -76,10 +76,8 @@ func (c Certs) loaded(got sysobs.CertNotAfter) bool {
 	return same(c.Routes.NotAfter, got.Cluster) && same(c.Gateway.NotAfter, got.Gateway) && same(c.Leafnodes.NotAfter, got.Leafnode)
 }
 
-// ensureCerts makes every listener's certificate Secret exist and reads
-// it. While one is not ready it also returns what the servers wait for and
-// the condition reason naming the listener, routes before gateway before
-// leafnodes.
+// ensureCerts reads every listener's certificate Secret, and while one is
+// not ready what the servers wait for and the reason naming the first.
 func (r *Reconciler) ensureCerts(ctx context.Context, nc *clusterv1beta1.NatsCluster) (Certs, string, string, error) {
 	var certs Certs
 	var wait, reason string
@@ -165,11 +163,10 @@ func (r *Reconciler) ensureCertSecret(ctx context.Context, nc *clusterv1beta1.Na
 	return "", s, nil
 }
 
-// ensureSelfSignedRouteSecret issues the route certificate Secret, and the
-// CA Secret it is signed from, when routes are self-signed and it is
-// missing or due for renewal. A renewal keeps the CA's key, so servers
-// still holding the previous certificates accept the renewed ones. A route
-// Secret nc does not control is left alone.
+// ensureSelfSignedRouteSecret issues the self-signed route certificate
+// Secret and its CA Secret when the route Secret is missing, or nc controls
+// it and it is due for renewal. A renewal keeps the CA's key, so servers
+// still holding the previous certificates accept the renewed ones.
 func (r *Reconciler) ensureSelfSignedRouteSecret(ctx context.Context, nc *clusterv1beta1.NatsCluster) error {
 	name := routesSecret(nc)
 	if name == "" || name != routesSecretName(nc) || certManagerIssuer(nc) != nil {

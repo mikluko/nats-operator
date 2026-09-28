@@ -74,7 +74,7 @@ Each NatsCluster reports every other member's gateways connected.
 
 ## The auth plane
 
-The NATS operator, the system account, and the production account chain: checks exports a service to monitoring, which exports streams and services to core and to the collector.
+The NATS operator, the system account, and the production account chain: checks exports a service to monitoring, which exports streams and services to core and to the collector. The development chain repeats it under `-dev` names and is left out, so the page shows each account's wiring once.
 
 {{< manifest "01-auth.yaml" >}}
 

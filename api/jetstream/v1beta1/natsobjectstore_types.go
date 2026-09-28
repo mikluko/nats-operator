@@ -24,7 +24,7 @@ type ObjectStoreConfig struct {
 	// +optional
 	MaxBytes *resource.Quantity `json:"maxBytes,omitempty"`
 
-	// Storage is immutable: a bucket is a stream.
+	// Storage is immutable.
 	// +optional
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="storage is immutable"
 	Storage *StorageType `json:"storage,omitempty"`

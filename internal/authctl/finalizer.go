@@ -9,9 +9,7 @@ import (
 )
 
 // patchFinalizer adds finalizer to obj, or removes it when add is false,
-// and persists that change alone, where obj needs it. An update of the
-// whole object would write spec as the Go types encode it, which can differ
-// from what was applied (48h becomes 48h0m0s) and move the generation.
+// and persists that change alone, where obj needs it.
 func patchFinalizer(ctx context.Context, c client.Client, obj client.Object, finalizer string, add bool) error {
 	base, ok := obj.DeepCopyObject().(client.Object)
 	if !ok {

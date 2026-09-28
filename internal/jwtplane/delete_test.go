@@ -11,7 +11,7 @@ import (
 )
 
 // TestSignDelete pins the request nats-server's handleDeleteRequest
-// accepts: self-signed by an operator key, accounts listed under
+// accepts: self-signed by a NATS operator key, accounts listed under
 // "accounts".
 func TestSignDelete(t *testing.T) {
 	keys := newKeys(t, nkeys.PrefixByteOperator, "active", "old")

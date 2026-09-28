@@ -22,7 +22,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
 
-// fullCluster is a routed cluster of servers trusting a plane's operator,
+// fullCluster is a routed cluster of servers trusting a plane's NATS operator,
 // each with a full resolver on a directory of its own that deletes are
 // allowed on and that outlives a restart. The resolvers sync once an hour,
 // so only pushes and deletes move JWTs between them.
@@ -125,7 +125,7 @@ func newAccount(t *testing.T) (jwtplane.Keys, string) {
 	return jwtplane.Keys{Identity: id, Signing: []jwtplane.SigningKey{{Name: "s", Pair: sk}}}, pub
 }
 
-// signAccount signs the account with keys, named name, with p's operator.
+// signAccount signs the account with keys, named name, with p's NATS operator.
 func signAccount(t *testing.T, p plane, keys jwtplane.Keys, name string) string {
 	t.Helper()
 	token, err := jwtplane.SignAccount(jwtplane.Account{Name: name, Keys: keys}, p.op, time.Now())
@@ -258,10 +258,9 @@ func TestResolvers_Lookup(t *testing.T) {
 	require.ErrorIs(t, err, authctl.ErrUnreachable)
 }
 
-// TestResolvers_NeverPushesOlder pins Q2181's rule: a server keeps whatever
-// it is pushed last, so a JWT issued before one already pushed, or before
-// one a server holds when nothing was pushed since a restart, is refused
-// and never sent.
+// TestResolvers_NeverPushesOlder pins that a JWT issued before one already
+// pushed, or before one a server holds when nothing was pushed since a
+// restart, is refused and never sent.
 func TestResolvers_NeverPushesOlder(t *testing.T) {
 	p := newPlane(t)
 	c := startFullCluster(t, p, 2)
@@ -280,10 +279,10 @@ func TestResolvers_NeverPushesOlder(t *testing.T) {
 	}
 }
 
-// TestResolvers_DeleteResentOnRejoin pins Q2068's gap and its remedy: a
-// server down across a delete comes back still serving the account, since
-// the resolver's sync never carries a delete, and the delete is sent again
-// once it answers STATSZ, under a new server ID.
+// TestResolvers_DeleteResentOnRejoin pins that a server down across a
+// delete, which comes back still serving the account since resolver sync
+// never carries a delete, is sent the delete again once it answers STATSZ
+// under a new server ID.
 func TestResolvers_DeleteResentOnRejoin(t *testing.T) {
 	p := newPlane(t)
 	c := startFullCluster(t, p, 3)
@@ -332,7 +331,7 @@ func userCreds(t *testing.T, keys jwtplane.Keys) nats.Option {
 }
 
 // TestResolvers_SystemAccountKeyPushed pins what nats-server does with an
-// account JWT for the system account's key that the operator signed with
+// account JWT for the system account's key that the NATS operator signed with
 // signing keys of someone else's: it takes it in place of the system
 // account's own, closes the connections of the system account's users,
 // the pushing one among them before its reply, and that someone's users

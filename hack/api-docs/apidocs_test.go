@@ -251,10 +251,8 @@ func prose(groups ...*ast.CommentGroup) string {
 // they copy; a field of theirs without a doc means what it means there.
 var mirrors = []string{"StreamConfig", "StreamConsumerLimits", "ConsumerConfig", "KeyValueConfig", "ObjectStoreConfig"}
 
-// undocumented reports whether a field needs no doc of its own: embedded
-// fields, whose members carry theirs; a kind's or a template's metadata,
-// spec, status and items, which the types they name document; and a
-// mirror's fields.
+// undocumented reports whether a field's doc lives elsewhere: on its type,
+// its members, or the config a mirror copies.
 func undocumented(typ string, f *ast.Field) bool {
 	if len(f.Names) == 0 || slices.Contains(mirrors, typ) {
 		return true

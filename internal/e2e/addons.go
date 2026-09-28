@@ -17,7 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// MetalLB's native manifest, v0.16.0, and its SHA-256.
+// MetalLB's native manifest and its SHA-256.
 const (
 	MetalLBManifestURL    = "https://raw.githubusercontent.com/metallb/metallb/v0.16.0/config/manifests/metallb-native.yaml"
 	MetalLBManifestSHA256 = "b0b9be2802f10aa32d45308b4457d06cde0c70544712c8d0cf5511657ffd2b69"

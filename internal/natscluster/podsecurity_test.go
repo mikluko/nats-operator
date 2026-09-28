@@ -62,9 +62,9 @@ func TestRender_RestrictedPodSecurity(t *testing.T) {
 	}
 }
 
-// TestEnvtestRestrictedPodSecurity has the API server's PodSecurity
-// admission judge each rendered pod against the restricted profile, and a
-// podTemplate that escalates past it.
+// TestEnvtestRestrictedPodSecurity pins that the API server's restricted
+// PodSecurity admission accepts each rendered pod and refuses a podTemplate
+// that escalates past it.
 func TestEnvtestRestrictedPodSecurity(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")

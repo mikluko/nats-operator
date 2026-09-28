@@ -21,19 +21,22 @@ import (
 )
 
 // OperatorTrustReconciler mirrors into a reference-form NatsOperatorTrust's
-// status the operator and system account JWTs of the NatsOperator it names.
+// status the NATS operator and system account JWTs of the NatsOperator it names.
 // A literal-form one is left alone. Where the reference is not admitted,
-// or the operator has not signed both JWTs, status carries neither.
+// or the NatsOperator has not signed both JWTs, status carries neither.
 type OperatorTrustReconciler struct {
 	client.Client
 }
+
+var _ reconcile.Reconciler = (*OperatorTrustReconciler)(nil)
 
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsoperatortrusts,verbs=get;list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsoperatortrusts/status,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
 
-// Reconcile implements reconcile.Reconciler.
+// Reconcile mirrors into the status of the NatsOperatorTrust req names the
+// JWTs of the NatsOperator it references.
 func (r *OperatorTrustReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	var t natsv1beta1.NatsOperatorTrust
 	if err := r.Get(ctx, req.NamespacedName, &t); err != nil {
@@ -80,8 +83,7 @@ func (r *OperatorTrustReconciler) reconcile(ctx context.Context, t *natsv1beta1.
 	return nil
 }
 
-// SetupWithManager registers the reconciler with mgr. The indexes Setup
-// registers must be in place.
+// SetupWithManager registers r with mgr, which must already hold Setup's indexes.
 func (r *OperatorTrustReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c := mgr.GetClient()
 	return ctrl.NewControllerManagedBy(mgr).
@@ -100,12 +102,15 @@ type AccountTrustReconciler struct {
 	client.Client
 }
 
+var _ reconcile.Reconciler = (*AccountTrustReconciler)(nil)
+
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsaccounttrusts,verbs=get;list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsaccounttrusts/status,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts,verbs=get;list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
 
-// Reconcile implements reconcile.Reconciler.
+// Reconcile mirrors into the status of the NatsAccountTrust req names the
+// public key and JWT of the NatsAccount it references.
 func (r *AccountTrustReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	var t natsv1beta1.NatsAccountTrust
 	if err := r.Get(ctx, req.NamespacedName, &t); err != nil {
@@ -152,8 +157,7 @@ func (r *AccountTrustReconciler) reconcile(ctx context.Context, t *natsv1beta1.N
 	return nil
 }
 
-// SetupWithManager registers the reconciler with mgr. The indexes Setup
-// registers must be in place.
+// SetupWithManager registers r with mgr, which must already hold Setup's indexes.
 func (r *AccountTrustReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c := mgr.GetClient()
 	return ctrl.NewControllerManagedBy(mgr).

@@ -109,7 +109,7 @@ func TestSignOperator(t *testing.T) {
 	}
 }
 
-// signedBy returns an operator JWT for keys' identity signed by signer.
+// signedBy returns a NATS operator JWT for keys' identity signed by signer.
 func signedBy(t *testing.T, keys jwtplane.Keys, signer nkeys.KeyPair, sys string) string {
 	t.Helper()
 	c := jwt.NewOperatorClaims(pub(t, keys.Identity))

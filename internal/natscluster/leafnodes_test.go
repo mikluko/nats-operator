@@ -251,7 +251,7 @@ func (b *booted) waitConnected(t *testing.T, remotes []LeafRemote) clusterv1beta
 }
 
 // hub is story 10's prod-east booted in-process as one server under a
-// hand-minted operator, its leafnode listener on a self-signed certificate
+// hand-minted NATS operator, its leafnode listener on a self-signed certificate
 // and advertising where it listens, with the telemetry account pushed.
 type hub struct {
 	*booted
@@ -309,7 +309,7 @@ func bootRenderedAt(t *testing.T, nc *clusterv1beta1.NatsCluster, trust *Trust, 
 	return b
 }
 
-// push signs account under the hub's operator and pushes it over $SYS as
+// push signs account under the hub's NATS operator and pushes it over $SYS as
 // the auth controller's user.
 func (h *hub) push(t *testing.T, account jwtplane.Account) {
 	t.Helper()
@@ -460,7 +460,7 @@ func TestLeaf_RemotesReload(t *testing.T) {
 }
 
 // operatorLeaf is story 10's edge-site-2 booted against h: it trusts the
-// hub's operator, binds one remote to its system account and one to the
+// hub's NATS operator, binds one remote to its system account and one to the
 // telemetry account, whose JWT it preloads.
 func operatorLeaf(t *testing.T, h *hub) (*booted, []LeafRemote) {
 	t.Helper()

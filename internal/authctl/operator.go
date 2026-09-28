@@ -40,6 +40,8 @@ type OperatorReconciler struct {
 	Recorder events.EventRecorder
 }
 
+var _ reconcile.Reconciler = (*OperatorReconciler)(nil)
+
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators/status,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators/finalizers,verbs=update
@@ -48,7 +50,8 @@ type OperatorReconciler struct {
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create
 
-// Reconcile implements reconcile.Reconciler.
+// Reconcile signs the JWTs of the NatsOperator req names and of its system
+// account.
 func (r *OperatorReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	var op authv1beta1.NatsOperator
 	if err := r.Get(ctx, req.NamespacedName, &op); err != nil {
@@ -314,8 +317,7 @@ func setRetiringCondition(op *authv1beta1.NatsOperator, retiring, jwts []string)
 
 }
 
-// SetupWithManager registers the reconciler with mgr. The indexes Setup
-// registers must be in place.
+// SetupWithManager registers r with mgr, which must already hold Setup's indexes.
 func (r *OperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c := mgr.GetClient()
 	return ctrl.NewControllerManagedBy(mgr).
@@ -347,7 +349,7 @@ func (r *OperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // accountSignedChange passes a NatsAccount update only when what the
-// operator's reconcile reads of it changed: its generation, its deletion,
+// OperatorReconciler reads of it changed: its generation, its deletion,
 // or its public key or JWT in status. Every other event passes.
 var accountSignedChange = predicate.Funcs{UpdateFunc: func(e event.UpdateEvent) bool {
 	o, okOld := e.ObjectOld.(*authv1beta1.NatsAccount)
@@ -362,7 +364,7 @@ var accountSignedChange = predicate.Funcs{UpdateFunc: func(e event.UpdateEvent) 
 }}
 
 // systemAccountOperators maps requests for NatsSystemAccounts to requests
-// for the operators they name.
+// for the NatsOperators they name.
 func systemAccountOperators(ctx context.Context, c client.Reader, reqs []reconcile.Request) []reconcile.Request {
 	var out []reconcile.Request
 	for _, req := range reqs {

@@ -269,8 +269,7 @@ func serverConfig(nc *clusterv1beta1.NatsCluster, in Inputs, server string, l La
 	return c
 }
 
-// gatewayConfig renders the gateway of the NATS cluster named name: every
-// remote but its own entry, reject_unknown on unless discovery is Gossip.
+// gatewayConfig renders the gateway of the NATS cluster named name.
 func gatewayConfig(name string, g *clusterv1beta1.Gateway, l Layout, withCA bool) *GatewayConfig {
 	gc := &GatewayConfig{
 		Name:          name,

@@ -9,16 +9,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
 
-// evacuation writes story 11's fixtures, the part of story 9's supercluster
-// the evacuation acts on: in e2e/00-auth.yaml, a NATS operator acme with
-// accounts orders and payments adopting generated keys, the trust object
-// both NATS clusters read, the system users the cluster controllers, the
-// auth controller and the evacuation run as, and in namespaces orders and
-// payments a connection with creds of that account's user, signed by the
-// account's signing key; in e2e/01-workload.yaml, a stream and a key-value
-// bucket whose resources pin prod-east, and a Job creating, as a service
-// would at runtime, a stream no resource owns whose config names prod-east
-// and one that names no cluster.
+// evacuation writes story 11's fixtures into dir.
 func evacuation(dir string, _ io.Writer) error {
 	var e evac
 	for _, k := range []struct {

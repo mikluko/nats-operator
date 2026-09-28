@@ -19,8 +19,9 @@ type accept struct {
 	RuntimeCreds                          []string
 }
 
-// acceptance writes story 9's fixtures into dir and prints the operator and system account JWTs its
-// NatsOperatorTrust takes as a substitution's patch.
+// acceptance writes story 9's fixtures into dir and prints the NATS operator
+// and system account JWTs its NatsOperatorTrust takes as a substitution's
+// patch.
 func acceptance(dir string, out io.Writer) error {
 	var a accept
 	var op, sys, monitoring jwtplane.Keys

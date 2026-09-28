@@ -194,10 +194,8 @@ spec:
 {{- end }}
 
 {{/*
-nats-operator.test renders one controller's `helm test` hook: a Service on its
-probes port and a Pod that GETs /readyz through it. The Pod tries each URL
-30 times, two seconds apart, before it fails. It takes a dict of root (the
-chart context) and name (the controller's name).
+nats-operator.test renders one controller's `helm test` hook. It takes a dict
+of root (the chart context) and name (the controller's name).
 */}}
 {{- define "nats-operator.test" -}}
 {{- $fullname := include "nats-operator.fullname" . -}}

@@ -30,10 +30,8 @@ func NewPool() *natsconn.Pool {
 // to connect as: it has no auth plane, or no auth.systemCredentials.
 var ErrNoSystemUser = errors.New("no system user: auth.systemCredentials is not set")
 
-// SystemConnections reaches each NATS cluster a NatsCluster deployed as the
-// system user its auth.systemCredentials names, over one pooled connection
-// per NatsCluster. It observes a NatsCluster without that user through
-// Fallback.
+// SystemConnections reaches a NatsCluster's servers as the system user its
+// auth.systemCredentials names, and one without that user through Fallback.
 type SystemConnections struct {
 	Client   client.Reader
 	Pool     *natsconn.Pool

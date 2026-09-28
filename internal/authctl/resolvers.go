@@ -17,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 )
@@ -54,7 +55,7 @@ type Resolvers struct {
 }
 
 type resolverState struct {
-	// send serializes pushes and delete sends to the operator's servers.
+	// send serializes pushes and delete sends to a NATS operator's servers.
 	send sync.Mutex
 
 	// Guarded by Resolvers.mu.
@@ -71,7 +72,14 @@ type resolverState struct {
 	acked   map[string]bool
 }
 
-// Subscribe implements RosterNotifier.
+var (
+	_ Distributor      = (*Resolvers)(nil)
+	_ RosterNotifier   = (*Resolvers)(nil)
+	_ manager.Runnable = (*Resolvers)(nil)
+)
+
+// Subscribe returns a new channel of roster changes; one left undrained
+// stalls roster polling once 64 changes are pending.
 func (r *Resolvers) Subscribe() <-chan event.GenericEvent {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -117,9 +125,8 @@ func (r *Resolvers) conn(ctx context.Context, operator types.NamespacedName) (*n
 	return nc, nil
 }
 
-// Push implements Distributor. Before the first push of each account the
-// servers are asked for the JWT they hold, with CLAIMS.LOOKUP, so a newer
-// one pushed before a restart of the auth controller is not overwritten.
+// Push is Distributor.Push; the first push of an account after a restart
+// of the auth controller costs a CLAIMS.LOOKUP of every server.
 func (r *Resolvers) Push(ctx context.Context, operator types.NamespacedName, accountJWT string) error {
 	c, err := jwt.DecodeAccountClaims(accountJWT)
 	if err != nil {
@@ -186,10 +193,9 @@ func (r *Resolvers) Push(ctx context.Context, operator types.NamespacedName, acc
 	return nil
 }
 
-// Current implements Distributor: the servers are the roster, and a server
-// holds accountJWT when its CLAIMS.LOOKUP reply is that JWT. Lookup replies
-// carry no server ID, so current counts matching replies. The last push is
-// one this Resolvers made.
+// Current is Distributor.Current over the roster; since lookup replies
+// carry no server ID it counts matching replies, and it knows only the
+// pushes this Resolvers made.
 func (r *Resolvers) Current(ctx context.Context, operator types.NamespacedName, accountJWT string) (authv1beta1.Distribution, error) {
 	c, err := jwt.DecodeAccountClaims(accountJWT)
 	if err != nil {
@@ -223,11 +229,8 @@ func (r *Resolvers) Current(ctx context.Context, operator types.NamespacedName, 
 	return out, nil
 }
 
-// Lookup implements Distributor. A server whose resolver holds no JWT for
-// account answers with an empty reply; one failing to read it does not
-// answer. Unless every server of the roster answers with nothing or a JWT
-// of account, the error wraps ErrUnreachable: a server not heard from may
-// hold a newer JWT than any reply.
+// Lookup is Distributor.Lookup over the roster; a server that fails to
+// read its resolver sends no reply and so makes the lookup ErrUnreachable.
 func (r *Resolvers) Lookup(ctx context.Context, operator types.NamespacedName, account string) (string, error) {
 	st := r.state(operator)
 	nc, err := r.conn(ctx, operator)
@@ -266,7 +269,7 @@ func (r *Resolvers) Lookup(ctx context.Context, operator types.NamespacedName, a
 	return newest, nil
 }
 
-// Delete implements Distributor. A request deleting the accounts the last
+// Delete is Distributor.Delete; a request deleting the accounts the last
 // one did, signed by the same key, changes nothing.
 func (r *Resolvers) Delete(ctx context.Context, operator types.NamespacedName, request string) error {
 	var accounts []string
@@ -413,8 +416,7 @@ func (r *Resolvers) lookup(ctx context.Context, nc *nats.Conn, account string, w
 	return out, err
 }
 
-// Start implements manager.Runnable: it polls rosters every Interval until
-// ctx ends.
+// Start polls rosters every Interval until ctx ends.
 func (r *Resolvers) Start(ctx context.Context) error {
 	t := time.NewTicker(r.interval())
 	defer t.Stop()

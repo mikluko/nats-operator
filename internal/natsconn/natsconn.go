@@ -134,8 +134,8 @@ func endpointOptions(ep Endpoint) ([]nats.Option, error) {
 	return opts, nil
 }
 
-// validateCreds reports whether creds carries a user JWT and a seed, which
-// nats.go would otherwise discover only on connect.
+// validateCreds returns ErrInvalidCredentials unless creds carries a user JWT
+// and a seed.
 func validateCreds(creds []byte) error {
 	token, err := nkeys.ParseDecoratedJWT(creds)
 	if err != nil {

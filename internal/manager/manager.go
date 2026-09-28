@@ -58,8 +58,7 @@ func Run(c Controller) error {
 	return err
 }
 
-// start builds c's manager against cfg, installs its telemetry, sets it up
-// and runs it until ctx ends.
+// start runs c's manager against cfg until ctx ends.
 func start(ctx context.Context, cfg *rest.Config, o *Options, c Controller) error {
 	scheme, err := c.NewScheme()
 	if err != nil {
@@ -90,8 +89,7 @@ type Options struct {
 }
 
 // Flags registers the manager's flags on fs and returns the Options they
-// fill in once fs is parsed. The leader election ID defaults to id, which is
-// the controller's own API group so that two controllers never contend.
+// fill in once fs is parsed, the leader election ID defaulting to id.
 func Flags(fs *flag.FlagSet, id string) *Options {
 	o := &Options{}
 	fs.StringVar(&o.MetricsAddr, "metrics-bind-address", ":8080", "address the metrics endpoint serves HTTPS on, to a bearer token allowed to get /metrics; 0 disables it")
@@ -102,10 +100,9 @@ func Flags(fs *flag.FlagSet, id string) *Options {
 }
 
 // New builds a manager for scheme against the API server cfg reaches, with
-// health and readiness probes registered and its cache scoped as
-// cacheOptions and clientOptions state. Scoping the cache reads the API
-// server's discovery, so New fails while the API server is unreachable. The
-// caller starts the manager.
+// health and readiness probes registered and its cache scoped to owned, for
+// the caller to start. It fails while the API server is unreachable, since
+// scoping the cache reads its discovery.
 func New(cfg *rest.Config, o *Options, scheme *runtime.Scheme, owned Owned) (ctrl.Manager, error) {
 	cacheOpts, err := cacheOptions(owned)
 	if err != nil {

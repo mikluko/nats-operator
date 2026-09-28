@@ -31,12 +31,16 @@ const (
 
 const shutdownTimeout = 5 * time.Second
 
-// Shutdown flushes and stops the providers Start installed. It is a manager
-// runnable that runs on every replica, leader or not, and shuts down once
-// the manager stops.
+// Shutdown flushes and stops the providers Start installed, as a manager
+// runnable on every replica, leader or not.
 type Shutdown func(context.Context) error
 
-// Start implements manager.Runnable.
+var (
+	_ manager.Runnable               = Shutdown(nil)
+	_ manager.LeaderElectionRunnable = Shutdown(nil)
+)
+
+// Start blocks until ctx ends, then calls s with shutdownTimeout to flush.
 func (s Shutdown) Start(ctx context.Context) error {
 	<-ctx.Done()
 	flush, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
@@ -44,7 +48,7 @@ func (s Shutdown) Start(ctx context.Context) error {
 	return s(flush)
 }
 
-// NeedLeaderElection implements manager.LeaderElectionRunnable.
+// NeedLeaderElection is false.
 func (Shutdown) NeedLeaderElection() bool { return false }
 
 // Start installs the global meter and tracer providers of the controller
@@ -82,12 +86,8 @@ func Start(ctx context.Context, service string, log logr.Logger) (Shutdown, erro
 	}, nil
 }
 
-// exporters decides what a controller exports: per signal, nothing unless
-// the environment turns it on, and then autoexport's choice under the SDK's
-// defaults. A signal is on while OTEL_<SIGNAL>_EXPORTER,
-// OTEL_EXPORTER_OTLP_<SIGNAL>_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT is
-// set to anything, and every signal is off while OTEL_SDK_DISABLED is
-// true; the reader or exporter of a signal left off is nil.
+// exporters returns autoexport's reader and span exporter for each signal
+// signalOn turns on unless sdkDisabled, and nil for a signal left off.
 func exporters(ctx context.Context) (sdkmetric.Reader, sdktrace.SpanExporter, error) {
 	if sdkDisabled() {
 		return nil, nil, nil

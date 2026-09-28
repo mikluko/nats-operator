@@ -193,11 +193,7 @@ func decide(st rolloutState) rolloutDecision {
 	return d
 }
 
-// rolloutCondition is the Progressing condition of rollout rs: while a
-// server is being worked on or the gate is closed, RollingRestart,
-// ScalingDown or ReplacingServer after what that server's step does;
-// GateBlocked once the gate has been closed for gateBlockedAfter;
-// RolloutPaused while paused between steps.
+// rolloutCondition is the Progressing condition of rollout rs.
 func rolloutCondition(rs *clusterv1beta1.RolloutStatus, gate gateState, paused bool, closedFor time.Duration, kindOf func(string) stepKind) metav1.Condition {
 	c := metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionTrue}
 	total := len(rs.Updated) + len(rs.Pending)

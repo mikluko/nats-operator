@@ -23,14 +23,11 @@ import (
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
-// ReconciledKinds runs setup against a manager for scheme and returns the
-// kind each controller it registers traces its reconciles under, in
-// registration order. Each controller reconciles once, for an object its
-// client does not hold, and a controller that records no span fails the
-// test. Field indexes setup registers are dropped, and nothing is started.
-// Controller names are unique per process, and the global tracer provider
-// is replaced while it runs, so setup runs once per test binary and never
-// in parallel.
+// ReconciledKinds returns the kind each controller setup registers traces its
+// reconciles under, in registration order, failing the test for a controller
+// that records no span. It runs once per test binary and never in parallel:
+// controller names are unique per process, and it replaces the global tracer
+// provider.
 func ReconciledKinds(t *testing.T, scheme *runtime.Scheme, setup func(context.Context, manager.Manager) error) []string {
 	t.Helper()
 	mgr, err := ctrl.NewManager(&rest.Config{Host: "http://127.0.0.1:1"}, ctrl.Options{
@@ -90,7 +87,9 @@ func (r *recording) GetFieldIndexer() client.FieldIndexer { return noIndexer{} }
 
 type noIndexer struct{}
 
-// IndexField implements client.FieldIndexer.
+var _ client.FieldIndexer = noIndexer{}
+
+// IndexField registers nothing.
 func (noIndexer) IndexField(context.Context, client.Object, string, client.IndexerFunc) error {
 	return nil
 }
