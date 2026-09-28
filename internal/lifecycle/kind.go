@@ -96,8 +96,11 @@ func (k Kind[P]) Reconcile(ctx context.Context, c client.Client, d *natsconn.Dia
 
 func (k Kind[P]) sync(ctx context.Context, c client.Client, d *natsconn.Dialer, s Syncer, obj P) (reconcile.Result, error) {
 	o, _, err := k.resolve(ctx, c, d, obj, true)
-	if err != nil || o == nil {
-		return reconcile.Result{RequeueAfter: natsconn.DefaultRetryAfter}, err
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if o == nil {
+		return reconcile.Result{RequeueAfter: natsconn.DefaultRetryAfter}, nil
 	}
 	f := k.Fields(obj)
 	res, info, err := s.Sync(ctx, Resource{

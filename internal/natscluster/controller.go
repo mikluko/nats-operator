@@ -3,7 +3,9 @@ package natscluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -173,6 +175,25 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if !nc.DeletionTimestamp.IsZero() {
 		return r.finalize(ctx, nc)
 	}
+	res, err := r.reconcile(ctx, nc)
+	if err != nil && !apierrors.IsConflict(err) {
+		err = errors.Join(err, r.reportFailure(ctx, nc, err))
+	}
+	return res, err
+}
+
+// reportFailure records err, the error a reconcile of nc failed with, as a
+// ReconcileFailed Warning event and as nc's Progressing condition.
+func (r *Reconciler) reportFailure(ctx context.Context, nc *clusterv1beta1.NatsCluster, err error) error {
+	telemetry.Emit(r.Recorder, nc, telemetry.ReconcileFailed, "%s", err)
+	orig := nc.DeepCopy()
+	conditions.Set(&nc.Status.Conditions, nc.Generation, metav1.Condition{
+		Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: ReasonReconcileFailed, Message: err.Error()})
+	return r.patchStatus(ctx, orig, nc)
+}
+
+// reconcile is Reconcile for a NatsCluster not being deleted.
+func (r *Reconciler) reconcile(ctx context.Context, nc *clusterv1beta1.NatsCluster) (ctrl.Result, error) {
 	if err := r.guardDeletion(ctx, nc); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -186,14 +207,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, err
 	}
 	if cond != nil {
-		return ctrl.Result{RequeueAfter: resyncUnsettled}, r.hold(ctx, orig, nc, cond)
+		return r.holdFor(ctx, orig, nc, cond)
 	}
 	remotes, cond, err := readLeafRemotes(ctx, r.Client, nc, trust)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if cond != nil {
-		return ctrl.Result{RequeueAfter: resyncUnsettled}, r.hold(ctx, orig, nc, cond)
+		return r.holdFor(ctx, orig, nc, cond)
 	}
 	certs, certWait, certReason, err := r.ensureCerts(ctx, nc)
 	if err != nil {
@@ -216,9 +237,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, err
 	}
 	obs := Observed{StatefulSets: stsByName, CertWait: certWait, CertReason: certReason}
+	if obs.ClaimTerminating, err = r.finishDeletions(ctx, nc, plan, stsByName); err != nil {
+		return ctrl.Result{}, err
+	}
 	if certWait == "" {
 		for _, s := range plan.Servers {
-			if stsByName[s.Name] != nil {
+			if stsByName[s.Name] != nil || slices.Contains(obs.ClaimTerminating, s.Name) {
 				continue
 			}
 			terminating, err := r.claimTerminating(ctx, nc, s.Name)
@@ -228,10 +252,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			if terminating {
 				obs.ClaimTerminating = append(obs.ClaimTerminating, s.Name)
 				continue
-			}
-			if ro := nc.Status.Rollout; ro != nil && ro.Current == s.Name {
-				s.StatefulSet = s.StatefulSet.DeepCopy()
-				s.StatefulSet.Annotations[AnnotationRemoval] = string(phaseRejoining)
 			}
 			sts, err := r.createServer(ctx, nc, s)
 			if err != nil {
@@ -273,6 +293,14 @@ func unsupportedFields(spec *clusterv1beta1.NatsClusterSpec) []string {
 func (r *Reconciler) hold(ctx context.Context, orig, nc *clusterv1beta1.NatsCluster, held *metav1.Condition) error {
 	conditions.Set(&nc.Status.Conditions, nc.Generation, progressingCondition(nc, nil, Observed{Held: held}))
 	return r.patchStatus(ctx, orig, nc)
+}
+
+// holdFor is hold, then a look again after resyncUnsettled.
+func (r *Reconciler) holdFor(ctx context.Context, orig, nc *clusterv1beta1.NatsCluster, held *metav1.Condition) (ctrl.Result, error) {
+	if err := r.hold(ctx, orig, nc, held); err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{RequeueAfter: resyncUnsettled}, nil
 }
 
 func unsupportedSpec(msg string) *metav1.Condition {

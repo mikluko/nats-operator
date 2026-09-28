@@ -982,6 +982,37 @@ spec:
                 description: ReadyReplicas is the number of ready servers.
                 format: int32
                 type: integer
+              removals:
+                description: |-
+                  Removals are the servers whose removal or replacement has begun, and
+                  how far each has gone.
+                items:
+                  description: ServerRemoval is one server's removal.
+                  properties:
+                    name:
+                      description: Name is the server_name.
+                      type: string
+                    phase:
+                      description: Phase is how far the removal has gone.
+                      enum:
+                      - Requested
+                      - Evacuating
+                      - Removed
+                      - Deleting
+                      - Rejoining
+                      type: string
+                    since:
+                      description: Since is when the removal entered Phase.
+                      format: date-time
+                      type: string
+                  required:
+                  - name
+                  - phase
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               replicas:
                 description: Replicas is the number of servers.
                 format: int32

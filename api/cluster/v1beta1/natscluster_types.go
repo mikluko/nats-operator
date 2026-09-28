@@ -8,8 +8,9 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 )
 
-// One-shot imperatives on a NatsCluster: the cluster controller clears each
-// once it has acted.
+// Imperatives on a NatsCluster. The cluster controller clears force-step and
+// replace-server once it has acted; force-delete it reads only while the
+// NatsCluster is being deleted, and never clears.
 const (
 	// AnnotationForceStep pushes the rollout step for the named server
 	// through its gate.
@@ -398,6 +399,13 @@ type NatsClusterStatus struct {
 	// +optional
 	Rollout *RolloutStatus `json:"rollout,omitempty"`
 
+	// Removals are the servers whose removal or replacement has begun, and
+	// how far each has gone.
+	// +optional
+	// +listType=map
+	// +listMapKey=name
+	Removals []ServerRemoval `json:"removals,omitempty"`
+
 	// JetStream is the JetStream state of the cluster.
 	// +optional
 	JetStream *JetStreamStatus `json:"jetstream,omitempty"`
@@ -494,6 +502,44 @@ type RolloutGate struct {
 	WaitingFor string `json:"waitingFor,omitempty"`
 
 	// Since is when the gate closed.
+	// +optional
+	Since *metav1.Time `json:"since,omitempty"`
+}
+
+// RemovalPhase is how far a server's removal has gone.
+// +kubebuilder:validation:Enum=Requested;Evacuating;Removed;Deleting;Rejoining
+type RemovalPhase string
+
+// Removal phases.
+const (
+	// RemovalRequested is a server replace-server named, waiting its turn.
+	RemovalRequested RemovalPhase = "Requested"
+	// RemovalEvacuating is a server whose evacuation the meta leader
+	// accepted.
+	RemovalEvacuating RemovalPhase = "Evacuating"
+	// RemovalRemoved is a server whose removal from the meta group was
+	// committed.
+	RemovalRemoved RemovalPhase = "Removed"
+	// RemovalDeleting is a server whose StatefulSet, data volume claim and,
+	// beyond spec.replicas, ConfigMap are being deleted. A replaced server
+	// is not recreated until its claim is gone.
+	RemovalDeleting RemovalPhase = "Deleting"
+	// RemovalRejoining is a server its replacement recreated, until the
+	// rollout gate next opens.
+	RemovalRejoining RemovalPhase = "Rejoining"
+)
+
+// ServerRemoval is one server's removal.
+type ServerRemoval struct {
+	// Name is the server_name.
+	// +required
+	Name string `json:"name"`
+
+	// Phase is how far the removal has gone.
+	// +required
+	Phase RemovalPhase `json:"phase"`
+
+	// Since is when the removal entered Phase.
 	// +optional
 	Since *metav1.Time `json:"since,omitempty"`
 }

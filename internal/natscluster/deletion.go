@@ -53,7 +53,10 @@ func (r *Reconciler) finalize(ctx context.Context, nc *clusterv1beta1.NatsCluste
 			if c := deletingCondition(nc.Name, snap, err); c.Status == metav1.ConditionTrue {
 				orig := nc.DeepCopy()
 				conditions.Set(&nc.Status.Conditions, nc.Generation, c)
-				return ctrl.Result{RequeueAfter: resyncUnsettled}, r.patchStatus(ctx, orig, nc)
+				if err := r.patchStatus(ctx, orig, nc); err != nil {
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{RequeueAfter: resyncUnsettled}, nil
 			}
 		}
 		orig := nc.DeepCopy()

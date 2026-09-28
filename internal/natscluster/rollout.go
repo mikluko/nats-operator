@@ -154,7 +154,11 @@ func decide(st rolloutState) rolloutDecision {
 	}
 	switch {
 	case rm.Removing != "":
-		if d.Remove, gate = continueRemoval(rm, st.MetaLeader); d.Remove != nil {
+		d.Remove, gate = continueRemoval(rm, st.MetaLeader)
+		switch {
+		case !rm.Since.IsZero():
+			since = rm.Since
+		case d.Remove != nil:
 			since = st.Now
 		}
 	case st.ForceStep != "" && slices.Contains(restarts, st.ForceStep):
@@ -370,7 +374,7 @@ func (r *Reconciler) rollout(ctx context.Context, nc *clusterv1beta1.NatsCluster
 	st.Removal.NoAdmin = noAdmin
 	d := decide(st)
 	if judgeGate(st).open() {
-		if err := r.rejoined(ctx, st.Removal.Rejoining, o.StatefulSets); err != nil {
+		if err := r.rejoined(ctx, nc, st.Removal.Rejoining); err != nil {
 			return d, err
 		}
 	}

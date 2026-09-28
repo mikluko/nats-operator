@@ -54,6 +54,11 @@ var (
 		Regarding: []string{"NatsCluster"},
 		When:      "A rollout's gate has been closed long enough for Progressing to read GateBlocked.",
 	}
+	ReconcileFailed = Event{
+		Reason: "ReconcileFailed", Type: corev1.EventTypeWarning, Action: "Reconcile", Controller: ClusterController,
+		Regarding: []string{"NatsCluster"},
+		When:      "A reconcile fails on anything but a write conflict; Progressing reads ReconcileFailed with the same message.",
+	}
 	JWTPushed = Event{
 		Reason: "JWTPushed", Type: corev1.EventTypeNormal, Action: "Push", Controller: AuthController,
 		Regarding: []string{"NatsOperator", "NatsAccount"},
@@ -80,6 +85,7 @@ var Events = []Event{
 	EvacuationRefused,
 	RolloutStep,
 	GateBlocked,
+	ReconcileFailed,
 	JWTPushed,
 	JWTHeld,
 	UserKicked,

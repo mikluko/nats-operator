@@ -26,10 +26,6 @@ const (
 	// the server.
 	AnnotationVolumeDigest = "cluster.nats.mikluko.io/volume-digest"
 
-	// AnnotationRemoval on a server's StatefulSet is how far its removal
-	// has gone, one of the removalPhase values.
-	AnnotationRemoval = "cluster.nats.mikluko.io/removal"
-
 	// AnnotationConfigApply on a server's ConfigMap is how the revision it
 	// holds is applied: Reload while the cluster controller reloads it,
 	// Restart once the reload failed. A ConfigMap written for a restart

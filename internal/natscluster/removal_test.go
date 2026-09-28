@@ -29,7 +29,8 @@ type fakeNats struct {
 	leader    string
 	streams   map[string][]string
 	removing  string
-	phase     removalPhase
+	phase     clusterv1beta1.RemovalPhase
+	since     time.Time
 	replace   []string
 	restart   []string
 	paused    bool
@@ -100,7 +101,7 @@ func (f *fakeNats) state() rolloutState {
 			st.NotInMeta = append(st.NotInMeta, s)
 		}
 	}
-	st.Removal = removalState{Removing: f.removing, Phase: f.phase, Replace: slices.Clone(f.replace),
+	st.Removal = removalState{Removing: f.removing, Phase: f.phase, Since: f.since, Replace: slices.Clone(f.replace),
 		Replicas: f.replicas, JetStream: f.jetStream, NoAdmin: f.noAdmin, Snapshot: snap}
 	for _, s := range f.servers {
 		if !slices.Contains(f.plan(), s) {
@@ -139,12 +140,12 @@ func (f *fakeNats) decide() rolloutDecision {
 			}
 			f.streams[name] = ms
 		}
-		f.removing, f.phase = x, phaseEvacuating
+		f.removing, f.phase, f.since = x, clusterv1beta1.RemovalEvacuating, f.now
 	case actionStepDown:
 		f.leader = f.meta[slices.IndexFunc(f.meta, func(s string) bool { return s != x })]
 	case actionRemovePeer:
 		f.meta = slices.DeleteFunc(f.meta, func(s string) bool { return s == x })
-		f.phase = phaseRemoved
+		f.phase, f.since = clusterv1beta1.RemovalRemoved, f.now
 	case actionDelete:
 		f.removing, f.phase = "", ""
 		f.replace = slices.DeleteFunc(f.replace, func(s string) bool { return s == x })
@@ -250,6 +251,26 @@ func TestDecide_ScaleDownWaits(t *testing.T) {
 	require.Equal(t, "paused before removing demo-3 (4 of 4)", d.Progressing.Message)
 }
 
+// TestDecide_ReissuedRemovalKeepsGateTimer pins that a removal action
+// taken again in the same phase, as a RemovePeer the meta leader refuses
+// while another membership change is in flight, keeps the gate's since,
+// so a stuck removal reads GateBlocked.
+func TestDecide_ReissuedRemovalKeepsGateTimer(t *testing.T) {
+	f := newFakeNats(5, "demo-0")
+	f.decide()
+	entered := f.now
+	var d rolloutDecision
+	for range 11 {
+		f.tick(time.Minute)
+		d = decide(f.state())
+		require.Equal(t, &removalStep{Server: "demo-4", Action: actionRemovePeer}, d.Remove)
+		f.prev = d.Status
+	}
+	require.Equal(t, entered, d.Status.Gate.Since.Time)
+	require.Equal(t, ReasonGateBlocked, d.Progressing.Reason)
+	require.Equal(t, "removing demo-4 (4 of 5); waiting for Settled for 11m0s: removing demo-4 from the meta group", d.Progressing.Message)
+}
+
 // silent stops server answering while it stays a member of everything.
 func (f *fakeNats) silent(server string) {
 	f.servers = slices.DeleteFunc(f.servers, func(s string) bool { return s == server })
@@ -261,7 +282,7 @@ func TestDecide_ScaleDownOfDeadServer(t *testing.T) {
 	d := f.decide()
 	require.Nil(t, d.Remove, "started a removal with a server silent")
 
-	f.removing, f.phase = "demo-3", phaseEvacuating
+	f.removing, f.phase = "demo-3", clusterv1beta1.RemovalEvacuating
 	f.streams["D"] = []string{"demo-0"}
 	d = f.decide()
 	require.Equal(t, &removalStep{Server: "demo-3", Action: actionRemovePeer}, d.Remove, "the removed server's own silence held its removal")
@@ -480,7 +501,7 @@ func TestContinueRemoval_Removed(t *testing.T) {
 			for _, m := range tt.members {
 				meta.Members = append(meta.Members, sysobs.Member{Server: m, Current: true})
 			}
-			rm := removalState{Removing: "demo-3", Phase: phaseRemoved, JetStream: true, Snapshot: &sysobs.Snapshot{Groups: []sysobs.Group{meta}}}
+			rm := removalState{Removing: "demo-3", Phase: clusterv1beta1.RemovalRemoved, JetStream: true, Snapshot: &sysobs.Snapshot{Groups: []sysobs.Group{meta}}}
 			step, _ := continueRemoval(rm, "prod-west-0")
 			require.NotNil(t, step)
 			require.Equal(t, tt.want, step.Action)

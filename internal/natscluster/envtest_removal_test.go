@@ -2,10 +2,12 @@ package natscluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -21,6 +23,7 @@ import (
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
@@ -33,7 +36,7 @@ import (
 // StatefulSet's pod is Ready and its server answers, reporting the revision
 // its StatefulSet names; the meta group and streams move as the
 // ServerAdmin calls ask, and a server that was not in the meta group stays
-// out until readmit.
+// out until readmit. Evacuate fails with evacuateErr while it is set.
 type world struct {
 	c   client.Client
 	ns  string
@@ -46,12 +49,17 @@ type world struct {
 	leader  string
 	streams map[string][]string
 	calls   []string
+
+	evacuateErr error
 }
 
 func (w *world) Evacuate(_ context.Context, server string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.calls = append(w.calls, "Evacuate "+server)
+	if w.evacuateErr != nil {
+		return w.evacuateErr
+	}
 	for name, ms := range w.streams {
 		i := slices.Index(ms, server)
 		if i < 0 {
@@ -106,6 +114,14 @@ func (w *world) sync(t *testing.T, ctx context.Context) {
 	t.Helper()
 	var list appsv1.StatefulSetList
 	require.NoError(t, w.c.List(ctx, &list, client.InNamespace(w.ns)))
+	var clusters clusterv1beta1.NatsClusterList
+	require.NoError(t, w.c.List(ctx, &clusters, client.InNamespace(w.ns)))
+	phases := map[string]clusterv1beta1.RemovalPhase{}
+	for _, nc := range clusters.Items {
+		for _, rv := range nc.Status.Removals {
+			phases[rv.Name] = rv.Phase
+		}
+	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.running, w.fresh = nil, nil
@@ -118,7 +134,7 @@ func (w *world) sync(t *testing.T, ctx context.Context) {
 			require.NoError(t, w.c.Status().Update(ctx, sts))
 		}
 		w.running = append(w.running, sts.Name)
-		if p := removalPhase(sts.Annotations[AnnotationRemoval]); p == "" || p == phaseRejoining {
+		if p := phases[sts.Name]; p == "" || p == clusterv1beta1.RemovalRejoining {
 			w.fresh = append(w.fresh, sts.Name)
 		}
 		snap.Servers = append(snap.Servers, sysobs.Server{Name: sts.Name, ID: sts.Name, Version: "2.15.0", JetStream: true,
@@ -163,7 +179,7 @@ func TestEnvtestRemoval(t *testing.T) {
 	require.NoError(t, clientgoscheme.AddToScheme(scheme))
 	require.NoError(t, natsv1beta1.AddToScheme(scheme))
 	require.NoError(t, clusterv1beta1.AddToScheme(scheme))
-	c, err := client.New(cfg, client.Options{Scheme: scheme})
+	c, err := client.NewWithWatch(cfg, client.Options{Scheme: scheme})
 	require.NoError(t, err)
 	ctx := t.Context()
 
@@ -181,9 +197,10 @@ func TestEnvtestRemoval(t *testing.T) {
 		reloader := &fakeReloader{c: c}
 		reloader.reset(ns)
 		rec := events.NewFakeRecorder(100)
-		h := &removalHarness{c: c, w: w, rec: rec, key: client.ObjectKeyFromObject(nc), r: &Reconciler{Client: c, Observer: w.obs, Recorder: rec,
+		h := &removalHarness{c: c, w: w, rec: rec, key: client.ObjectKeyFromObject(nc)}
+		h.r = &Reconciler{Client: failingClaimDeletes(c, &h.failClaims), Observer: w.obs, Recorder: rec,
 			Reloader: func(context.Context, *clusterv1beta1.NatsCluster) (ServerReloader, error) { return reloader, nil },
-			Admin:    func(context.Context, *clusterv1beta1.NatsCluster) (ServerAdmin, error) { return w, nil }}}
+			Admin:    func(context.Context, *clusterv1beta1.NatsCluster) (ServerAdmin, error) { return w, nil }}
 		h.reconcile(t)
 		h.reconcile(t)
 		requireCondition(t, h.get(t), ConditionProgressing, metav1.ConditionFalse, ReasonUpToDate)
@@ -241,7 +258,7 @@ func TestEnvtestRemoval(t *testing.T) {
 		got := h.get(t)
 		require.NotContains(t, got.Annotations, clusterv1beta1.AnnotationReplaceServer)
 		require.Equal(t, []string{"Normal RolloutStep replacing demo-1"}, recorded(h.rec))
-		require.Equal(t, string(phaseEvacuating), h.sts(t, "demo-1").Annotations[AnnotationRemoval])
+		require.Equal(t, clusterv1beta1.RemovalEvacuating, removalPhaseOf(got, "demo-1"))
 		requireCondition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonReplacingServer)
 
 		h.reconcile(t)
@@ -255,7 +272,7 @@ func TestEnvtestRemoval(t *testing.T) {
 		h.reconcile(t)
 		after := h.sts(t, "demo-1")
 		require.NotEqual(t, before, after.UID, "demo-1 was not recreated")
-		require.Equal(t, string(phaseRejoining), after.Annotations[AnnotationRemoval])
+		require.Equal(t, clusterv1beta1.RemovalRejoining, removalPhaseOf(h.get(t), "demo-1"))
 
 		h.reconcile(t)
 		got = h.get(t)
@@ -268,8 +285,66 @@ func TestEnvtestRemoval(t *testing.T) {
 		h.w.sync(t, ctx)
 		h.reconcile(t)
 		requireCondition(t, h.get(t), ConditionProgressing, metav1.ConditionFalse, ReasonUpToDate)
-		require.Empty(t, h.sts(t, "demo-1").Annotations[AnnotationRemoval])
+		require.Empty(t, h.get(t).Status.Removals)
 		require.Equal(t, []string{"Evacuate demo-1", "RemovePeer demo-1"}, h.w.calls)
+	})
+
+	t.Run("a replacement whose claim deletion failed deletes the claim before recreating the server", func(t *testing.T) {
+		h := setUp(t, "replacefault", 3, "demo-0")
+		createClaim(t, c, "replacefault", "demo-1")
+		nc := h.get(t)
+		nc.Annotations = map[string]string{clusterv1beta1.AnnotationReplaceServer: "demo-1"}
+		require.NoError(t, c.Update(ctx, nc))
+
+		h.failClaims.Store(true)
+		h.untilError(t)
+		requireGone(t, c, &appsv1.StatefulSet{}, "replacefault", "demo-1")
+		h.failClaims.Store(false)
+
+		h.reconcile(t)
+		requireGone(t, c, &appsv1.StatefulSet{}, "replacefault", "demo-1")
+		requireClaimDeleted(t, c, "replacefault", "demo-1")
+		requireCondition(t, h.get(t), ConditionProgressing, metav1.ConditionTrue, ReasonClaimTerminating)
+
+		releaseClaim(t, c, "replacefault", "demo-1")
+		h.reconcile(t)
+		h.sts(t, "demo-1")
+		require.Equal(t, []clusterv1beta1.ServerRemoval{{Name: "demo-1", Phase: clusterv1beta1.RemovalRejoining}}, withoutSince(h.get(t).Status.Removals))
+	})
+
+	t.Run("a scale-down whose claim deletion failed deletes the claim", func(t *testing.T) {
+		h := setUp(t, "scaledownfault", 4, "demo-0")
+		createClaim(t, c, "scaledownfault", "demo-3")
+		nc := h.get(t)
+		nc.Spec.Replicas = 3
+		require.NoError(t, c.Update(ctx, nc))
+
+		h.failClaims.Store(true)
+		h.untilError(t)
+		requireGone(t, c, &appsv1.StatefulSet{}, "scaledownfault", "demo-3")
+		h.failClaims.Store(false)
+
+		h.settle(t)
+		requireClaimDeleted(t, c, "scaledownfault", "demo-3")
+		requireGone(t, c, &corev1.ConfigMap{}, "scaledownfault", configMapName("demo-3"))
+		require.Empty(t, h.get(t).Status.Removals)
+	})
+
+	t.Run("a failed rollout step reads Progressing and records a warning", func(t *testing.T) {
+		h := setUp(t, "stepfail", 3, "demo-0")
+		h.w.evacuateErr = errors.New("no responders")
+		nc := h.get(t)
+		nc.Annotations = map[string]string{clusterv1beta1.AnnotationReplaceServer: "demo-1"}
+		require.NoError(t, c.Update(ctx, nc))
+		require.Error(t, h.tryReconcile(t))
+		got := h.get(t)
+		requireCondition(t, got, ConditionProgressing, metav1.ConditionFalse, ReasonReconcileFailed)
+		require.Equal(t, "evacuate demo-1: no responders", meta.FindStatusCondition(got.Status.Conditions, ConditionProgressing).Message)
+		require.Equal(t, []string{"Normal RolloutStep replacing demo-1", "Warning ReconcileFailed evacuate demo-1: no responders"}, recorded(h.rec))
+
+		h.w.evacuateErr = nil
+		h.reconcile(t)
+		requireCondition(t, h.get(t), ConditionProgressing, metav1.ConditionTrue, ReasonReplacingServer)
 	})
 
 	t.Run("a volume change replaces every server, the meta leader last", func(t *testing.T) {
@@ -320,13 +395,48 @@ func TestEnvtestRemoval(t *testing.T) {
 	})
 }
 
-// removalHarness reconciles one NatsCluster against world.
+// removalHarness reconciles one NatsCluster against world. While
+// failClaims is set, its Reconciler cannot delete a PersistentVolumeClaim.
 type removalHarness struct {
-	c   client.Client
-	w   *world
-	r   *Reconciler
-	rec *events.FakeRecorder
-	key types.NamespacedName
+	c          client.Client
+	w          *world
+	r          *Reconciler
+	rec        *events.FakeRecorder
+	key        types.NamespacedName
+	failClaims atomic.Bool
+}
+
+// failingClaimDeletes is c refusing every PersistentVolumeClaim deletion
+// while fail is set.
+func failingClaimDeletes(c client.WithWatch, fail *atomic.Bool) client.WithWatch {
+	return interceptor.NewClient(c, interceptor.Funcs{
+		Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+			if _, ok := obj.(*corev1.PersistentVolumeClaim); ok && fail.Load() {
+				return errors.New("injected claim deletion failure")
+			}
+			return c.Delete(ctx, obj, opts...)
+		},
+	})
+}
+
+// untilError reconciles until a reconcile fails.
+func (h *removalHarness) untilError(t *testing.T) {
+	t.Helper()
+	for range 10 {
+		if h.tryReconcile(t) != nil {
+			return
+		}
+	}
+	t.Fatal("no reconcile failed")
+}
+
+// withoutSince is removals with every Since cleared.
+func withoutSince(removals []clusterv1beta1.ServerRemoval) []clusterv1beta1.ServerRemoval {
+	out := slices.Clone(removals)
+	for i := range out {
+		out[i].Since = nil
+	}
+	return out
 }
 
 // recorded drains the events rec holds.
@@ -344,9 +454,16 @@ func recorded(rec *events.FakeRecorder) []string {
 
 func (h *removalHarness) reconcile(t *testing.T) {
 	t.Helper()
+	require.NoError(t, h.tryReconcile(t))
+}
+
+// tryReconcile reconciles once and syncs world, returning the reconcile's
+// error.
+func (h *removalHarness) tryReconcile(t *testing.T) error {
+	t.Helper()
 	_, err := h.r.Reconcile(t.Context(), ctrl.Request{NamespacedName: h.key})
-	require.NoError(t, err)
 	h.w.sync(t, t.Context())
+	return err
 }
 
 func (h *removalHarness) get(t *testing.T) *clusterv1beta1.NatsCluster {

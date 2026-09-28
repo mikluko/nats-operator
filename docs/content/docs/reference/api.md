@@ -602,6 +602,7 @@ Appears on: [NatsCluster](#NatsCluster).
 | `endpoints` | [{{< type "Endpoints" >}}](#Endpoints) | No | Endpoints are the addresses clients and peers reach the cluster at. |
 | `config` | [{{< type "ConfigStatus" >}}](#ConfigStatus) | No | Config is the rendered config revision and how it was applied. |
 | `rollout` | [{{< type "RolloutStatus" >}}](#RolloutStatus) | No | Rollout is the rollout in progress. |
+| `removals` | [{{< type "[]ServerRemoval" >}}](#ServerRemoval) | No | Removals are the servers whose removal or replacement has begun, and how far each has gone. |
 | `jetstream` | [{{< type "JetStreamStatus" >}}](#JetStreamStatus) | No | JetStream is the JetStream state of the cluster. |
 | `gateways` | [{{< type "[]GatewayStatus" >}}](#GatewayStatus) | No | Gateways are the connections to the other supercluster members. |
 | `leafRemotes` | [{{< type "[]LeafRemoteStatus" >}}](#LeafRemoteStatus) | No | LeafRemotes are the connections to hubs. |
@@ -614,6 +615,18 @@ Appears on: [NatsClusterSpec](#NatsClusterSpec).
 | :---- | :--- | :------: | :---------- |
 | `metadata` | [{{< type "EmbeddedObjectMetadata" >}}](#EmbeddedObjectMetadata) | No |  |
 | `spec` | [{{< type "PodSpec" >}}](https://pkg.go.dev/k8s.io/api/core/v1#PodSpec) | No | Spec is a partial pod spec merged over the rendered one; the API server does not validate it. |
+
+### RemovalPhase {#RemovalPhase}
+RemovalPhase is how far a server's removal has gone.\
+Type: {{< type "string" >}}\
+Appears on: [ServerRemoval](#ServerRemoval).
+| Value | Description |
+| :---- | :---------- |
+| `Requested` | RemovalRequested is a server replace-server named, waiting its turn. |
+| `Evacuating` | RemovalEvacuating is a server whose evacuation the meta leader accepted. |
+| `Removed` | RemovalRemoved is a server whose removal from the meta group was committed. |
+| `Deleting` | RemovalDeleting is a server whose StatefulSet, data volume claim and, beyond spec.replicas, ConfigMap are being deleted. A replaced server is not recreated until its claim is gone. |
+| `Rejoining` | RemovalRejoining is a server its replacement recreated, until the rollout gate next opens. |
 
 ### ResolverType {#ResolverType}
 ResolverType is a NATS account resolver type.\
@@ -665,6 +678,15 @@ Appears on: [Routes](#Routes).
 | `enabled` | {{< type "bool" >}} | No | Enabled turns route TLS off when false. Default: `true`. |
 | `secretRef` | [{{< type "SecretReference" >}}](#SecretReference) | No | SecretRef names a kubernetes.io/tls Secret. |
 | `certManager` | [{{< type "CertManagerCertificate" >}}](#CertManagerCertificate) | No | CertManager has cert-manager issue the certificate. |
+
+### ServerRemoval {#ServerRemoval}
+ServerRemoval is one server's removal.\
+Appears on: [NatsClusterStatus](#NatsClusterStatus).
+| Field | Type | Required | Description |
+| :---- | :--- | :------: | :---------- |
+| `name` | {{< type "string" >}} | Yes | Name is the server_name. |
+| `phase` | [{{< type "RemovalPhase" >}}](#RemovalPhase) | Yes | Phase is how far the removal has gone. |
+| `since` | [{{< type "Time" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Time) | No | Since is when the removal entered Phase. |
 
 ### ServerStatus {#ServerStatus}
 ServerStatus is one server's state.\

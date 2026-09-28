@@ -159,16 +159,17 @@ func (rc *removalCluster) step(t *testing.T, st rolloutState, log *[]string) rol
 	switch d.Remove.Action {
 	case actionEvacuate:
 		require.NoError(t, rc.admin.Evacuate(ctx, x))
-		rc.sets[x].Annotations[AnnotationRemoval] = string(phaseEvacuating)
+		rc.nc.Status.Removals = withRemoval(rc.nc.Status.Removals, x, clusterv1beta1.RemovalEvacuating, time.Now())
 	case actionStepDown:
 		require.NoError(t, rc.admin.StepDownMeta(ctx))
 	case actionRemovePeer:
 		require.NoError(t, rc.admin.RemovePeer(ctx, x))
-		rc.sets[x].Annotations[AnnotationRemoval] = string(phaseRemoved)
+		rc.nc.Status.Removals = withRemoval(rc.nc.Status.Removals, x, clusterv1beta1.RemovalRemoved, time.Now())
 	case actionDelete:
 		rc.srvs[x].Shutdown()
 		rc.srvs[x].WaitForShutdown()
 		delete(rc.sets, x)
+		rc.nc.Status.Removals = withRemoval(rc.nc.Status.Removals, x, "", time.Now())
 	}
 	return d
 }
@@ -239,7 +240,7 @@ func TestScaleDown_InProcess(t *testing.T) {
 func TestReplace_InProcess(t *testing.T) {
 	rc := startRemovalCluster(t, 5)
 	rc.addStream(t, "ORDERS", 3, 100)
-	rc.sets["demo-3"].Annotations[AnnotationRemoval] = string(phaseRequested)
+	rc.nc.Status.Removals = withRemoval(nil, "demo-3", clusterv1beta1.RemovalRequested, time.Now())
 	var log []string
 	var deleted bool
 	require.Eventually(t, func() bool {
@@ -255,6 +256,7 @@ func TestReplace_InProcess(t *testing.T) {
 	sts := rc.plan.Servers[3].StatefulSet.DeepCopy()
 	sts.Status.ObservedGeneration, sts.Status.UpdatedReplicas, sts.Status.ReadyReplicas = sts.Generation, 1, 1
 	rc.sets["demo-3"] = sts
+	rc.nc.Status.Removals = withRemoval(rc.nc.Status.Removals, "demo-3", clusterv1beta1.RemovalRejoining, time.Now())
 
 	require.Eventually(t, func() bool {
 		snap, _ := rc.observe(t)

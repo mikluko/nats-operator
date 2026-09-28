@@ -55,6 +55,7 @@ const (
 	ReasonScaleDownBlocked    = "ScaleDownBlocked"
 	ReasonReplacementBlocked  = "ReplacementBlocked"
 	ReasonUnsupportedSpec     = "UnsupportedSpec"
+	ReasonReconcileFailed     = "ReconcileFailed"
 	ReasonRouteCertNotReady   = "RouteCertificateNotReady"
 	ReasonGatewayCertNotReady = "GatewayCertificateNotReady"
 	ReasonTrustNotFound       = "TrustNotFound"

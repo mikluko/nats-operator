@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -32,25 +35,6 @@ var _ ServerAdmin = (*sysobs.SystemClient)(nil)
 // error saying why it has none.
 type AdminFunc func(ctx context.Context, nc *clusterv1beta1.NatsCluster) (ServerAdmin, error)
 
-// removalPhase is how far a server's removal has gone, as its
-// StatefulSet's AnnotationRemoval records it.
-type removalPhase string
-
-const (
-	// phaseRequested is a server the replace-server annotation named,
-	// waiting its turn to be replaced.
-	phaseRequested removalPhase = "Requested"
-	// phaseEvacuating is a server whose evacuation the meta leader
-	// accepted.
-	phaseEvacuating removalPhase = "Evacuating"
-	// phaseRemoved is a server whose removal from the meta group was
-	// committed.
-	phaseRemoved removalPhase = "Removed"
-	// phaseRejoining is a server recreated by its replacement, until the
-	// rollout gate next opens.
-	phaseRejoining removalPhase = "Rejoining"
-)
-
 // removalAction is one thing done to the server being removed.
 type removalAction string
 
@@ -71,9 +55,11 @@ type removalStep struct {
 // Surplus and Replace are in ordinal order.
 type removalState struct {
 	// Removing is the server whose removal has begun, "" when none has,
-	// and Phase how far it has gone.
+	// Phase how far it has gone, and Since when it entered Phase, zero
+	// when unrecorded.
 	Removing string
-	Phase    removalPhase
+	Phase    clusterv1beta1.RemovalPhase
+	Since    time.Time
 	// Surplus are the servers beyond spec.replicas.
 	Surplus []string
 	// Replace are the servers of the plan waiting to be replaced: their
@@ -126,7 +112,7 @@ func continueRemoval(rm removalState, metaLeader string) (*removalStep, gateStat
 	if snap == nil {
 		return nil, gateState{GateSettled, "the NATS cluster is not observed"}
 	}
-	if rm.Phase == phaseRemoved {
+	if rm.Phase == clusterv1beta1.RemovalRemoved {
 		if member, known := metaMember(snap, x); member || !known {
 			return &removalStep{Server: x, Action: actionRemovePeer}, gateState{GateSettled, "removing " + x + " from the meta group"}
 		}
@@ -225,36 +211,73 @@ func unsettledWithout(v sysobs.Verdict, server string) string {
 	return describeUnsettled(v)
 }
 
-// removalOf collects the removal state of nc from its StatefulSets.
+// removalOf collects the removal state of nc from status.removals and its
+// StatefulSets.
 func removalOf(nc *clusterv1beta1.NatsCluster, plan *Plan, sets map[string]*appsv1.StatefulSet, snap *sysobs.Snapshot) removalState {
 	rm := removalState{Replicas: int(nc.Spec.Replicas), JetStream: nc.Spec.JetStream != nil, Snapshot: snap}
+	byOrdinal := func(a, b string) int { return ordinal(nc, a) - ordinal(nc, b) }
+	removals := slices.Clone(nc.Status.Removals)
+	slices.SortFunc(removals, func(a, b clusterv1beta1.ServerRemoval) int { return byOrdinal(a.Name, b.Name) })
+	for _, rv := range removals {
+		switch rv.Phase {
+		case clusterv1beta1.RemovalEvacuating, clusterv1beta1.RemovalRemoved:
+			if rm.Removing == "" {
+				rm.Removing, rm.Phase = rv.Name, rv.Phase
+				if rv.Since != nil {
+					rm.Since = rv.Since.Time
+				}
+			}
+		case clusterv1beta1.RemovalRejoining:
+			rm.Rejoining = append(rm.Rejoining, rv.Name)
+		}
+	}
 	want := map[string]string{}
 	for _, s := range plan.Servers {
 		want[s.Name] = s.StatefulSet.Annotations[AnnotationVolumeDigest]
 	}
-	names := make([]string, 0, len(sets))
-	for name := range sets {
-		names = append(names, name)
-	}
-	slices.SortFunc(names, func(a, b string) int { return ordinal(nc, a) - ordinal(nc, b) })
+	names := slices.SortedFunc(maps.Keys(sets), byOrdinal)
 	for _, name := range names {
-		sts := sets[name]
-		phase := removalPhase(sts.Annotations[AnnotationRemoval])
-		if (phase == phaseEvacuating || phase == phaseRemoved) && rm.Removing == "" {
-			rm.Removing, rm.Phase = name, phase
-		}
-		if phase == phaseRejoining {
-			rm.Rejoining = append(rm.Rejoining, name)
-		}
 		digest, inPlan := want[name]
 		switch {
 		case !inPlan:
 			rm.Surplus = append(rm.Surplus, name)
-		case phase == phaseRequested || sts.Annotations[AnnotationVolumeDigest] != digest:
+		case removalPhaseOf(nc, name) == clusterv1beta1.RemovalRequested || sets[name].Annotations[AnnotationVolumeDigest] != digest:
 			rm.Replace = append(rm.Replace, name)
 		}
 	}
 	return rm
+}
+
+// removalPhaseOf is server's phase in nc's status.removals, "" when its
+// removal has not begun.
+func removalPhaseOf(nc *clusterv1beta1.NatsCluster, server string) clusterv1beta1.RemovalPhase {
+	for _, rv := range nc.Status.Removals {
+		if rv.Name == server {
+			return rv.Phase
+		}
+	}
+	return ""
+}
+
+// withRemoval is removals with server at phase, entered at now unless it
+// was there already, or without server where phase is "".
+func withRemoval(removals []clusterv1beta1.ServerRemoval, server string, phase clusterv1beta1.RemovalPhase, now time.Time) []clusterv1beta1.ServerRemoval {
+	i := slices.IndexFunc(removals, func(rv clusterv1beta1.ServerRemoval) bool { return rv.Name == server })
+	switch {
+	case phase == "" && i < 0:
+		return removals
+	case phase == "":
+		return slices.Delete(slices.Clone(removals), i, i+1)
+	case i >= 0 && removals[i].Phase == phase:
+		return removals
+	}
+	rv := clusterv1beta1.ServerRemoval{Name: server, Phase: phase, Since: &metav1.Time{Time: now}}
+	if i < 0 {
+		return append(slices.Clone(removals), rv)
+	}
+	out := slices.Clone(removals)
+	out[i] = rv
+	return out
 }
 
 // ordinal is the index a server's name carries, -1 for a name not of nc's
@@ -287,9 +310,8 @@ func (r *Reconciler) requestReplacement(ctx context.Context, nc *clusterv1beta1.
 	if !ok {
 		return nil
 	}
-	sts := sets[name]
-	if sts != nil && slices.ContainsFunc(plan.Servers, func(s Server) bool { return s.Name == name }) && sts.Annotations[AnnotationRemoval] == "" {
-		if err := r.markRemoval(ctx, sts, phaseRequested); err != nil {
+	if sets[name] != nil && slices.ContainsFunc(plan.Servers, func(s Server) bool { return s.Name == name }) && removalPhaseOf(nc, name) == "" {
+		if err := r.setRemoval(ctx, nc, name, clusterv1beta1.RemovalRequested); err != nil {
 			return err
 		}
 	}
@@ -306,9 +328,11 @@ func (r *Reconciler) requestReplacement(ctx context.Context, nc *clusterv1beta1.
 // removal refused while another membership change is in flight is retried
 // on a later reconcile.
 func (r *Reconciler) remove(ctx context.Context, nc *clusterv1beta1.NatsCluster, admin ServerAdmin, noAdmin string, step removalStep, sets map[string]*appsv1.StatefulSet, surplus bool) error {
-	sts := sets[step.Server]
 	if step.Action == actionDelete {
-		return r.deleteServer(ctx, nc, step.Server, sts, surplus)
+		if err := r.setRemoval(ctx, nc, step.Server, clusterv1beta1.RemovalDeleting); err != nil {
+			return err
+		}
+		return r.deleteServer(ctx, nc, step.Server, sets[step.Server], surplus)
 	}
 	if admin == nil {
 		return fmt.Errorf("%s %s: %s", step.Action, step.Server, noAdmin)
@@ -318,7 +342,7 @@ func (r *Reconciler) remove(ctx context.Context, nc *clusterv1beta1.NatsCluster,
 		if err := admin.Evacuate(ctx, step.Server); err != nil && !errors.Is(err, sysobs.ErrNotMember) {
 			return fmt.Errorf("evacuate %s: %w", step.Server, err)
 		}
-		return r.markRemoval(ctx, sts, phaseEvacuating)
+		return r.setRemoval(ctx, nc, step.Server, clusterv1beta1.RemovalEvacuating)
 	case actionStepDown:
 		if err := admin.StepDownMeta(ctx); err != nil {
 			return fmt.Errorf("step down meta leader %s: %w", step.Server, err)
@@ -328,7 +352,7 @@ func (r *Reconciler) remove(ctx context.Context, nc *clusterv1beta1.NatsCluster,
 		err := admin.RemovePeer(ctx, step.Server)
 		switch {
 		case err == nil, errors.Is(err, sysobs.ErrNotMember):
-			return r.markRemoval(ctx, sts, phaseRemoved)
+			return r.setRemoval(ctx, nc, step.Server, clusterv1beta1.RemovalRemoved)
 		case errors.Is(err, sysobs.ErrChangeInflight):
 			return nil
 		default:
@@ -338,26 +362,64 @@ func (r *Reconciler) remove(ctx context.Context, nc *clusterv1beta1.NatsCluster,
 	return fmt.Errorf("unknown removal action %q", step.Action)
 }
 
-// rejoined clears the mark on every server in rejoining.
-func (r *Reconciler) rejoined(ctx context.Context, rejoining []string, sets map[string]*appsv1.StatefulSet) error {
+// rejoined forgets the removal of every server in rejoining.
+func (r *Reconciler) rejoined(ctx context.Context, nc *clusterv1beta1.NatsCluster, rejoining []string) error {
 	for _, name := range rejoining {
-		sts := sets[name]
-		orig := sts.DeepCopy()
-		delete(sts.Annotations, AnnotationRemoval)
-		if err := r.Client.Patch(ctx, sts, client.MergeFrom(orig)); err != nil {
-			return fmt.Errorf("clear %s on statefulset %s: %w", AnnotationRemoval, name, err)
+		if err := r.setRemoval(ctx, nc, name, ""); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-func (r *Reconciler) markRemoval(ctx context.Context, sts *appsv1.StatefulSet, phase removalPhase) error {
-	orig := sts.DeepCopy()
-	sts.Annotations = merged(sts.Annotations, map[string]string{AnnotationRemoval: string(phase)})
-	if err := r.Client.Patch(ctx, sts, client.MergeFrom(orig)); err != nil {
-		return fmt.Errorf("mark statefulset %s %s: %w", sts.Name, phase, err)
+// setRemoval patches server's removal phase into nc's status.removals at
+// once, so that it outlives the objects the next action deletes, or drops
+// server from it where phase is "".
+func (r *Reconciler) setRemoval(ctx context.Context, nc *clusterv1beta1.NatsCluster, server string, phase clusterv1beta1.RemovalPhase) error {
+	orig := nc.DeepCopy()
+	nc.Status.Removals = withRemoval(nc.Status.Removals, server, phase, r.now())
+	if equality.Semantic.DeepEqual(orig.Status.Removals, nc.Status.Removals) {
+		return nil
+	}
+	if err := r.Client.Status().Patch(ctx, nc, client.MergeFrom(orig)); err != nil {
+		return fmt.Errorf("record removal of %s as %q: %w", server, phase, err)
 	}
 	return nil
+}
+
+// finishDeletions carries through every server whose removal reached
+// Deleting, deleting again whatever deleteServer left, and drops each
+// deleted StatefulSet from sets. A server of plan moves to Rejoining once
+// its data volume claim is gone; any other is forgotten. It returns the
+// servers of plan still waiting for their claim.
+func (r *Reconciler) finishDeletions(ctx context.Context, nc *clusterv1beta1.NatsCluster, plan *Plan, sets map[string]*appsv1.StatefulSet) ([]string, error) {
+	var waiting []string
+	for _, rv := range slices.Clone(nc.Status.Removals) {
+		if rv.Phase != clusterv1beta1.RemovalDeleting {
+			continue
+		}
+		inPlan := slices.ContainsFunc(plan.Servers, func(s Server) bool { return s.Name == rv.Name })
+		if err := r.deleteServer(ctx, nc, rv.Name, sets[rv.Name], !inPlan); err != nil {
+			return nil, err
+		}
+		delete(sets, rv.Name)
+		next := clusterv1beta1.RemovalPhase("")
+		if inPlan {
+			gone, err := r.claimGone(ctx, nc, rv.Name)
+			if err != nil {
+				return nil, err
+			}
+			if !gone {
+				waiting = append(waiting, rv.Name)
+				continue
+			}
+			next = clusterv1beta1.RemovalRejoining
+		}
+		if err := r.setRemoval(ctx, nc, rv.Name, next); err != nil {
+			return nil, err
+		}
+	}
+	return waiting, nil
 }
 
 // deleteServer deletes server's StatefulSet and its data volume claim, and
@@ -383,15 +445,27 @@ func (r *Reconciler) deleteServer(ctx context.Context, nc *clusterv1beta1.NatsCl
 // claimTerminating reports whether server's data volume claim is being
 // deleted.
 func (r *Reconciler) claimTerminating(ctx context.Context, nc *clusterv1beta1.NatsCluster, server string) (bool, error) {
+	pvc, err := r.claim(ctx, nc, server)
+	return pvc != nil && !pvc.DeletionTimestamp.IsZero(), err
+}
+
+// claimGone reports whether server's data volume claim does not exist.
+func (r *Reconciler) claimGone(ctx context.Context, nc *clusterv1beta1.NatsCluster, server string) (bool, error) {
+	pvc, err := r.claim(ctx, nc, server)
+	return pvc == nil && err == nil, err
+}
+
+// claim is server's data volume claim, nil when there is none.
+func (r *Reconciler) claim(ctx context.Context, nc *clusterv1beta1.NatsCluster, server string) (*corev1.PersistentVolumeClaim, error) {
 	pvc := &corev1.PersistentVolumeClaim{}
 	err := r.Client.Get(ctx, client.ObjectKey{Namespace: nc.Namespace, Name: dataClaimName(server)}, pvc)
 	switch {
 	case apierrors.IsNotFound(err):
-		return false, nil
+		return nil, nil
 	case err != nil:
-		return false, fmt.Errorf("get pvc %s: %w", dataClaimName(server), err)
+		return nil, fmt.Errorf("get pvc %s: %w", dataClaimName(server), err)
 	}
-	return !pvc.DeletionTimestamp.IsZero(), nil
+	return pvc, nil
 }
 
 // streamLabel names a stream group as account/stream, by the account's
