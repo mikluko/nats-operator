@@ -411,7 +411,8 @@ func (r *UserReconciler) finalize(ctx context.Context, u *authv1beta1.NatsUser) 
 
 // drain reports whether a deleted user and the keys it replaced are revoked
 // everywhere and it has no connection left, with Ready set to the step it waits on otherwise. A user
-// never signed, or whose account is gone or unsigned, has nothing to drain.
+// never signed, or whose account is gone, unsigned or without its
+// NatsOperator, has nothing to drain: no revocation can be signed.
 func (r *UserReconciler) drain(ctx context.Context, u *authv1beta1.NatsUser) (bool, reconcile.Result, error) {
 	pub := u.Status.PublicKey
 	if pub == "" {
@@ -426,6 +427,9 @@ func (r *UserReconciler) drain(ctx context.Context, u *authv1beta1.NatsUser) (bo
 	}
 	if !found || acc.jwt == "" {
 		return true, reconcile.Result{}, nil
+	}
+	if err := r.Get(ctx, acc.operator, &authv1beta1.NatsOperator{}); err != nil {
+		return apierrors.IsNotFound(err), reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 	if !revokedSince(acc.jwt, pub, u.DeletionTimestamp.Time) {
 		waiting(ReasonRevoking, fmt.Sprintf("waiting for %s %s to revoke %s", u.Spec.AccountRef.Kind, acc.key, pub))

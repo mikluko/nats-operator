@@ -598,3 +598,89 @@ spec:
 		}
 	})
 }
+
+// testOrphanedAccountUser pins that a deleted user whose NatsAccount
+// outlives its NatsOperator is released: no revocation can be signed.
+func (e *env) testOrphanedAccountUser(t *testing.T) {
+	e.apply(t, `
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsOperator
+metadata: {name: orphan, namespace: orphan}
+spec:
+  systemAccountRef: {name: sys}
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsSystemAccount
+metadata: {name: sys, namespace: orphan}
+spec:
+  operatorRef: {name: orphan}
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsAccount
+metadata: {name: app, namespace: orphan}
+spec:
+  operatorRef: {name: orphan}
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsUser
+metadata: {name: svc, namespace: orphan}
+spec:
+  accountRef: {kind: NatsAccount, name: app}
+`)
+	userKey := key("orphan", "svc")
+	e.eventually(t, func(ct *assert.CollectT) {
+		var u authv1beta1.NatsUser
+		e.get(ct, userKey, &u)
+		assert.NotEmpty(ct, u.Status.PublicKey)
+		assert.Contains(ct, u.Finalizers, authctl.UserFinalizer)
+	})
+	require.NoError(t, e.c.Delete(t.Context(), &authv1beta1.NatsOperator{ObjectMeta: metav1.ObjectMeta{Namespace: "orphan", Name: "orphan"}}))
+	e.eventually(t, func(ct *assert.CollectT) {
+		var acc authv1beta1.NatsAccount
+		e.get(ct, key("orphan", "app"), &acc)
+		if cond := meta.FindStatusCondition(acc.Status.Conditions, authctl.ConditionReady); assert.NotNil(ct, cond) {
+			assert.Equal(ct, metav1.ConditionFalse, cond.Status)
+		}
+	})
+	require.NoError(t, e.c.Delete(t.Context(), &authv1beta1.NatsUser{ObjectMeta: metav1.ObjectMeta{Namespace: "orphan", Name: "svc"}}))
+	e.eventually(t, func(ct *assert.CollectT) {
+		assert.True(ct, apierrors.IsNotFound(e.c.Get(t.Context(), userKey, &authv1beta1.NatsUser{})))
+	})
+}
+
+// testAccountDeletedWithOperator pins that a NatsAccount deleted together
+// with its NatsOperator, as a namespace deletion does, is released.
+func (e *env) testAccountDeletedWithOperator(t *testing.T) {
+	e.apply(t, `
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsOperator
+metadata: {name: gone, namespace: gone}
+spec:
+  systemAccountRef: {name: sys}
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsSystemAccount
+metadata: {name: sys, namespace: gone}
+spec:
+  operatorRef: {name: gone}
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsAccount
+metadata: {name: app, namespace: gone}
+spec:
+  operatorRef: {name: gone}
+`)
+	accKey := key("gone", "app")
+	e.eventually(t, func(ct *assert.CollectT) {
+		var acc authv1beta1.NatsAccount
+		e.get(ct, accKey, &acc)
+		assert.NotEmpty(ct, acc.Status.JWT)
+		assert.Contains(ct, acc.Finalizers, authctl.AccountFinalizer)
+	})
+	require.NoError(t, e.c.Delete(t.Context(), &authv1beta1.NatsAccount{ObjectMeta: metav1.ObjectMeta{Namespace: "gone", Name: "app"}}))
+	require.NoError(t, e.c.Delete(t.Context(), &authv1beta1.NatsSystemAccount{ObjectMeta: metav1.ObjectMeta{Namespace: "gone", Name: "sys"}}))
+	require.NoError(t, e.c.Delete(t.Context(), &authv1beta1.NatsOperator{ObjectMeta: metav1.ObjectMeta{Namespace: "gone", Name: "gone"}}))
+	e.eventually(t, func(ct *assert.CollectT) {
+		assert.True(ct, apierrors.IsNotFound(e.c.Get(t.Context(), accKey, &authv1beta1.NatsAccount{})))
+	})
+}

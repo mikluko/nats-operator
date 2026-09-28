@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -207,6 +208,111 @@ func TestEnvtest_ReleaseGuards(t *testing.T) {
 	require.Equal(t, "Retain", consumer.Object["spec"].(map[string]any)["deletionPolicy"])
 	require.Equal(t, "Retain", stream.Object["spec"].(map[string]any)["deletionPolicy"])
 	require.NoError(t, releaseGuards(t.Context(), c, "empty"))
+}
+
+// TestEnvtest_ReleaseFinalizers pins that a story's namespace whose objects
+// still hold the controllers' finalizers goes once it has no Pod left, the
+// runner removing those finalizers, and that none is removed while a Pod
+// remains.
+func TestEnvtest_ReleaseFinalizers(t *testing.T) {
+	c := startAPIServer(t)
+	const ns = "stuck"
+	require.NoError(t, c.Create(t.Context(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}))
+	held := map[string]*unstructured.Unstructured{}
+	for _, h := range controllerFinalizers {
+		u := &unstructured.Unstructured{Object: map[string]any{"spec": map[string]any{}}}
+		u.SetGroupVersionKind(h.gvk)
+		u.SetNamespace(ns)
+		u.SetName("held")
+		u.SetFinalizers([]string{h.finalizer})
+		held[h.gvk.Kind] = u
+	}
+	spec := func(kind string, fields map[string]any) {
+		held[kind].Object["spec"] = fields
+	}
+	conn := map[string]any{"name": "demo"}
+	spec("NatsUser", map[string]any{"accountRef": map[string]any{"kind": "NatsAccount", "name": "held"}})
+	spec("NatsAccount", map[string]any{"operatorRef": map[string]any{"name": "demo"}})
+	spec("NatsConsumer", map[string]any{"connectionRef": conn, "stream": "LEDGER"})
+	spec("NatsStream", map[string]any{"connectionRef": conn, "name": "LEDGER"})
+	spec("NatsKeyValue", map[string]any{"connectionRef": conn, "bucket": "config"})
+	spec("NatsObjectStore", map[string]any{"connectionRef": conn, "bucket": "blobs"})
+	spec("NatsClusterEvacuation", map[string]any{"connectionRef": conn, "from": map[string]any{"cluster": "east"},
+		"to": map[string]any{"serverTags": []any{"cluster:west"}}})
+	spec("NatsCluster", map[string]any{"version": "2.15.0", "replicas": int64(3)})
+	for _, u := range held {
+		require.NoError(t, c.Create(t.Context(), u), u.GetKind())
+	}
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "nats-0", Finalizers: []string{"example.com/kubelet"}},
+		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "nats", Image: "nats:2.15.0"}}},
+	}
+	require.NoError(t, c.Create(t.Context(), pod))
+
+	go playNamespaceController(t.Context(), c, ns)
+	var log bytes.Buffer
+	r := &Runner{Clients: []client.Client{c}, Timeout: 30 * time.Second, Interval: 100 * time.Millisecond, Log: &log}
+	done := make(chan error, 1)
+	go func() { done <- r.freshNamespace(t.Context(), c, ns) }()
+
+	user := held["NatsUser"].DeepCopy()
+	require.Eventually(t, func() bool {
+		return c.Get(t.Context(), client.ObjectKeyFromObject(user), user) == nil && user.GetDeletionTimestamp() != nil
+	}, 10*time.Second, 50*time.Millisecond)
+	require.Never(t, func() bool {
+		return c.Get(t.Context(), client.ObjectKeyFromObject(user), user) != nil || len(user.GetFinalizers()) == 0
+	}, time.Second, 100*time.Millisecond, "nothing is released while a Pod remains")
+
+	require.NoError(t, c.Get(t.Context(), client.ObjectKeyFromObject(pod), pod))
+	pod.Finalizers = nil
+	require.NoError(t, c.Update(t.Context(), pod))
+	require.NoError(t, <-done)
+	for _, h := range controllerFinalizers {
+		require.Contains(t, log.String(), "namespace stuck: released "+h.finalizer+" from "+h.gvk.Kind+" held\n")
+	}
+	require.NoError(t, c.Get(t.Context(), client.ObjectKey{Name: ns}, &corev1.Namespace{}), "the namespace is created again")
+}
+
+// playNamespaceController does for namespace ns what kube-controller-manager
+// does and envtest lacks: once ns is terminating it deletes every Pod and
+// every object of controllerFinalizers' kinds in it, and finalizes ns when
+// none remains.
+func playNamespaceController(ctx context.Context, c client.Client, ns string) {
+	lists := []client.ObjectList{&corev1.PodList{}}
+	for _, h := range controllerFinalizers {
+		l := &unstructured.UnstructuredList{}
+		l.SetGroupVersionKind(h.gvk.GroupVersion().WithKind(h.gvk.Kind + "List"))
+		lists = append(lists, l)
+	}
+	tick := time.NewTicker(50 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+		var n corev1.Namespace
+		if c.Get(ctx, client.ObjectKey{Name: ns}, &n) != nil || n.DeletionTimestamp == nil {
+			continue
+		}
+		left := 0
+		for _, l := range lists {
+			if c.List(ctx, l, client.InNamespace(ns)) != nil {
+				left++
+				continue
+			}
+			items, _ := meta.ExtractList(l)
+			for _, o := range items {
+				left++
+				_ = c.Delete(ctx, o.(client.Object), client.GracePeriodSeconds(0))
+			}
+		}
+		if left == 0 {
+			n.Spec.Finalizers = nil
+			_ = c.SubResource("finalize").Update(ctx, &n)
+		}
+	}
 }
 
 // TestEnvtest_TwoClusters pins, against two API servers, that a placed story

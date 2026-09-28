@@ -16,11 +16,13 @@ import (
 )
 
 // Runner timings besides the per-step wait: how long a previous story's
-// namespace may take to delete, its servers lame-ducking for two minutes,
+// namespace may take to delete, its servers lame-ducking for two minutes;
+// how long it keeps the controllers' finalizers once its last Pod is gone;
 // and how often a waiting step logs its diff.
 const (
-	teardown = 5 * time.Minute
-	report   = 15 * time.Second
+	teardown     = 5 * time.Minute
+	releaseAfter = time.Minute
+	report       = 15 * time.Second
 )
 
 // runStories runs the story bundles under root numbered in only, all when
@@ -37,7 +39,7 @@ func runStories(ctx context.Context, root string, clients []client.Client, only 
 		return err
 	}
 	r := &e2e.Runner{
-		Clients: clients, Timeout: wait, Teardown: teardown, Interval: 2 * time.Second, Report: report,
+		Clients: clients, Timeout: wait, Teardown: teardown, Release: releaseAfter, Interval: 2 * time.Second, Report: report,
 		Namespaces: []string{releaseNS}, Log: os.Stderr, Publish: e2e.PublishHosts,
 	}
 	var results []e2e.Result

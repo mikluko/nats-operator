@@ -50,6 +50,9 @@ type Runner struct {
 	// Teardown bounds the wait for a previous story's namespace to finish
 	// deleting; 0 is Timeout.
 	Teardown time.Duration
+	// Release is how long a terminating namespace with no Pod left keeps
+	// the controllers' finalizers before the runner removes them.
+	Release  time.Duration
 	Interval time.Duration
 	// Report is how often a step still waiting logs what it waits for; 0
 	// logs nothing.
@@ -406,6 +409,8 @@ func forceDeletes(ctx context.Context, c client.Client, ns string) error {
 	return nil
 }
 
+// awaitGone waits for namespace ns to go, removing the controllers'
+// finalizers from what it holds once it has had no Pod for r.Release.
 func (r *Runner) awaitGone(ctx context.Context, c client.Client, ns *corev1.Namespace) error {
 	limit := r.Teardown
 	if limit == 0 {
@@ -415,10 +420,23 @@ func (r *Runner) awaitGone(ctx context.Context, c client.Client, ns *corev1.Name
 	defer cancel()
 	tick := time.NewTicker(r.Interval)
 	defer tick.Stop()
+	var podless time.Time
 	for {
 		err := c.Get(ctx, client.ObjectKeyFromObject(ns), &corev1.Namespace{})
 		if apierrors.IsNotFound(err) {
 			return nil
+		}
+		var pods corev1.PodList
+		switch err := c.List(ctx, &pods, client.InNamespace(ns.Name)); {
+		case err != nil || len(pods.Items) > 0:
+			podless = time.Time{}
+		case podless.IsZero():
+			podless = time.Now()
+		}
+		if !podless.IsZero() && time.Since(podless) >= r.Release {
+			if err := r.releaseFinalizers(ctx, c, ns.Name); err != nil {
+				r.logf("namespace %s: %v", ns.Name, err)
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -426,6 +444,59 @@ func (r *Runner) awaitGone(ctx context.Context, c client.Client, ns *corev1.Name
 		case <-tick.C:
 		}
 	}
+}
+
+// heldBy is a kind of object whose controller holds its deletion, and the
+// finalizer it holds it by.
+type heldBy struct {
+	gvk       schema.GroupVersionKind
+	finalizer string
+}
+
+// controllerFinalizers are the finalizers the controllers add, in the order
+// the runner removes them: users before their accounts, JetStream resources
+// before the NatsCluster whose data they hold.
+var controllerFinalizers = []heldBy{
+	{schema.GroupVersionKind{Group: "auth.nats.mikluko.io", Version: "v1beta1", Kind: "NatsUser"}, "auth.nats.mikluko.io/revoke"},
+	{schema.GroupVersionKind{Group: "auth.nats.mikluko.io", Version: "v1beta1", Kind: "NatsAccount"}, "auth.nats.mikluko.io/delete"},
+	{schema.GroupVersionKind{Group: "jetstream.nats.mikluko.io", Version: "v1beta1", Kind: "NatsConsumer"}, jetStreamFinalizer},
+	{schema.GroupVersionKind{Group: "jetstream.nats.mikluko.io", Version: "v1beta1", Kind: "NatsStream"}, jetStreamFinalizer},
+	{schema.GroupVersionKind{Group: "jetstream.nats.mikluko.io", Version: "v1beta1", Kind: "NatsKeyValue"}, jetStreamFinalizer},
+	{schema.GroupVersionKind{Group: "jetstream.nats.mikluko.io", Version: "v1beta1", Kind: "NatsObjectStore"}, jetStreamFinalizer},
+	{schema.GroupVersionKind{Group: "jetstream.nats.mikluko.io", Version: "v1beta1", Kind: "NatsClusterEvacuation"}, jetStreamFinalizer},
+	{schema.GroupVersionKind{Group: "cluster.nats.mikluko.io", Version: "v1beta1", Kind: "NatsCluster"}, "cluster.nats.mikluko.io/jetstream-data"},
+}
+
+const jetStreamFinalizer = "jetstream.nats.mikluko.io/finalizer"
+
+// releaseFinalizers removes controllerFinalizers from every object being
+// deleted in namespace ns, logging each; a kind the API server lacks has
+// none.
+func (r *Runner) releaseFinalizers(ctx context.Context, c client.Client, ns string) error {
+	for _, h := range controllerFinalizers {
+		list := &unstructured.UnstructuredList{}
+		list.SetGroupVersionKind(h.gvk.GroupVersion().WithKind(h.gvk.Kind + "List"))
+		err := c.List(ctx, list, client.InNamespace(ns))
+		switch {
+		case meta.IsNoMatchError(err):
+			continue
+		case err != nil:
+			return fmt.Errorf("list %ss: %w", h.gvk.Kind, err)
+		}
+		for i := range list.Items {
+			o := &list.Items[i]
+			if o.GetDeletionTimestamp() == nil || !slices.Contains(o.GetFinalizers(), h.finalizer) {
+				continue
+			}
+			orig := o.DeepCopy()
+			o.SetFinalizers(slices.DeleteFunc(o.GetFinalizers(), func(f string) bool { return f == h.finalizer }))
+			if err := c.Patch(ctx, o, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{})); client.IgnoreNotFound(err) != nil {
+				return fmt.Errorf("release %s %s: %w", h.gvk.Kind, key(o), err)
+			}
+			r.logf("namespace %s: released %s from %s %s", ns, h.finalizer, h.gvk.Kind, o.GetName())
+		}
+	}
+	return nil
 }
 
 func (r *Runner) logf(format string, args ...any) {

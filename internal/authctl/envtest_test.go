@@ -179,7 +179,7 @@ func TestEnvtest(t *testing.T) {
 	c, err := client.New(cfg, client.Options{Scheme: s})
 	require.NoError(t, err)
 	e.c = c
-	for _, ns := range []string{"nats-system", "team-a", "rot", "offline", "flip", "payments", "orders", "foreign", "lost", "tenancy", "thief"} {
+	for _, ns := range []string{"nats-system", "team-a", "rot", "offline", "flip", "payments", "orders", "foreign", "lost", "tenancy", "thief", "orphan", "gone"} {
 		require.NoError(t, c.Create(t.Context(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}))
 	}
 	for _, f := range []string{
@@ -206,6 +206,8 @@ func TestEnvtest(t *testing.T) {
 	t.Run("Story2Users", e.testStory2Users)
 	t.Run("Story4", e.testStory4)
 	t.Run("UserDeletion", e.testDeletion)
+	t.Run("UserOfOrphanedAccount", e.testOrphanedAccountUser)
+	t.Run("AccountDeletedWithOperator", e.testAccountDeletedWithOperator)
 	t.Run("RevocationRecord", e.testRevocationRecord)
 	t.Run("LostSeed", e.testLostSeed)
 	t.Run("AccountKeyHeld", e.testAccountKeyHeld)

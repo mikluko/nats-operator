@@ -108,7 +108,8 @@ func TestUserKicked(t *testing.T) {
 			Status: authv1beta1.NatsAccountStatus{PublicKey: accPub, JWT: token,
 				Distribution: &authv1beta1.Distribution{Servers: 1, Current: 1}},
 		}
-		c := fake.NewClientBuilder().WithScheme(s).WithStatusSubresource(u).WithObjects(u, a).Build()
+		o := &authv1beta1.NatsOperator{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "demo"}}
+		c := fake.NewClientBuilder().WithScheme(s).WithStatusSubresource(u).WithObjects(u, a, o).Build()
 		rec := events.NewFakeRecorder(10)
 		r := &UserReconciler{Client: c, Sessions: kicker{tt.closed}, Recorder: rec}
 		_, err := r.Reconcile(t.Context(), reconcile.Request{NamespacedName: client.ObjectKeyFromObject(u)})

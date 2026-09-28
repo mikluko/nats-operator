@@ -64,7 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The auth controller signs `NatsUser`s into creds Secrets, or into `status.jwt` for a user with `publicKey`.
 - `NatsUser` `spec.accountRef` cannot change once set.
 - A `NatsUser` whose `NatsReferenceGrant` is deleted is revoked.
-- Deleting a `NatsUser` revokes it and, with `--system-connection` set, closes its connections before its creds Secret is removed.
+- Deleting a `NatsUser` revokes it and, with `--system-connection` set, closes its connections before its creds Secret is removed, unless its account or the account's `NatsOperator` no longer exists.
 - `--system-connection` on the auth controller pushes account JWTs to the servers, and `status.distribution` reports how many hold the current one.
 - Deleting a `NatsAccount` deletes it from the servers' resolvers, also on servers that join later.
 - `NatsAccount` and `NatsSystemAccount` `status.revocations` list the user keys the account revokes.
