@@ -45,9 +45,7 @@ const pingJszSubject = "$SYS.REQ.SERVER.PING.JSZ"
 
 // serversDown says why snap, of NATS cluster cluster, may be missing streams,
 // and is "" where it is not: a server of cluster did not answer, the meta
-// group has no leader, or its leader reports a peer offline. A server that is
-// down is in no roster, so only the meta leader still names it, and it names
-// no cluster for it.
+// group has no leader, or its leader reports a peer offline.
 func serversDown(ctx context.Context, sys *nats.Conn, snap *sysobs.Snapshot, cluster string) (string, error) {
 	if len(snap.Silent) > 0 {
 		return fmt.Sprintf("%s of %s %s", servers(snap.Silent), cluster, plural(len(snap.Silent), "does not answer", "do not answer")), nil

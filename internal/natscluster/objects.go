@@ -30,10 +30,9 @@ const (
 	ExporterTag        = "0.17.3"
 )
 
-// A server in lame-duck mode hands off every Raft leadership it holds, tells
-// its clients after lameDuckGracePeriod, spreads their disconnects over the
-// rest of lameDuckDuration and exits; terminationGracePeriod, in seconds,
-// must outlast all of it.
+// terminationGracePeriod, in seconds, must outlast lameDuckDuration, over
+// which a server in lame-duck mode hands off its leaderships and disconnects
+// its clients.
 const (
 	terminationGracePeriod = 300
 	lameDuckDuration       = 2 * time.Minute

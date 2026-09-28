@@ -364,13 +364,9 @@ func freePorts(t *testing.T, n int) []int {
 	return out
 }
 
-// supercluster boots story 6's east and west under one hand-minted NATS
-// operator, with gateway TLS from one self-signed CA, each member's
-// gateway listening on loopback and every remote URL rewritten to the
-// first server of that member. Each server advertises its own listener:
-// the story's advertise names one load balancer in front of every server,
-// which loopback has no counterpart for. mutate adjusts both NatsClusters
-// before they render.
+// supercluster boots story 6's east and west on loopback under one NATS
+// operator, with gateway TLS from one CA and each server advertising its own
+// listener; mutate adjusts both NatsClusters before they render.
 func supercluster(t *testing.T, mutate func(east, west *clusterv1beta1.NatsCluster)) (east, west *member) {
 	t.Helper()
 	p := mintPlane(t)

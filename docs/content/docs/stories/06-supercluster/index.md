@@ -37,6 +37,19 @@ Identical in both Kubernetes clusters and replicated by GitOps: the trust roots 
 
 {{< manifest "01-natsoperatortrust.yaml" >}}
 
+The gateways take their certificates from a private CA whose key pair every member's cert-manager holds, replicated the same way: gateways authenticate each other by certificate alone, so a public issuer would admit any certificate it signs, and the cluster controller holds the servers until the certificate Secret carries `ca.crt`, which an ACME issuer never writes.
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: nats-gateway-ca
+spec:
+  ca:
+    secretName: nats-gateway-ca   # in cert-manager's own namespace
+```
+
+
 ## The home cluster
 
 There is no supercluster resource: each NatsCluster lists the gateways it joins, the same list in every member. The external Service is rendered from a template.

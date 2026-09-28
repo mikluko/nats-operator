@@ -89,7 +89,7 @@ func condition(ct *assert.CollectT, b *js.NatsSystemBalancer, typ string, status
 }
 
 // TestSystemBalancer_Supercluster runs the reconciler against a two-cluster
-// supercluster in operator mode, where account A carries the
+// supercluster under a NATS operator, where account A carries the
 // jetstream-stepdown export and B does not, and every stream leader in C1
 // starts on C1-0.
 func TestSystemBalancer_Supercluster(t *testing.T) {
@@ -250,8 +250,6 @@ func TestSystemBalancer_ProbeFailsAfterMove(t *testing.T) {
 	t.Cleanup(pool.Close)
 	r := &SystemBalancerReconciler{Client: c, Dialer: &natsconn.Dialer{Reader: c, Pool: pool}, PendingPoll: time.Millisecond, Leases: &MoveLeases{}}
 	key := client.ObjectKey{Namespace: ns, Name: "demo"}
-	// A stream that does not answer, or answers with no leader, is electing
-	// one after a stepdown, which only the balancer requests here.
 	moved := func() bool {
 		for _, name := range aStreams {
 			ctx, cancel := context.WithTimeout(ctx, 2*time.Second)

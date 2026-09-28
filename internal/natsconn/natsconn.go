@@ -114,8 +114,6 @@ func Dial(ep Endpoint, opts ...nats.Option) (*nats.Conn, error) {
 	return nc, nil
 }
 
-// endpointOptions validates ep's CA and creds and returns the options that
-// carry them, with unlimited reconnects.
 func endpointOptions(ep Endpoint) ([]nats.Option, error) {
 	opts := []nats.Option{nats.MaxReconnects(-1)}
 	if ep.CA != nil {

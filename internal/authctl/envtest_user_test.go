@@ -66,11 +66,11 @@ func (e *env) creds(ct assert.TestingT, k types.NamespacedName) (token, seed str
 	return token, string(b), s
 }
 
-// testStory2Users applies story 2's users: creds land in Secrets owned by
+// testUserCreds applies story 2's users: creds land in Secrets owned by
 // their users, signed by the account's signing key; the bring-your-own-key
 // user gets its JWT in status and no Secret; the controller presets sign
 // into the system account.
-func (e *env) testStory2Users(t *testing.T) {
+func (e *env) testUserCreds(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join(storiesDir, "02-auth-plane/01-natsusers.yaml"))
 	require.NoError(t, err)
 	e.apply(t, string(raw))
@@ -153,11 +153,11 @@ func (e *env) testStory2Users(t *testing.T) {
 	})
 }
 
-// testStory4 applies story 4: users in the payments namespace attach to the
-// payments account in nats-system through a grant, a user no grant covers is
-// refused, and deleting the grant revokes the users it had admitted until it
-// is restored.
-func (e *env) testStory4(t *testing.T) {
+// testUsersUnderGrant applies story 4: users in the payments namespace attach
+// to the payments account in nats-system through a grant, a user no grant
+// covers is refused, and deleting the grant revokes the users it had admitted
+// until it is restored.
+func (e *env) testUsersUnderGrant(t *testing.T) {
 	for _, f := range []string{"04-team-self-service/01-platform.yaml", "04-team-self-service/01-team.yaml"} {
 		raw, err := os.ReadFile(filepath.Join(storiesDir, f))
 		require.NoError(t, err)
@@ -362,12 +362,8 @@ func (e *env) testDeletion(t *testing.T) {
 	t.Run("SystemAccount", e.testSystemUserDeletion)
 }
 
-// testSystemUserDeletion deletes a user of a NatsSystemAccount whose
-// status.distribution counts servers holding a JWT other than the revoking
-// one the NatsOperator signed: the user is held, kick pass or not, until
-// status.jwtHash names that JWT and every server holds it. The system
-// account is kept from catching up by withdrawing the grant its
-// cross-namespace operatorRef needs.
+// testSystemUserDeletion pins that a deleted user of a NatsSystemAccount is
+// held until every server holds the system account JWT revoking it.
 func (e *env) testSystemUserDeletion(t *testing.T) {
 	for _, ns := range []string{"sysdel-op", "sysdel-sys"} {
 		require.NoError(t, e.c.Create(t.Context(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}))

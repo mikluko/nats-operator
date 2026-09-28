@@ -167,9 +167,9 @@ type Limits struct {
 	GoMemLimit int64
 }
 
-// deriveLimits derives from resources.limits.memory a GOMEMLIMIT of 90% and
-// a memory store of 75%, and from the volume claim's storage request a file
-// store of 95%; jetstream.limits overrides either store limit.
+// deriveLimits derives GOMEMLIMIT and the memory store from
+// resources.limits.memory, and the file store from the volume claim's storage
+// request; jetstream.limits overrides either store.
 func deriveLimits(spec *clusterv1beta1.NatsClusterSpec) Limits {
 	var l Limits
 	if mem, ok := spec.Resources.Limits[corev1.ResourceMemory]; ok {

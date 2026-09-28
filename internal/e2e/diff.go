@@ -23,15 +23,8 @@ func (m Mismatch) String() string {
 	return fmt.Sprintf("%s: want %s, got %s", m.Path, m.Want, got)
 }
 
-// Diff returns every way got fails to contain want, ordered by path; none
-// means it does. Maps are compared on want's keys only. A list named
-// conditions is matched by each entry's type, and only type and status are
-// compared. Any other list must have want's length, each item compared in
-// turn. Scalars are compared by their JSON encoding, so 3 and 3.0 are equal.
-// An absent field equals the zero scalar, as omitempty encodes it; a field
-// want states otherwise and got lacks yields one mismatch per scalar under
-// it. A placeholder matches anything, absence included, and a condition
-// whose status is a placeholder need only be present.
+// Diff returns every way got fails to contain want by the matching rules
+// hack/e2e/README.md states, ordered by path; none means it does.
 func Diff(want, got map[string]any) []Mismatch {
 	return diffValue("", want, got, true)
 }

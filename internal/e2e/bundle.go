@@ -412,8 +412,8 @@ func (b *Bundle) Parts() []Part {
 	return parts
 }
 
-// Objects returns every object p's steps up to and including step apply or
-// delete, once each, as last declared.
+// Objects returns the objects p's steps up to step apply or delete, each as
+// last declared.
 func (p Part) Objects(step int) []*unstructured.Unstructured {
 	return objects(p.Steps, step)
 }
@@ -537,8 +537,8 @@ func loadExpectation(path string, name FileName) (Expectation, error) {
 	return e, nil
 }
 
-// Objects returns every object b's steps up to and including step apply or
-// delete, once each, as last declared.
+// Objects returns the objects b's steps up to step apply or delete, each as
+// last declared.
 func (b *Bundle) Objects(step int) []*unstructured.Unstructured {
 	return objects(b.Steps, step)
 }

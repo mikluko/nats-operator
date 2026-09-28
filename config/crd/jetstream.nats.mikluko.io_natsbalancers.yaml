@@ -98,7 +98,6 @@ spec:
                     others.
                   properties:
                     name:
-                      description: Name, unique within the balancer.
                       maxLength: 63
                       pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                       type: string

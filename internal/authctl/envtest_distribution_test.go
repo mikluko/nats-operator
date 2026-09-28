@@ -36,8 +36,7 @@ import (
 // TestEnvtestDistribution runs the reconcilers with Resolvers over the
 // SystemConnection cmd/auth-controller wires, against three routed
 // nats-servers with full resolvers booted from the NatsOperator the auth
-// controller signed: story 2's status, re-signing at half the TTL, jwtTTL:
-// 0, and deletion.
+// controller signed.
 func TestEnvtestDistribution(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")
@@ -146,7 +145,7 @@ spec:
   jwtTTL: 0s
 `)
 
-	t.Run("Story2", func(t *testing.T) {
+	t.Run("DistributedToEveryServer", func(t *testing.T) {
 		orders := &authv1beta1.NatsAccount{}
 		sys := &authv1beta1.NatsSystemAccount{}
 		e.eventually(t, func(ct *assert.CollectT) {

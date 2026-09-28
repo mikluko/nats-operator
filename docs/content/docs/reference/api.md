@@ -87,7 +87,7 @@ Distribution is how many servers hold an account's current JWT.\
 Appears on: [NatsAccountStatus](#NatsAccountStatus), [NatsSystemAccountStatus](#NatsSystemAccountStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `servers` | {{< type "int32" >}} | No | Servers is the number of servers in the roster. |
+| `servers` | {{< type "int32" >}} | No | Servers is how many servers trust the account's NATS operator. |
 | `current` | {{< type "int32" >}} | No | Current is the number of servers holding the current JWT. |
 | `lastPushTime` | [{{< type "Time" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Time) | No | LastPushTime is when the JWT was last pushed. |
 
@@ -1345,7 +1345,7 @@ Pool is a declared group of streams balanced apart from the account's others.\
 Appears on: [NatsBalancerSpec](#NatsBalancerSpec).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `name` | {{< type "string" >}} | Yes | Name, unique within the balancer. |
+| `name` | {{< type "string" >}} | Yes |  |
 | `selector` | [{{< type "LabelSelector" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#LabelSelector) | Yes | Selector matches NatsStream, NatsKeyValue and NatsObjectStore resources in the balancer's namespace by label. |
 
 ### PoolStatus {#PoolStatus}
@@ -1595,7 +1595,7 @@ Package v1beta1 is the nats.mikluko.io API group: the kinds every controller rea
 | [NatsAccountTrust](#NatsAccountTrust) | NatsAccountTrust is an account a leaf binds a remote to. |
 | [NatsConnection](#NatsConnection) | NatsConnection is an address and an identity on a NATS cluster, managed or not; the only way the JetStream controller reaches one. |
 | [NatsOperatorTrust](#NatsOperatorTrust) | NatsOperatorTrust is the trust roots a NatsCluster boots from: the NATS operator JWT and system account JWT. |
-| [NatsReferenceGrant](#NatsReferenceGrant) | NatsReferenceGrant admits references into its own namespace from the namespaces it lists; it has no status. Admitting a NatsCluster to a NatsConnection hands that connection's credentials to the NatsCluster's namespace, where they are copied into the Secret <name>-leaf-remotes. |
+| [NatsReferenceGrant](#NatsReferenceGrant) | NatsReferenceGrant admits references into its own namespace from the namespaces it lists. Admitting a NatsCluster to a NatsConnection hands that connection's credentials to the NatsCluster's namespace. |
 
 ### CA {#CA}
 CA is where a CA bundle is read from.\
@@ -1720,7 +1720,7 @@ Appears on: [NatsOperatorTrust](#NatsOperatorTrust).
 | `systemAccountJWT` | {{< type "string" >}} | No | SystemAccountJWT is the referenced NATS operator's system account JWT, written by the auth controller in the reference form. |
 
 ### NatsReferenceGrant {#NatsReferenceGrant}
-NatsReferenceGrant admits references into its own namespace from the namespaces it lists; it has no status. Admitting a NatsCluster to a NatsConnection hands that connection's credentials to the NatsCluster's namespace, where they are copied into the Secret <name>-leaf-remotes.
+NatsReferenceGrant admits references into its own namespace from the namespaces it lists. Admitting a NatsCluster to a NatsConnection hands that connection's credentials to the NatsCluster's namespace.
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `apiVersion` | {{< type "string" >}} | Yes | `nats.mikluko.io/v1beta1` |

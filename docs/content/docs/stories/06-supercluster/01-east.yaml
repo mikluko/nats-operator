@@ -49,7 +49,7 @@ spec:
       certManager:
         issuerRef:
           kind: ClusterIssuer
-          name: letsencrypt
+          name: nats-gateway-ca
     # The external Service is rendered from this template; its hostname is
     # what the server advertises and what the other members' remotes name.
     service:

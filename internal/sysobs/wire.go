@@ -6,10 +6,6 @@ import (
 	"time"
 )
 
-// The wire types decode the subset of nats-server's system API responses
-// this package reads; their JSON names match nats-server v2.15.0
-// (server/events.go, server/monitor.go, server/stream.go).
-
 type wireServerInfo struct {
 	Name      string            `json:"name"`
 	ID        string            `json:"id"`

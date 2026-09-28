@@ -202,10 +202,6 @@ func (r *OperatorReconciler) deletes(ctx context.Context, op *authv1beta1.NatsOp
 	return next, nil
 }
 
-// keysFailed reports a key that cannot be read: a missing seed is waited
-// for, a malformed one or a generated one its owner does not control is a
-// spec error, a lost identity seed is left for a human, and anything else is
-// retried.
 func keysFailed(err error, notReady func(reason, msg string)) error {
 	switch {
 	case errors.Is(err, errSeedLost):
@@ -245,7 +241,7 @@ func (r *OperatorReconciler) systemAccount(ctx context.Context, op *authv1beta1.
 		return nil, resolvedKeys{}, false, err
 	}
 	if refKey(sys.Spec.OperatorRef, sys.Namespace) != client.ObjectKeyFromObject(op) {
-		notReady(ReasonOperatorMismatch, fmt.Sprintf("NatsSystemAccount %s names another operator", key))
+		notReady(ReasonOperatorMismatch, fmt.Sprintf("NatsSystemAccount %s names another NatsOperator", key))
 		return nil, resolvedKeys{}, false, nil
 	}
 	keys, err := resolveKeys(ctx, r.Client, systemAccountKeySource(&sys), false)

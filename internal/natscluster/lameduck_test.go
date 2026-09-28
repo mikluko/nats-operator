@@ -46,8 +46,7 @@ func TestLameDuckFitsTerminationGrace(t *testing.T) {
 
 // TestLameDuckHandsOffLeaders pins that a server entering lame-duck mode
 // hands off the meta, stream and consumer leadership it holds to another
-// server before its clients are told and before it exits, which is why a
-// rollout moves no leader before a restart.
+// server before its clients are told and before it exits.
 func TestLameDuckHandsOffLeaders(t *testing.T) {
 	nc := storyCluster(t)
 	_, srvs, url, _ := startRendered(t, nc, nil, "r1", func(o *server.Options) {

@@ -333,13 +333,8 @@ func serversOf(us []sysobs.Unsettled) []string {
 	return slices.Compact(out)
 }
 
-// progressingCondition is the one Progressing decision. It reports the
-// first of, in rank: o.Held; a certificate the servers wait for; servers
-// being created; servers waiting for their data volume claim to be
-// deleted; a rollout; servers reloading to the revision; a
-// scale-down or replacement that cannot start; servers beyond
-// spec.replicas; and otherwise False with UpToDate. plan is read only when
-// o.Held is nil.
+// progressingCondition is the highest-ranked Progressing reason; plan is read
+// only when o.Held is nil.
 func progressingCondition(nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed) metav1.Condition {
 	if o.Held != nil {
 		return *o.Held

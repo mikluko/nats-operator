@@ -11,8 +11,7 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 )
 
-// TestGroupVersions pins the four groups and their version to what the
-// design and the story manifests name.
+// TestGroupVersions pins the four groups and their version.
 func TestGroupVersions(t *testing.T) {
 	tests := []struct {
 		name string

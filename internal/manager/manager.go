@@ -23,7 +23,6 @@ import (
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
-// readyWait is how long a readiness probe waits for the cache to sync.
 const readyWait = time.Second
 
 // Controller is one controller binary, as Run starts it.
@@ -38,8 +37,7 @@ type Controller struct {
 	// client-go's.
 	AddToScheme []func(*runtime.Scheme) error
 	Owned       Owned
-	// Setup adds the controller's runnables and reconcilers to mgr.
-	Setup func(ctx context.Context, mgr ctrl.Manager) error
+	Setup       func(ctx context.Context, mgr ctrl.Manager) error
 }
 
 // Run registers the manager's flags and zap's on flag.CommandLine, parses

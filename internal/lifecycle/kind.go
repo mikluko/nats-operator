@@ -34,11 +34,9 @@ type Kind[P interface {
 	// Fields points into obj.
 	Fields func(obj P) Fields
 	// Resolve returns obj's server object, asking with ready that every
-	// resource it depends on be Ready. Where there is none it records why on
-	// obj's status and returns a nil Object, and gone reports that nothing
-	// will reach the server object, so a deleting obj drops its finalizer
-	// without running its deletion policy. Nil resolves through Connection
-	// and Bind.
+	// resource it depends on be Ready, or nil with why recorded on obj's
+	// status and gone set where nothing will reach it. Nil resolves through
+	// Connection and Bind.
 	Resolve func(ctx context.Context, c client.Client, d *natsconn.Dialer, obj P, ready bool) (o Object, gone bool, err error)
 	// Connection is the NatsConnection reference obj makes and Bind binds
 	// obj's server object through it, where Resolve is nil.

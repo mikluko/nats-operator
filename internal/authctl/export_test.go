@@ -11,5 +11,4 @@ func (r *Resolvers) PollOperator(ctx context.Context, operator types.NamespacedN
 	return r.pollOperator(ctx, operator)
 }
 
-// RosterMisses is rosterMisses.
 const RosterMisses = rosterMisses

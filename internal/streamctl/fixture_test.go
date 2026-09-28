@@ -98,7 +98,7 @@ func (f *fixture) create(obj client.Object) {
 	require.NoError(f.t, f.c.Create(f.t.Context(), obj))
 }
 
-// edit applies mutate to the NatsStream name and bumps its generation, as
+// editStream applies mutate to the NatsStream name and bumps its generation, as
 // the API server does on a spec change.
 func (f *fixture) editStream(name string, mutate func(*js.NatsStreamSpec)) {
 	f.t.Helper()

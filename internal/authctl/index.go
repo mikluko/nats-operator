@@ -11,7 +11,8 @@ import (
 	"github.com/mikluko/nats-operator/internal/grant"
 )
 
-// Field indexes, each valued "<namespace>/<name>" of the object named.
+// Field indexes, each valued "<namespace>/<name>" of the object named, but
+// userAccountField, valued by accountValue.
 const (
 	// operatorField indexes NatsSystemAccount, NatsAccount and
 	// NatsOperatorTrust by the NatsOperator they name.
@@ -26,8 +27,7 @@ const (
 	// seedSecretField indexes NatsOperator, NatsSystemAccount and
 	// NatsAccount by the seed Secrets they read, generated ones included.
 	seedSecretField = "auth.nats.mikluko.io/seed-secret"
-	// userAccountField indexes NatsUser by its account, valued by
-	// accountValue.
+	// userAccountField indexes NatsUser by its account.
 	userAccountField = "auth.nats.mikluko.io/user-account"
 )
 

@@ -216,9 +216,7 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 const userInfoSubject = "$SYS.REQ.USER.INFO"
 
 // accountOf is the account nc is a user of, as the server names it, or ""
-// where nc has no user JWT and the server runs no system account. A
-// connection with a user JWT needs no permission to publish to
-// userInfoSubject.
+// where nc has no user JWT and the server runs no system account.
 func accountOf(ctx context.Context, nc *nats.Conn) (string, error) {
 	if account := jwtAccount(nc); account != "" {
 		return account, nil

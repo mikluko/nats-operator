@@ -58,7 +58,7 @@ Everything from the earlier stories at once, across three NATS clusters in three
 
 ## Trust roots and clusters
 
-The trust roots and the gateway list are the same in every Kubernetes cluster; GitOps keeps them alike.
+The trust roots and the gateway list are the same in every Kubernetes cluster; GitOps keeps them alike. The gateway certificates come from a private CA, as in [the supercluster story]({{< relref "/docs/stories/06-supercluster" >}}), since a public issuer would let any certificate it signs join the supercluster.
 
 {{< manifest "01-natsoperatortrust.yaml" >}}
 

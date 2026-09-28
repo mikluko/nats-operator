@@ -60,9 +60,8 @@ type ReferenceGrantTo struct {
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // NatsReferenceGrant admits references into its own namespace from the
-// namespaces it lists; it has no status. Admitting a NatsCluster to a
-// NatsConnection hands that connection's credentials to the NatsCluster's
-// namespace, where they are copied into the Secret <name>-leaf-remotes.
+// namespaces it lists. Admitting a NatsCluster to a NatsConnection hands that
+// connection's credentials to the NatsCluster's namespace.
 type NatsReferenceGrant struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

@@ -51,7 +51,7 @@ type PodMonitor struct {
 	Monitor *sysobs.MonitorObserver
 }
 
-// Observe reads every server's /varz and /jsz.
+// Observe reads every server's /varz, /gatewayz and /jsz.
 func (m PodMonitor) Observe(ctx context.Context, nc *clusterv1beta1.NatsCluster) (*sysobs.Snapshot, error) {
 	return m.Monitor.Observe(ctx, monitorEndpoints(nc))
 }
@@ -318,7 +318,6 @@ func (r *Reconciler) hold(ctx context.Context, orig, nc *clusterv1beta1.NatsClus
 	return r.patchStatus(ctx, orig, nc)
 }
 
-// holdFor is hold, then a look again after resyncUnsettled.
 func (r *Reconciler) holdFor(ctx context.Context, orig, nc *clusterv1beta1.NatsCluster, held *metav1.Condition) (ctrl.Result, error) {
 	if err := r.hold(ctx, orig, nc, held); err != nil {
 		return ctrl.Result{}, err

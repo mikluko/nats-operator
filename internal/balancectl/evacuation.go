@@ -67,8 +67,7 @@ const (
 	ReasonMoveRefused = "MoveRefused"
 	// ReasonServersDown is Ready's and Progressing's reason while a server
 	// of the source does not answer, or the meta group reports a server of
-	// the NATS system offline, since the source may hold streams no snapshot
-	// shows; no move is made and none is counted done.
+	// the NATS system offline; no move is made and none is counted done.
 	ReasonServersDown = "ServersDown"
 )
 
@@ -234,7 +233,7 @@ func (r *EvacuationReconciler) evacuate(ctx context.Context, e *js.NatsClusterEv
 
 // finalize cancels the moves e has in flight and releases e. A connection
 // that cannot be resolved, or a source no server of which answers, leaves
-// nothing to cancel; a Ready evacuation has nothing in flight.
+// nothing to cancel.
 func (r *EvacuationReconciler) finalize(ctx context.Context, e *js.NatsClusterEvacuation) error {
 	if !controllerutil.ContainsFinalizer(e, lifecycle.Finalizer) {
 		return nil

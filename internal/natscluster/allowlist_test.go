@@ -18,11 +18,10 @@ import (
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 )
 
-// TestReloadAllowLists_EverySupportedVersion fails when a minor version
-// from 2.15 up to the nats-server this module builds against has no
-// reload allow-list, or when a list names a diffOptions case that is not
-// an Options field of that nats-server; only a key reloading the system
-// account's entry names an unexported one.
+// TestReloadAllowLists_EverySupportedVersion pins a reload allow-list for
+// every minor version from 2.15 up to the linked nats-server, and that the
+// linked version's list names only Options fields, an unexported one only for
+// the key reloading the system account's entry.
 func TestReloadAllowLists_EverySupportedVersion(t *testing.T) {
 	linked := minorVersion(server.VERSION)
 	require.NotEmpty(t, linked, server.VERSION)

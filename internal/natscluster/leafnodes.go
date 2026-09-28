@@ -192,12 +192,9 @@ func leafRefNamespaces(nc *clusterv1beta1.NatsCluster) []string {
 	return out
 }
 
-// readLeafRemotes resolves nc's leafRemotes under trust, which is nil
-// exactly when nc has no auth plane. A remote whose NatsConnection, its
-// Secrets or its NatsAccountTrust is absent, not admitted, not yet filled
-// in or invalid returns nil and the Progressing condition saying so; so
-// do two remotes naming one NatsConnection, and a leaf preloading accounts
-// into a Full resolver with no jetstream.volumeClaimTemplate to keep it on.
+// readLeafRemotes resolves nc's leafRemotes under trust, nil exactly when nc
+// has no auth plane; a remote it cannot resolve returns nil and the
+// Progressing condition saying why.
 func readLeafRemotes(ctx context.Context, r client.Reader, nc *clusterv1beta1.NatsCluster, trust *Trust) ([]LeafRemote, *metav1.Condition, error) {
 	notProgressing := func(reason, format string, args ...any) *metav1.Condition {
 		return &metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: reason, Message: fmt.Sprintf(format, args...)}

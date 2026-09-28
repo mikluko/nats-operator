@@ -9,11 +9,9 @@ import (
 	"time"
 )
 
-// A Balancer is a system or account balancer's passes over one NATS cluster.
-// It makes at most one move a pass and none while the NATS cluster is not
-// Settled, so every move is followed by a Settled reading before the next: a
-// leader move starts an election, and a second one started into it is an
-// outage.
+// A Balancer makes at most one move a pass over one NATS cluster, and none
+// while it is not Settled: a leader move started into another's election is
+// an outage.
 //
 // A Balancer is not safe for concurrent use.
 type Balancer struct {

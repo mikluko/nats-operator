@@ -53,11 +53,8 @@ func (a *configApply) restart(server, reason string) {
 }
 
 // applyConfig reloads every server not on plan's revision whose change
-// reloads, and reports the rest as needing a restart. A reload is
-// confirmed when the server reports the rendered config's digest; one that
-// fails, or is not confirmed within reloadWindow, falls back to a restart.
-// A server a reload moved has its StatefulSet annotated with the revision
-// in sts.
+// reloads, and reports the rest, and any reload not confirmed within
+// reloadWindow, as needing a restart.
 func (r *Reconciler) applyConfig(ctx context.Context, nc *clusterv1beta1.NatsCluster, plan *Plan, sts map[string]*appsv1.StatefulSet, snap *sysobs.Snapshot) (configApply, error) {
 	var a configApply
 	var rl ServerReloader

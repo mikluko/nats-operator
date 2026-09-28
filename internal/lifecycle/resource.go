@@ -42,8 +42,7 @@ func RemoveFinalizer(ctx context.Context, c client.Client, obj client.Object) er
 }
 
 // SpecOrDeletion passes creates, deletes, and updates that change the
-// generation or mark the object for deletion, so a controller's own status
-// writes do not requeue it.
+// generation or mark the object for deletion.
 func SpecOrDeletion() predicate.Predicate {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {

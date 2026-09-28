@@ -80,9 +80,7 @@ type Member struct {
 	Lag uint64
 }
 
-// SettledLag is how far behind a peer may be and still take leadership: a
-// follower under sustained writes is never Current for long, and a peer this
-// far back catches up well inside one pass interval.
+// SettledLag is how far behind a peer may be and still take leadership.
 const SettledLag = 4096
 
 // Takes reports whether leadership may move to m.
@@ -114,9 +112,9 @@ func (g Group) Holders() []string {
 // holds reports whether server carries a copy of g.
 func (g Group) holds(server string) bool { return slices.Contains(g.Holders(), server) }
 
-// Unsettled names the first group that keeps groups from being Settled, and is
-// empty when there is none: every group has a leader and every member is
-// online. A member that is merely behind is not a reason.
+// Unsettled names the first group that is offline, has no leader or has a
+// member offline, and is empty when there is none; a member merely behind
+// does not count.
 func Unsettled(groups []Group) string {
 	for _, g := range groups {
 		if g.Offline {

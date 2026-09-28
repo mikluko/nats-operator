@@ -16,7 +16,7 @@ import (
 )
 
 // plane is an auth plane signed by this package and served by one
-// in-process nats-server in operator mode.
+// in-process nats-server trusting its NATS operator.
 type plane struct {
 	srv   *server.Server
 	users map[string]planeUser

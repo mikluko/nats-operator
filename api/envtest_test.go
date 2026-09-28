@@ -17,9 +17,9 @@ import (
 	"github.com/mikluko/nats-operator/internal/e2e"
 )
 
-// TestEnvtest installs the generated CRDs into a real API server and pins
-// that every story manifest is accepted, that every CEL rule refuses what
-// it names, and the schema defaults.
+// TestEnvtest pins, against the generated CRDs in a real API server, that
+// every story manifest is accepted, every CEL rule refuses what it names, and
+// the schema defaults.
 func TestEnvtest(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")

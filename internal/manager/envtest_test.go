@@ -126,9 +126,8 @@ func TestEnvtestCache(t *testing.T) {
 }
 
 // TestEnvtestMetrics pins that the metrics endpoint answers over HTTPS
-// only to a token allowed to get /metrics. A token the API server rejects
-// with an error, as it does a malformed one, is answered 500, not 401: that
-// is controller-runtime's filter.
+// only to a token allowed to get /metrics; a malformed token is answered
+// 500, not 401.
 func TestEnvtestMetrics(t *testing.T) {
 	cfg := startEnvtest(t)
 	scheme, err := NewScheme()

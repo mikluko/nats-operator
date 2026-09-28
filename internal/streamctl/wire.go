@@ -44,9 +44,8 @@ func durationWire(d *metav1.Duration) *int64 {
 	return &n
 }
 
-// durationAPI returns nil for a zero duration, as every *API helper
-// does for a zero value, so late initialization writes only what the
-// server sets.
+// durationAPI returns nil for a zero duration, as every *API helper does for
+// a zero value.
 func durationAPI(n *int64) *metav1.Duration {
 	if n == nil || *n == 0 {
 		return nil

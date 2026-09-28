@@ -47,9 +47,6 @@ const (
 // NatsStream a NatsConsumer's streamRef names.
 const StreamRefField = "jetstream.nats.mikluko.io/stream-ref"
 
-// immutableConsumerKeys are the ConsumerConfig keys nats-server refuses to
-// update (consumer.go checkNewConsumerConfig); a switch between push and
-// pull is refused too.
 var immutableConsumerKeys = []string{
 	"deliver_policy", "mem_storage", "opt_start_seq", "opt_start_time",
 	"ack_policy", "replay_policy", "idle_heartbeat", "flow_control", "max_waiting",

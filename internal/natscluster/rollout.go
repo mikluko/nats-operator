@@ -235,9 +235,7 @@ func rolloutCondition(rs *clusterv1beta1.RolloutStatus, gate gateState, paused b
 	return c
 }
 
-// judgeGate reports what holds the gate to the next step, in order: the
-// NATS cluster not Settled, a server outside the meta group, a server not
-// Ready, a server on the target revision not reporting it.
+// judgeGate reports the first thing holding the gate to the next step.
 func judgeGate(st rolloutState) gateState {
 	var notReady, behind []string
 	for _, s := range st.Servers {

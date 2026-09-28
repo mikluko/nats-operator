@@ -207,7 +207,6 @@ func userClaims(u *authv1beta1.NatsUser, pub string) jwtplane.User {
 	return out
 }
 
-// credsSecret returns the key of u's creds Secret and the key within it.
 func credsSecret(u *authv1beta1.NatsUser) (types.NamespacedName, string) {
 	name, key := u.Name+"-creds", natsconn.DefaultCredentialsKey
 	if c := u.Spec.Credentials; c != nil {
@@ -219,9 +218,9 @@ func credsSecret(u *authv1beta1.NatsUser) (types.NamespacedName, string) {
 	return types.NamespacedName{Namespace: u.Namespace, Name: name}, key
 }
 
-// writeCreds keeps u's creds Secret holding a creds file signed for u and
-// returns the user's public key and JWT. The key pair of a creds file already there
-// is kept; a Secret the user does not own wraps errSecretNotOwned.
+// writeCreds keeps u's creds Secret holding a creds file signed for u, on the
+// key pair of any creds file already there, and returns u's public key and
+// JWT. A Secret u does not own wraps errSecretNotOwned.
 func (r *UserReconciler) writeCreds(ctx context.Context, u *authv1beta1.NatsUser, keys resolvedKeys, accountJWT string) (string, string, error) {
 	key, field := credsSecret(u)
 	var s corev1.Secret
@@ -413,9 +412,8 @@ func (r *UserReconciler) finalize(ctx context.Context, u *authv1beta1.NatsUser) 
 }
 
 // drain reports whether a deleted user and the keys it replaced are revoked
-// everywhere and it has no connection left, with Ready set to the step it waits on otherwise. A user
-// never signed, or whose account is gone, unsigned or without its
-// NatsOperator, has nothing to drain: no revocation can be signed.
+// everywhere with no connection left, setting Ready to the step it waits on
+// otherwise. A user no revocation can be signed for has nothing to drain.
 func (r *UserReconciler) drain(ctx context.Context, u *authv1beta1.NatsUser) (bool, reconcile.Result, error) {
 	pub := u.Status.PublicKey
 	if pub == "" {
@@ -464,7 +462,6 @@ func (r *UserReconciler) drain(ctx context.Context, u *authv1beta1.NatsUser) (bo
 	return true, reconcile.Result{}, nil
 }
 
-// deleteCreds deletes u's creds Secret if u owns it.
 func (r *UserReconciler) deleteCreds(ctx context.Context, u *authv1beta1.NatsUser) error {
 	if u.Spec.PublicKey != "" {
 		return nil

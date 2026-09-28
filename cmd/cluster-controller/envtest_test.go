@@ -27,11 +27,10 @@ const (
 	envtestTick = 100 * time.Millisecond
 )
 
-// TestEnvtestOwnedCache runs setup in a manager scoped to owned and to
-// story 1's namespace against a real API server: story 1's NatsCluster comes
-// up to date and counts its servers ready, which it reads through that
-// cache, every object of an owned kind it renders carries the owner label,
-// and a NatsCluster in another namespace is never reconciled.
+// TestEnvtestOwnedCache pins that setup, in a manager scoped to owned and to
+// story 1's namespace, brings story 1's NatsCluster up to date through that
+// cache, labels every owned object it renders, and never reconciles a
+// NatsCluster in another namespace.
 func TestEnvtestOwnedCache(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")

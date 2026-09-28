@@ -72,9 +72,9 @@ const (
 	ReasonReconcileError = "ReconcileError"
 )
 
-// observe records on a status the outcome err of reconciling generation
-// gen. Success sets *observed to gen. Any other error but a conflict turns
-// Ready False, reason ReconcileError, unless Ready is already False at gen.
+// observe records the outcome err of reconciling generation gen: success sets
+// *observed to gen, and an error but a conflict turns Ready False, reason
+// ReconcileError, unless Ready is already False at gen.
 func observe(conds *[]metav1.Condition, observed *int64, gen int64, err error) {
 	if err == nil {
 		*observed = gen

@@ -45,9 +45,6 @@ type Resolvers struct {
 	// authenticated as a user holding the auth-controller preset.
 	Conn func(ctx context.Context, operator types.NamespacedName) (*nats.Conn, error)
 	// Wait bounds how long a request gathers replies; zero is two seconds.
-	// A roster poll always waits it out, since nothing says how many
-	// servers will answer; other requests stop once every server in the
-	// roster has.
 	Wait time.Duration
 	// Interval is how often rosters are polled; zero is ten seconds.
 	Interval time.Duration
@@ -422,8 +419,7 @@ func (r *Resolvers) setRoster(st *resolverState, answered map[string]bool) bool 
 }
 
 // mergeRoster returns the misses of each server in the roster after a poll
-// that answered answered, prev being those before it. A server leaves once
-// it has missed rosterMisses polls in a row. changed reports a server
+// that answered answered, prev being those before it; changed reports a server
 // joining, leaving, or answering after a miss.
 func mergeRoster(prev map[string]int, answered map[string]bool) (next map[string]int, changed bool) {
 	next = make(map[string]int, max(len(prev), len(answered)))

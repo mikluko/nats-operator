@@ -119,8 +119,8 @@ func consumerIn(ctx context.Context, j jetstream.JetStream, stream, consumer str
 	return cluster
 }
 
-// TestEvacuation_Supercluster empties C1 of a two-cluster operator-mode
-// supercluster into C2 while a system balancer and an account balancer of C1
+// TestEvacuation_Supercluster empties C1 of a two-cluster supercluster under
+// one NATS operator into C2 while a system balancer and an account balancer of C1
 // run beside the evacuation.
 func TestEvacuation_Supercluster(t *testing.T) {
 	t.Parallel()

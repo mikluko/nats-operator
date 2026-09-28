@@ -11,9 +11,9 @@ type LeaderMove struct {
 	To    string
 }
 
-// PlanLeaders returns the leader moves that even out who leads groups, in the
-// order they would be made. Every group with a leader is counted; only one
-// movable admits is moved, and only onto a member [Member.Takes] admits.
+// PlanLeaders returns, in order, the leader moves of groups movable admits
+// that even out who leads every group with a leader, each onto a member
+// [Member.Takes] admits.
 //
 // Each move takes a leader from a server to one leading at least two fewer, so
 // the plan ends. It ends even wherever every server is a member of every group;

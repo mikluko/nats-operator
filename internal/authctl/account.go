@@ -252,8 +252,6 @@ func listUsers(ctx context.Context, c client.Reader, kind authv1beta1.AccountKin
 	return list.Items, nil
 }
 
-// pushed returns the distribution of a JWT newly signed at now: d's server
-// count, no server current, and now as the last push if sent.
 func pushed(d *authv1beta1.Distribution, now time.Time, sent bool) *authv1beta1.Distribution {
 	out := &authv1beta1.Distribution{}
 	if sent {
@@ -265,7 +263,6 @@ func pushed(d *authv1beta1.Distribution, now time.Time, sent bool) *authv1beta1.
 	return out
 }
 
-// accountTTL is the lifetime jwtplane signs for ttl.
 func accountTTL(ttl time.Duration) time.Duration {
 	if ttl == 0 {
 		return jwtplane.DefaultAccountTTL

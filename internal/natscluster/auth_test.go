@@ -218,7 +218,8 @@ func TestRender_AuthDataVolume(t *testing.T) {
 	})
 }
 
-// authCase is a change to an operator-mode server's rendered config.
+// authCase is a change to the rendered config of a server under a NATS
+// operator.
 type authCase struct {
 	name   string
 	mutate func(t *testing.T, m map[string]any)
@@ -289,7 +290,7 @@ func TestRestartReason_Auth(t *testing.T) {
 }
 
 // TestOperatorReload_AgreesWithClassification reloads each trust change
-// on an operator-mode nats-server: a change nats-server refuses is
+// on a nats-server under a NATS operator: a change nats-server refuses is
 // classified restart-only.
 func TestOperatorReload_AgreesWithClassification(t *testing.T) {
 	skipUnderRace(t)
@@ -402,10 +403,10 @@ func pushAccount(t *testing.T, p testPlane, url string) error {
 	return err
 }
 
-// TestAuthCluster_SettledOverSystemUser pins that story 2's rendered
-// config boots an operator-mode NATS cluster whose preloaded system account
-// takes the cluster controller's system user, a cluster-controller preset
-// user dialed from NewPool, which observes it Settled, and whose full resolver serves an account pushed over $SYS.
+// TestAuthCluster_SettledOverSystemUser pins that story 2's rendered config
+// boots a NATS cluster that a cluster-controller preset user of its preloaded
+// system account observes Settled, and whose full resolver serves an account
+// pushed over $SYS.
 func TestAuthCluster_SettledOverSystemUser(t *testing.T) {
 	a := startAuthCluster(t)
 	require.NoError(t, pushAccount(t, a.p, a.url))
@@ -522,11 +523,10 @@ func TestClustersTrusting(t *testing.T) {
 	require.ElementsMatch(t, []string{"a/same", "b/cross"}, got)
 }
 
-// skipUnderRace skips a test that reloads an operator-mode nats-server
-// under the race detector: nats-server 2.15 parses a fresh resolver on
-// every reload, whose expiry goroutine updates a counter atomically while
-// diffOptions compares it with reflect.DeepEqual. `just test` runs these
-// tests again without -race.
+// skipUnderRace skips a test under the race detector, which trips on
+// nats-server 2.15 comparing a resolver's atomically updated expiry counter
+// with reflect.DeepEqual on every reload. `just test` runs these tests again
+// without -race.
 func skipUnderRace(t *testing.T) {
 	t.Helper()
 	if raceEnabled {

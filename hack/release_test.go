@@ -104,9 +104,9 @@ func stepByID(t *testing.T, steps []step, id string) step {
 	return step{}
 }
 
-// TestRelease_InvalidChangelogFails holds the plan to the changelog action's
-// failing step: an invalid CHANGELOG.md fails the plan job, which has no
-// branch of its own for it.
+// TestRelease_InvalidChangelogFails pins that the plan job runs the changelog
+// action failing on an invalid CHANGELOG.md, and that ci, the workflow
+// release.yml follows, is named so.
 func TestRelease_InvalidChangelogFails(t *testing.T) {
 	plan := readWorkflow(t, "release.yml").Jobs["plan"]
 	var changelog *step

@@ -141,11 +141,8 @@ type env struct {
 	sys atomic.Pointer[nats.Conn]
 }
 
-// TestEnvtest runs the reconcilers against a real API server: stories 2, 4
-// and 5 as their manifests declare them, user deletion against a
-// nats-server, the revocation record, the JWTs served by a nats-server,
-// cross-namespace imports under grants, signing key rotation, offline
-// identities, jwtTTL: 0, a system account flip and the stepdown preset.
+// TestEnvtest runs the reconcilers against a real API server, one subtest per
+// behaviour.
 func TestEnvtest(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")
@@ -194,8 +191,8 @@ func TestEnvtest(t *testing.T) {
 		e.apply(t, string(raw))
 	}
 
-	t.Run("Story2", e.testStory2)
-	t.Run("Story5", e.testStory5)
+	t.Run("AuthPlaneSigned", e.testAuthPlaneSigned)
+	t.Run("ExportsImported", e.testExportsImported)
 	t.Run("ServedByNatsServer", e.testServed)
 	t.Run("CrossNamespaceImport", e.testCrossNamespaceImport)
 	t.Run("ImportFromOtherOperator", e.testImportFromOtherOperator)
@@ -203,8 +200,8 @@ func TestEnvtest(t *testing.T) {
 	t.Run("Rotation", e.testRotation)
 	t.Run("OfflineIdentities", e.testOfflineIdentities)
 	t.Run("SystemAccountFlipAndStepdown", e.testFlipAndStepdown)
-	t.Run("Story2Users", e.testStory2Users)
-	t.Run("Story4", e.testStory4)
+	t.Run("UserCreds", e.testUserCreds)
+	t.Run("UsersUnderGrant", e.testUsersUnderGrant)
 	t.Run("UserDeletion", e.testDeletion)
 	t.Run("UserOfOrphanedAccount", e.testOrphanedAccountUser)
 	t.Run("AccountDeletedWithOperator", e.testAccountDeletedWithOperator)
@@ -220,7 +217,7 @@ func TestEnvtest(t *testing.T) {
 
 var demo = types.NamespacedName{Namespace: "nats-system", Name: "demo"}
 
-func (e *env) testStory2(t *testing.T) {
+func (e *env) testAuthPlaneSigned(t *testing.T) {
 	op := &authv1beta1.NatsOperator{}
 	sys := &authv1beta1.NatsSystemAccount{}
 	orders := &authv1beta1.NatsAccount{}
@@ -290,7 +287,7 @@ func (e *env) testStory2(t *testing.T) {
 	}, 2*time.Second, 100*time.Millisecond, "an unchanged account is not re-signed")
 }
 
-func (e *env) testStory5(t *testing.T) {
+func (e *env) testExportsImported(t *testing.T) {
 	monitoring := &authv1beta1.NatsAccount{}
 	core := &authv1beta1.NatsAccount{}
 	e.eventually(t, func(ct *assert.CollectT) {

@@ -52,9 +52,8 @@ func (s Shutdown) Start(ctx context.Context) error {
 func (Shutdown) NeedLeaderElection() bool { return false }
 
 // Start installs the global meter and tracer providers of the controller
-// named service, for the signals exporters turns on, with service as
-// service.name unless OTEL_SERVICE_NAME is set; a signal left off keeps
-// the global noop provider. The SDK's errors go to log.
+// named service for each signal exporters turns on, the SDK logging to log;
+// a signal left off keeps the global noop provider.
 func Start(ctx context.Context, service string, log logr.Logger) (Shutdown, error) {
 	otel.SetLogger(log)
 	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) { log.Error(err, "opentelemetry") }))
@@ -133,10 +132,8 @@ func signalOn(signal string) bool {
 }
 
 // newResource is the SDK's own attributes and those of OTEL_RESOURCE_ATTRIBUTES
-// and OTEL_SERVICE_NAME, over service as service.name and the host name,
-// which in Kubernetes is the pod's name, as service.instance.id. An
-// attribute the environment malforms is reported to the SDK's error handler
-// and left out.
+// and OTEL_SERVICE_NAME, over service as service.name and the host name as
+// service.instance.id; an attribute the environment malforms is left out.
 func newResource(ctx context.Context, service string) (*resource.Resource, error) {
 	host, err := os.Hostname()
 	if err != nil {

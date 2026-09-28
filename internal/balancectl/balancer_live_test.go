@@ -67,8 +67,8 @@ func accountCondition(ct assert.TestingT, b *js.NatsBalancer, typ string, status
 	}
 }
 
-// TestBalancer_Pools runs the reconciler against a NATS cluster in operator
-// mode, on a connection of account A, whose streams in three pools, one of
+// TestBalancer_Pools runs the reconciler against a NATS cluster under a NATS
+// operator, on a connection of account A, whose streams in three pools, one of
 // them the default, all start led by C1-0.
 func TestBalancer_Pools(t *testing.T) {
 	t.Parallel()

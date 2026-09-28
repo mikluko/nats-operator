@@ -33,5 +33,10 @@ spec:
   # `routes.tls.certManager.issuerRef` name a real one instead, and
   # `routes.tls.enabled: false` turns it off.
 
+  # No `tls` block: clients connect in the clear. `tls.secretRef` or
+  # `tls.certManager.issuerRef` put the client listener under TLS, and
+  # clients then dial `tls://`.
+
+
   # No `auth` block: servers run with no accounts and no client auth, every
   # client lands in the global account. Story 2 adds the auth plane.

@@ -79,7 +79,7 @@ type AccountReference struct {
 
 // Distribution is how many servers hold an account's current JWT.
 type Distribution struct {
-	// Servers is the number of servers in the roster.
+	// Servers is how many servers trust the account's NATS operator.
 	// +optional
 	Servers int32 `json:"servers,omitempty"`
 

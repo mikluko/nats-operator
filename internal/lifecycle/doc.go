@@ -1,4 +1,5 @@
 // Package lifecycle is the reconcile loop every JetStream object resource
-// shares; a kind supplies an Object that converts its spec to and from the
-// server's JSON config.
+// shares: resolving its NatsConnection, the JetStream API requests made
+// through it, and syncing the server object a kind's Object converts to and
+// from spec.
 package lifecycle

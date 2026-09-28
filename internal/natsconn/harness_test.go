@@ -28,8 +28,8 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 )
 
-// testNATS is an operator-mode nats-server requiring TLS, with one account
-// and a user in it.
+// testNATS is a nats-server under a NATS operator requiring TLS, with one
+// account and a user in it.
 type testNATS struct {
 	srv     *server.Server
 	url     string

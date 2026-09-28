@@ -10,8 +10,8 @@ import (
 // +kubebuilder:validation:Enum=cluster-controller;jetstream-controller;auth-controller;readonly;leafnode
 type UserPreset string
 
-// User presets. The three controller presets are for system account users;
-// readonly is for ordinary accounts.
+// User presets: the controller presets for system account users, readonly
+// for ordinary accounts.
 const (
 	UserPresetClusterController   UserPreset = "cluster-controller"
 	UserPresetJetStreamController UserPreset = "jetstream-controller"

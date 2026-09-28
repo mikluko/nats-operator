@@ -102,12 +102,10 @@ func generatedSecretName(owner, role, key string) string {
 	return owner + "-" + role + "-" + key
 }
 
-// resolveKeys reads the keys src names. An identity or signing key spec
-// leaves out is read from the Secret the auth controller generates it into;
-// with generate, a missing generated Secret is created for src.owner, and
-// otherwise the error wraps errKeysPending. A missing generated identity
-// seed of an owner whose status records its identity wraps errSeedLost and
-// is never created.
+// resolveKeys reads the keys src names, and a key spec leaves out from the
+// Secret generated for it, created only with generate and otherwise wrapping
+// errKeysPending. A generated identity seed missing while src records an
+// identity wraps errSeedLost and is never created.
 func resolveKeys(ctx context.Context, c client.Client, src keySource, generate bool) (resolvedKeys, error) {
 	var out resolvedKeys
 	ns := src.owner.GetNamespace()
@@ -245,7 +243,7 @@ func accountKeySource(acc *authv1beta1.NatsAccount) keySource {
 }
 
 // seedSecretNames lists the Secrets src reads its seeds from, generated
-// ones included, for the seed Secret index.
+// ones included.
 func seedSecretNames(src keySource) []string {
 	var out []string
 	switch {

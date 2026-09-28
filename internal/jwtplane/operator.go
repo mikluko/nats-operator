@@ -11,7 +11,7 @@ import (
 
 // ErrOfflineOperatorMismatch is returned when a NATS operator JWT signed offline
 // does not carry what the spec requires of it.
-var ErrOfflineOperatorMismatch = errors.New("offline operator JWT does not match spec")
+var ErrOfflineOperatorMismatch = errors.New("offline NATS operator JWT does not match spec")
 
 // Operator is a NATS operator. Exactly one of Keys.Identity and JWT is set:
 // JWT is a NATS operator JWT signed offline.
@@ -45,7 +45,7 @@ func SignOperator(o Operator) (string, error) {
 		return checkOfflineOperator(o)
 	}
 	if o.Keys.Identity == nil {
-		return "", fmt.Errorf("%w: operator has neither identity key nor JWT", ErrWrongKeyType)
+		return "", fmt.Errorf("%w: NATS operator has neither identity key nor JWT", ErrWrongKeyType)
 	}
 	pub, err := o.Keys.publicKey(nkeys.PrefixByteOperator)
 	if err != nil {

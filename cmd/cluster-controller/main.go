@@ -56,8 +56,6 @@ var owned = manager.Owned{
 
 var schemes = []func(*runtime.Scheme) error{natsv1beta1.AddToScheme, clusterv1beta1.AddToScheme}
 
-// setup registers the cluster controller's instruments and adds the
-// connection pool and the NatsCluster reconciler to mgr.
 func setup(ctx context.Context, mgr ctrl.Manager) error {
 	if err := telemetry.RegisterCluster(otel.Meter(telemetry.ClusterController), mgr.GetClient()); err != nil {
 		return fmt.Errorf("register instruments: %w", err)

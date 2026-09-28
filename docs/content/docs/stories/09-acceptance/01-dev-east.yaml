@@ -46,7 +46,7 @@ spec:
       certManager:
         issuerRef:
           kind: ClusterIssuer
-          name: letsencrypt
+          name: nats-gateway-ca
     service:
       type: LoadBalancer
       annotations:

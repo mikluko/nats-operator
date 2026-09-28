@@ -198,9 +198,8 @@ func userRevoked(accountJWT, userJWT string) bool {
 	return ac.IsClaimRevoked(uc)
 }
 
-// replaceKey returns replaced with prev, replaced at now, added where it is
-// set and not pub, and with pub and every key accountJWT revokes since it
-// was replaced removed.
+// replaceKey returns replaced with prev recorded at now, and without pub or
+// any key accountJWT revokes since its replacement.
 func replaceKey(replaced []authv1beta1.ReplacedKey, prev, pub, accountJWT string, now time.Time) []authv1beta1.ReplacedKey {
 	if prev != "" && prev != pub && !slices.ContainsFunc(replaced, func(k authv1beta1.ReplacedKey) bool { return k.PublicKey == prev }) {
 		replaced = append(replaced, authv1beta1.ReplacedKey{PublicKey: prev, At: metav1.Time{Time: now}})

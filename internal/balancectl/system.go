@@ -1,8 +1,6 @@
-// Package balancectl reconciles balancers and evacuations: a
-// NatsSystemBalancer runs a [balance.Balancer] over the NATS cluster its
-// NatsConnection reaches, and a NatsClusterEvacuation empties one NATS
-// cluster, both on a system connection. A balancer leaves alone the streams
-// an evacuation of its NATS cluster moves while it is not Ready.
+// Package balancectl reconciles NatsSystemBalancer, NatsBalancer and
+// NatsClusterEvacuation. A balancer leaves alone the streams an evacuation of
+// its NATS cluster moves while that evacuation is not Ready.
 package balancectl
 
 import (

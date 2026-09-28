@@ -217,7 +217,8 @@ spec:
                     format: date-time
                     type: string
                   servers:
-                    description: Servers is the number of servers in the roster.
+                    description: Servers is how many servers trust the account's NATS
+                      operator.
                     format: int32
                     type: integer
                 type: object

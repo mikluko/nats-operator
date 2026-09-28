@@ -20,13 +20,11 @@ import (
 // ErrForeignConnection is returned by SystemConnection.Conn when the
 // connection's credentials are not those of a user of the NatsOperator's
 // system account.
-var ErrForeignConnection = errors.New("system connection is not a user of the operator's system account")
+var ErrForeignConnection = errors.New("system connection is not a user of the NATS operator's system account")
 
-// SystemConnection is the auth controller's system connection: the
-// NatsConnection Name, pooled in Pool. It serves a NatsOperator only if the
-// connection's creds are those of a user of the system account the
-// NatsOperator signed, which for the auth controller is a NatsUser holding the
-// auth-controller preset.
+// SystemConnection is the NatsConnection Name, pooled in Pool, serving a
+// NatsOperator only when its creds are those of a user of that NatsOperator's
+// system account.
 type SystemConnection struct {
 	Reader client.Reader
 	Pool   *natsconn.Pool

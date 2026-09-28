@@ -6,11 +6,9 @@ imagePullSecrets: []
 leaderElection:
   enabled: true
 
-# Namespaces every controller watches and reconciles in, passed as
-# --watch-namespaces. Set, each controller gets a Role and RoleBinding in each
-# of them instead of a ClusterRole over all, which keeps only the
-# cluster-scoped TokenReview and SubjectAccessReview its metrics endpoint
-# needs. Empty, the controllers watch every namespace.
+# Namespaces every controller watches, passed as --watch-namespaces; set, each
+# gets a Role in each of them, and its ClusterRole keeps only the TokenReview
+# and SubjectAccessReview its metrics endpoint needs. Empty, every namespace.
 watchNamespaces: []
 
 # Every controller's defaults, merged under its own block's, which win.
@@ -126,9 +124,9 @@ metrics:
   service:
     enabled: false
   # A prometheus-operator ServiceMonitor per enabled controller over that
-  # Service, which it requires. The scrape sends the Prometheus pod's own
-  # ServiceAccount token, which metrics.scraper.serviceAccount must name, and
-  # skips certificate verification, the certificate being self-signed.
+  # Service, which it requires, scraping with the Prometheus pod's own token,
+  # whose ServiceAccount metrics.scraper.serviceAccount must name, and without
+  # verifying the certificate.
   serviceMonitor:
     enabled: false
     # On each ServiceMonitor, for a Prometheus that selects them by label.

@@ -40,7 +40,7 @@ type testNATS struct {
 	opts []*server.Options
 	urls []string
 	// ca and creds are set on a secure cluster: client TLS signed by ca,
-	// and operator mode with one JetStream account, creds being its user's.
+	// and a NATS operator with one JetStream account, creds being its user's.
 	ca    []byte
 	creds []byte
 }
