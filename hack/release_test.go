@@ -47,7 +47,7 @@ type workflow struct {
 		Outputs     map[string]string `json:"outputs"`
 		Env         map[string]string `json:"env"`
 		Strategy    struct {
-			Matrix map[string]string `json:"matrix"`
+			Matrix map[string]any `json:"matrix"`
 		} `json:"strategy"`
 		Steps []step            `json:"steps"`
 		Uses  string            `json:"uses"`
