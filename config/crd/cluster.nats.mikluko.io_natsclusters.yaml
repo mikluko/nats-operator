@@ -605,7 +605,10 @@ spec:
                       rule: has(self.secretRef) != has(self.certManager)
                 type: object
               podTemplate:
-                description: PodTemplate is merged into every server's pod.
+                description: |-
+                  PodTemplate is merged into every server's pod, over its security
+                  context and automountServiceAccountToken too: whoever may write a
+                  NatsCluster runs pods with any privilege its namespace admits.
                 properties:
                   metadata:
                     description: EmbeddedObjectMetadata is the metadata a template
@@ -885,7 +888,7 @@ spec:
                     description: Gateway is the advertised gateway address.
                     type: string
                   monitor:
-                    description: Monitor is the monitoring URL.
+                    description: Monitor is the monitoring URL, on the headless Service.
                     type: string
                 type: object
               gateways:

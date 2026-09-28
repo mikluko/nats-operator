@@ -56,7 +56,7 @@ The hub is story 9's `prod-east`, whose NatsCluster gains a leafnode listener, a
 
 ## The edge
 
-A leaf is a NatsCluster that dials out through a NatsConnection, the same kind the JetStream controller uses. Its JetStream runs in a domain of its own.
+A leaf is a NatsCluster that dials out through a NatsConnection, the same kind the JetStream controller uses. Its JetStream runs in a domain of its own. A NatsConnection in another namespace needs a NatsReferenceGrant there, and that grant hands the connection's credentials to the leaf's namespace, where the cluster controller copies them into the Secret `<name>-leaf-remotes`.
 
 {{< manifest "01-edge.yaml" >}}
 

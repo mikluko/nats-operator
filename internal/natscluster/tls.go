@@ -24,16 +24,32 @@ import (
 
 const caKey = "ca.crt"
 
-const selfSignedValidity = 10 * 365 * 24 * time.Hour
+// A self-signed route certificate and its CA are valid for
+// selfSignedValidity and renewed once less than selfSignedRenewBefore of it
+// remains.
+const (
+	selfSignedValidity    = 365 * 24 * time.Hour
+	selfSignedRenewBefore = selfSignedValidity / 3
+)
 
 // selfSignedRouteSecret returns a kubernetes.io/tls Secret holding a new CA
-// and a certificate it signs for hosts, for both server and client auth. A
-// host that parses as an IP address is an IP SAN.
+// and a certificate it signs for hosts, as issueRouteSecrets does.
 func selfSignedRouteSecret(nc *clusterv1beta1.NatsCluster, hosts []string, now time.Time) (*corev1.Secret, error) {
-	caKeyPair, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, err
 	}
+	_, routes, err := issueRouteSecrets(nc, hosts, key, now)
+	return routes, err
+}
+
+// issueRouteSecrets returns the CA Secret, a CA certificate self-signed
+// with caKeyPair beside that key, and the route Secret, the CA certificate
+// beside one it signs for hosts for server and client auth, both valid from
+// now for selfSignedValidity. A host that parses as an IP address is an IP
+// SAN. A certificate one call signs verifies against the CA of any other
+// call with the same nc and caKeyPair.
+func issueRouteSecrets(nc *clusterv1beta1.NatsCluster, hosts []string, caKeyPair *ecdsa.PrivateKey, now time.Time) (caSecret, routes *corev1.Secret, err error) {
 	caTmpl := &x509.Certificate{
 		SerialNumber:          serial(),
 		Subject:               pkix.Name{CommonName: nc.Name + " route CA"},
@@ -45,16 +61,20 @@ func selfSignedRouteSecret(nc *clusterv1beta1.NatsCluster, hosts []string, now t
 	}
 	caDER, err := x509.CreateCertificate(rand.Reader, caTmpl, caTmpl, &caKeyPair.PublicKey, caKeyPair)
 	if err != nil {
-		return nil, fmt.Errorf("sign route CA: %w", err)
+		return nil, nil, fmt.Errorf("sign route CA: %w", err)
 	}
 	ca, err := x509.ParseCertificate(caDER)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	caKeyDER, err := x509.MarshalECPrivateKey(caKeyPair)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	leafTmpl := &x509.Certificate{
 		SerialNumber: serial(),
@@ -73,21 +93,65 @@ func selfSignedRouteSecret(nc *clusterv1beta1.NatsCluster, hosts []string, now t
 	}
 	leafDER, err := x509.CreateCertificate(rand.Reader, leafTmpl, ca, &leafKey.PublicKey, caKeyPair)
 	if err != nil {
-		return nil, fmt.Errorf("sign route certificate: %w", err)
+		return nil, nil, fmt.Errorf("sign route certificate: %w", err)
 	}
 	keyDER, err := x509.MarshalECPrivateKey(leafKey)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return &corev1.Secret{
+	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
+	caSecret = &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: routesCASecretName(nc), Namespace: nc.Namespace, Labels: labels(nc)},
+		Type:       corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			corev1.TLSCertKey:       caPEM,
+			corev1.TLSPrivateKeyKey: pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: caKeyDER}),
+		},
+	}
+	routes = &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: routesSecretName(nc), Namespace: nc.Namespace, Labels: labels(nc)},
 		Type:       corev1.SecretTypeTLS,
 		Data: map[string][]byte{
-			caKey:                   pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}),
+			caKey:                   caPEM,
 			corev1.TLSCertKey:       pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER}),
 			corev1.TLSPrivateKeyKey: pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}),
 		},
-	}, nil
+	}
+	return caSecret, routes, nil
+}
+
+// routeCA returns the CA certificate and key of caSecret, or nils when
+// either is absent or does not parse.
+func routeCA(caSecret *corev1.Secret) (*x509.Certificate, *ecdsa.PrivateKey) {
+	cb, _ := pem.Decode(caSecret.Data[corev1.TLSCertKey])
+	kb, _ := pem.Decode(caSecret.Data[corev1.TLSPrivateKeyKey])
+	if cb == nil || kb == nil {
+		return nil, nil
+	}
+	cert, err := x509.ParseCertificate(cb.Bytes)
+	if err != nil {
+		return nil, nil
+	}
+	key, err := x509.ParseECPrivateKey(kb.Bytes)
+	if err != nil {
+		return nil, nil
+	}
+	return cert, key
+}
+
+// routeRenewalDue reports whether the route certificate in routes must be
+// reissued at now: it does not parse, ca did not sign it, or less than
+// selfSignedRenewBefore of it or of ca remains.
+func routeRenewalDue(routes *corev1.Secret, ca *x509.Certificate, now time.Time) bool {
+	b, _ := pem.Decode(routes.Data[corev1.TLSCertKey])
+	if b == nil {
+		return true
+	}
+	leaf, err := x509.ParseCertificate(b.Bytes)
+	if err != nil || leaf.CheckSignatureFrom(ca) != nil {
+		return true
+	}
+	return !now.Before(leaf.NotAfter.Add(-selfSignedRenewBefore)) || !now.Before(ca.NotAfter.Add(-selfSignedRenewBefore))
 }
 
 func serial() *big.Int {

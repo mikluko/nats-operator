@@ -43,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `NatsCluster` `status.config.restartReason` names what makes a spec change restart-only.
 - A `NatsCluster` with `auth` renders its trust roots and account resolver from the `NatsOperatorTrust` that `auth.trustRef` names.
 - With `auth.systemCredentials` the cluster controller reloads servers over `$SYS`; without it every config change restarts.
+- A self-signed route certificate is valid for one year and renewed under the same CA once a third of that remains; the CA is kept in the Secret `<name>-routes-ca`.
+- A `NatsCluster`'s client Service serves only the client port; the monitoring port is on the headless Service, which `status.endpoints.monitor` names.
+- A `NatsCluster`'s pods meet the restricted Pod Security Standard and mount no ServiceAccount token; `podTemplate` can still escalate what the pod runs.
 - A change to the trust roots, `system_account` or the resolver restarts servers one at a time.
 - `NatsCluster` `gateway` joins a supercluster, and status reports `GatewaysConnected`.
 - `NatsCluster` `leafnodes` accepts leaf connections on port 7422.

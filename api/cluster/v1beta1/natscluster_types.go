@@ -56,7 +56,9 @@ type NatsClusterSpec struct {
 	// +optional
 	ServerTags map[string]string `json:"serverTags,omitempty"`
 
-	// PodTemplate is merged into every server's pod.
+	// PodTemplate is merged into every server's pod, over its security
+	// context and automountServiceAccountToken too: whoever may write a
+	// NatsCluster runs pods with any privilege its namespace admits.
 	// +optional
 	PodTemplate *PodTemplate `json:"podTemplate,omitempty"`
 
@@ -437,7 +439,7 @@ type Endpoints struct {
 	// +optional
 	Client string `json:"client,omitempty"`
 
-	// Monitor is the monitoring URL.
+	// Monitor is the monitoring URL, on the headless Service.
 	// +optional
 	Monitor string `json:"monitor,omitempty"`
 

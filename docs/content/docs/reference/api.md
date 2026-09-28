@@ -450,7 +450,7 @@ Appears on: [NatsClusterStatus](#NatsClusterStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `client` | {{< type "string" >}} | No | Client is the client URL, what a NatsConnection's servers is copied from. |
-| `monitor` | {{< type "string" >}} | No | Monitor is the monitoring URL. |
+| `monitor` | {{< type "string" >}} | No | Monitor is the monitoring URL, on the headless Service. |
 | `gateway` | {{< type "string" >}} | No | Gateway is the advertised gateway address. |
 
 ### Exporter {#Exporter}
@@ -589,7 +589,7 @@ Appears on: [NatsCluster](#NatsCluster).
 | `resources` | [{{< type "ResourceRequirements" >}}](https://pkg.go.dev/k8s.io/api/core/v1#ResourceRequirements) | No | Resources of the nats-server container. GOMEMLIMIT and the JetStream memory store derive from limits.memory. |
 | `jetstream` | [{{< type "JetStream" >}}](#JetStream) | No | JetStream enables JetStream on every server. |
 | `serverTags` | {{< type "map[string]string" >}} | No | ServerTags are rendered as key:value server tags. |
-| `podTemplate` | [{{< type "PodTemplate" >}}](#PodTemplate) | No | PodTemplate is merged into every server's pod. |
+| `podTemplate` | [{{< type "PodTemplate" >}}](#PodTemplate) | No | PodTemplate is merged into every server's pod, over its security context and automountServiceAccountToken too: whoever may write a NatsCluster runs pods with any privilege its namespace admits. |
 | `exporter` | [{{< type "Exporter" >}}](#Exporter) | No | Exporter configures the prometheus-nats-exporter sidecar; absent, it runs. |
 | `routes` | [{{< type "Routes" >}}](#Routes) | No | Routes configures the route listener; absent, route TLS is on and self-signed. |
 | `auth` | [{{< type "Auth" >}}](#Auth) | No | Auth puts the NATS cluster under a NATS operator; absent, servers run with no accounts and no client auth. |
@@ -1568,7 +1568,7 @@ Package v1beta1 is the nats.mikluko.io API group: the kinds every controller rea
 | [NatsAccountTrust](#NatsAccountTrust) | NatsAccountTrust is an account a leaf binds a remote to. |
 | [NatsConnection](#NatsConnection) | NatsConnection is an address and an identity on a NATS cluster, managed or not; the only way the JetStream controller reaches one. |
 | [NatsOperatorTrust](#NatsOperatorTrust) | NatsOperatorTrust is the trust roots a NatsCluster boots from: the NATS operator JWT and system account JWT. |
-| [NatsReferenceGrant](#NatsReferenceGrant) | NatsReferenceGrant admits references into its own namespace from the namespaces it lists; it has no status. |
+| [NatsReferenceGrant](#NatsReferenceGrant) | NatsReferenceGrant admits references into its own namespace from the namespaces it lists; it has no status. Admitting a NatsCluster to a NatsConnection hands that connection's credentials to the NatsCluster's namespace, where they are copied into the Secret <name>-leaf-remotes. |
 
 ### CA {#CA}
 CA is where a CA bundle is read from.\
@@ -1693,7 +1693,7 @@ Appears on: [NatsOperatorTrust](#NatsOperatorTrust).
 | `systemAccountJWT` | {{< type "string" >}} | No | SystemAccountJWT is the referenced NATS operator's system account JWT, written by the auth controller in the reference form. |
 
 ### NatsReferenceGrant {#NatsReferenceGrant}
-NatsReferenceGrant admits references into its own namespace from the namespaces it lists; it has no status.
+NatsReferenceGrant admits references into its own namespace from the namespaces it lists; it has no status. Admitting a NatsCluster to a NatsConnection hands that connection's credentials to the NatsCluster's namespace, where they are copied into the Secret <name>-leaf-remotes.
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `apiVersion` | {{< type "string" >}} | Yes | `nats.mikluko.io/v1beta1` |

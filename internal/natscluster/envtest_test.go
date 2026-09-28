@@ -196,7 +196,7 @@ func TestEnvtestReconcile(t *testing.T) {
 		condition(t, got, ConditionReady, metav1.ConditionFalse, ReasonQuorumUnavailable)
 		condition(t, got, ConditionSettled, metav1.ConditionUnknown, ReasonObservationFailed)
 		require.Equal(t, "nats://demo.story1.svc:4222", got.Status.Endpoints.Client)
-		require.Equal(t, "http://demo.story1.svc:8222", got.Status.Endpoints.Monitor)
+		require.Equal(t, "http://demo-headless.story1.svc:8222", got.Status.Endpoints.Monitor)
 		revision := got.Status.Config.Revision
 		require.NotEmpty(t, revision)
 
@@ -351,6 +351,23 @@ func TestEnvtestReconcile(t *testing.T) {
 			for name, sts := range statefulSets(t, "rotate") {
 				require.Equal(t, got.Status.Config.Revision, sts.Annotations[AnnotationConfigRevision], name)
 			}
+			require.ElementsMatch(t, []string{"demo-0", "demo-1", "demo-2"}, fake.reloaded())
+		})
+
+		t.Run("a route certificate due for renewal is renewed and reloads", func(t *testing.T) {
+			nc, first := setUp(t, "renew", func(*clusterv1beta1.NatsClusterSpec) {})
+			before := &corev1.Secret{}
+			require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "renew", Name: routesSecretName(nc)}, before))
+			start := clock
+			clock = clock.Add(selfSignedValidity - selfSignedRenewBefore)
+			t.Cleanup(func() { clock = start })
+
+			got := reconcileWith(t, nc)
+			after := &corev1.Secret{}
+			require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "renew", Name: routesSecretName(nc)}, after))
+			require.Equal(t, clock.Add(selfSignedValidity), mountedCert(after).NotAfter)
+			require.NotEqual(t, first, got.Status.Config.Revision)
+			require.Equal(t, clusterv1beta1.ConfigAppliedByReload, got.Status.Config.AppliedBy)
 			require.ElementsMatch(t, []string{"demo-0", "demo-1", "demo-2"}, fake.reloaded())
 		})
 

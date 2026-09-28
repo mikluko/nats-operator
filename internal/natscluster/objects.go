@@ -36,6 +36,11 @@ const (
 	lameDuckGracePeriod    = 10 * time.Second
 )
 
+// podUser is the user and group every container of a server's pod runs as,
+// and the group owning its volumes: the images run as root unless told
+// otherwise.
+const podUser = 1000
+
 // Server is one server's rendered objects.
 type Server struct {
 	Name        string
@@ -201,6 +206,8 @@ func podTemplate(nc *clusterv1beta1.NatsCluster, server string, limits Limits) (
 		ObjectMeta: metav1.ObjectMeta{Labels: serverLabels(nc, server)},
 		Spec: corev1.PodSpec{
 			TerminationGracePeriodSeconds: ptr.To[int64](terminationGracePeriod),
+			AutomountServiceAccountToken:  ptr.To(false),
+			SecurityContext:               podSecurityContext(),
 			Containers:                    []corev1.Container{natsContainer(nc, limits)},
 			Volumes:                       volumes(nc, server),
 		},
@@ -222,6 +229,27 @@ func podTemplate(nc *clusterv1beta1.NatsCluster, server string, limits Limits) (
 		t.Spec = spec
 	}
 	return t, nil
+}
+
+// podSecurityContext and containerSecurityContext meet the restricted Pod
+// Security Standard.
+func podSecurityContext() *corev1.PodSecurityContext {
+	return &corev1.PodSecurityContext{
+		RunAsNonRoot:        ptr.To(true),
+		RunAsUser:           ptr.To[int64](podUser),
+		RunAsGroup:          ptr.To[int64](podUser),
+		FSGroup:             ptr.To[int64](podUser),
+		FSGroupChangePolicy: ptr.To(corev1.FSGroupChangeOnRootMismatch),
+		SeccompProfile:      &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+	}
+}
+
+func containerSecurityContext() *corev1.SecurityContext {
+	return &corev1.SecurityContext{
+		AllowPrivilegeEscalation: ptr.To(false),
+		ReadOnlyRootFilesystem:   ptr.To(true),
+		Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+	}
 }
 
 // mergePodSpec strategic-merges override over base. A field override does
@@ -280,10 +308,11 @@ func dropNulls(v any) any {
 
 func natsContainer(nc *clusterv1beta1.NatsCluster, limits Limits) corev1.Container {
 	c := corev1.Container{
-		Name:      "nats",
-		Image:     image(nc),
-		Args:      []string{"--config", configDir + "/" + configFile},
-		Resources: *nc.Spec.Resources.DeepCopy(),
+		Name:            "nats",
+		Image:           image(nc),
+		Args:            []string{"--config", configDir + "/" + configFile},
+		Resources:       *nc.Spec.Resources.DeepCopy(),
+		SecurityContext: containerSecurityContext(),
 		Ports: []corev1.ContainerPort{
 			{Name: "client", ContainerPort: PortClient},
 			{Name: "route", ContainerPort: PortRoute},
@@ -350,7 +379,8 @@ func exporterContainer() corev1.Container {
 			"-connz", "-routez", "-subz", "-varz", "-healthz", "-jsz=all",
 			fmt.Sprintf("http://localhost:%d", PortMonitor),
 		},
-		Ports: []corev1.ContainerPort{{Name: "metrics", ContainerPort: PortMetrics}},
+		Ports:           []corev1.ContainerPort{{Name: "metrics", ContainerPort: PortMetrics}},
+		SecurityContext: containerSecurityContext(),
 	}
 }
 
@@ -428,16 +458,15 @@ func gatewayService(nc *clusterv1beta1.NatsCluster) *corev1.Service {
 	}
 }
 
+// clientService serves the client port alone: the monitoring port has no
+// authentication and answers for every account.
 func clientService(nc *clusterv1beta1.NatsCluster) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: clientServiceName(nc), Namespace: nc.Namespace, Labels: labels(nc)},
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
 			Selector: clusterSelector(nc),
-			Ports: []corev1.ServicePort{
-				servicePort("client", PortClient),
-				servicePort("monitor", PortMonitor),
-			},
+			Ports:    []corev1.ServicePort{servicePort("client", PortClient)},
 		},
 	}
 }

@@ -74,6 +74,8 @@ func TestRender_Story1(t *testing.T) {
 	require.Equal(t, corev1.ClusterIPNone, p.HeadlessService.Spec.ClusterIP)
 	require.True(t, p.HeadlessService.Spec.PublishNotReadyAddresses)
 	require.Equal(t, "demo", p.ClientService.Name)
+	require.Equal(t, []corev1.ServicePort{servicePort("client", PortClient)}, p.ClientService.Spec.Ports, "the monitoring port is on the client Service")
+	require.Contains(t, p.HeadlessService.Spec.Ports, servicePort("monitor", PortMonitor))
 	require.Equal(t, intstr.FromInt32(1), *p.PDB.Spec.MaxUnavailable)
 	require.Equal(t, map[string]string{LabelCluster: "demo"}, p.PDB.Spec.Selector.MatchLabels)
 }

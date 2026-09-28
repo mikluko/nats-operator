@@ -18,7 +18,7 @@ status:
   # reads it, and there is no intermediate Secret.
   endpoints:
     client: nats://demo.nats-system.svc:4222
-    monitor: http://demo.nats-system.svc:8222
+    monitor: http://demo-headless.nats-system.svc:8222
   config:
     revision: !any 3f9a1c
     appliedBy: Restart

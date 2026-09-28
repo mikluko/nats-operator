@@ -76,6 +76,10 @@ func configMapName(server string) string { return server + "-config" }
 
 func routesSecretName(nc *clusterv1beta1.NatsCluster) string { return nc.Name + "-routes-tls" }
 
+// routesCASecretName is the Secret holding the self-signed route CA's
+// certificate and key; no pod mounts it.
+func routesCASecretName(nc *clusterv1beta1.NatsCluster) string { return nc.Name + "-routes-ca" }
+
 func gatewayServiceName(nc *clusterv1beta1.NatsCluster) string { return nc.Name + "-gateway" }
 
 // gatewaySecretName is the Secret cert-manager issues the gateway

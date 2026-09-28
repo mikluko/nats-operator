@@ -92,7 +92,7 @@ func computeStatus(nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed) clust
 	st.Replicas = nc.Spec.Replicas
 	st.Endpoints = &clusterv1beta1.Endpoints{
 		Client:  fmt.Sprintf("nats://%s.%s.svc:%d", clientServiceName(nc), nc.Namespace, PortClient),
-		Monitor: fmt.Sprintf("http://%s.%s.svc:%d", clientServiceName(nc), nc.Namespace, PortMonitor),
+		Monitor: fmt.Sprintf("http://%s.%s.svc:%d", headlessServiceName(nc), nc.Namespace, PortMonitor),
 	}
 	st.Config = configStatus(nc.Status.Config, plan, o.Apply)
 	st.Rollout = o.Rollout.Status

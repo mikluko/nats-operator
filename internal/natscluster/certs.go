@@ -2,6 +2,9 @@ package natscluster
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/binary"
@@ -162,29 +165,83 @@ func (r *Reconciler) ensureCertSecret(ctx context.Context, nc *clusterv1beta1.Na
 	return "", s, nil
 }
 
-// ensureSelfSignedRouteSecret generates the route certificate Secret when
-// routes are self-signed and it does not exist.
+// ensureSelfSignedRouteSecret issues the route certificate Secret, and the
+// CA Secret it is signed from, when routes are self-signed and it is
+// missing or due for renewal. A renewal keeps the CA's key, so servers
+// still holding the previous certificates accept the renewed ones. A route
+// Secret nc does not control is left alone.
 func (r *Reconciler) ensureSelfSignedRouteSecret(ctx context.Context, nc *clusterv1beta1.NatsCluster) error {
 	name := routesSecret(nc)
 	if name == "" || name != routesSecretName(nc) || certManagerIssuer(nc) != nil {
 		return nil
 	}
-	err := r.Client.Get(ctx, client.ObjectKey{Namespace: nc.Namespace, Name: name}, &corev1.Secret{})
-	if !apierrors.IsNotFound(err) {
-		if err != nil {
-			return fmt.Errorf("get route secret: %w", err)
-		}
-		return nil
-	}
-	secret, err := selfSignedRouteSecret(nc, routeDNSNames(nc), r.now())
+	routes, err := r.getSecret(ctx, nc.Namespace, name)
 	if err != nil {
 		return err
 	}
-	if err := controllerutil.SetControllerReference(nc, secret, r.Client.Scheme()); err != nil {
+	if routes != nil && !metav1.IsControlledBy(routes, nc) {
+		return nil
+	}
+	caSecret, err := r.getSecret(ctx, nc.Namespace, routesCASecretName(nc))
+	if err != nil {
 		return err
 	}
-	if err := r.Client.Create(ctx, secret); err != nil {
-		return fmt.Errorf("create route secret: %w", err)
+	var ca *x509.Certificate
+	var key *ecdsa.PrivateKey
+	if caSecret != nil {
+		ca, key = routeCA(caSecret)
+	}
+	now := r.now()
+	if routes != nil && ca != nil && !routeRenewalDue(routes, ca, now) {
+		return nil
+	}
+	if key == nil {
+		if key, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader); err != nil {
+			return err
+		}
+	}
+	wantCA, wantRoutes, err := issueRouteSecrets(nc, routeDNSNames(nc), key, now)
+	if err != nil {
+		return err
+	}
+	if err := r.writeSecret(ctx, nc, caSecret, wantCA); err != nil {
+		return err
+	}
+	return r.writeSecret(ctx, nc, routes, wantRoutes)
+}
+
+// getSecret returns the Secret namespace/name, nil when it does not exist.
+func (r *Reconciler) getSecret(ctx context.Context, namespace, name string) (*corev1.Secret, error) {
+	s := &corev1.Secret{}
+	err := r.Client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, s)
+	switch {
+	case apierrors.IsNotFound(err):
+		return nil, nil
+	case err != nil:
+		return nil, fmt.Errorf("get secret %s: %w", name, err)
+	}
+	return s, nil
+}
+
+// writeSecret creates want controlled by nc when have is nil, and otherwise
+// updates have to want's data.
+func (r *Reconciler) writeSecret(ctx context.Context, nc *clusterv1beta1.NatsCluster, have, want *corev1.Secret) error {
+	if have == nil {
+		if err := controllerutil.SetControllerReference(nc, want, r.Client.Scheme()); err != nil {
+			return err
+		}
+		if err := r.Client.Create(ctx, want); err != nil {
+			return fmt.Errorf("create secret %s: %w", want.Name, err)
+		}
+		return nil
+	}
+	have.Labels = merged(have.Labels, want.Labels)
+	have.Data = want.Data
+	if err := controllerutil.SetControllerReference(nc, have, r.Client.Scheme()); err != nil {
+		return err
+	}
+	if err := r.Client.Update(ctx, have); err != nil {
+		return fmt.Errorf("update secret %s: %w", have.Name, err)
 	}
 	return nil
 }
