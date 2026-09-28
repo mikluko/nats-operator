@@ -44,7 +44,6 @@ var _ reconcile.Reconciler = (*OperatorReconciler)(nil)
 
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators/status,verbs=update
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators/finalizers,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natssystemaccounts,verbs=get;list;watch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts;natsusers,verbs=list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
@@ -59,7 +58,7 @@ func (r *OperatorReconciler) Reconcile(ctx context.Context, req reconcile.Reques
 	}
 	before := op.Status.DeepCopy()
 	again, err := r.reconcile(ctx, &op)
-	op.Status.ObservedGeneration = op.Generation
+	observe(&op.Status.Conditions, &op.Status.ObservedGeneration, op.Generation, err)
 	return result(reconcile.Result{RequeueAfter: again}, updateStatus(ctx, r.Client, &op, before, &op.Status, err))
 }
 
@@ -323,7 +322,6 @@ func (r *OperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("natsoperator").
 		For(&authv1beta1.NatsOperator{}).
-		Owns(&corev1.Secret{}).
 		Watches(&corev1.Secret{}, enqueueIndexed(c, &authv1beta1.NatsOperatorList{}, seedSecretField)).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			return systemAccountOperators(ctx, c, listIndexed(ctx, c, &authv1beta1.NatsSystemAccountList{}, seedSecretField, keyValue(client.ObjectKeyFromObject(obj))))

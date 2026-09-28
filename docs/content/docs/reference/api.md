@@ -158,7 +158,7 @@ Appears on: [NatsAccountStatus](#NatsAccountStatus).
 | `activation` | [{{< type "ActivationState" >}}](#ActivationState) | No | Activation is the state of the activation token of a Private export. |
 
 ### Keys {#Keys}
-Keys adopts existing seeds; omitted, the auth controller generates keys into Secrets it owns.\
+Keys adopts existing seeds; omitted, the auth controller generates keys into Secrets that outlive the object.\
 Appears on: [NatsAccountSpec](#NatsAccountSpec), [NatsOperatorSpec](#NatsOperatorSpec), [NatsSystemAccountSpec](#NatsSystemAccountSpec).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |

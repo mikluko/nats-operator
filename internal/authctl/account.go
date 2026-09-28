@@ -54,7 +54,6 @@ const AccountFinalizer = "auth.nats.mikluko.io/delete"
 
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts,verbs=get;list;watch;patch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts/status,verbs=update
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts/finalizers,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
@@ -74,7 +73,7 @@ func (r *AccountReconciler) Reconcile(ctx context.Context, req reconcile.Request
 	}
 	before := acc.Status.DeepCopy()
 	res, err := r.reconcile(ctx, &acc)
-	acc.Status.ObservedGeneration = acc.Generation
+	observe(&acc.Status.Conditions, &acc.Status.ObservedGeneration, acc.Generation, err)
 	return result(res, updateStatus(ctx, r.Client, &acc, before, &acc.Status, err))
 }
 
@@ -92,6 +91,13 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 		return reconcile.Result{}, err
 	}
 	opKey := refKey(acc.Spec.OperatorRef, acc.Namespace)
+	refused, err := admit(ctx, r.Client, authGroup, "NatsAccount", acc, "NatsOperator", opKey)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if !referenceAdmitted(&st.Conditions, acc.Generation, refused, notReady) {
+		return reconcile.Result{}, nil
+	}
 	holder, err := accountKeyHolder(ctx, r.Client, acc, opKey, pub)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -105,7 +111,7 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 	}
 	st.PublicKey = pub
 
-	opKeys, ok, err := r.operatorKeys(ctx, acc, opKey, notReady)
+	opKeys, ok, err := r.operatorKeys(ctx, opKey, notReady)
 	if !ok || err != nil {
 		return reconcile.Result{}, err
 	}
@@ -282,14 +288,7 @@ func requeueAtRenewal(token string, now time.Time) reconcile.Result {
 
 // operatorKeys returns the keys of the NatsOperator at key. ok is false
 // where they cannot be read yet, with Ready set to say why.
-func (r *AccountReconciler) operatorKeys(ctx context.Context, acc *authv1beta1.NatsAccount, key types.NamespacedName, notReady func(reason, msg string)) (resolvedKeys, bool, error) {
-	cond, err := admit(ctx, r.Client, authGroup, "NatsAccount", acc, "NatsOperator", key)
-	if err != nil {
-		return resolvedKeys{}, false, err
-	}
-	if !referenceAdmitted(&acc.Status.Conditions, acc.Generation, cond, notReady) {
-		return resolvedKeys{}, false, nil
-	}
+func (r *AccountReconciler) operatorKeys(ctx context.Context, key types.NamespacedName, notReady func(reason, msg string)) (resolvedKeys, bool, error) {
 	var op authv1beta1.NatsOperator
 	if err := r.Get(ctx, key, &op); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -528,7 +527,6 @@ func (r *AccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return b.
 		Named("natsaccount").
 		For(&authv1beta1.NatsAccount{}).
-		Owns(&corev1.Secret{}).
 		Watches(&corev1.Secret{}, enqueueIndexed(c, &authv1beta1.NatsAccountList{}, seedSecretField)).
 		Watches(&authv1beta1.NatsOperator{}, enqueueIndexed(c, &authv1beta1.NatsAccountList{}, operatorField)).
 		Watches(&authv1beta1.NatsAccount{}, enqueueIndexed(c, &authv1beta1.NatsAccountList{}, exporterField)).

@@ -17,6 +17,7 @@ import (
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	"github.com/mikluko/nats-operator/internal/authctl"
+	"github.com/mikluko/nats-operator/internal/grant"
 )
 
 // notReady asserts Ready=False with reason on conds.
@@ -84,6 +85,63 @@ spec:
 			require.True(t, apierrors.IsNotFound(err), "no new identity is generated: %v", err)
 		})
 	}
+}
+
+// testSeedsOutliveOwner deletes a signed NatsOperator, NatsSystemAccount
+// and NatsAccount and applies them again: the generated seed Secrets carry
+// no owner reference, stay, and the objects come back under the same keys.
+func (e *env) testSeedsOutliveOwner(t *testing.T) {
+	manifest := `
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsOperator
+metadata: {name: keep, namespace: keep}
+spec:
+  systemAccountRef: {name: sys}
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsSystemAccount
+metadata: {name: sys, namespace: keep}
+spec:
+  operatorRef: {name: keep}
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsAccount
+metadata: {name: app, namespace: keep}
+spec:
+  operatorRef: {name: keep}
+`
+	signed := func() (op authv1beta1.NatsOperator, sys authv1beta1.NatsSystemAccount, acc authv1beta1.NatsAccount) {
+		e.eventually(t, func(ct *assert.CollectT) {
+			e.get(ct, key("keep", "keep"), &op)
+			e.get(ct, key("keep", "sys"), &sys)
+			e.get(ct, key("keep", "app"), &acc)
+			ready(ct, op.Status.Conditions, op.Generation, authctl.ReasonSigned)
+			ready(ct, sys.Status.Conditions, sys.Generation, authctl.ReasonSigned)
+			ready(ct, acc.Status.Conditions, acc.Generation, authctl.ReasonSigned)
+		})
+		return op, sys, acc
+	}
+	e.apply(t, manifest)
+	op, sys, acc := signed()
+	for _, name := range []string{"keep-operator-identity", "keep-operator-signing-1", "sys-systemaccount-identity", "sys-systemaccount-signing-1", "app-account-identity", "app-account-signing-1"} {
+		var sec corev1.Secret
+		require.NoError(t, e.c.Get(t.Context(), key("keep", name), &sec))
+		require.Empty(t, sec.OwnerReferences, name)
+	}
+
+	for _, obj := range []client.Object{&acc, &sys, &op} {
+		require.NoError(t, e.c.Delete(t.Context(), obj))
+		e.eventually(t, func(ct *assert.CollectT) {
+			err := e.c.Get(t.Context(), client.ObjectKeyFromObject(obj), obj)
+			assert.True(ct, apierrors.IsNotFound(err), "%s is gone: %v", obj.GetName(), err)
+		})
+	}
+	e.apply(t, manifest)
+	op2, sys2, acc2 := signed()
+	require.Equal(t, op.Status.PublicKey, op2.Status.PublicKey)
+	require.Equal(t, op.Status.SigningKeys, op2.Status.SigningKeys)
+	require.Equal(t, sys.Status.PublicKey, sys2.Status.PublicKey)
+	require.Equal(t, acc.Status.PublicKey, acc2.Status.PublicKey)
 }
 
 // testAccountKeyHeld has a namespace granted the NatsOperator declare
@@ -165,6 +223,74 @@ spec:
 	}
 	require.NoError(t, e.c.Get(t.Context(), key("tenancy", "victim"), victim))
 	require.Equal(t, victimJWT, victim.Status.JWT)
+}
+
+// testAccountKeySquatted has a namespace no grant admits declare a
+// NatsAccount under the NatsOperator, and a granted one declare a
+// NatsSystemAccount naming it that the NatsOperator does not reference,
+// each with the public key of an account about to be adopted: neither
+// records the key, and the adopted accounts are signed.
+func (e *env) testAccountKeySquatted(t *testing.T) {
+	restored, fresh := accountPub(t), accountPub(t)
+	e.seedSecret(t, "squat", "squat-signing", nkeys.PrefixByteAccount)
+	e.seedSecret(t, "thief", "decoy-signing", nkeys.PrefixByteAccount)
+	e.seedSecret(t, "tenancy", "restored-signing", nkeys.PrefixByteAccount)
+	e.seedSecret(t, "tenancy", "fresh-signing", nkeys.PrefixByteAccount)
+	e.apply(t, fmt.Sprintf(`
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsAccount
+metadata: {name: squatter, namespace: squat}
+spec:
+  operatorRef: {name: home, namespace: tenancy}
+  publicKey: %s
+  keys:
+    signing: [{name: s, secretKeyRef: {name: squat-signing, key: seed}}]
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsSystemAccount
+metadata: {name: decoy, namespace: thief}
+spec:
+  operatorRef: {name: home, namespace: tenancy}
+  publicKey: %s
+  keys:
+    signing: [{name: s, secretKeyRef: {name: decoy-signing, key: seed}}]
+`, restored, fresh))
+	squatter := &authv1beta1.NatsAccount{}
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, key("squat", "squatter"), squatter)
+		notReady(ct, squatter.Status.Conditions, grant.ReasonReferenceNotPermitted)
+	})
+	require.Empty(t, squatter.Status.PublicKey, "an account no grant admits records no key")
+
+	for _, tc := range []struct{ name, pub string }{{"restored", restored}, {"fresh", fresh}} {
+		e.apply(t, fmt.Sprintf(`
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsAccount
+metadata: {name: %s, namespace: tenancy}
+spec:
+  operatorRef: {name: home}
+  publicKey: %s
+  keys:
+    signing: [{name: s, secretKeyRef: {name: %s-signing, key: seed}}]
+`, tc.name, tc.pub, tc.name))
+	}
+	for _, tc := range []struct{ name, pub string }{{"restored", restored}, {"fresh", fresh}} {
+		acc := &authv1beta1.NatsAccount{}
+		e.eventually(t, func(ct *assert.CollectT) {
+			e.get(ct, key("tenancy", tc.name), acc)
+			ready(ct, acc.Status.Conditions, acc.Generation, authctl.ReasonSigned)
+			assert.Equal(ct, tc.pub, acc.Status.PublicKey)
+		})
+	}
+}
+
+func accountPub(t *testing.T) string {
+	t.Helper()
+	kp, err := nkeys.CreateAccount()
+	require.NoError(t, err)
+	pub, err := kp.PublicKey()
+	require.NoError(t, err)
+	return pub
 }
 
 // testUserKeyHeld has a user granted an account set publicKey to the key
@@ -261,6 +387,51 @@ spec:
 		assert.Empty(ct, bob.Status.ReplacedKeys)
 		assert.Empty(ct, alice.Status.ReplacedKeys)
 	})
+}
+
+// testReplacedKeyRefused changes a signed user's publicKey to a key that
+// is not a user key, then to one another user holds: each change is
+// refused, and the key it held is revoked all the same.
+func (e *env) testReplacedKeyRefused(t *testing.T) {
+	k1 := userPub(t)
+	e.apply(t, fmt.Sprintf(`
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsUser
+metadata: {name: carol, namespace: tenancy}
+spec:
+  accountRef: {kind: NatsAccount, name: victim}
+  publicKey: %s
+`, k1))
+	carol, alice := &authv1beta1.NatsUser{}, &authv1beta1.NatsUser{}
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, key("tenancy", "carol"), carol)
+		e.get(ct, key("tenancy", "alice"), alice)
+		ready(ct, carol.Status.Conditions, carol.Generation, authctl.ReasonSigned)
+		ready(ct, alice.Status.Conditions, alice.Generation, authctl.ReasonSigned)
+	})
+	for _, tc := range []struct {
+		name, pub, reason string
+	}{
+		{"not a user key", "not-a-key", authctl.ReasonInvalidKeys},
+		{"held by alice", alice.Status.PublicKey, authctl.ReasonPublicKeyInUse},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e.update(t, key("tenancy", "carol"), &authv1beta1.NatsUser{}, func(o client.Object) {
+				o.(*authv1beta1.NatsUser).Spec.PublicKey = tc.pub
+			})
+			victim := &authv1beta1.NatsAccount{}
+			e.eventually(t, func(ct *assert.CollectT) {
+				e.get(ct, key("tenancy", "carol"), carol)
+				e.get(ct, key("tenancy", "victim"), victim)
+				notReady(ct, carol.Status.Conditions, tc.reason)
+				assert.Empty(ct, carol.Status.PublicKey)
+				assert.Empty(ct, carol.Status.JWT)
+				assert.True(ct, revokesKey(victim.Status.JWT, k1), "carol's previous key is revoked")
+				assert.False(ct, revokesKey(victim.Status.JWT, alice.Status.PublicKey), "alice's key is not")
+				assert.Empty(ct, carol.Status.ReplacedKeys)
+			})
+		})
+	}
 }
 
 func userPub(t *testing.T) string {

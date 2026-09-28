@@ -1,5 +1,13 @@
 package authctl
 
+import (
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/mikluko/nats-operator/internal/conditions"
+)
+
 // The condition types the reconcilers of this package set in status.
 const (
 	ConditionReady = "Ready"
@@ -57,4 +65,26 @@ const (
 	// ReasonPublicKeyInUse is Ready's reason on an account or user whose
 	// public key another holds under the same NatsOperator or account.
 	ReasonPublicKeyInUse = "PublicKeyInUse"
+	// ReasonReconcileError is Ready's reason on an object whose last
+	// reconcile failed with an error no other reason names; its
+	// status.observedGeneration stays at the generation last reconciled in
+	// full.
+	ReasonReconcileError = "ReconcileError"
 )
+
+// observe records on a status the outcome err of reconciling generation
+// gen. Success sets *observed to gen. Any other error but a conflict turns
+// Ready False, reason ReconcileError, unless Ready is already False at gen.
+func observe(conds *[]metav1.Condition, observed *int64, gen int64, err error) {
+	if err == nil {
+		*observed = gen
+		return
+	}
+	if apierrors.IsConflict(err) {
+		return
+	}
+	if c := meta.FindStatusCondition(*conds, ConditionReady); c != nil && c.Status == metav1.ConditionFalse && c.ObservedGeneration == gen {
+		return
+	}
+	conditions.Set(conds, gen, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: ReasonReconcileError, Message: err.Error()})
+}

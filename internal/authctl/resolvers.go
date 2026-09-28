@@ -28,13 +28,18 @@ const (
 	subjClaimsLookup = "$SYS.REQ.ACCOUNT.%s.CLAIMS.LOOKUP"
 )
 
+// rosterMisses is how many roster polls in a row a server may miss before
+// it leaves the roster: until then it is counted, and asked, as any other.
+const rosterMisses = 3
+
 // ErrOperatorGone is wrapped by a Resolvers Conn error for a NatsOperator
 // that no longer exists; its roster is no longer polled.
 var ErrOperatorGone = errors.New("NatsOperator does not exist")
 
 // Resolvers is the Distributor over each NatsOperator's system connection
 // to the full resolvers of the servers trusting it, and a RosterNotifier.
-// A restarted server joins the roster under a new server ID.
+// The roster is every server that answered STATSZ within its last
+// rosterMisses polls; a restarted server joins it under a new server ID.
 type Resolvers struct {
 	// Conn returns the system connection to the servers trusting operator,
 	// authenticated as a user holding the auth-controller preset.
@@ -60,6 +65,8 @@ type resolverState struct {
 
 	// Guarded by Resolvers.mu.
 	roster map[string]bool
+	// misses counts, per server of roster, the polls in a row it missed.
+	misses map[string]int
 	// newest is, per account public key, the issue time of the newest JWT
 	// pushed or seen on a server, and pushedAt when it was last pushed.
 	newest   map[string]int64
@@ -358,12 +365,14 @@ func (r *Resolvers) roster(ctx context.Context, st *resolverState, nc *nats.Conn
 	if roster != nil {
 		return roster, nil
 	}
-	roster, err := r.pollRoster(ctx, nc)
+	answered, err := r.pollRoster(ctx, nc)
 	if err != nil {
 		return nil, err
 	}
-	r.setRoster(st, roster)
-	return roster, nil
+	r.setRoster(st, answered)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return st.roster, nil
 }
 
 // pollRoster returns the IDs of the servers answering STATSZ within Wait.
@@ -391,19 +400,50 @@ func (r *Resolvers) pollRoster(ctx context.Context, nc *nats.Conn) (map[string]b
 	return roster, nil
 }
 
-// setRoster records roster and forgets the acknowledgements of servers not
-// in it. It reports whether roster differs from the one recorded before.
-func (r *Resolvers) setRoster(st *resolverState, roster map[string]bool) bool {
+// setRoster merges the servers that answered a poll into st's roster and
+// forgets the acknowledgements of servers that left it. It reports whether
+// a server joined, left or answered again after missing a poll.
+func (r *Resolvers) setRoster(st *resolverState, answered map[string]bool) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	changed := !maps.Equal(st.roster, roster)
-	st.roster = roster
+	misses, changed := mergeRoster(st.misses, answered)
+	st.misses = misses
+	st.roster = make(map[string]bool, len(misses))
+	for id := range misses {
+		st.roster[id] = true
+	}
 	for id := range st.acked {
-		if !roster[id] {
+		if !st.roster[id] {
 			delete(st.acked, id)
 		}
 	}
 	return changed
+}
+
+// mergeRoster returns the misses of each server in the roster after a poll
+// that answered answered, prev being those before it. A server leaves once
+// it has missed rosterMisses polls in a row. changed reports a server
+// joining, leaving, or answering after a miss.
+func mergeRoster(prev map[string]int, answered map[string]bool) (next map[string]int, changed bool) {
+	next = make(map[string]int, max(len(prev), len(answered)))
+	for id, n := range prev {
+		switch {
+		case answered[id]:
+			changed = changed || n > 0
+			next[id] = 0
+		case n+1 < rosterMisses:
+			next[id] = n + 1
+		default:
+			changed = true
+		}
+	}
+	for id := range answered {
+		if _, ok := prev[id]; !ok {
+			changed = true
+			next[id] = 0
+		}
+	}
+	return next, changed
 }
 
 // lookup returns every CLAIMS.LOOKUP reply for account: its JWT, or "" from
@@ -457,11 +497,11 @@ func (r *Resolvers) pollOperator(ctx context.Context, operator types.NamespacedN
 		return err
 	}
 	st := r.state(operator)
-	roster, err := r.pollRoster(ctx, nc)
+	answered, err := r.pollRoster(ctx, nc)
 	if err != nil {
 		return err
 	}
-	if r.setRoster(st, roster) {
+	if r.setRoster(st, answered) {
 		r.notify(ctx, operator)
 	}
 	return r.sendDeletes(ctx, operator, st)

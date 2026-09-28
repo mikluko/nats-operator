@@ -28,11 +28,8 @@ rules:
 - apiGroups:
   - auth.nats.mikluko.io
   resources:
-  - natsaccounts/finalizers
   - natsaccounts/status
-  - natsoperators/finalizers
   - natsoperators/status
-  - natssystemaccounts/finalizers
   - natssystemaccounts/status
   - natsusers/finalizers
   - natsusers/status

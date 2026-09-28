@@ -42,7 +42,6 @@ var _ reconcile.Reconciler = (*SystemAccountReconciler)(nil)
 
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natssystemaccounts,verbs=get;list;watch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natssystemaccounts/status,verbs=update
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natssystemaccounts/finalizers,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
@@ -57,7 +56,7 @@ func (r *SystemAccountReconciler) Reconcile(ctx context.Context, req reconcile.R
 	}
 	before := sys.Status.DeepCopy()
 	again, err := r.reconcile(ctx, &sys)
-	sys.Status.ObservedGeneration = sys.Generation
+	observe(&sys.Status.Conditions, &sys.Status.ObservedGeneration, sys.Generation, err)
 	return result(reconcile.Result{RequeueAfter: again}, updateStatus(ctx, r.Client, &sys, before, &sys.Status, err))
 }
 
@@ -136,7 +135,6 @@ func (r *SystemAccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return b.
 		Named("natssystemaccount").
 		For(&authv1beta1.NatsSystemAccount{}).
-		Owns(&corev1.Secret{}).
 		Watches(&corev1.Secret{}, enqueueIndexed(c, &authv1beta1.NatsSystemAccountList{}, seedSecretField)).
 		Watches(&authv1beta1.NatsOperator{}, enqueueIndexed(c, &authv1beta1.NatsSystemAccountList{}, operatorField)).
 		Watches(&authv1beta1.NatsUser{}, handler.EnqueueRequestsFromMapFunc(func(_ context.Context, obj client.Object) []reconcile.Request {

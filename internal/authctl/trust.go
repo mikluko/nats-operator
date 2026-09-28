@@ -47,7 +47,7 @@ func (r *OperatorTrustReconciler) Reconcile(ctx context.Context, req reconcile.R
 	}
 	before := t.Status.DeepCopy()
 	err := r.reconcile(ctx, &t)
-	t.Status.ObservedGeneration = t.Generation
+	observe(&t.Status.Conditions, &t.Status.ObservedGeneration, t.Generation, err)
 	return reconcile.Result{}, updateStatus(ctx, r.Client, &t, before, &t.Status, err)
 }
 
@@ -121,7 +121,7 @@ func (r *AccountTrustReconciler) Reconcile(ctx context.Context, req reconcile.Re
 	}
 	before := t.Status.DeepCopy()
 	err := r.reconcile(ctx, &t)
-	t.Status.ObservedGeneration = t.Generation
+	observe(&t.Status.Conditions, &t.Status.ObservedGeneration, t.Generation, err)
 	return reconcile.Result{}, updateStatus(ctx, r.Client, &t, before, &t.Status, err)
 }
 

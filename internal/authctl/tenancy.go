@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -52,17 +53,23 @@ func precedes(a, b keyClaim) bool {
 }
 
 // accountKeyHolder returns who holds pub against acc under the NatsOperator
-// at operator: a NatsSystemAccount naming it whose spec or status carries
-// pub, or another NatsAccount per keyHolder.
+// at operator: the NatsSystemAccount it references, where that names it
+// back and its spec or status carries pub, or another NatsAccount per
+// keyHolder.
 func accountKeyHolder(ctx context.Context, c client.Reader, acc *authv1beta1.NatsAccount, operator types.NamespacedName, pub string) (string, error) {
-	var systems authv1beta1.NatsSystemAccountList
-	if err := c.List(ctx, &systems, client.MatchingFields{operatorField: keyValue(operator)}); err != nil {
-		return "", fmt.Errorf("list NatsSystemAccounts: %w", err)
-	}
-	for i := range systems.Items {
-		sys := &systems.Items[i]
-		if sys.Status.PublicKey == pub || sys.Spec.PublicKey == pub {
-			return claimOf("NatsSystemAccount", sys, pub).String(), nil
+	var op authv1beta1.NatsOperator
+	switch err := c.Get(ctx, operator, &op); {
+	case apierrors.IsNotFound(err):
+	case err != nil:
+		return "", fmt.Errorf("get NatsOperator %s: %w", operator, err)
+	default:
+		var sys authv1beta1.NatsSystemAccount
+		err := c.Get(ctx, refKey(op.Spec.SystemAccountRef, op.Namespace), &sys)
+		if client.IgnoreNotFound(err) != nil {
+			return "", fmt.Errorf("get NatsSystemAccount: %w", err)
+		}
+		if err == nil && refKey(sys.Spec.OperatorRef, sys.Namespace) == operator && (sys.Status.PublicKey == pub || sys.Spec.PublicKey == pub) {
+			return claimOf("NatsSystemAccount", &sys, pub).String(), nil
 		}
 	}
 	var accounts authv1beta1.NatsAccountList

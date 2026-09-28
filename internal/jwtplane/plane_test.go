@@ -152,21 +152,35 @@ func TestPlaneServed(t *testing.T) {
 		require.Equal(t, "done", string(reply.Data))
 	})
 
-	t.Run("readonly preset reads JetStream and publishes nothing else", func(t *testing.T) {
+	t.Run("readonly preset reads JetStream under its own inbox and nothing else", func(t *testing.T) {
 		violations := make(chan error, 1)
-		nc, err := p.connect(t, "a-readonly", nats.ErrorHandler(func(_ *nats.Conn, _ *nats.Subscription, err error) {
-			violations <- err
-		}))
+		nc, err := p.connect(t, "a-readonly",
+			nats.CustomInboxPrefix(jwtplane.InboxPrefix(jwtplane.PresetReadonly)),
+			nats.ErrorHandler(func(_ *nats.Conn, _ *nats.Subscription, err error) { violations <- err }))
 		require.NoError(t, err)
 		_, err = nc.Request("$JS.API.INFO", nil, 2*time.Second)
 		require.NoError(t, err)
 
-		require.NoError(t, nc.Publish("a.execute", nil))
-		select {
-		case err := <-violations:
-			require.ErrorIs(t, err, nats.ErrPermissionViolation)
-		case <-time.After(2 * time.Second):
-			t.Fatal("publish outside the preset was not refused")
+		refused := func(what string, do func() error) {
+			t.Helper()
+			require.NoError(t, do())
+			select {
+			case err := <-violations:
+				require.ErrorIs(t, err, nats.ErrPermissionViolation, what)
+			case <-time.After(2 * time.Second):
+				t.Fatalf("%s was not refused", what)
+			}
+		}
+		refused("publish outside the preset", func() error { return nc.Publish("a.execute", nil) })
+		for _, subject := range []string{">", "_INBOX.>", "a.execute", "$JS.API.>"} {
+			refused("subscribe to "+subject, func() error {
+				sub, err := nc.SubscribeSync(subject)
+				if err != nil {
+					return err
+				}
+				t.Cleanup(func() { _ = sub.Unsubscribe() })
+				return nil
+			})
 		}
 	})
 

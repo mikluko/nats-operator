@@ -33,6 +33,8 @@ An account change is pushed to the servers' resolvers without a restart; status 
 
 {{< manifest "02-status-natsaccount-orders.yaml" >}}
 
+The account JWT expires its `jwtTTL` after it was signed, 48h here, and the auth controller re-signs it at half that. The auth controller is therefore an availability requirement: down for longer than half a `jwtTTL`, it may let the orders account expire, and the servers then close its connections. The gauge `nats_operator.account.jwt_expiry` says when that happens.
+
 ## Users
 
 A user's creds can land in a Secret shaped the way a NatsConnection reads it, so a connection needs only the Secret's name. The controllers' own system users take a permission preset instead of a permission list.

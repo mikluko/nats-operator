@@ -28,7 +28,7 @@ const (
 	// accountField indexes NatsAccountTrust by its NatsAccount.
 	accountField = "auth.nats.mikluko.io/account"
 	// seedSecretField indexes NatsOperator, NatsSystemAccount and
-	// NatsAccount by the seed Secrets their keys name.
+	// NatsAccount by the seed Secrets they read, generated ones included.
 	seedSecretField = "auth.nats.mikluko.io/seed-secret"
 	// userAccountField indexes NatsUser by its account, valued by
 	// accountValue.
@@ -60,9 +60,9 @@ func indexes(ctx context.Context, idx client.FieldIndexer) error {
 	nsOf := func(o client.Object, ref natsv1beta1.ObjectReference) []string {
 		return []string{keyValue(refKey(ref, o.GetNamespace()))}
 	}
-	secrets := func(o client.Object, keys *authv1beta1.Keys) []string {
+	secrets := func(o client.Object, src keySource) []string {
 		var out []string
-		for _, name := range seedSecretNames(keys) {
+		for _, name := range seedSecretNames(src) {
 			out = append(out, keyValue(types.NamespacedName{Namespace: o.GetNamespace(), Name: name}))
 		}
 		return out
@@ -105,13 +105,14 @@ func indexes(ctx context.Context, idx client.FieldIndexer) error {
 			return []string{accountValue(ref.Kind, refKey(ref.ObjectReference, o.GetNamespace()))}
 		}},
 		{&authv1beta1.NatsOperator{}, seedSecretField, func(o client.Object) []string {
-			return secrets(o, o.(*authv1beta1.NatsOperator).Spec.Keys)
+			src, _ := operatorKeySource(o.(*authv1beta1.NatsOperator))
+			return secrets(o, src)
 		}},
 		{&authv1beta1.NatsSystemAccount{}, seedSecretField, func(o client.Object) []string {
-			return secrets(o, o.(*authv1beta1.NatsSystemAccount).Spec.Keys)
+			return secrets(o, systemAccountKeySource(o.(*authv1beta1.NatsSystemAccount)))
 		}},
 		{&authv1beta1.NatsAccount{}, seedSecretField, func(o client.Object) []string {
-			return secrets(o, o.(*authv1beta1.NatsAccount).Spec.Keys)
+			return secrets(o, accountKeySource(o.(*authv1beta1.NatsAccount)))
 		}},
 	}
 	for _, i := range all {

@@ -8,7 +8,7 @@ metadata:
   namespace: nats-system
 spec:
   # No `keys`: the auth controller generates the identity key and one signing
-  # key and keeps each seed in a Secret it owns. `keys.identity` and
+  # key and keeps each seed in a Secret that outlives this object. `keys.identity` and
   # `keys.signing[]` adopt existing seeds instead, and `jwt` with signing keys
   # only keeps the identity offline. Account JWTs are signed with a signing
   # key, never the identity key.

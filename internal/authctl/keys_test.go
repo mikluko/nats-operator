@@ -44,17 +44,19 @@ func testScheme(t *testing.T) *runtime.Scheme {
 }
 
 // TestGeneratedSeed_Ownership pins that a generated seed Secret is read
-// only where its owner controls it.
+// only where it is annotated as generated for its owner.
 func TestGeneratedSeed_Ownership(t *testing.T) {
 	s := testScheme(t)
 	acc := &authv1beta1.NatsAccount{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "a", UID: types.UID("a")}}
-	other := &authv1beta1.NatsSystemAccount{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "b", UID: types.UID("b")}}
 	seed, err := nkeys.CreateAccount()
 	require.NoError(t, err)
 	raw, err := seed.Seed()
 	require.NoError(t, err)
-	secret := func(name string, owner client.Object) *corev1.Secret {
+	secret := func(name, generatedFor string, owner client.Object) *corev1.Secret {
 		sec := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: name}, Data: map[string][]byte{SeedKey: raw}}
+		if generatedFor != "" {
+			sec.Annotations = map[string]string{GeneratedForAnnotation: generatedFor}
+		}
 		if owner != nil {
 			require.NoError(t, controllerutil.SetControllerReference(owner, sec, s))
 		}
@@ -65,13 +67,14 @@ func TestGeneratedSeed_Ownership(t *testing.T) {
 		secret *corev1.Secret
 		want   error
 	}{
-		{"owned", secret("owned", acc), nil},
-		{"another owner's", secret("other", other), errSeedNotOwned},
-		{"no owner", secret("stray", nil), errSeedNotOwned},
+		{"generated for it", secret("owned", "account/a", nil), nil},
+		{"generated for another", secret("other", "systemaccount/b", nil), errSeedNotOwned},
+		{"generated for another role", secret("role", "operator/a", nil), errSeedNotOwned},
+		{"not generated, though controlled by it", secret("stray", "", acc), errSeedNotOwned},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := fake.NewClientBuilder().WithScheme(s).WithObjects(tc.secret).Build()
-			kp, err := generatedSeed(t.Context(), c, acc, tc.secret.Name, nkeys.PrefixByteAccount, true)
+			kp, err := generatedSeed(t.Context(), c, acc, roleAccount, tc.secret.Name, nkeys.PrefixByteAccount, true)
 			if tc.want != nil {
 				require.ErrorIs(t, err, tc.want)
 				require.Nil(t, kp)
@@ -81,4 +84,27 @@ func TestGeneratedSeed_Ownership(t *testing.T) {
 			require.NotNil(t, kp)
 		})
 	}
+}
+
+// TestGeneratedSeed_Created pins that a generated seed Secret is annotated
+// as generated for its owner and carries no owner reference, so it outlives
+// the owner.
+func TestGeneratedSeed_Created(t *testing.T) {
+	s := testScheme(t)
+	acc := &authv1beta1.NatsAccount{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "a", UID: types.UID("a")}}
+	c := fake.NewClientBuilder().WithScheme(s).Build()
+	kp, err := generatedSeed(t.Context(), c, acc, roleAccount, "a-account-identity", nkeys.PrefixByteAccount, true)
+	require.NoError(t, err)
+	require.NotNil(t, kp)
+	var sec corev1.Secret
+	require.NoError(t, c.Get(t.Context(), client.ObjectKey{Namespace: "ns", Name: "a-account-identity"}, &sec))
+	require.Empty(t, sec.OwnerReferences)
+	require.Equal(t, "account/a", sec.Annotations[GeneratedForAnnotation])
+	again, err := generatedSeed(t.Context(), c, acc, roleAccount, "a-account-identity", nkeys.PrefixByteAccount, false)
+	require.NoError(t, err)
+	want, err := kp.PublicKey()
+	require.NoError(t, err)
+	got, err := again.PublicKey()
+	require.NoError(t, err)
+	require.Equal(t, want, got)
 }

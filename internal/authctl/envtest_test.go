@@ -179,7 +179,7 @@ func TestEnvtest(t *testing.T) {
 	c, err := client.New(cfg, client.Options{Scheme: s})
 	require.NoError(t, err)
 	e.c = c
-	for _, ns := range []string{"nats-system", "team-a", "rot", "offline", "flip", "payments", "orders", "foreign", "lost", "tenancy", "thief", "orphan", "gone"} {
+	for _, ns := range []string{"nats-system", "team-a", "rot", "offline", "flip", "payments", "orders", "foreign", "lost", "tenancy", "thief", "orphan", "gone", "squat", "keep"} {
 		require.NoError(t, c.Create(t.Context(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}))
 	}
 	for _, f := range []string{
@@ -210,9 +210,12 @@ func TestEnvtest(t *testing.T) {
 	t.Run("AccountDeletedWithOperator", e.testAccountDeletedWithOperator)
 	t.Run("RevocationRecord", e.testRevocationRecord)
 	t.Run("LostSeed", e.testLostSeed)
+	t.Run("SeedsOutliveOwner", e.testSeedsOutliveOwner)
 	t.Run("AccountKeyHeld", e.testAccountKeyHeld)
+	t.Run("AccountKeySquatted", e.testAccountKeySquatted)
 	t.Run("UserKeyHeld", e.testUserKeyHeld)
 	t.Run("ReplacedUserKey", e.testReplacedUserKey)
+	t.Run("ReplacedKeyRefused", e.testReplacedKeyRefused)
 }
 
 var demo = types.NamespacedName{Namespace: "nats-system", Name: "demo"}
@@ -245,7 +248,8 @@ func (e *env) testStory2(t *testing.T) {
 		var sec corev1.Secret
 		require.NoError(t, e.c.Get(t.Context(), key("nats-system", name), &sec))
 		require.Contains(t, sec.Data, authctl.SeedKey)
-		require.NotNil(t, metav1.GetControllerOf(&sec), name)
+		require.Empty(t, sec.OwnerReferences, "%s outlives its object", name)
+		require.Contains(t, sec.Annotations, authctl.GeneratedForAnnotation, name)
 	}
 
 	oc, err := jwt.DecodeOperatorClaims(op.Status.JWT)
@@ -775,7 +779,7 @@ spec:
 	require.NoError(t, e.c.List(t.Context(), &secrets, client.InNamespace("offline")))
 	var names []string
 	for _, s := range secrets.Items {
-		if metav1.GetControllerOf(&s) != nil {
+		if _, generated := s.Annotations[authctl.GeneratedForAnnotation]; generated {
 			names = append(names, s.Name)
 		}
 	}

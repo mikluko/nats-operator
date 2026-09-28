@@ -37,7 +37,7 @@ tests:
               resources: [natsaccounts, natsusers]
               verbs: [get, list, patch, watch]
             - apiGroups: [auth.nats.mikluko.io]
-              resources: [natsaccounts/finalizers, natsaccounts/status, natsoperators/finalizers, natsoperators/status, natssystemaccounts/finalizers, natssystemaccounts/status, natsusers/finalizers, natsusers/status]
+              resources: [natsaccounts/status, natsoperators/status, natssystemaccounts/status, natsusers/finalizers, natsusers/status]
               verbs: [update]
             - apiGroups: [auth.nats.mikluko.io]
               resources: [natsoperators, natssystemaccounts]

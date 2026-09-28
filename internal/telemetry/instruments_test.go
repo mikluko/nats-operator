@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nats-io/jwt/v2"
+	"github.com/nats-io/nkeys"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -28,6 +30,33 @@ func cond(typ string, status metav1.ConditionStatus, reason string) metav1.Condi
 }
 
 func om(name string) metav1.ObjectMeta { return metav1.ObjectMeta{Namespace: "ns", Name: name} }
+
+// accountExpires is when the fixture account orders' JWT expires.
+const accountExpires = 1_900_000_000
+
+// accountJWT is an account JWT expiring at expires, or never where it is
+// zero.
+func accountJWT(expires int64) string {
+	op, err := nkeys.CreateOperator()
+	if err != nil {
+		panic(err)
+	}
+	acc, err := nkeys.CreateAccount()
+	if err != nil {
+		panic(err)
+	}
+	pub, err := acc.PublicKey()
+	if err != nil {
+		panic(err)
+	}
+	c := jwt.NewAccountClaims(pub)
+	c.Expires = expires
+	token, err := c.Encode(op)
+	if err != nil {
+		panic(err)
+	}
+	return token
+}
 
 // fixtures are one or two resources of each kind whose status an
 // instrument reads.
@@ -61,6 +90,9 @@ func fixtures() []client.Object {
 		&js.NatsStream{ObjectMeta: om("orders"), Status: js.NatsStreamStatus{SyncStatus: js.SyncStatus{
 			Conditions: []metav1.Condition{cond("Ready", metav1.ConditionTrue, "Synced")},
 		}}},
+		&authv1beta1.NatsAccount{ObjectMeta: om("orders"), Status: authv1beta1.NatsAccountStatus{JWT: accountJWT(accountExpires)}},
+		&authv1beta1.NatsAccount{ObjectMeta: om("preloaded"), Status: authv1beta1.NatsAccountStatus{JWT: accountJWT(0)}},
+		&authv1beta1.NatsAccount{ObjectMeta: om("unsigned")},
 		&authv1beta1.NatsUser{ObjectMeta: om("svc"), Status: authv1beta1.NatsUserStatus{
 			Conditions: []metav1.Condition{cond("Ready", metav1.ConditionFalse, "Revoking")},
 		}},
@@ -178,6 +210,7 @@ func TestInstruments(t *testing.T) {
 		{ClusterController, RolloutGate, map[string]string{"kind": "NatsCluster", "namespace": "ns", "name": "rolling", "waiting_for": "Settled"}, 1},
 		{ClusterController, Condition, map[string]string{"kind": "NatsCluster", "namespace": "ns", "name": "rolling", "type": "Progressing", "reason": "RollingRestart"}, 1},
 		{AuthController, Condition, map[string]string{"kind": "NatsUser", "namespace": "ns", "name": "svc", "type": "Ready", "reason": "Revoking"}, 0},
+		{AuthController, AccountJWTExpiry, map[string]string{"kind": "NatsAccount", "namespace": "ns", "name": "orders"}, accountExpires},
 		{JetStreamController, BalancerLeaderSkew, map[string]string{"kind": "NatsBalancer", "namespace": "ns", "name": "orders", "pool": "fast"}, 3},
 		{JetStreamController, BalancerLeaderSkew, map[string]string{"kind": "NatsBalancer", "namespace": "ns", "name": "orders", "pool": "(default)"}, 1},
 		{JetStreamController, BalancerLeaderSkew, map[string]string{"kind": "NatsSystemBalancer", "namespace": "ns", "name": "c1"}, 2},
@@ -200,6 +233,7 @@ func TestInstruments(t *testing.T) {
 		})
 	}
 	require.Len(t, got[JetStreamController][BalancerHeldPasses.Name].points, 1, "a settled pass was counted")
+	require.Len(t, got[AuthController][AccountJWTExpiry.Name].points, 1, "a JWT that never expires, or none, has an expiry point")
 	require.NotContains(t, got[ClusterController][RolloutGate.Name].points,
 		attrKey(map[string]string{"kind": "NatsCluster", "namespace": "ns", "name": "idle", "waiting_for": ""}))
 }

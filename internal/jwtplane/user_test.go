@@ -54,7 +54,7 @@ func TestSignUser(t *testing.T) {
 					"$JS.API.INFO", "$JS.API.STREAM.NAMES", "$JS.API.STREAM.LIST", "$JS.API.STREAM.INFO.*",
 					"$JS.API.CONSUMER.NAMES.*", "$JS.API.CONSUMER.LIST.*", "$JS.API.CONSUMER.INFO.*.*",
 				},
-				subAllow: []string{">"},
+				subAllow: []string{"_INBOX.readonly.>"},
 			},
 		},
 		{

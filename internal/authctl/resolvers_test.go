@@ -316,6 +316,35 @@ func TestResolvers_DeleteResentOnRejoin(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestResolvers_RosterMemory pins that a server silent at a roster poll
+// stays in the roster, counted as not current and failing Lookup, until
+// it has missed RosterMisses polls in a row.
+func TestResolvers_RosterMemory(t *testing.T) {
+	p := newPlane(t)
+	c := startFullCluster(t, p, 3)
+	r := resolversOn(t, c, testOperator)
+	keys, pub := newAccount(t)
+	token := signAccount(t, p, keys, "orders")
+	require.NoError(t, r.Push(t.Context(), testOperator, token))
+
+	c.stop(2)
+	for miss := 1; miss < authctl.RosterMisses; miss++ {
+		require.NoError(t, r.PollOperator(t.Context(), testOperator))
+		d, err := r.Current(t.Context(), testOperator, token)
+		require.NoError(t, err)
+		require.Equal(t, [2]int32{3, 2}, [2]int32{d.Servers, d.Current}, "server 2 missed %d polls and is still counted", miss)
+		_, err = r.Lookup(t.Context(), testOperator, pub)
+		require.ErrorIs(t, err, authctl.ErrUnreachable, "server 2 may hold a newer JWT")
+	}
+	require.NoError(t, r.PollOperator(t.Context(), testOperator))
+	d, err := r.Current(t.Context(), testOperator, token)
+	require.NoError(t, err)
+	require.Equal(t, [2]int32{2, 2}, [2]int32{d.Servers, d.Current}, "server 2 left the roster")
+	got, err := r.Lookup(t.Context(), testOperator, pub)
+	require.NoError(t, err)
+	require.Equal(t, token, got)
+}
+
 // userCreds signs a new user of the account with keys.
 func userCreds(t *testing.T, keys jwtplane.Keys) nats.Option {
 	t.Helper()

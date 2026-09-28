@@ -19,8 +19,8 @@ spec:
     secretKeyRef:
       name: nats-service-creds
 ---
-# The readonly preset: subscribe to everything, publish only to the
-# JetStream introspection subjects.
+# The readonly preset: publish only to the JetStream introspection
+# subjects, and subscribe only to replies under `_INBOX.readonly`.
 # `permissions` is refused beside a preset.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser

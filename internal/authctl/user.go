@@ -76,7 +76,7 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req reconcile.Request) (
 	before := u.Status.DeepCopy()
 	res, err := r.reconcile(ctx, &u)
 	r.recordSystemConnection(&u)
-	u.Status.ObservedGeneration = u.Generation
+	observe(&u.Status.Conditions, &u.Status.ObservedGeneration, u.Generation, err)
 	return result(res, updateStatus(ctx, r.Client, &u, before, &u.Status, err))
 }
 
@@ -102,6 +102,10 @@ func (r *UserReconciler) reconcile(ctx context.Context, u *authv1beta1.NatsUser)
 	var token string
 
 	if u.Spec.PublicKey != "" {
+		if st.PublicKey != u.Spec.PublicKey {
+			st.ReplacedKeys = replaceKey(st.ReplacedKeys, st.PublicKey, u.Spec.PublicKey, acc.jwt, time.Now())
+			st.PublicKey, st.JWT = "", ""
+		}
 		if !nkeys.IsValidPublicUserKey(u.Spec.PublicKey) {
 			notReady(ReasonInvalidKeys, fmt.Sprintf("publicKey %q is not a user public key", u.Spec.PublicKey))
 			return reconcile.Result{}, nil
@@ -111,9 +115,7 @@ func (r *UserReconciler) reconcile(ctx context.Context, u *authv1beta1.NatsUser)
 			return reconcile.Result{}, err
 		}
 		if holder != "" {
-			if st.PublicKey == u.Spec.PublicKey {
-				st.PublicKey, st.JWT = "", ""
-			}
+			st.PublicKey, st.JWT = "", ""
 			notReady(ReasonPublicKeyInUse, fmt.Sprintf("public key %s is held by %s in %s %s", u.Spec.PublicKey, holder, u.Spec.AccountRef.Kind, acc.key))
 			return reconcile.Result{}, nil
 		}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/nats-io/jwt/v2"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -78,6 +79,15 @@ var (
 		Attributes:  append(slices.Clone(resourceAttrs), AttrType, AttrReason),
 		Reads:       "status.conditions of every kind the controller reconciles",
 	}
+	AccountJWTExpiry = Instrument{
+		Name:        "nats_operator.account.jwt_expiry",
+		Unit:        "s",
+		Description: "When the NatsAccount's current JWT expires, in seconds since the Unix epoch; a JWT that never expires has no point. Every account JWT expires once the auth controller has been down its jwtTTL, so the minimum over every account is the deadline for bringing it back.",
+		Type:        Gauge,
+		Controllers: []string{AuthController},
+		Attributes:  resourceAttrs,
+		Reads:       "NatsAccount status.jwt",
+	}
 	RolloutPendingServers = Instrument{
 		Name:        "nats_operator.rollout.pending_servers",
 		Unit:        "{server}",
@@ -146,6 +156,7 @@ var (
 // Instruments are every instrument the controllers register.
 var Instruments = []Instrument{
 	Condition,
+	AccountJWTExpiry,
 	RolloutPendingServers,
 	RolloutGate,
 	BalancerLeaderSkew,
@@ -263,9 +274,31 @@ func RegisterAuth(m metric.Meter, r client.Reader) error {
 	if err != nil {
 		return err
 	}
+	expiry, err := gauge(m, AccountJWTExpiry)
+	if err != nil {
+		return err
+	}
 	_, err = m.RegisterCallback(func(ctx context.Context, o metric.Observer) error {
-		return observeConditions(ctx, o, conds, r, AuthKinds)
-	}, conds)
+		var errs []error
+		var accounts authv1beta1.NatsAccountList
+		if err := r.List(ctx, &accounts); err != nil {
+			errs = append(errs, fmt.Errorf("list NatsAccounts: %w", err))
+		}
+		for _, acc := range accounts.Items {
+			if acc.Status.JWT == "" {
+				continue
+			}
+			c, err := jwt.DecodeAccountClaims(acc.Status.JWT)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("NatsAccount %s/%s: %w", acc.Namespace, acc.Name, err))
+				continue
+			}
+			if c.Expires != 0 {
+				o.ObserveInt64(expiry, c.Expires, attrs("NatsAccount", acc.Namespace, acc.Name))
+			}
+		}
+		return errors.Join(append(errs, observeConditions(ctx, o, conds, r, AuthKinds))...)
+	}, conds, expiry)
 	return err
 }
 

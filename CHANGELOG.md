@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation page `/docs/reference/api/`: every kind, field and enum value of the four API groups.
 - Documentation page `/docs/reference/nats-permissions/`: the nats-server subjects each controller requests and the presets that grant them.
 - Documentation page `/docs/reference/telemetry/`: the controllers' OpenTelemetry configuration, instruments, spans and Kubernetes events.
+- The auth controller exports `nats_operator.account.jwt_expiry`, when each `NatsAccount`'s current JWT expires.
 - Each controller exports OpenTelemetry metrics and traces once the SDK's environment names an exporter or endpoint.
 - The controllers record Kubernetes events for balancer moves, evacuations, rollout steps, JWT pushes and user kicks.
 - The cluster controller deploys a `NatsCluster` as one StatefulSet and ConfigMap per server, with Services, a PodDisruptionBudget, route TLS and a `prometheus-nats-exporter` sidecar.
@@ -81,16 +82,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `NatsStream` whose stream matches spec but whose transfer or consumers cannot be read reads `Ready` False, reason `ObserveFailed`, and is retried with backoff.
 - The API server refuses a `NatsBalancer` or `NatsSystemBalancer` `interval` that is not positive.
 - A `NatsAccount` or `NatsUser` whose `publicKey` another account or user under the same `NatsOperator` holds reads `Ready` False, reason `PublicKeyInUse`.
-- Generated seed Secrets are named `<name>-<operator|systemaccount|account>-<identity|signing-1>`; one the object does not own reads `Ready` False, reason `SecretConflict`.
+- Generated seed Secrets are named `<name>-<operator|systemaccount|account>-<identity|signing-1>` and annotated `auth.nats.mikluko.io/generated-for`; one not annotated for the object reads `Ready` False, reason `SecretConflict`.
+- Generated seed Secrets carry no owner reference: they stay when their object is deleted, and an object of the same kind and name applied again takes the same keys.
 - A generated identity Secret lost after `status.publicKey` recorded its key reads `Ready` False, reason `SeedLost`, and no new identity is minted.
 - A key a `NatsUser` stops holding is revoked in its account and listed in `status.replacedKeys` until the account JWT carries the revocation.
+- A `NatsUser` whose `publicKey` changes to a key it is refused revokes the key it held.
+- A `NatsAccount` no `NatsReferenceGrant` admits to its `NatsOperator` records no `status.publicKey`, and only the `NatsSystemAccount` a `NatsOperator` references holds a key against its accounts.
 - Revocation recovery reads the servers' JWT only when every server of the roster answers.
+- A server stays in the auth controller's roster until it misses three STATSZ polls in a row, counted in `status.distribution` and awaited by revocation recovery and user deletion.
 - A `NatsAccount`, `NatsSystemAccount` or `NatsUser` reads `Distributed` False, reason `NoSystemConnection`, while the auth controller runs without `--system-connection`.
+- An auth object whose reconcile fails reads `Ready` False, reason `ReconcileError`, and keeps `status.observedGeneration` at the generation last reconciled in full.
 - `NatsClusterEvacuation` makes no move while any server of its NATS system is down or the meta group has no leader, reporting `Ready` and `Progressing` False with reason `ServersDown`.
 - The `NatsSystemBalancer` and the `NatsBalancer`s of one NATS cluster move one at a time; while one's move is in flight the others read `Holding`, reason `MoveLeaseHeld`.
 
 ### Security
 
 - The `cluster-controller`, `jetstream-controller` and `auth-controller` presets subscribe only to their own inbox, `_INBOX.<preset>.>`; a JetStream controller account user whose `permissions` restrict subscriptions must allow `_INBOX.jetstream-controller.>`.
+- The `readonly` preset subscribes only to its own inbox, `_INBOX.readonly.>`, which its client dials with.
 
 [Unreleased]: https://github.com/mikluko/nats-operator/commits/main

@@ -7,7 +7,7 @@ import (
 )
 
 // Keys adopts existing seeds; omitted, the auth controller generates keys
-// into Secrets it owns.
+// into Secrets that outlive the object.
 type Keys struct {
 	// Identity is the identity key's seed.
 	// +optional

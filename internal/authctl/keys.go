@@ -10,7 +10,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
@@ -18,6 +17,12 @@ import (
 
 // SeedKey is the key a generated seed Secret holds its seed under.
 const SeedKey = "seed"
+
+// GeneratedForAnnotation marks a generated seed Secret with the object it
+// was generated for, as "<operator|systemaccount|account>/<name>". The
+// Secret carries no owner reference: it outlives that object, and an object
+// of the same kind and name applied again reads it.
+const GeneratedForAnnotation = "auth.nats.mikluko.io/generated-for"
 
 // generatedSigningKeyName is the name of the signing key generated where
 // spec lists none.
@@ -35,9 +40,9 @@ var errInvalidSeed = errors.New("invalid seed")
 // absent while its owner's status records the identity.
 var errSeedLost = errors.New("identity seed lost")
 
-// errSeedNotOwned is returned for a generated seed Secret its owner does
-// not control.
-var errSeedNotOwned = errors.New("seed Secret not controlled by its owner")
+// errSeedNotOwned is returned for a seed Secret under a generated name that
+// is not annotated as generated for its owner.
+var errSeedNotOwned = errors.New("seed Secret not generated for its owner")
 
 // Roles name the kind of identity a generated seed Secret belongs to. No
 // role is a hyphen-delimited suffix of another, so generatedSecretName
@@ -99,8 +104,8 @@ func generatedSecretName(owner, role, key string) string {
 
 // resolveKeys reads the keys src names. An identity or signing key spec
 // leaves out is read from the Secret the auth controller generates it into;
-// with generate, a missing generated Secret is created, owned by src.owner,
-// and otherwise the error wraps errKeysPending. A missing generated identity
+// with generate, a missing generated Secret is created for src.owner, and
+// otherwise the error wraps errKeysPending. A missing generated identity
 // seed of an owner whose status records its identity wraps errSeedLost and
 // is never created.
 func resolveKeys(ctx context.Context, c client.Client, src keySource, generate bool) (resolvedKeys, error) {
@@ -117,7 +122,7 @@ func resolveKeys(ctx context.Context, c client.Client, src keySource, generate b
 		out.PublicKey = src.publicKey
 	default:
 		name := generatedSecretName(src.owner.GetName(), src.role, "identity")
-		kp, err := generatedSeed(ctx, c, src.owner, name, src.prefix, generate && src.recorded == "")
+		kp, err := generatedSeed(ctx, c, src.owner, src.role, name, src.prefix, generate && src.recorded == "")
 		if src.recorded != "" && errors.Is(err, errKeysPending) {
 			return out, fmt.Errorf("%w: %s is recorded as the identity, and generating another would orphan every JWT issued under it; restore the seed into it or name it in keys.identity: %w",
 				errSeedLost, src.recorded, err)
@@ -139,7 +144,7 @@ func resolveKeys(ctx context.Context, c client.Client, src keySource, generate b
 		return out, nil
 	}
 	name := generatedSecretName(src.owner.GetName(), src.role, "signing-1")
-	kp, err := generatedSeed(ctx, c, src.owner, name, src.prefix, generate)
+	kp, err := generatedSeed(ctx, c, src.owner, src.role, name, src.prefix, generate)
 	if err != nil {
 		return out, fmt.Errorf("signing key: %w", err)
 	}
@@ -184,13 +189,14 @@ func seedFrom(s *corev1.Secret, key string, prefix nkeys.PrefixByte) (nkeys.KeyP
 }
 
 // generatedSeed reads the generated seed Secret name in owner's namespace,
-// creating it owned by owner when generate is set and it is absent. A
-// Secret owner does not control wraps errSeedNotOwned.
-func generatedSeed(ctx context.Context, c client.Client, owner client.Object, name string, prefix nkeys.PrefixByte, generate bool) (nkeys.KeyPair, error) {
+// creating it for owner, of role, when generate is set and it is absent. A
+// Secret not annotated as generated for owner wraps errSeedNotOwned.
+func generatedSeed(ctx context.Context, c client.Client, owner client.Object, role, name string, prefix nkeys.PrefixByte, generate bool) (nkeys.KeyPair, error) {
+	generatedFor := role + "/" + owner.GetName()
 	existing, err := getSeedSecret(ctx, c, owner.GetNamespace(), name)
 	if err == nil {
-		if !metav1.IsControlledBy(existing, owner) {
-			return nil, fmt.Errorf("%w: Secret %s/%s", errSeedNotOwned, owner.GetNamespace(), name)
+		if existing.Annotations[GeneratedForAnnotation] != generatedFor {
+			return nil, fmt.Errorf("%w: Secret %s/%s is not annotated %s: %s", errSeedNotOwned, owner.GetNamespace(), name, GeneratedForAnnotation, generatedFor)
 		}
 		return seedFrom(existing, SeedKey, prefix)
 	}
@@ -202,12 +208,13 @@ func generatedSeed(ctx context.Context, c client.Client, owner client.Object, na
 		return nil, err
 	}
 	s := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Namespace: owner.GetNamespace(), Name: name},
-		Type:       corev1.SecretTypeOpaque,
-		Data:       map[string][]byte{SeedKey: seed},
-	}
-	if err := controllerutil.SetControllerReference(owner, s, c.Scheme()); err != nil {
-		return nil, err
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:   owner.GetNamespace(),
+			Name:        name,
+			Annotations: map[string]string{GeneratedForAnnotation: generatedFor},
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{SeedKey: seed},
 	}
 	if err := c.Create(ctx, s); err != nil {
 		return nil, fmt.Errorf("create Secret %s/%s: %w", s.Namespace, name, err)
@@ -237,16 +244,20 @@ func accountKeySource(acc *authv1beta1.NatsAccount) keySource {
 	return keySource{owner: acc, keys: acc.Spec.Keys, publicKey: acc.Spec.PublicKey, recorded: acc.Status.PublicKey, prefix: nkeys.PrefixByteAccount, role: roleAccount}
 }
 
-// seedSecretNames lists the Secrets keys names, for the seed Secret index.
-func seedSecretNames(keys *authv1beta1.Keys) []string {
-	if keys == nil {
-		return nil
-	}
+// seedSecretNames lists the Secrets src reads its seeds from, generated
+// ones included, for the seed Secret index.
+func seedSecretNames(src keySource) []string {
 	var out []string
-	if keys.Identity != nil {
-		out = append(out, keys.Identity.SecretKeyRef.Name)
+	switch {
+	case src.keys != nil && src.keys.Identity != nil:
+		out = append(out, src.keys.Identity.SecretKeyRef.Name)
+	case src.publicKey == "":
+		out = append(out, generatedSecretName(src.owner.GetName(), src.role, "identity"))
 	}
-	for _, sk := range keys.Signing {
+	if src.keys == nil || len(src.keys.Signing) == 0 {
+		return append(out, generatedSecretName(src.owner.GetName(), src.role, "signing-1"))
+	}
+	for _, sk := range src.keys.Signing {
 		out = append(out, sk.SecretKeyRef.Name)
 	}
 	return out

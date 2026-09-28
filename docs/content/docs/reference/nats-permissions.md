@@ -121,7 +121,7 @@ For a user of an ordinary account.
 
 Publish: `$JS.API.INFO`, `$JS.API.STREAM.NAMES`, `$JS.API.STREAM.LIST`, `$JS.API.STREAM.INFO.*`, `$JS.API.CONSUMER.NAMES.*`, `$JS.API.CONSUMER.LIST.*`, `$JS.API.CONSUMER.INFO.*.*`.
 
-Subscribe: `>`.
+Subscribe: `_INBOX.readonly.>`.
 
 ## Export preset
 

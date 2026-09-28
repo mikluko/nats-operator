@@ -10,7 +10,7 @@ The platform team owns `nats-system`: the NATS operator, the system account, eve
 
 ## What the platform team declares
 
-The account, and a grant that lets users in `payments` attach to it. The grant sits in the namespace it opens up, so only someone who can write there can open it.
+The account, and a grant that lets users in `payments` attach to it. The grant sits in the namespace it opens up, so only someone who can write there can open it. It trusts `payments` with every user key of the account: a `NatsUser` there can claim any key the account's users hold, those issued outside the auth controller included, and deleting it revokes that key.
 
 {{< manifest "01-platform.yaml" >}}
 

@@ -44,6 +44,8 @@ helm test nats-operator --namespace nats-operator --logs
 
 For each enabled controller this starts the Pod `<release>-<controller>-test`, which GETs the controller's `/readyz` on port `8081` through the Service `<release>-<controller>-test`, with 30 tries, two seconds apart.
 
+The auth controller has to stay up for the accounts it signs to keep working. Each account JWT expires its `jwtTTL` after it was signed, 48h by default, and is re-signed at half that, so an auth controller down for half a `jwtTTL` may let an account's JWT expire, and one down for a whole `jwtTTL` has let every one expire; the servers then close that account's connections. The gauge `nats_operator.account.jwt_expiry`, under [Telemetry]({{< relref "/docs/reference/telemetry#metrics" >}}), says when each current account JWT expires. An account with `jwtTTL: 0s` never expires.
+
 Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NATS cluster with JetStream.
 
 ## Values
@@ -144,7 +146,7 @@ While `metrics.scraper.serviceAccount` is set, the ClusterRole `<release>-metric
 |---|---|---|
 | `""` | `secrets` | `get`, `list`, `watch`, `create`, `update`, `delete` |
 | `auth.nats.mikluko.io` | `natsaccounts`, `natsusers` | `get`, `list`, `watch`, `patch` |
-| `auth.nats.mikluko.io` | `natsaccounts/finalizers`, `natsaccounts/status`, `natsoperators/finalizers`, `natsoperators/status`, `natssystemaccounts/finalizers`, `natssystemaccounts/status`, `natsusers/finalizers`, `natsusers/status` | `update` |
+| `auth.nats.mikluko.io` | `natsaccounts/status`, `natsoperators/status`, `natssystemaccounts/status`, `natsusers/finalizers`, `natsusers/status` | `update` |
 | `auth.nats.mikluko.io` | `natsoperators`, `natssystemaccounts` | `get`, `list`, `watch` |
 | `nats.mikluko.io` | `natsaccounttrusts`, `natsconnections`, `natsoperatortrusts` | `get`, `list`, `watch` |
 | `nats.mikluko.io` | `natsaccounttrusts/status`, `natsoperatortrusts/status` | `update` |
@@ -184,6 +186,8 @@ This removes the controllers' Deployments, ServiceAccounts and RBAC. It leaves b
 - the CRDs, and with them every custom resource and everything the controllers created for them: StatefulSets, Services, ConfigMaps, Secrets, PodDisruptionBudgets and cert-manager Certificates;
 - after a `helm test`, its Pods and Services `<release>-<controller>-test`;
 - with leader election on, the Leases `cluster.nats.mikluko.io`, `auth.nats.mikluko.io` and `jetstream.nats.mikluko.io` in the release namespace.
+
+The seed Secrets the auth controller generates, `<name>-<operator|systemaccount|account>-<identity|signing-1>`, outlive their objects, the CRDs' deletion included: applying the objects again takes the same keys. Deleting those Secrets discards the NATS operator and account identities for good.
 
 Some kinds carry a finalizer that only their controller removes, so delete them while it still runs:
 

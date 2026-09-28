@@ -172,9 +172,10 @@ func UserPresetGrant(preset UserPreset) (PresetGrant, bool) {
 	}, true
 }
 
-// InboxPrefix is the prefix of the reply subjects a connection holding the
-// controller preset dials with, for nats.CustomInboxPrefix; the preset
-// grants subscribe under it and under no other inbox.
+// InboxPrefix is the prefix of the reply subjects a connection holding
+// preset, a controller preset or readonly, dials with, for
+// nats.CustomInboxPrefix; the preset grants subscribe under it and under no
+// other inbox.
 func InboxPrefix(preset UserPreset) string {
 	return "_INBOX." + string(preset)
 }
@@ -233,7 +234,7 @@ var userPresets = map[UserPreset]userPreset{
 			"$JS.API.CONSUMER.LIST.*",
 			"$JS.API.CONSUMER.INFO.*.*",
 		},
-		sub: []string{">"},
+		sub: []string{InboxPrefix(PresetReadonly) + ".>"},
 	},
 	PresetLeafnode: {
 		anyAccount:      true,
