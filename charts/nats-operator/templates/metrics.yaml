@@ -1,0 +1,54 @@
+{{- $metrics := .Values.metrics }}
+{{- if and $metrics.serviceMonitor.enabled (not $metrics.service.enabled) }}
+{{- fail "metrics.serviceMonitor.enabled requires metrics.service.enabled" }}
+{{- end }}
+{{- if $metrics.service.enabled }}
+{{- range $name, $values := dict "cluster-controller" .Values.cluster "auth-controller" .Values.auth "jetstream-controller" .Values.jetstream }}
+{{- if $values.enabled }}
+{{- $ctx := dict "root" $ "name" $name }}
+{{- $fullname := printf "%s-metrics" (include "nats-operator.fullname" $ctx) }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "nats-operator.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    {{- include "nats-operator.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: metrics
+      port: 8080
+      targetPort: metrics
+{{- if $metrics.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ $fullname }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "nats-operator.labels" $ctx | nindent 4 }}
+    {{- with $metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "nats-operator.selectorLabels" $ctx | nindent 6 }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+      scheme: https
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tlsConfig:
+        insecureSkipVerify: true
+      {{- with $metrics.serviceMonitor.interval }}
+      interval: {{ . }}
+      {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -37,7 +37,7 @@ const rosterMisses = 3
 var ErrOperatorGone = errors.New("NatsOperator does not exist")
 
 // Resolvers is the Distributor over each NatsOperator's system connection
-// to the full resolvers of the servers trusting it, and a RosterNotifier.
+// to the full resolvers of the servers trusting it.
 // The roster is every server that answered STATSZ within its last
 // rosterMisses polls; a restarted server joins it under a new server ID.
 type Resolvers struct {
@@ -81,12 +81,13 @@ type resolverState struct {
 
 var (
 	_ Distributor      = (*Resolvers)(nil)
-	_ RosterNotifier   = (*Resolvers)(nil)
 	_ manager.Runnable = (*Resolvers)(nil)
 )
 
-// Subscribe returns a new channel of roster changes; one left undrained
-// stalls roster polling once 64 changes are pending.
+// Subscribe returns a new channel that receives a NatsOperator, carrying
+// only its name, whenever the servers trusting it change; it is called
+// before r starts. One left undrained stalls roster polling once 64 changes
+// are pending.
 func (r *Resolvers) Subscribe() <-chan event.GenericEvent {
 	r.mu.Lock()
 	defer r.mu.Unlock()

@@ -356,7 +356,7 @@ func startAuthCluster(t *testing.T) *authCluster {
 		ObjectMeta: metav1.ObjectMeta{Namespace: a.nc.Namespace, Name: a.nc.Spec.Auth.SystemCredentials.SecretKeyRef.Name},
 		Data:       map[string][]byte{natsconn.DefaultCredentialsKey: a.p.systemCreds(t, jwtplane.PresetClusterController)},
 	}
-	pool := NewPool()
+	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetClusterController))
 	t.Cleanup(pool.Close)
 	a.sys = &SystemConnections{
 		Client:  fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build(),
@@ -444,7 +444,7 @@ func TestSystemConnections_NoSystemUser(t *testing.T) {
 	require.NoError(t, clientgoscheme.AddToScheme(scheme))
 	fallback := &fakeObserver{}
 	fallback.set(&sysobs.Snapshot{Servers: []sysobs.Server{{Name: "demo-0"}}})
-	pool := NewPool()
+	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetClusterController))
 	t.Cleanup(pool.Close)
 	sys := &SystemConnections{Client: fake.NewClientBuilder().WithScheme(scheme).Build(), Pool: pool, Fallback: fallback}
 	ctx := context.Background()

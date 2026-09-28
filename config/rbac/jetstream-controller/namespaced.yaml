@@ -1,0 +1,76 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jetstream-controller
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - jetstream.nats.mikluko.io
+  resources:
+  - natsbalancers
+  - natssystembalancers
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - jetstream.nats.mikluko.io
+  resources:
+  - natsbalancers/status
+  - natsclusterevacuations/status
+  - natsconsumers/status
+  - natskeyvalues/status
+  - natsobjectstores/status
+  - natsstreams/status
+  - natssystembalancers/status
+  verbs:
+  - patch
+- apiGroups:
+  - jetstream.nats.mikluko.io
+  resources:
+  - natsclusterevacuations
+  - natsconsumers
+  - natskeyvalues
+  - natsobjectstores
+  - natsstreams
+  verbs:
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - nats.mikluko.io
+  resources:
+  - natsconnections
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - nats.mikluko.io
+  resources:
+  - natsconnections/status
+  verbs:
+  - patch
+- apiGroups:
+  - nats.mikluko.io
+  resources:
+  - natsreferencegrants
+  verbs:
+  - list
+  - watch

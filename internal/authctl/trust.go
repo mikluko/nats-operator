@@ -17,6 +17,7 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
+	"github.com/mikluko/nats-operator/internal/refindex"
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
@@ -89,7 +90,7 @@ func (r *OperatorTrustReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("natsoperatortrust").
 		For(&natsv1beta1.NatsOperatorTrust{}).
-		Watches(&authv1beta1.NatsOperator{}, enqueueIndexed(c, &natsv1beta1.NatsOperatorTrustList{}, operatorField)).
+		Watches(&authv1beta1.NatsOperator{}, refindex.EnqueueByField(c, &natsv1beta1.NatsOperatorTrustList{}, operatorField)).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, schema.GroupKind{Group: natsGroup, Kind: "NatsOperatorTrust"}, &natsv1beta1.NatsOperatorTrustList{})).
 		Complete(telemetry.Traced("NatsOperatorTrust", r))
 }
@@ -163,7 +164,7 @@ func (r *AccountTrustReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("natsaccounttrust").
 		For(&natsv1beta1.NatsAccountTrust{}).
-		Watches(&authv1beta1.NatsAccount{}, enqueueIndexed(c, &natsv1beta1.NatsAccountTrustList{}, accountField)).
+		Watches(&authv1beta1.NatsAccount{}, refindex.EnqueueByField(c, &natsv1beta1.NatsAccountTrustList{}, accountField)).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, schema.GroupKind{Group: natsGroup, Kind: "NatsAccountTrust"}, &natsv1beta1.NatsAccountTrustList{})).
 		Complete(telemetry.Traced("NatsAccountTrust", r))
 }

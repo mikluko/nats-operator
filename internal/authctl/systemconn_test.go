@@ -91,7 +91,7 @@ func TestSystemConnection_Conn(t *testing.T) {
 			if tt.operator != nil {
 				objs = append(objs, tt.operator)
 			}
-			pool := authctl.NewPool()
+			pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetAuthController))
 			t.Cleanup(pool.Close)
 			conn := &authctl.SystemConnection{
 				Reader: fake.NewClientBuilder().WithScheme(s).WithObjects(objs...).Build(),

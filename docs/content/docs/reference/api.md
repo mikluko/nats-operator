@@ -459,6 +459,16 @@ Appears on: [NatsClusterSpec](#NatsClusterSpec).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `enabled` | {{< type "bool" >}} | No | Enabled turns the sidecar off when false. Default: `true`. |
+| `image` | [{{< type "ExporterImage" >}}](#ExporterImage) | No | Image is the sidecar's image. |
+
+### ExporterImage {#ExporterImage}
+ExporterImage names the prometheus-nats-exporter sidecar's image.\
+Appears on: [Exporter](#Exporter).
+| Field | Type | Required | Description |
+| :---- | :--- | :------: | :---------- |
+| `repository` | {{< type "string" >}} | No | Repository is the image repository; empty, it is natsio/prometheus-nats-exporter. |
+| `tag` | {{< type "string" >}} | No | Tag is the image tag; empty, it is 0.17.3. |
+| `digest` | {{< type "string" >}} | No | Digest pins the image to one manifest, rendered after the tag. |
 
 ### Gateway {#Gateway}
 Gateway joins a NATS cluster into a supercluster.\
@@ -497,6 +507,14 @@ Appears on: [NatsClusterStatus](#NatsClusterStatus).
 | `connected` | {{< type "bool" >}} | No | Connected reports whether the member is reachable. |
 | `inbound` | {{< type "int32" >}} | No | Inbound is the number of inbound gateway connections. |
 | `outbound` | {{< type "int32" >}} | No | Outbound is the number of outbound gateway connections. |
+
+### Image {#Image}
+Image names the nats-server image of a NATS cluster's servers.\
+Appears on: [NatsClusterSpec](#NatsClusterSpec).
+| Field | Type | Required | Description |
+| :---- | :--- | :------: | :---------- |
+| `repository` | {{< type "string" >}} | No | Repository is the image repository; empty, it is nats. |
+| `digest` | {{< type "string" >}} | No | Digest pins the image to one manifest, rendered after the tag. |
 
 ### IssuerReference {#IssuerReference}
 IssuerReference names a cert-manager Issuer or ClusterIssuer.\
@@ -591,7 +609,7 @@ Appears on: [NatsCluster](#NatsCluster).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `version` | {{< type "string" >}} | Yes | Version is the nats-server version rendered for, 2.15.0 or later. A change moves at most one minor at a time, up or down; any patch change is allowed. |
-| `image` | {{< type "string" >}} | No | Image overrides the image repository; the tag is always Version. |
+| `image` | [{{< type "Image" >}}](#Image) | No | Image is the nats-server image; its tag is always Version. |
 | `replicas` | {{< type "int32" >}} | Yes | Replicas is the number of servers. |
 | `resources` | [{{< type "ResourceRequirements" >}}](https://pkg.go.dev/k8s.io/api/core/v1#ResourceRequirements) | No | Resources of the nats-server container. GOMEMLIMIT and the JetStream memory store derive from limits.memory. |
 | `jetstream` | [{{< type "JetStream" >}}](#JetStream) | No | JetStream enables JetStream on every server. |

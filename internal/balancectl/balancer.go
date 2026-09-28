@@ -361,35 +361,18 @@ func (r *BalancerReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Mana
 		return fmt.Errorf("index NatsBalancer grant targets: %w", err)
 	}
 	c := mgr.GetClient()
-	balancers := func(sameNamespace bool) handler.EventHandler {
-		return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []reconcile.Request {
-			var opts []client.ListOption
-			if sameNamespace {
-				opts = append(opts, client.InNamespace(o.GetNamespace()))
-			}
-			var list js.NatsBalancerList
-			if err := c.List(ctx, &list, opts...); err != nil {
-				ctrl.LoggerFrom(ctx).Error(err, "list NatsBalancers")
-				return nil
-			}
-			out := make([]reconcile.Request, 0, len(list.Items))
-			for i := range list.Items {
-				out = append(out, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&list.Items[i])})
-			}
-			return out
-		})
-	}
+	members := refindex.EnqueueNamespace(c, &js.NatsBalancerList{})
 	memberChanges := builder.WithPredicates(predicate.Or(lifecycle.SpecOrDeletion(), predicate.LabelChangedPredicate{}))
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&js.NatsBalancer{}, builder.WithPredicates(lifecycle.SpecOrDeletion())).
 		Watches(&natsv1beta1.NatsConnection{}, refindex.EnqueueByField(c, &js.NatsBalancerList{}, refindex.ConnectionField)).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, js.GroupVersion.WithKind(BalancerKind).GroupKind(), &js.NatsBalancerList{})).
-		Watches(&js.NatsStream{}, balancers(true), memberChanges).
-		Watches(&js.NatsKeyValue{}, balancers(true), memberChanges).
-		Watches(&js.NatsObjectStore{}, balancers(true), memberChanges).
+		Watches(&js.NatsStream{}, members, memberChanges).
+		Watches(&js.NatsKeyValue{}, members, memberChanges).
+		Watches(&js.NatsObjectStore{}, members, memberChanges).
 		Watches(&js.NatsSystemBalancer{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []reconcile.Request {
 			return r.ofSystemBalancer(ctx, c, o)
 		}), builder.WithPredicates(pendingOrSpec())).
-		Watches(&js.NatsClusterEvacuation{}, balancers(false)).
+		Watches(&js.NatsClusterEvacuation{}, refindex.EnqueueAll(c, &js.NatsBalancerList{})).
 		Complete(telemetry.Traced(BalancerKind, r))
 }

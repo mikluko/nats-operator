@@ -6,7 +6,7 @@ metadata:
   name: demo
   namespace: nats-system
 spec:
-  # `image` overrides the repository only.
+  # `image` sets the repository and a digest, never the tag.
   version: 2.15.0
   replicas: 3
 

@@ -11,6 +11,8 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
 
 // Key names the resource a pooled connection belongs to.
@@ -47,6 +49,12 @@ type PoolOption func(*Pool)
 // the pool's change handlers.
 func WithNATSOptions(opts ...nats.Option) PoolOption {
 	return func(p *Pool) { p.opts = append(p.opts, opts...) }
+}
+
+// WithPreset makes every dial take replies under preset's inbox prefix, the
+// only inbox a user holding that controller preset may subscribe under.
+func WithPreset(preset jwtplane.UserPreset) PoolOption {
+	return WithNATSOptions(nats.CustomInboxPrefix(jwtplane.InboxPrefix(preset)))
 }
 
 // NewPool returns an empty Pool.

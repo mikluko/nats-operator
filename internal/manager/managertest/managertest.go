@@ -16,6 +16,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -25,15 +26,17 @@ import (
 
 // ReconciledKinds returns the kind each controller setup registers traces its
 // reconciles under, in registration order, failing the test for a controller
-// that records no span. It runs once per test binary and never in parallel:
-// controller names are unique per process, and it replaces the global tracer
-// provider.
+// that records no span. It never runs in parallel, since it replaces the
+// global tracer provider. Its controllers skip controller-runtime's
+// process-wide name check, so another manager in the test binary may
+// register the same names.
 func ReconciledKinds(t *testing.T, scheme *runtime.Scheme, setup func(context.Context, manager.Manager) error) []string {
 	t.Helper()
 	mgr, err := ctrl.NewManager(&rest.Config{Host: "http://127.0.0.1:1"}, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsserver.Options{BindAddress: "0"},
 		HealthProbeBindAddress: "0",
+		Controller:             config.Controller{SkipNameValidation: new(true)},
 	})
 	require.NoError(t, err)
 	rec := &recording{Manager: mgr, client: fake.NewClientBuilder().WithScheme(scheme).Build()}

@@ -3,12 +3,8 @@ package authctl
 import (
 	"context"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
@@ -160,37 +156,4 @@ func indexes(ctx context.Context, idx client.FieldIndexer) error {
 		}
 	}
 	return nil
-}
-
-// enqueueIndexed returns a handler enqueueing every object of list's type
-// whose field index holds the event object's key.
-func enqueueIndexed(r client.Reader, list client.ObjectList, field string) handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
-		return listIndexed(ctx, r, list, field, keyValue(client.ObjectKeyFromObject(obj)))
-	})
-}
-
-// listIndexed returns a request for every object of list's type whose field
-// index holds value; a failed list is logged and returns none.
-func listIndexed(ctx context.Context, r client.Reader, list client.ObjectList, field, value string) []reconcile.Request {
-	l, ok := list.DeepCopyObject().(client.ObjectList)
-	if !ok {
-		return nil
-	}
-	if err := r.List(ctx, l, client.MatchingFields{field: value}); err != nil {
-		log.FromContext(ctx).Error(err, "list by index", "field", field, "value", value)
-		return nil
-	}
-	items, err := meta.ExtractList(l)
-	if err != nil {
-		log.FromContext(ctx).Error(err, "extract list", "field", field)
-		return nil
-	}
-	out := make([]reconcile.Request, 0, len(items))
-	for _, item := range items {
-		if o, ok := item.(client.Object); ok {
-			out = append(out, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(o)})
-		}
-	}
-	return out
 }

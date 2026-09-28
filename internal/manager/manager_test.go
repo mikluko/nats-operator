@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"flag"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,9 +16,10 @@ import (
 
 func TestFlags(t *testing.T) {
 	tests := []struct {
-		name string
-		args []string
-		want Options
+		name    string
+		args    []string
+		want    Options
+		wantErr bool
 	}{
 		{
 			name: "defaults",
@@ -29,12 +31,28 @@ func TestFlags(t *testing.T) {
 			args: []string{"-metrics-bind-address=0", "-leader-elect", "-leader-election-id=x"},
 			want: Options{MetricsAddr: "0", ProbeAddr: ":8081", LeaderElection: true, LeaderElectionID: "x"},
 		},
+		{
+			name: "watch namespaces",
+			args: []string{"-watch-namespaces= a,b ,,c"},
+			want: Options{MetricsAddr: ":8080", ProbeAddr: ":8081", LeaderElectionID: "cluster.nats.mikluko.io", WatchNamespaces: []string{"a", "b", "c"}},
+		},
+		{
+			name:    "watch namespaces naming none",
+			args:    []string{"-watch-namespaces=,"},
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fs := flag.NewFlagSet(tt.name, flag.ContinueOnError)
+			fs.SetOutput(io.Discard)
 			got := Flags(fs, "cluster.nats.mikluko.io")
-			require.NoError(t, fs.Parse(tt.args))
+			err := fs.Parse(tt.args)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
 			require.Equal(t, tt.want, *got)
 		})
 	}
@@ -67,12 +85,8 @@ func TestSecretMetadata(t *testing.T) {
 	require.Equal(t, tombstone, got)
 }
 
-type stubSyncer bool
-
-func (s stubSyncer) WaitForCacheSync(context.Context) bool { return bool(s) }
-
 func TestCacheSynced(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
-	require.NoError(t, cacheSynced(stubSyncer(true))(req))
-	require.EqualError(t, cacheSynced(stubSyncer(false))(req), "cache is not synced")
+	require.NoError(t, cacheSynced(func(context.Context) bool { return true })(req))
+	require.EqualError(t, cacheSynced(func(context.Context) bool { return false })(req), "cache is not synced")
 }

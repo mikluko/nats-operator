@@ -1,6 +1,6 @@
-// Package refindex carries the field indexes the JetStream controller's
-// reconcilers register over the references their resources make, and the
-// event handlers that enqueue a referrer when what it references changes.
+// Package refindex carries the field indexes reconcilers register over the
+// references their resources make, and the event handlers that enqueue a
+// referrer when what it references changes.
 package refindex
 
 import (
@@ -47,22 +47,39 @@ func IndexConnections(ctx context.Context, indexer client.FieldIndexer, obj clie
 // for a NatsConnection; r carries the index.
 func EnqueueByField(r client.Reader, list client.ObjectList, field string) handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []reconcile.Request {
-		return listRequests(ctx, r, list, client.MatchingFields{field: client.ObjectKeyFromObject(o).String()})
+		return Requests(ctx, r, list, client.MatchingFields{field: client.ObjectKeyFromObject(o).String()})
 	})
 }
 
-func listRequests(ctx context.Context, r client.Reader, list client.ObjectList, opts ...client.ListOption) []reconcile.Request {
+// EnqueueAll maps any object to every object of list's type.
+func EnqueueAll(r client.Reader, list client.ObjectList) handler.EventHandler {
+	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, _ client.Object) []reconcile.Request {
+		return Requests(ctx, r, list)
+	})
+}
+
+// EnqueueNamespace maps an object to every object of list's type in its
+// namespace.
+func EnqueueNamespace(r client.Reader, list client.ObjectList) handler.EventHandler {
+	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []reconcile.Request {
+		return Requests(ctx, r, list, client.InNamespace(o.GetNamespace()))
+	})
+}
+
+// Requests returns a request for every object of list's type that r lists
+// under opts; a failed list is logged and returns none.
+func Requests(ctx context.Context, r client.Reader, list client.ObjectList, opts ...client.ListOption) []reconcile.Request {
 	l, ok := list.DeepCopyObject().(client.ObjectList)
 	if !ok {
 		return nil
 	}
 	if err := r.List(ctx, l, opts...); err != nil {
-		ctrl.LoggerFrom(ctx).Error(err, "list referrers")
+		ctrl.LoggerFrom(ctx).Error(err, "list referrers", "list", fmt.Sprintf("%T", list))
 		return nil
 	}
 	items, err := meta.ExtractList(l)
 	if err != nil {
-		ctrl.LoggerFrom(ctx).Error(err, "extract referrers")
+		ctrl.LoggerFrom(ctx).Error(err, "extract referrers", "list", fmt.Sprintf("%T", list))
 		return nil
 	}
 	out := make([]reconcile.Request, 0, len(items))

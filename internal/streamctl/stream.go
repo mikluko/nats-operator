@@ -34,6 +34,8 @@ type StreamReconciler struct {
 	Syncer lifecycle.Syncer
 }
 
+var _ reconcile.Reconciler = (*StreamReconciler)(nil)
+
 var streamKind = lifecycle.Kind[*js.NatsStream]{
 	Name: StreamKind,
 	New:  func() *js.NatsStream { return &js.NatsStream{} },
@@ -49,7 +51,8 @@ var streamKind = lifecycle.Kind[*js.NatsStream]{
 	Observe: observeTransfer,
 }
 
-// Reconcile implements reconcile.Reconciler.
+// Reconcile brings the stream of the NatsStream req names to its spec,
+// or runs its deletion policy where the NatsStream is being deleted.
 func (r *StreamReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	return streamKind.Reconcile(ctx, r.Client, r.Dialer, r.Syncer, req)
 }
@@ -73,10 +76,10 @@ type streamObject struct {
 	obj    *js.NatsStream
 }
 
-// Describe implements lifecycle.Object.
+var _ lifecycle.Object = (*streamObject)(nil)
+
 func (o *streamObject) Describe() string { return "stream " + streamName(o.obj) }
 
-// Fetch implements lifecycle.Object.
 func (o *streamObject) Fetch(ctx context.Context) (*lifecycle.Info, error) {
 	info, err := o.api.StreamInfo(ctx, streamName(o.obj))
 	if errors.Is(err, jsapi.ErrNotFound) {
@@ -85,29 +88,24 @@ func (o *streamObject) Fetch(ctx context.Context) (*lifecycle.Info, error) {
 	return info, err
 }
 
-// Desired implements lifecycle.Object.
 func (o *streamObject) Desired() (lifecycle.Config, error) {
 	w := streamToWire(&o.obj.Spec.StreamConfig)
 	w.Name = streamName(o.obj)
 	return lifecycle.ToConfig(w)
 }
 
-// Create implements lifecycle.Object.
 func (o *streamObject) Create(ctx context.Context, cfg lifecycle.Config) (*lifecycle.Info, error) {
 	return o.api.CreateStream(ctx, cfg)
 }
 
-// Update implements lifecycle.Object.
 func (o *streamObject) Update(ctx context.Context, _ *lifecycle.Info, cfg lifecycle.Config) (*lifecycle.Info, error) {
 	return o.api.UpdateStream(ctx, cfg)
 }
 
-// Delete implements lifecycle.Object.
 func (o *streamObject) Delete(ctx context.Context) error {
 	return o.api.DeleteStream(ctx, streamName(o.obj))
 }
 
-// WriteSpec implements lifecycle.Object.
 func (o *streamObject) WriteSpec(ctx context.Context, cfg lifecycle.Config, replace bool) error {
 	var w streamWire
 	if err := lifecycle.FromConfig(cfg, &w); err != nil {

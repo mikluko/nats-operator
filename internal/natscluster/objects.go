@@ -1,6 +1,7 @@
 package natscluster
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -21,10 +22,12 @@ import (
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 )
 
-// Images the pods run unless spec.image overrides the NATS repository.
+// The images the pods run where spec.image and spec.exporter.image name
+// none.
 const (
-	DefaultImage  = "nats"
-	ExporterImage = "natsio/prometheus-nats-exporter:0.17.3"
+	DefaultImage       = "nats"
+	ExporterRepository = "natsio/prometheus-nats-exporter"
+	ExporterTag        = "0.17.3"
 )
 
 // A server in lame-duck mode hands off every Raft leadership it holds, tells
@@ -161,11 +164,27 @@ func configMap(nc *clusterv1beta1.NatsCluster, server string, cfg []byte, revisi
 }
 
 func image(nc *clusterv1beta1.NatsCluster) string {
-	repo := nc.Spec.Image
-	if repo == "" {
-		repo = DefaultImage
+	var img clusterv1beta1.Image
+	if nc.Spec.Image != nil {
+		img = *nc.Spec.Image
 	}
-	return repo + ":" + nc.Spec.Version
+	return reference(cmp.Or(img.Repository, DefaultImage), nc.Spec.Version, img.Digest)
+}
+
+func exporterImage(nc *clusterv1beta1.NatsCluster) string {
+	var img clusterv1beta1.ExporterImage
+	if nc.Spec.Exporter != nil && nc.Spec.Exporter.Image != nil {
+		img = *nc.Spec.Exporter.Image
+	}
+	return reference(cmp.Or(img.Repository, ExporterRepository), cmp.Or(img.Tag, ExporterTag), img.Digest)
+}
+
+func reference(repo, tag, digest string) string {
+	ref := repo + ":" + tag
+	if digest != "" {
+		ref += "@" + digest
+	}
+	return ref
 }
 
 // statefulSet renders server's one-replica StatefulSet.
@@ -214,7 +233,7 @@ func podTemplate(nc *clusterv1beta1.NatsCluster, server string, limits Limits) (
 		},
 	}
 	if exporterEnabled(&nc.Spec) {
-		t.Spec.Containers = append(t.Spec.Containers, exporterContainer())
+		t.Spec.Containers = append(t.Spec.Containers, exporterContainer(nc))
 	}
 	pt := nc.Spec.PodTemplate
 	if pt == nil {
@@ -374,10 +393,10 @@ func exporterEnabled(spec *clusterv1beta1.NatsClusterSpec) bool {
 	return spec.Exporter == nil || spec.Exporter.Enabled == nil || *spec.Exporter.Enabled
 }
 
-func exporterContainer() corev1.Container {
+func exporterContainer(nc *clusterv1beta1.NatsCluster) corev1.Container {
 	return corev1.Container{
 		Name:  "exporter",
-		Image: ExporterImage,
+		Image: exporterImage(nc),
 		Args: []string{
 			"-port=" + strconv.Itoa(PortMetrics),
 			"-connz", "-routez", "-subz", "-varz", "-healthz", "-jsz=all",

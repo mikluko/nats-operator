@@ -10,14 +10,15 @@ import (
 )
 
 // Setup registers the field indexes and every reconciler of this package
-// with mgr; d, s and rec may each be nil.
+// with mgr; d, s and rec may each be nil. Where d is a *Resolvers, the
+// system account and account reconcilers follow its roster changes.
 func Setup(ctx context.Context, mgr ctrl.Manager, d Distributor, s Sessions, rec events.EventRecorder) error {
 	if err := indexes(ctx, mgr.GetFieldIndexer()); err != nil {
 		return fmt.Errorf("register indexes: %w", err)
 	}
 	var accounts, systemAccounts <-chan event.GenericEvent
-	if n, ok := d.(RosterNotifier); ok {
-		accounts, systemAccounts = n.Subscribe(), n.Subscribe()
+	if r, ok := d.(*Resolvers); ok {
+		accounts, systemAccounts = r.Subscribe(), r.Subscribe()
 	}
 	c := mgr.GetClient()
 	for _, r := range []interface{ SetupWithManager(ctrl.Manager) error }{

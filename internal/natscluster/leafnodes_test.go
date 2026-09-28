@@ -508,7 +508,7 @@ func TestLeaf_OperatorMode(t *testing.T) {
 		{ConnectionNamespace: "nats-system", ConnectionName: "hub-telemetry", Connected: 3, Account: telemetry},
 	}, st.LeafRemotes)
 
-	pool := NewPool()
+	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetClusterController))
 	t.Cleanup(pool.Close)
 	hubSys := &SystemConnections{
 		Client:  fake.NewClientBuilder().WithScheme(leafScheme(t)).WithObjects(credsSecret(h.nc.Namespace, h.nc.Spec.Auth.SystemCredentials.SecretKeyRef.Name, h.p.systemCreds(t, jwtplane.PresetClusterController))).Build(),

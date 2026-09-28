@@ -109,6 +109,16 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].image
           value: ghcr.io/mikluko/nats-operator/auth-controller:v9
+  - it: pins its image to auth.image.digest after the tag when set
+    chart:
+      appVersion: 9.8.7
+    set:
+      auth.image.digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/mikluko/nats-operator/auth-controller:9.8.7@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   - it: drops the leader election Role and passes --leader-elect=false while leaderElection.enabled is false
     set:
       leaderElection.enabled: false
@@ -219,3 +229,31 @@ tests:
       - notExists: {path: spec.template.metadata.annotations}
       - notExists: {path: spec.template.spec.nodeSelector}
       - notExists: {path: spec.template.spec.affinity}
+  - it: appends extraArgs after --system-connection
+    set:
+      auth.systemConnection: nats/auth-controller
+      auth.extraArgs: [--zap-devel]
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[4]
+          value: --system-connection=nats/auth-controller
+      - equal:
+          path: spec.template.spec.containers[0].args[5]
+          value: --zap-devel
+  - it: refuses an auth.systemConnection outside watchNamespaces
+    set:
+      watchNamespaces: [a]
+      auth.systemConnection: nats/auth-controller
+    asserts:
+      - failedTemplate:
+          errorMessage: auth.systemConnection names namespace nats, which watchNamespaces does not
+  - it: accepts an auth.systemConnection inside watchNamespaces
+    set:
+      watchNamespaces: [a, nats]
+      auth.systemConnection: nats/auth-controller
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --watch-namespaces=a,nats

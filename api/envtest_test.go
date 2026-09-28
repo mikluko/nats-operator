@@ -195,6 +195,8 @@ func testCreateRules(t *testing.T, c client.Client) {
 		{"route TLS with two certificates", cluster(", routes: {tls: {secretRef: {name: s}, certManager: {issuerRef: {name: i}}}}"), "secretRef and certManager are mutually exclusive"},
 		{"disabled route TLS with a certificate", cluster(", routes: {tls: {enabled: false, secretRef: {name: s}}}"), "only while route TLS is enabled"},
 		{"gateway TLS without a certificate", cluster(", gateway: {discovery: Explicit, remotes: [{name: a, url: u}], tls: {}}"), "set exactly one of secretRef and certManager"},
+		{"image digest that is not sha256", cluster(", image: {digest: 'latest'}"), "spec.image.digest"},
+		{"exporter image digest that is not sha256", cluster(", exporter: {image: {digest: 'sha256:abc'}}"), "spec.exporter.image.digest"},
 		{"leafnode TLS with two certificates", cluster(", leafnodes: {tls: {secretRef: {name: s}, certManager: {issuerRef: {name: i}}}}"), "set exactly one of secretRef and certManager"},
 
 		{"operator jwt beside identity key", manifest("NatsOperator", "o", "{systemAccountRef: {name: sys}, jwt: x, keys: {identity: "+seed+", signing: "+signing+"}}"), "jwt and keys.identity are mutually exclusive"},

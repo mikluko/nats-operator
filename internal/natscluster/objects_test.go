@@ -53,7 +53,7 @@ func TestRender_Story1(t *testing.T) {
 		require.Equal(t, nc.Spec.Resources, nats.Resources)
 		require.Equal(t, intstr.FromString("monitor"), nats.ReadinessProbe.HTTPGet.Port)
 		exporter := container(t, sts, "exporter")
-		require.Equal(t, ExporterImage, exporter.Image)
+		require.Equal(t, "natsio/prometheus-nats-exporter:0.17.3", exporter.Image)
 
 		require.Len(t, sts.Spec.VolumeClaimTemplates, 1)
 		pvc := sts.Spec.VolumeClaimTemplates[0]
@@ -114,6 +114,51 @@ func TestRender_Exporter(t *testing.T) {
 				ports = append(ports, sp.Name)
 			}
 			require.Equal(t, tt.want, slices.Contains(ports, "metrics"), ports)
+		})
+	}
+}
+
+func TestRender_Images(t *testing.T) {
+	const digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	for _, tt := range []struct {
+		name         string
+		image        *clusterv1beta1.Image
+		exporter     *clusterv1beta1.ExporterImage
+		wantNATS     string
+		wantExporter string
+	}{
+		{
+			name:         "defaults",
+			wantNATS:     "nats:2.15.0",
+			wantExporter: "natsio/prometheus-nats-exporter:0.17.3",
+		},
+		{
+			name:         "repositories",
+			image:        &clusterv1beta1.Image{Repository: "registry.example/nats"},
+			exporter:     &clusterv1beta1.ExporterImage{Repository: "registry.example/exporter", Tag: "0.18.0"},
+			wantNATS:     "registry.example/nats:2.15.0",
+			wantExporter: "registry.example/exporter:0.18.0",
+		},
+		{
+			name:         "digests",
+			image:        &clusterv1beta1.Image{Digest: digest},
+			exporter:     &clusterv1beta1.ExporterImage{Digest: digest},
+			wantNATS:     "nats:2.15.0@" + digest,
+			wantExporter: "natsio/prometheus-nats-exporter:0.17.3@" + digest,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			nc := storyCluster(t)
+			nc.Spec.Image = tt.image
+			if tt.exporter != nil {
+				nc.Spec.Exporter = &clusterv1beta1.Exporter{Image: tt.exporter}
+			}
+			p, err := Render(nc, Inputs{})
+			require.NoError(t, err)
+			for _, s := range p.Servers {
+				require.Equal(t, tt.wantNATS, container(t, s.StatefulSet, "nats").Image)
+				require.Equal(t, tt.wantExporter, container(t, s.StatefulSet, "exporter").Image)
+			}
 		})
 	}
 }

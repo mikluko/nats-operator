@@ -203,7 +203,7 @@ func TestEvacuation_Supercluster(t *testing.T) {
 		WithStatusSubresource(&js.NatsSystemBalancer{}, &js.NatsBalancer{}, &js.NatsClusterEvacuation{}).
 		WithObjects(objs...).
 		Build()
-	pool := NewPool()
+	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetJetStreamController))
 	t.Cleanup(pool.Close)
 	dialer := &natsconn.Dialer{Reader: c, Pool: pool}
 	rec := events.NewFakeRecorder(1000)
@@ -408,7 +408,7 @@ func TestEvacuation_ServerDown(t *testing.T) {
 
 	objs := append(connection("sys", sc["C2"][0].ClientURL(), p.sysCreds), evacuation("retire-c1", "sys", "new"))
 	c := fake.NewClientBuilder().WithScheme(testScheme(t)).WithStatusSubresource(&js.NatsClusterEvacuation{}).WithObjects(objs...).Build()
-	pool := NewPool()
+	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetJetStreamController))
 	t.Cleanup(pool.Close)
 	r := &EvacuationReconciler{Client: c, Dialer: &natsconn.Dialer{Reader: c, Pool: pool}, PendingPoll: time.Millisecond}
 	key := client.ObjectKey{Namespace: ns, Name: "retire-c1"}

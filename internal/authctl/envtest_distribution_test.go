@@ -29,6 +29,8 @@ import (
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/authctl"
+	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
 // TestEnvtestDistribution runs the reconcilers with Resolvers over the
@@ -60,7 +62,7 @@ func TestEnvtestDistribution(t *testing.T) {
 		Controller:             config.Controller{SkipNameValidation: ptr.To(true)},
 	})
 	require.NoError(t, err)
-	pool := authctl.NewPool()
+	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetAuthController))
 	conn := &authctl.SystemConnection{Reader: mgr.GetClient(), Pool: pool, Name: key("nats-system", "system")}
 	resolvers := &authctl.Resolvers{Conn: conn.Conn, Wait: time.Second, Interval: 300 * time.Millisecond}
 	require.NoError(t, mgr.Add(pool))

@@ -13,7 +13,6 @@ linters:
     revive:
       rules:
         - name: exported
-          arguments: [checkPrivateReceivers]
 
 formatters:
   enable:

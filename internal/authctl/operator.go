@@ -25,6 +25,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"github.com/mikluko/nats-operator/internal/refindex"
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
@@ -322,13 +323,13 @@ func (r *OperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("natsoperator").
 		For(&authv1beta1.NatsOperator{}).
-		Watches(&corev1.Secret{}, enqueueIndexed(c, &authv1beta1.NatsOperatorList{}, seedSecretField)).
+		Watches(&corev1.Secret{}, refindex.EnqueueByField(c, &authv1beta1.NatsOperatorList{}, seedSecretField)).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
-			return systemAccountOperators(ctx, c, listIndexed(ctx, c, &authv1beta1.NatsSystemAccountList{}, seedSecretField, keyValue(client.ObjectKeyFromObject(obj))))
+			return systemAccountOperators(ctx, c, refindex.Requests(ctx, c, &authv1beta1.NatsSystemAccountList{}, client.MatchingFields{seedSecretField: keyValue(client.ObjectKeyFromObject(obj))}))
 		})).
 		Watches(&authv1beta1.NatsSystemAccount{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			sys := obj.(*authv1beta1.NatsSystemAccount)
-			reqs := listIndexed(ctx, c, &authv1beta1.NatsOperatorList{}, systemAccountField, keyValue(client.ObjectKeyFromObject(sys)))
+			reqs := refindex.Requests(ctx, c, &authv1beta1.NatsOperatorList{}, client.MatchingFields{systemAccountField: keyValue(client.ObjectKeyFromObject(sys))})
 			return append(reqs, reconcile.Request{NamespacedName: refKey(sys.Spec.OperatorRef, sys.Namespace)})
 		})).
 		Watches(&authv1beta1.NatsAccount{}, handler.EnqueueRequestsFromMapFunc(func(_ context.Context, obj client.Object) []reconcile.Request {

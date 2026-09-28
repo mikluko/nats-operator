@@ -6,8 +6,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
+	ctrl "sigs.k8s.io/controller-runtime"
 
+	"github.com/mikluko/nats-operator/internal/manager"
 	"github.com/mikluko/nats-operator/internal/manager/managertest"
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
@@ -15,9 +16,9 @@ import (
 // TestReconciledKinds pins telemetry.JetStreamKinds, whose conditions the
 // condition gauge reports, to the reconcilers setup registers.
 func TestReconciledKinds(t *testing.T) {
-	scheme, err := newScheme()
+	scheme, err := manager.NewScheme(schemes...)
 	require.NoError(t, err)
-	got := managertest.ReconciledKinds(t, scheme, func(ctx context.Context, mgr manager.Manager) error {
+	got := managertest.ReconciledKinds(t, scheme, func(ctx context.Context, mgr ctrl.Manager) error {
 		return setup(ctx, mgr, time.Minute)
 	})
 	var want []string

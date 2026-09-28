@@ -122,6 +122,23 @@ spec:
                     default: true
                     description: Enabled turns the sidecar off when false.
                     type: boolean
+                  image:
+                    description: Image is the sidecar's image.
+                    properties:
+                      digest:
+                        description: Digest pins the image to one manifest, rendered
+                          after the tag.
+                        pattern: ^sha256:[a-f0-9]{64}$
+                        type: string
+                      repository:
+                        description: |-
+                          Repository is the image repository; empty, it is
+                          natsio/prometheus-nats-exporter.
+                        type: string
+                      tag:
+                        description: Tag is the image tag; empty, it is 0.17.3.
+                        type: string
+                    type: object
                 type: object
               gateway:
                 description: |-
@@ -230,9 +247,18 @@ spec:
                 - remotes
                 type: object
               image:
-                description: Image overrides the image repository; the tag is always
-                  Version.
-                type: string
+                description: Image is the nats-server image; its tag is always Version.
+                properties:
+                  digest:
+                    description: Digest pins the image to one manifest, rendered after
+                      the tag.
+                    pattern: ^sha256:[a-f0-9]{64}$
+                    type: string
+                  repository:
+                    description: Repository is the image repository; empty, it is
+                      nats.
+                    type: string
+                type: object
               jetstream:
                 description: JetStream enables JetStream on every server.
                 properties:

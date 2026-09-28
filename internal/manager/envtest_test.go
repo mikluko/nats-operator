@@ -17,8 +17,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -40,20 +38,14 @@ func startEnvtest(t *testing.T) *rest.Config {
 	return cfg
 }
 
-func newScheme() (*runtime.Scheme, error) {
-	scheme := runtime.NewScheme()
-	return scheme, clientgoscheme.AddToScheme(scheme)
-}
-
 // TestEnvtestStart pins that start runs what Setup adds and returns nil once
 // its context ends.
 func TestEnvtestStart(t *testing.T) {
 	cfg := startEnvtest(t)
 	ran := make(chan struct{})
 	c := Controller{
-		Name:      "test-controller",
-		Group:     "test.nats.mikluko.io",
-		NewScheme: newScheme,
+		Name:  "test-controller",
+		Group: "test.nats.mikluko.io",
 		Setup: func(_ context.Context, mgr ctrl.Manager) error {
 			return mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
 				close(ran)
@@ -81,14 +73,14 @@ func TestEnvtestStart(t *testing.T) {
 // manager's client reads a Secret whole.
 func TestEnvtestCache(t *testing.T) {
 	cfg := startEnvtest(t)
-	scheme, err := newScheme()
+	scheme, err := NewScheme()
 	require.NoError(t, err)
 	owned := Owned{Label: "test.nats.mikluko.io/owner", Kinds: []client.Object{&corev1.ConfigMap{}}}
 	mgr, err := New(cfg, &Options{MetricsAddr: "0", ProbeAddr: "0"}, scheme, owned)
 	require.NoError(t, err)
 	_, err = mgr.GetCache().GetInformer(t.Context(), &corev1.ConfigMap{}, cache.BlockUntilSynced(false))
 	require.NoError(t, err)
-	ready := cacheSynced(mgr.GetCache())
+	ready := cacheSynced(mgr.GetCache().WaitForCacheSync)
 	probe := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	require.Error(t, ready(probe), "ready before the cache started")
 	go func() { _ = mgr.Start(t.Context()) }()
@@ -134,10 +126,12 @@ func TestEnvtestCache(t *testing.T) {
 }
 
 // TestEnvtestMetrics pins that the metrics endpoint answers over HTTPS
-// only to a token allowed to get /metrics.
+// only to a token allowed to get /metrics. A token the API server rejects
+// with an error, as it does a malformed one, is answered 500, not 401: that
+// is controller-runtime's filter.
 func TestEnvtestMetrics(t *testing.T) {
 	cfg := startEnvtest(t)
-	scheme, err := newScheme()
+	scheme, err := NewScheme()
 	require.NoError(t, err)
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -149,12 +143,16 @@ func TestEnvtestMetrics(t *testing.T) {
 
 	c, err := client.New(cfg, client.Options{Scheme: scheme})
 	require.NoError(t, err)
-	sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "scraper"}}
-	require.NoError(t, c.Create(t.Context(), sa))
-	tr := &authnv1.TokenRequest{}
-	require.NoError(t, c.SubResource("token").Create(t.Context(), sa, tr))
-	token := tr.Status.Token
-	require.NotEmpty(t, token)
+	tokenOf := func(name string) (*corev1.ServiceAccount, string) {
+		sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: name}}
+		require.NoError(t, c.Create(t.Context(), sa))
+		tr := &authnv1.TokenRequest{}
+		require.NoError(t, c.SubResource("token").Create(t.Context(), sa, tr))
+		require.NotEmpty(t, tr.Status.Token)
+		return sa, tr.Status.Token
+	}
+	sa, token := tokenOf("scraper")
+	_, stranger := tokenOf("stranger")
 
 	httpc := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 	get := func(token string) (int, error) {
@@ -183,8 +181,8 @@ func TestEnvtestMetrics(t *testing.T) {
 	}
 
 	requireStatus(t, "", http.StatusUnauthorized)
-	requireStatus(t, "not-a-token", http.StatusUnauthorized)
-	requireStatus(t, token, http.StatusForbidden)
+	requireStatus(t, "not-a-token", http.StatusInternalServerError)
+	requireStatus(t, stranger, http.StatusForbidden)
 
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{Name: "metrics-reader"},

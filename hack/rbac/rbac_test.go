@@ -51,6 +51,15 @@ var unstructuredKinds = map[string]string{
 	module + "/internal/natscluster.certificateGVK": "cert-manager.io/certificates",
 }
 
+// libraryGrants maps each library function whose API calls the scan cannot
+// see to the resources it creates.
+var libraryGrants = map[string][]string{
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters.WithAuthenticationAndAuthorization": {
+		"authentication.k8s.io/tokenreviews",
+		"authorization.k8s.io/subjectaccessreviews",
+	},
+}
+
 // clientVerbs is the verb each method of controller-runtime's client
 // interfaces requires on its object.
 var clientVerbs = map[string]string{
@@ -352,6 +361,7 @@ func (s *scan) required(t *testing.T, c string) requirement {
 				if call, ok := instr.(ssa.CallInstruction); ok {
 					w.call(call)
 				}
+				w.libraryRefs(instr)
 			}
 		}
 	}
@@ -373,12 +383,28 @@ func (w *walker) inModule(fn *ssa.Function) bool {
 	}
 	abs, err := filepath.Abs(root)
 	require.NoError(w.t, err)
+	abs, err = filepath.EvalSymlinks(abs)
+	require.NoError(w.t, err)
 	for _, dir := range []string{"cmd", "internal"} {
 		if strings.HasPrefix(pos.Filename, filepath.Join(abs, dir)+string(filepath.Separator)) {
 			return true
 		}
 	}
 	return false
+}
+
+// libraryRefs records what each library function in libraryGrants that
+// instr calls or takes as a value requires.
+func (w *walker) libraryRefs(instr ssa.Instruction) {
+	for _, op := range instr.Operands(nil) {
+		f, ok := (*op).(*ssa.Function)
+		if !ok || f.Pkg == nil {
+			continue
+		}
+		for _, key := range libraryGrants[f.Pkg.Pkg.Path()+"."+f.Name()] {
+			w.req.add(key, w.pos(instr), "create")
+		}
+	}
 }
 
 func (w *walker) pos(instr ssa.Instruction) string {

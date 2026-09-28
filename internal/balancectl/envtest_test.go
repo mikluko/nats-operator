@@ -25,6 +25,7 @@ import (
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	"github.com/mikluko/nats-operator/internal/e2e"
+	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
@@ -48,7 +49,7 @@ func TestEnvtest(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, env.Stop()) })
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{Scheme: testScheme(t), Metrics: metricsserver.Options{BindAddress: "0"}})
 	require.NoError(t, err)
-	pool := NewPool()
+	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetJetStreamController))
 	require.NoError(t, mgr.Add(pool))
 	r := &SystemBalancerReconciler{Client: mgr.GetClient(), Dialer: &natsconn.Dialer{Reader: mgr.GetClient(), Pool: pool}, PendingPoll: 200 * time.Millisecond, Leases: &MoveLeases{}}
 	require.NoError(t, r.SetupWithManager(t.Context(), mgr))

@@ -31,6 +31,8 @@ type ObjectStoreReconciler struct {
 	Syncer lifecycle.Syncer
 }
 
+var _ reconcile.Reconciler = (*ObjectStoreReconciler)(nil)
+
 var objectStoreKind = lifecycle.Kind[*js.NatsObjectStore]{
 	Name: ObjectStoreKind,
 	New:  func() *js.NatsObjectStore { return &js.NatsObjectStore{} },
@@ -45,7 +47,8 @@ var objectStoreKind = lifecycle.Kind[*js.NatsObjectStore]{
 	Record: func(b *js.NatsObjectStore, info *lifecycle.Info) { b.Status.Server = streamServerStatus(info) },
 }
 
-// Reconcile implements reconcile.Reconciler.
+// Reconcile brings the object store of the NatsObjectStore req names to its spec,
+// or runs its deletion policy where the NatsObjectStore is being deleted.
 func (r *ObjectStoreReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	return objectStoreKind.Reconcile(ctx, r.Client, r.Dialer, r.Syncer, req)
 }
@@ -63,16 +66,16 @@ type objectStoreObject struct {
 	obj    *js.NatsObjectStore
 }
 
+var _ lifecycle.Object = (*objectStoreObject)(nil)
+
 func (o *objectStoreObject) bucket() string { return bucketName(o.obj.Spec.Name, o.obj) }
 
 func (o *objectStoreObject) manager() (jetstream.ObjectStoreManager, error) {
 	return jetstream.New(o.api.Conn)
 }
 
-// Describe implements lifecycle.Object.
 func (o *objectStoreObject) Describe() string { return "object store " + o.bucket() }
 
-// Fetch implements lifecycle.Object.
 func (o *objectStoreObject) Fetch(ctx context.Context) (*lifecycle.Info, error) {
 	info, s, err := bucketStream(ctx, o.api, objStreamPrefix, o.bucket())
 	if err != nil || info == nil {
@@ -81,7 +84,6 @@ func (o *objectStoreObject) Fetch(ctx context.Context) (*lifecycle.Info, error) 
 	return withConfig(info, objFromStream(s))
 }
 
-// Desired implements lifecycle.Object.
 func (o *objectStoreObject) Desired() (lifecycle.Config, error) {
 	if p := o.obj.Spec.Placement; p != nil && p.Preferred != "" {
 		return nil, errPreferred
@@ -89,12 +91,10 @@ func (o *objectStoreObject) Desired() (lifecycle.Config, error) {
 	return lifecycle.ToConfig(objToWire(&o.obj.Spec.ObjectStoreConfig, o.bucket()))
 }
 
-// Create implements lifecycle.Object.
 func (o *objectStoreObject) Create(ctx context.Context, cfg lifecycle.Config) (*lifecycle.Info, error) {
 	return o.put(ctx, cfg, jetstream.ObjectStoreManager.CreateObjectStore)
 }
 
-// Update implements lifecycle.Object.
 func (o *objectStoreObject) Update(ctx context.Context, _ *lifecycle.Info, cfg lifecycle.Config) (*lifecycle.Info, error) {
 	return o.put(ctx, cfg, jetstream.ObjectStoreManager.UpdateObjectStore)
 }
@@ -114,7 +114,6 @@ func (o *objectStoreObject) put(ctx context.Context, cfg lifecycle.Config, put f
 	return refetch(ctx, o.Fetch, o.Describe())
 }
 
-// Delete implements lifecycle.Object.
 func (o *objectStoreObject) Delete(ctx context.Context) error {
 	m, err := o.manager()
 	if err != nil {
@@ -126,7 +125,6 @@ func (o *objectStoreObject) Delete(ctx context.Context) error {
 	return nil
 }
 
-// WriteSpec implements lifecycle.Object.
 func (o *objectStoreObject) WriteSpec(ctx context.Context, cfg lifecycle.Config, replace bool) error {
 	var w objWire
 	if err := lifecycle.FromConfig(cfg, &w); err != nil {

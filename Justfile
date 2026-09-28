@@ -21,10 +21,12 @@ image platform=("linux/" + if arch() == "aarch64" { "arm64" } else { "amd64" }):
     done
     KO_DOCKER_REPO=ghcr.io/mikluko/nats-operator ko build --push=false -B --platform "{{ platform }}" "$@"
 
-# The OperatorReload tests skip under -race and run again without it.
+# The OperatorReload tests skip under -race and run again without it. The
+# API-server-backed tests skip here whatever the shell exports, as in CI;
+# `just envtest` runs them.
 test:
-    go test -race ./...
-    go test -run OperatorReload ./internal/natscluster
+    env -u KUBEBUILDER_ASSETS go test -race ./...
+    env -u KUBEBUILDER_ASSETS go test -run OperatorReload ./internal/natscluster
 
 lint:
     golangci-lint run
@@ -52,6 +54,8 @@ chart-rbac:
     mkdir -p charts/nats-operator/files/rbac
     for c in {{ controllers }}; do
         cp "config/rbac/$c/role.yaml" "charts/nats-operator/files/rbac/$c.yaml"
+        cp "config/rbac/$c/cluster-scoped.yaml" "charts/nats-operator/files/rbac/$c-cluster-scoped.yaml"
+        cp "config/rbac/$c/namespaced.yaml" "charts/nats-operator/files/rbac/$c-namespaced.yaml"
     done
 
 chart:

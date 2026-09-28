@@ -20,6 +20,14 @@ app.kubernetes.io/component: {{ .name }}
 {{- end }}
 
 {{/*
+nats-operator.image takes a dict of image (a block of image values) and tag,
+and returns repository:tag, followed by @digest where the block sets one.
+*/}}
+{{- define "nats-operator.image" -}}
+{{ printf "%s:%s" .image.repository .tag }}{{ with .image.digest }}@{{ . }}{{ end }}
+{{- end }}
+
+{{/*
 nats-operator.merged takes a list of a global map and a controller's map and
 returns, as YAML, the global map with each of the controller's top-level keys
 set over it: a key's value is taken whole, never merged below the top level.
@@ -38,16 +46,47 @@ Both empty, it returns nothing.
 {{- end }}
 
 {{/*
+nats-operator.env takes a list of a global env and a controller's env and
+returns, as YAML, the global entries the controller's does not name followed
+by the controller's. Both empty, it returns nothing.
+*/}}
+{{- define "nats-operator.env" -}}
+{{- $global := index . 0 -}}
+{{- $own := index . 1 -}}
+{{- $names := list -}}
+{{- range $own -}}
+{{- $names = append $names .name -}}
+{{- end -}}
+{{- $out := list -}}
+{{- range $global -}}
+{{- if not (has .name $names) -}}
+{{- $out = append $out . -}}
+{{- end -}}
+{{- end -}}
+{{- $out = concat $out $own -}}
+{{- if $out -}}
+{{- toYaml $out -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 nats-operator.controller renders one controller's ServiceAccount, RBAC and
 Deployment. It takes a dict of root (the chart context), name (the
 controller's, and its image's), group (its API group and lease), values (its
 block of values) and, optionally, args (flags appended to the controller's
-own). Its ClusterRole's rules are those of files/rbac/<name>.yaml, a copy of
-the role controller-gen generates for it.
+own, before extraArgs). Its ClusterRole's rules are those of
+files/rbac/<name>.yaml, a copy of the role controller-gen generates for it.
+With watchNamespaces set, the ClusterRole holds only the rules of
+files/rbac/<name>-cluster-scoped.yaml, and each namespace named gets a Role
+and RoleBinding of those of files/rbac/<name>-namespaced.yaml.
 */}}
 {{- define "nats-operator.controller" -}}
 {{- $fullname := include "nats-operator.fullname" . -}}
+{{- $namespaces := .root.Values.watchNamespaces -}}
 {{- $role := printf "files/rbac/%s.yaml" .name -}}
+{{- if $namespaces -}}
+{{- $role = printf "files/rbac/%s-cluster-scoped.yaml" .name -}}
+{{- end -}}
 {{- $rules := required (printf "%s has no rules" $role) (.root.Files.Get $role | fromYaml).rules -}}
 apiVersion: v1
 kind: ServiceAccount
@@ -80,6 +119,38 @@ subjects:
   - kind: ServiceAccount
     name: {{ $fullname }}
     namespace: {{ .root.Release.Namespace }}
+{{- if $namespaces }}
+{{- $nsRole := printf "files/rbac/%s-namespaced.yaml" .name }}
+{{- $nsRules := required (printf "%s has no rules" $nsRole) (.root.Files.Get $nsRole | fromYaml).rules }}
+{{- range $ns := $namespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $fullname }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "nats-operator.labels" $ | nindent 4 }}
+rules:
+  {{- toYaml $nsRules | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $fullname }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "nats-operator.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $fullname }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $fullname }}
+    namespace: {{ $.root.Release.Namespace }}
+{{- end }}
+{{- end }}
 {{- if .root.Values.leaderElection.enabled }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -152,22 +223,40 @@ spec:
       affinity:
         {{- . | nindent 8 }}
       {{- end }}
+      {{- with .values.tolerations | default .root.Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .values.priorityClassName | default .root.Values.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
+      {{- with .values.topologySpreadConstraints | default .root.Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
       containers:
         - name: {{ .name }}
-          image: {{ printf "%s:%s" .values.image.repository (.values.image.tag | default .root.Chart.AppVersion) | quote }}
+          image: {{ include "nats-operator.image" (dict "image" .values.image "tag" (.values.image.tag | default .root.Chart.AppVersion)) | quote }}
           imagePullPolicy: {{ .values.image.pullPolicy }}
           args:
             - --leader-elect={{ .root.Values.leaderElection.enabled }}
             - --leader-election-id={{ .group }}
             - --metrics-bind-address=:8080
             - --health-probe-bind-address=:8081
-            {{- range .args }}
+            {{- with $namespaces }}
+            - --watch-namespaces={{ join "," . }}
+            {{- end }}
+            {{- range concat (.args | default list) .root.Values.extraArgs .values.extraArgs }}
             - {{ . | quote }}
             {{- end }}
+          {{- with include "nats-operator.env" (list .root.Values.env .values.env) }}
+          env:
+            {{- . | nindent 12 }}
+          {{- end }}
           ports:
             - name: metrics
               containerPort: 8080
@@ -242,7 +331,7 @@ spec:
       type: RuntimeDefault
   containers:
     - name: check
-      image: {{ printf "%s:%s" $image.repository $image.tag | quote }}
+      image: {{ include "nats-operator.image" (dict "image" $image "tag" $image.tag) | quote }}
       imagePullPolicy: {{ $image.pullPolicy }}
       command:
         - sh

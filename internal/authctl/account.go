@@ -28,6 +28,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"github.com/mikluko/nats-operator/internal/refindex"
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
@@ -522,14 +523,14 @@ func (r *AccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c := mgr.GetClient()
 	b := ctrl.NewControllerManagedBy(mgr)
 	if r.RosterChanges != nil {
-		b = b.WatchesRawSource(source.Channel(r.RosterChanges, enqueueIndexed(c, &authv1beta1.NatsAccountList{}, operatorField)))
+		b = b.WatchesRawSource(source.Channel(r.RosterChanges, refindex.EnqueueByField(c, &authv1beta1.NatsAccountList{}, operatorField)))
 	}
 	return b.
 		Named("natsaccount").
 		For(&authv1beta1.NatsAccount{}).
-		Watches(&corev1.Secret{}, enqueueIndexed(c, &authv1beta1.NatsAccountList{}, seedSecretField)).
-		Watches(&authv1beta1.NatsOperator{}, enqueueIndexed(c, &authv1beta1.NatsAccountList{}, operatorField)).
-		Watches(&authv1beta1.NatsAccount{}, enqueueIndexed(c, &authv1beta1.NatsAccountList{}, exporterField)).
+		Watches(&corev1.Secret{}, refindex.EnqueueByField(c, &authv1beta1.NatsAccountList{}, seedSecretField)).
+		Watches(&authv1beta1.NatsOperator{}, refindex.EnqueueByField(c, &authv1beta1.NatsAccountList{}, operatorField)).
+		Watches(&authv1beta1.NatsAccount{}, refindex.EnqueueByField(c, &authv1beta1.NatsAccountList{}, exporterField)).
 		Watches(&authv1beta1.NatsAccount{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			return sameKeyAccounts(ctx, c, obj)
 		})).

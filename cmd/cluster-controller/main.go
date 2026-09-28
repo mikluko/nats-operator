@@ -15,25 +15,26 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/manager"
 	"github.com/mikluko/nats-operator/internal/natscluster"
+	"github.com/mikluko/nats-operator/internal/natsconn"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
 func main() {
 	if err := manager.Run(manager.Controller{
-		Name:      telemetry.ClusterController,
-		Group:     clusterv1beta1.GroupVersion.Group,
-		NewScheme: newScheme,
-		Owned:     owned,
-		Setup:     setup,
+		Name:        telemetry.ClusterController,
+		Group:       clusterv1beta1.GroupVersion.Group,
+		AddToScheme: schemes,
+		Owned:       owned,
+		Setup:       setup,
 	}); err != nil {
 		os.Exit(1)
 	}
@@ -53,24 +54,7 @@ var owned = manager.Owned{
 	},
 }
 
-func newScheme() (*runtime.Scheme, error) {
-	scheme := runtime.NewScheme()
-	for _, add := range []func(*runtime.Scheme) error{
-		clientgoscheme.AddToScheme,
-		natsv1beta1.AddToScheme,
-		clusterv1beta1.AddToScheme,
-	} {
-		if err := add(scheme); err != nil {
-			return nil, err
-		}
-	}
-	return scheme, nil
-}
-
-// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
-// +kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
-// +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+var schemes = []func(*runtime.Scheme) error{natsv1beta1.AddToScheme, clusterv1beta1.AddToScheme}
 
 // setup registers the cluster controller's instruments and adds the
 // connection pool and the NatsCluster reconciler to mgr.
@@ -78,7 +62,7 @@ func setup(ctx context.Context, mgr ctrl.Manager) error {
 	if err := telemetry.RegisterCluster(otel.Meter(telemetry.ClusterController), mgr.GetClient()); err != nil {
 		return fmt.Errorf("register instruments: %w", err)
 	}
-	pool := natscluster.NewPool()
+	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetClusterController))
 	if err := mgr.Add(pool); err != nil {
 		return fmt.Errorf("add connection pool: %w", err)
 	}

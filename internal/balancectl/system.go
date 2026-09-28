@@ -20,7 +20,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
@@ -421,22 +420,10 @@ func (r *SystemBalancerReconciler) SetupWithManager(ctx context.Context, mgr ctr
 	}); err != nil {
 		return fmt.Errorf("index NatsSystemBalancer grant targets: %w", err)
 	}
-	all := handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, _ client.Object) []reconcile.Request {
-		var list js.NatsSystemBalancerList
-		if err := mgr.GetClient().List(ctx, &list); err != nil {
-			ctrl.LoggerFrom(ctx).Error(err, "list NatsSystemBalancers")
-			return nil
-		}
-		out := make([]reconcile.Request, 0, len(list.Items))
-		for i := range list.Items {
-			out = append(out, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&list.Items[i])})
-		}
-		return out
-	})
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&js.NatsSystemBalancer{}, builder.WithPredicates(lifecycle.SpecOrDeletion())).
 		Watches(&natsv1beta1.NatsConnection{}, refindex.EnqueueByField(mgr.GetClient(), &js.NatsSystemBalancerList{}, refindex.ConnectionField)).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(mgr.GetClient(), js.GroupVersion.WithKind(SystemBalancerKind).GroupKind(), &js.NatsSystemBalancerList{})).
-		Watches(&js.NatsClusterEvacuation{}, all).
+		Watches(&js.NatsClusterEvacuation{}, refindex.EnqueueAll(mgr.GetClient(), &js.NatsSystemBalancerList{})).
 		Complete(telemetry.Traced(SystemBalancerKind, r))
 }

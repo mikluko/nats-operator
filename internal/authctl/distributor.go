@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 )
@@ -43,15 +42,6 @@ type Distributor interface {
 	// server trusting operator is sent now and whenever it joins; "" sends
 	// none.
 	Delete(ctx context.Context, operator types.NamespacedName, request string) error
-}
-
-// RosterNotifier is a Distributor that reports changes to the set of
-// servers trusting a NATS operator.
-type RosterNotifier interface {
-	// Subscribe returns a channel that receives a NatsOperator, carrying
-	// only its name, whenever the servers trusting it change. It is called
-	// before the Distributor runs.
-	Subscribe() <-chan event.GenericEvent
 }
 
 // push hands token to d, which may be nil.

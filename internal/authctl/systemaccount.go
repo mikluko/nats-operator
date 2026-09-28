@@ -20,6 +20,7 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
+	"github.com/mikluko/nats-operator/internal/refindex"
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
@@ -130,13 +131,13 @@ func (r *SystemAccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c := mgr.GetClient()
 	b := ctrl.NewControllerManagedBy(mgr)
 	if r.RosterChanges != nil {
-		b = b.WatchesRawSource(source.Channel(r.RosterChanges, enqueueIndexed(c, &authv1beta1.NatsSystemAccountList{}, operatorField)))
+		b = b.WatchesRawSource(source.Channel(r.RosterChanges, refindex.EnqueueByField(c, &authv1beta1.NatsSystemAccountList{}, operatorField)))
 	}
 	return b.
 		Named("natssystemaccount").
 		For(&authv1beta1.NatsSystemAccount{}).
-		Watches(&corev1.Secret{}, enqueueIndexed(c, &authv1beta1.NatsSystemAccountList{}, seedSecretField)).
-		Watches(&authv1beta1.NatsOperator{}, enqueueIndexed(c, &authv1beta1.NatsSystemAccountList{}, operatorField)).
+		Watches(&corev1.Secret{}, refindex.EnqueueByField(c, &authv1beta1.NatsSystemAccountList{}, seedSecretField)).
+		Watches(&authv1beta1.NatsOperator{}, refindex.EnqueueByField(c, &authv1beta1.NatsSystemAccountList{}, operatorField)).
 		Watches(&authv1beta1.NatsUser{}, handler.EnqueueRequestsFromMapFunc(func(_ context.Context, obj client.Object) []reconcile.Request {
 			ref := obj.(*authv1beta1.NatsUser).Spec.AccountRef
 			if ref.Kind != authv1beta1.AccountKindSystemAccount {

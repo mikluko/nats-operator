@@ -6,6 +6,13 @@ imagePullSecrets: []
 leaderElection:
   enabled: true
 
+# Namespaces every controller watches and reconciles in, passed as
+# --watch-namespaces. Set, each controller gets a Role and RoleBinding in each
+# of them instead of a ClusterRole over all, which keeps only the
+# cluster-scoped TokenReview and SubjectAccessReview its metrics endpoint
+# needs. Empty, the controllers watch every namespace.
+watchNamespaces: []
+
 # Every controller's defaults, merged under its own block's, which win.
 nodeSelector: {}
 # On the Deployment.
@@ -14,6 +21,19 @@ annotations: {}
 podAnnotations: {}
 affinity: {}
 
+# Every controller's pod takes these three unless its own block sets them,
+# which replaces them whole.
+tolerations: []
+priorityClassName: ""
+topologySpreadConstraints: []
+
+# Appended to every controller's flags, before its own block's extraArgs; of a
+# flag given twice, the last wins.
+extraArgs: []
+# Set in every controller's container; its own block's env replaces an entry
+# of the same name.
+env: []
+
 cluster:
   enabled: true
   replicas: 1
@@ -21,6 +41,8 @@ cluster:
     repository: ghcr.io/mikluko/nats-operator/cluster-controller
     # Defaults to the chart's appVersion.
     tag: ""
+    # sha256:<hex>, appended to the tag to pin the image.
+    digest: ""
     pullPolicy: IfNotPresent
   resources:
     requests:
@@ -32,6 +54,11 @@ cluster:
   annotations: {}
   podAnnotations: {}
   affinity: {}
+  tolerations: []
+  priorityClassName: ""
+  topologySpreadConstraints: []
+  extraArgs: []
+  env: []
 
 auth:
   enabled: true
@@ -43,6 +70,8 @@ auth:
     repository: ghcr.io/mikluko/nats-operator/auth-controller
     # Defaults to the chart's appVersion.
     tag: ""
+    # sha256:<hex>, appended to the tag to pin the image.
+    digest: ""
     pullPolicy: IfNotPresent
   resources:
     requests:
@@ -54,6 +83,11 @@ auth:
   annotations: {}
   podAnnotations: {}
   affinity: {}
+  tolerations: []
+  priorityClassName: ""
+  topologySpreadConstraints: []
+  extraArgs: []
+  env: []
 
 jetstream:
   enabled: true
@@ -62,6 +96,8 @@ jetstream:
     repository: ghcr.io/mikluko/nats-operator/jetstream-controller
     # Defaults to the chart's appVersion.
     tag: ""
+    # sha256:<hex>, appended to the tag to pin the image.
+    digest: ""
     pullPolicy: IfNotPresent
   resources:
     requests:
@@ -73,6 +109,11 @@ jetstream:
   annotations: {}
   podAnnotations: {}
   affinity: {}
+  tolerations: []
+  priorityClassName: ""
+  topologySpreadConstraints: []
+  extraArgs: []
+  env: []
 
 metrics:
   scraper:
@@ -80,10 +121,25 @@ metrics:
     # /metrics, which the controllers' metrics endpoints require of a bearer
     # token. Empty, the chart grants it to no one.
     serviceAccount: ""
+  # A Service <release>-<controller>-metrics on each enabled controller's
+  # metrics port, which serves HTTPS under a self-signed certificate.
+  service:
+    enabled: false
+  # A prometheus-operator ServiceMonitor per enabled controller over that
+  # Service, which it requires. The scrape sends the Prometheus pod's own
+  # ServiceAccount token, which metrics.scraper.serviceAccount must name, and
+  # skips certificate verification, the certificate being self-signed.
+  serviceMonitor:
+    enabled: false
+    # On each ServiceMonitor, for a Prometheus that selects them by label.
+    labels: {}
+    # Empty, Prometheus's own scrape interval.
+    interval: ""
 
 # The image of the `helm test` pods, which need sh and wget.
 tests:
   image:
     repository: busybox
     tag: "1.37.0"
+    digest: ""
     pullPolicy: IfNotPresent

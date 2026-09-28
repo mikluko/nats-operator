@@ -36,6 +36,8 @@ type KeyValueReconciler struct {
 	Syncer lifecycle.Syncer
 }
 
+var _ reconcile.Reconciler = (*KeyValueReconciler)(nil)
+
 var keyValueKind = lifecycle.Kind[*js.NatsKeyValue]{
 	Name: KeyValueKind,
 	New:  func() *js.NatsKeyValue { return &js.NatsKeyValue{} },
@@ -50,7 +52,8 @@ var keyValueKind = lifecycle.Kind[*js.NatsKeyValue]{
 	Record: func(b *js.NatsKeyValue, info *lifecycle.Info) { b.Status.Server = streamServerStatus(info) },
 }
 
-// Reconcile implements reconcile.Reconciler.
+// Reconcile brings the key-value bucket of the NatsKeyValue req names to its spec,
+// or runs its deletion policy where the NatsKeyValue is being deleted.
 func (r *KeyValueReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	return keyValueKind.Reconcile(ctx, r.Client, r.Dialer, r.Syncer, req)
 }
@@ -68,17 +71,18 @@ type keyValueObject struct {
 	obj    *js.NatsKeyValue
 }
 
+var _ lifecycle.Object = (*keyValueObject)(nil)
+
 func (o *keyValueObject) bucket() string { return bucketName(o.obj.Spec.Name, o.obj) }
 
 func (o *keyValueObject) manager() (jetstream.KeyValueManager, error) {
 	return jetstream.New(o.api.Conn)
 }
 
-// Describe implements lifecycle.Object.
 func (o *keyValueObject) Describe() string { return "key-value bucket " + o.bucket() }
 
-// Fetch implements lifecycle.Object. A stream KV_<bucket> that keeps no
-// history per subject is not a bucket, and is Terminal.
+// Fetch treats a stream KV_<bucket> that keeps no history per subject as no
+// bucket, and as Terminal.
 func (o *keyValueObject) Fetch(ctx context.Context) (*lifecycle.Info, error) {
 	info, s, err := bucketStream(ctx, o.api, kvStreamPrefix, o.bucket())
 	if err != nil || info == nil {
@@ -93,7 +97,6 @@ func (o *keyValueObject) Fetch(ctx context.Context) (*lifecycle.Info, error) {
 	return withConfig(info, kvFromStream(s))
 }
 
-// Desired implements lifecycle.Object.
 func (o *keyValueObject) Desired() (lifecycle.Config, error) {
 	if p := o.obj.Spec.Placement; p != nil && p.Preferred != "" {
 		return nil, errPreferred
@@ -101,12 +104,10 @@ func (o *keyValueObject) Desired() (lifecycle.Config, error) {
 	return lifecycle.ToConfig(kvToWire(&o.obj.Spec.KeyValueConfig, o.bucket()))
 }
 
-// Create implements lifecycle.Object.
 func (o *keyValueObject) Create(ctx context.Context, cfg lifecycle.Config) (*lifecycle.Info, error) {
 	return o.put(ctx, cfg, jetstream.KeyValueManager.CreateKeyValue)
 }
 
-// Update implements lifecycle.Object.
 func (o *keyValueObject) Update(ctx context.Context, _ *lifecycle.Info, cfg lifecycle.Config) (*lifecycle.Info, error) {
 	return o.put(ctx, cfg, jetstream.KeyValueManager.UpdateKeyValue)
 }
@@ -126,7 +127,6 @@ func (o *keyValueObject) put(ctx context.Context, cfg lifecycle.Config, put func
 	return refetch(ctx, o.Fetch, o.Describe())
 }
 
-// Delete implements lifecycle.Object.
 func (o *keyValueObject) Delete(ctx context.Context) error {
 	m, err := o.manager()
 	if err != nil {
@@ -138,7 +138,6 @@ func (o *keyValueObject) Delete(ctx context.Context) error {
 	return nil
 }
 
-// WriteSpec implements lifecycle.Object.
 func (o *keyValueObject) WriteSpec(ctx context.Context, cfg lifecycle.Config, replace bool) error {
 	var w kvWire
 	if err := lifecycle.FromConfig(cfg, &w); err != nil {

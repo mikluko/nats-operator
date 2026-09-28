@@ -69,6 +69,8 @@ type ConsumerReconciler struct {
 	Syncer lifecycle.Syncer
 }
 
+var _ reconcile.Reconciler = (*ConsumerReconciler)(nil)
+
 var consumerKind = lifecycle.Kind[*js.NatsConsumer]{
 	Name: ConsumerKind,
 	New:  func() *js.NatsConsumer { return &js.NatsConsumer{} },
@@ -110,7 +112,8 @@ var consumerKind = lifecycle.Kind[*js.NatsConsumer]{
 	Watches: watchStreamRefs,
 }
 
-// Reconcile implements reconcile.Reconciler.
+// Reconcile brings the consumer of the NatsConsumer req names to its spec,
+// or runs its deletion policy where the NatsConsumer is being deleted.
 func (r *ConsumerReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	return consumerKind.Reconcile(ctx, r.Client, r.Dialer, r.Syncer, req)
 }
@@ -228,12 +231,12 @@ type consumerObject struct {
 	stream string
 }
 
-// Describe implements lifecycle.Object.
+var _ lifecycle.Object = (*consumerObject)(nil)
+
 func (o *consumerObject) Describe() string {
 	return fmt.Sprintf("consumer %s on stream %s", consumerName(o.obj), o.stream)
 }
 
-// Fetch implements lifecycle.Object.
 func (o *consumerObject) Fetch(ctx context.Context) (*lifecycle.Info, error) {
 	info, err := o.api.ConsumerInfo(ctx, o.stream, consumerName(o.obj))
 	var apiErr *jetstream.APIError
@@ -246,7 +249,6 @@ func (o *consumerObject) Fetch(ctx context.Context) (*lifecycle.Info, error) {
 	return info, err
 }
 
-// Desired implements lifecycle.Object.
 func (o *consumerObject) Desired() (lifecycle.Config, error) {
 	cfg, err := lifecycle.ToConfig(consumerToWire(&o.obj.Spec.ConsumerConfig, consumerName(o.obj)))
 	if err != nil {
@@ -258,7 +260,6 @@ func (o *consumerObject) Desired() (lifecycle.Config, error) {
 	return cfg, nil
 }
 
-// Create implements lifecycle.Object.
 func (o *consumerObject) Create(ctx context.Context, cfg lifecycle.Config) (*lifecycle.Info, error) {
 	return o.api.PutConsumer(ctx, o.stream, lifecycle.ActionCreate, cfg)
 }
@@ -292,12 +293,10 @@ func isPush(cfg lifecycle.Config) bool {
 	return s != ""
 }
 
-// Delete implements lifecycle.Object.
 func (o *consumerObject) Delete(ctx context.Context) error {
 	return o.api.DeleteConsumer(ctx, o.stream, consumerName(o.obj))
 }
 
-// WriteSpec implements lifecycle.Object.
 func (o *consumerObject) WriteSpec(ctx context.Context, cfg lifecycle.Config, replace bool) error {
 	var w consumerWire
 	if err := lifecycle.FromConfig(cfg, &w); err != nil {

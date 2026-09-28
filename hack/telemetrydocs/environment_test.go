@@ -162,7 +162,9 @@ func exportedTo(t *testing.T) map[string]received {
 }
 
 // clientHello listens on port over both loopback addresses and
-// returns the first TLS ClientHello a client sends there.
+// returns the first TLS ClientHello a client sends there, skipping the test
+// where port is taken on both: the port is the SDK's default, which no
+// endpoint variable can stand in for without replacing it.
 func clientHello(t *testing.T, port string) <-chan *tls.ClientHelloInfo {
 	t.Helper()
 	hellos := make(chan *tls.ClientHelloInfo, 1)
@@ -194,7 +196,9 @@ func clientHello(t *testing.T, port string) <-chan *tls.ClientHelloInfo {
 			}
 		}()
 	}
-	require.True(t, listened, "port %s is taken on both loopback addresses", port)
+	if !listened {
+		t.Skipf("port %s, the default under test, is taken on both loopback addresses", port)
+	}
 	return hellos
 }
 

@@ -11,12 +11,12 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	jetstreamv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/balancectl"
+	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/manager"
 	"github.com/mikluko/nats-operator/internal/natsconn"
@@ -27,9 +27,9 @@ import (
 func main() {
 	resync := flag.Duration("resync-period", lifecycle.DefaultResync, "how often a JetStream resource is compared to its server object")
 	if err := manager.Run(manager.Controller{
-		Name:      telemetry.JetStreamController,
-		Group:     jetstreamv1beta1.GroupVersion.Group,
-		NewScheme: newScheme,
+		Name:        telemetry.JetStreamController,
+		Group:       jetstreamv1beta1.GroupVersion.Group,
+		AddToScheme: schemes,
 		Setup: func(ctx context.Context, mgr ctrl.Manager) error {
 			return setup(ctx, mgr, *resync)
 		},
@@ -38,25 +38,8 @@ func main() {
 	}
 }
 
-// newScheme is the JetStream controller's scheme.
-func newScheme() (*runtime.Scheme, error) {
-	scheme := runtime.NewScheme()
-	for _, add := range []func(*runtime.Scheme) error{
-		clientgoscheme.AddToScheme,
-		natsv1beta1.AddToScheme,
-		jetstreamv1beta1.AddToScheme,
-	} {
-		if err := add(scheme); err != nil {
-			return nil, err
-		}
-	}
-	return scheme, nil
-}
+var schemes = []func(*runtime.Scheme) error{natsv1beta1.AddToScheme, jetstreamv1beta1.AddToScheme}
 
-// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
-// +kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
-// +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections,verbs=get;list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections/status,verbs=patch
 
@@ -68,7 +51,7 @@ func setup(ctx context.Context, mgr ctrl.Manager, resync time.Duration) error {
 		return fmt.Errorf("register instruments: %w", err)
 	}
 	rec := mgr.GetEventRecorder(telemetry.JetStreamController)
-	pool := balancectl.NewPool()
+	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetJetStreamController))
 	if err := mgr.Add(pool); err != nil {
 		return fmt.Errorf("add connection pool: %w", err)
 	}

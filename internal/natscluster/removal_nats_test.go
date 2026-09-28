@@ -77,7 +77,7 @@ func startRemovalCluster(t *testing.T, replicas int32) *removalCluster {
 		ObjectMeta: metav1.ObjectMeta{Namespace: rc.nc.Namespace, Name: rc.nc.Spec.Auth.SystemCredentials.SecretKeyRef.Name},
 		Data:       map[string][]byte{natsconn.DefaultCredentialsKey: p.systemCreds(t, jwtplane.PresetClusterController)},
 	}
-	pool := NewPool()
+	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetClusterController))
 	t.Cleanup(pool.Close)
 	rc.sys = &SystemConnections{
 		Client:  fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build(),

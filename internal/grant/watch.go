@@ -3,17 +3,16 @@ package grant
 import (
 	"context"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/refindex"
 )
 
 // TargetNamespaceField is the field index IndexReferrers registers: the
@@ -91,29 +90,10 @@ func (e *enqueuer) requests(ctx context.Context, objs ...client.Object) []reconc
 			if f.Group != e.kind.Group || f.Kind != e.kind.Kind {
 				continue
 			}
-			list, ok := e.list.DeepCopyObject().(client.ObjectList)
-			if !ok {
-				continue
-			}
-			err := e.r.List(ctx, list, client.InNamespace(f.Namespace), client.MatchingFields{TargetNamespaceField: g.Namespace})
-			if err != nil {
-				log.FromContext(ctx).Error(err, "list referrers for NatsReferenceGrant", "grant", client.ObjectKeyFromObject(g), "kind", e.kind, "namespace", f.Namespace)
-				continue
-			}
-			items, err := meta.ExtractList(list)
-			if err != nil {
-				log.FromContext(ctx).Error(err, "extract referrers", "kind", e.kind)
-				continue
-			}
-			for _, item := range items {
-				o, ok := item.(client.Object)
-				if !ok {
-					continue
-				}
-				key := client.ObjectKeyFromObject(o)
-				if !seen[key] {
-					seen[key] = true
-					out = append(out, reconcile.Request{NamespacedName: key})
+			for _, req := range refindex.Requests(ctx, e.r, e.list, client.InNamespace(f.Namespace), client.MatchingFields{TargetNamespaceField: g.Namespace}) {
+				if !seen[req.NamespacedName] {
+					seen[req.NamespacedName] = true
+					out = append(out, req)
 				}
 			}
 		}

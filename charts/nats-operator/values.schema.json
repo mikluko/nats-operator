@@ -10,6 +10,7 @@
       "properties": {
         "repository": {"type": "string", "minLength": 1},
         "tag": {"type": "string"},
+        "digest": {"type": "string", "pattern": "^(sha256:[a-f0-9]{64})?$"},
         "pullPolicy": {"enum": ["Always", "IfNotPresent", "Never"]}
       }
     },
@@ -47,6 +48,29 @@
         "podAntiAffinity": {"type": "object"}
       }
     },
+    "tolerations": {
+      "type": "array",
+      "items": {"type": "object"}
+    },
+    "topologySpreadConstraints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["maxSkew", "topologyKey", "whenUnsatisfiable"]
+      }
+    },
+    "extraArgs": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "env": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {"name": {"type": "string", "minLength": 1}}
+      }
+    },
     "controller": {
       "type": "object",
       "additionalProperties": false,
@@ -59,7 +83,12 @@
         "nodeSelector": {"$ref": "#/definitions/strings"},
         "annotations": {"$ref": "#/definitions/strings"},
         "podAnnotations": {"$ref": "#/definitions/strings"},
-        "affinity": {"$ref": "#/definitions/affinity"}
+        "affinity": {"$ref": "#/definitions/affinity"},
+        "tolerations": {"$ref": "#/definitions/tolerations"},
+        "priorityClassName": {"type": "string"},
+        "topologySpreadConstraints": {"$ref": "#/definitions/topologySpreadConstraints"},
+        "extraArgs": {"$ref": "#/definitions/extraArgs"},
+        "env": {"$ref": "#/definitions/env"}
       }
     }
   },
@@ -78,10 +107,20 @@
       "additionalProperties": false,
       "properties": {"enabled": {"type": "boolean"}}
     },
+    "watchNamespaces": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", "maxLength": 63}
+    },
     "nodeSelector": {"$ref": "#/definitions/strings"},
     "annotations": {"$ref": "#/definitions/strings"},
     "podAnnotations": {"$ref": "#/definitions/strings"},
     "affinity": {"$ref": "#/definitions/affinity"},
+    "tolerations": {"$ref": "#/definitions/tolerations"},
+    "priorityClassName": {"type": "string"},
+    "topologySpreadConstraints": {"$ref": "#/definitions/topologySpreadConstraints"},
+    "extraArgs": {"$ref": "#/definitions/extraArgs"},
+    "env": {"$ref": "#/definitions/env"},
     "cluster": {"$ref": "#/definitions/controller"},
     "auth": {
       "type": "object",
@@ -96,7 +135,12 @@
         "nodeSelector": {"$ref": "#/definitions/strings"},
         "annotations": {"$ref": "#/definitions/strings"},
         "podAnnotations": {"$ref": "#/definitions/strings"},
-        "affinity": {"$ref": "#/definitions/affinity"}
+        "affinity": {"$ref": "#/definitions/affinity"},
+        "tolerations": {"$ref": "#/definitions/tolerations"},
+        "priorityClassName": {"type": "string"},
+        "topologySpreadConstraints": {"$ref": "#/definitions/topologySpreadConstraints"},
+        "extraArgs": {"$ref": "#/definitions/extraArgs"},
+        "env": {"$ref": "#/definitions/env"}
       }
     },
     "jetstream": {"$ref": "#/definitions/controller"},
@@ -109,6 +153,20 @@
           "additionalProperties": false,
           "properties": {
             "serviceAccount": {"type": "string", "pattern": "^([a-z0-9-]+/[a-z0-9.-]+)?$"}
+          }
+        },
+        "service": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"enabled": {"type": "boolean"}}
+        },
+        "serviceMonitor": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "labels": {"$ref": "#/definitions/strings"},
+            "interval": {"type": "string", "pattern": "^([0-9]+(ms|s|m|h))*$"}
           }
         }
       }

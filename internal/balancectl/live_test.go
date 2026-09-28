@@ -110,7 +110,7 @@ func TestSystemBalancer_Supercluster(t *testing.T) {
 		WithStatusSubresource(&js.NatsSystemBalancer{}).
 		WithObjects(objs...).
 		Build()
-	pool := NewPool()
+	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetJetStreamController))
 	t.Cleanup(pool.Close)
 	rec := events.NewFakeRecorder(1000)
 	r := &SystemBalancerReconciler{Client: c, Dialer: &natsconn.Dialer{Reader: c, Pool: pool}, PendingPoll: time.Millisecond, Recorder: rec, Leases: &MoveLeases{}}
@@ -246,7 +246,7 @@ func TestSystemBalancer_ProbeFailsAfterMove(t *testing.T) {
 
 	objs := append(connection("c1", sc["C1"][1].ClientURL(), p.sysCreds), balancer("demo", "c1", time.Now()))
 	c := fake.NewClientBuilder().WithScheme(testScheme(t)).WithStatusSubresource(&js.NatsSystemBalancer{}).WithObjects(objs...).Build()
-	pool := NewPool()
+	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetJetStreamController))
 	t.Cleanup(pool.Close)
 	r := &SystemBalancerReconciler{Client: c, Dialer: &natsconn.Dialer{Reader: c, Pool: pool}, PendingPoll: time.Millisecond, Leases: &MoveLeases{}}
 	key := client.ObjectKey{Namespace: ns, Name: "demo"}
@@ -311,7 +311,7 @@ func TestReconcile_APIErrorNoRequeue(t *testing.T) {
 			Build()
 	}
 	dialer := func(t *testing.T, c client.Client) *natsconn.Dialer {
-		pool := NewPool()
+		pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetJetStreamController))
 		t.Cleanup(pool.Close)
 		return &natsconn.Dialer{Reader: c, Pool: pool}
 	}

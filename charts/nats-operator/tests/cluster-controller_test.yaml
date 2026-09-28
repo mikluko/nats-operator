@@ -124,6 +124,16 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].image
           value: ghcr.io/mikluko/nats-operator/cluster-controller:v9
+  - it: pins its image to cluster.image.digest after the tag when set
+    chart:
+      appVersion: 9.8.7
+    set:
+      cluster.image.digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/mikluko/nats-operator/cluster-controller:9.8.7@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   - it: drops the leader election Role and passes --leader-elect=false while leaderElection.enabled is false
     set:
       leaderElection.enabled: false
@@ -225,3 +235,180 @@ tests:
       - notExists: {path: spec.template.metadata.annotations}
       - notExists: {path: spec.template.spec.nodeSelector}
       - notExists: {path: spec.template.spec.affinity}
+  - it: sets no tolerations, priorityClassName, topologySpreadConstraints or env by default
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - notExists: {path: spec.template.spec.tolerations}
+      - notExists: {path: spec.template.spec.priorityClassName}
+      - notExists: {path: spec.template.spec.topologySpreadConstraints}
+      - notExists:
+          path: spec.template.spec.containers[0].env
+  - it: takes the global tolerations, priorityClassName and topologySpreadConstraints
+    set:
+      tolerations: [{key: pool, operator: Equal, value: system, effect: NoSchedule}]
+      priorityClassName: system-cluster-critical
+      topologySpreadConstraints:
+        - {maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway}
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.tolerations
+          value: [{key: pool, operator: Equal, value: system, effect: NoSchedule}]
+      - equal:
+          path: spec.template.spec.priorityClassName
+          value: system-cluster-critical
+      - equal:
+          path: spec.template.spec.topologySpreadConstraints
+          value: [{maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway}]
+  - it: replaces the global tolerations, priorityClassName and topologySpreadConstraints whole with its own
+    set:
+      tolerations: [{key: a, operator: Exists}]
+      priorityClassName: global
+      topologySpreadConstraints:
+        - {maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway}
+      cluster.tolerations: [{key: b, operator: Exists}]
+      cluster.priorityClassName: own
+      cluster.topologySpreadConstraints:
+        - {maxSkew: 2, topologyKey: topology.kubernetes.io/zone, whenUnsatisfiable: DoNotSchedule}
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.tolerations
+          value: [{key: b, operator: Exists}]
+      - equal:
+          path: spec.template.spec.priorityClassName
+          value: own
+      - equal:
+          path: spec.template.spec.topologySpreadConstraints
+          value: [{maxSkew: 2, topologyKey: topology.kubernetes.io/zone, whenUnsatisfiable: DoNotSchedule}]
+  - it: appends the global extraArgs, then its own, after the chart's flags
+    set:
+      extraArgs: [--zap-log-level=debug]
+      cluster.extraArgs: [--zap-encoder=console]
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args
+          value:
+            - --leader-elect=true
+            - --leader-election-id=cluster.nats.mikluko.io
+            - --metrics-bind-address=:8080
+            - --health-probe-bind-address=:8081
+            - --zap-log-level=debug
+            - --zap-encoder=console
+  - it: sets the global env, its own entries replacing those of the same name
+    set:
+      env: [{name: A, value: global}, {name: B, value: global}]
+      cluster.env: [{name: B, value: own}, {name: C, value: own}]
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env
+          value: [{name: A, value: global}, {name: B, value: own}, {name: C, value: own}]
+  - it: takes none of another controller's tolerations, extraArgs or env
+    set:
+      auth.tolerations: [{key: a, operator: Exists}]
+      auth.extraArgs: [--zap-devel]
+      auth.env: [{name: A, value: auth}]
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - notExists: {path: spec.template.spec.tolerations}
+      - notExists:
+          path: spec.template.spec.containers[0].env
+      - lengthEqual:
+          path: spec.template.spec.containers[0].args
+          count: 4
+  - it: renders a Role and RoleBinding per watched namespace while watchNamespaces is set
+    set:
+      watchNamespaces: [a, b]
+    asserts:
+      - hasDocuments:
+          count: 10
+      - containsDocument: {kind: Role, apiVersion: rbac.authorization.k8s.io/v1, name: rel-cluster-controller, namespace: a, any: true}
+      - containsDocument: {kind: Role, apiVersion: rbac.authorization.k8s.io/v1, name: rel-cluster-controller, namespace: b, any: true}
+      - containsDocument: {kind: RoleBinding, apiVersion: rbac.authorization.k8s.io/v1, name: rel-cluster-controller, namespace: a, any: true}
+      - containsDocument: {kind: RoleBinding, apiVersion: rbac.authorization.k8s.io/v1, name: rel-cluster-controller, namespace: b, any: true}
+  - it: keeps only the cluster-scoped rules in its ClusterRole while watchNamespaces is set
+    set:
+      watchNamespaces: [a]
+    documentSelector: {path: kind, value: ClusterRole}
+    asserts:
+      - equal:
+          path: rules
+          value:
+            - apiGroups: [authentication.k8s.io]
+              resources: [tokenreviews]
+              verbs: [create]
+            - apiGroups: [authorization.k8s.io]
+              resources: [subjectaccessreviews]
+              verbs: [create]
+  - it: grants the namespaced rules in each watched namespace
+    set:
+      watchNamespaces: [a]
+      leaderElection.enabled: false
+    documentSelector: {path: kind, value: Role}
+    asserts:
+      - equal:
+          path: metadata.namespace
+          value: a
+      - equal:
+          path: rules
+          value:
+            - apiGroups: [""]
+              resources: [configmaps]
+              verbs: [create, delete, get, list, patch, update, watch]
+            - apiGroups: [""]
+              resources: [persistentvolumeclaims]
+              verbs: [delete, get, list, watch]
+            - apiGroups: [""]
+              resources: [secrets, services]
+              verbs: [create, delete, get, list, update, watch]
+            - apiGroups: [apps]
+              resources: [statefulsets]
+              verbs: [create, delete, list, patch, update, watch]
+            - apiGroups: [cert-manager.io]
+              resources: [certificates]
+              verbs: [create, delete, get, update]
+            - apiGroups: [cluster.nats.mikluko.io]
+              resources: [natsclusters]
+              verbs: [get, list, patch, watch]
+            - apiGroups: [cluster.nats.mikluko.io]
+              resources: [natsclusters/finalizers]
+              verbs: [update]
+            - apiGroups: [cluster.nats.mikluko.io]
+              resources: [natsclusters/status]
+              verbs: [patch]
+            - apiGroups: [events.k8s.io]
+              resources: [events]
+              verbs: [create, patch]
+            - apiGroups: [nats.mikluko.io]
+              resources: [natsaccounttrusts, natsconnections, natsoperatortrusts]
+              verbs: [get, list, watch]
+            - apiGroups: [nats.mikluko.io]
+              resources: [natsreferencegrants]
+              verbs: [list, watch]
+            - apiGroups: [networking.k8s.io]
+              resources: [networkpolicies]
+              verbs: [create, delete, get, list, update, watch]
+            - apiGroups: [policy]
+              resources: [poddisruptionbudgets]
+              verbs: [create, get, list, update, watch]
+  - it: binds each namespace's Role to its ServiceAccount
+    set:
+      watchNamespaces: [a]
+    documentSelector: {path: kind, value: RoleBinding, matchMany: true}
+    asserts:
+      - equal:
+          path: subjects
+          value: [{kind: ServiceAccount, name: rel-cluster-controller, namespace: nats}]
+  - it: passes watchNamespaces as --watch-namespaces
+    set:
+      watchNamespaces: [a, b]
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --watch-namespaces=a,b
+      - lengthEqual:
+          path: spec.template.spec.containers[0].args
+          count: 5

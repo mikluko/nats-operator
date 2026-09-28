@@ -11,9 +11,12 @@ tests:
   - it: accepts every option the other suites set
     set:
       leaderElection.enabled: false
+      watchNamespaces: [nats, team-a]
       auth.systemConnection: nats/auth-controller
       metrics.scraper.serviceAccount: monitoring/prometheus
       cluster.image.tag: v9
+      auth.image.digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      tests.image.digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       tests.image.tag: "1.36"
       annotations: {a: global}
       podAnnotations: {a: global}
@@ -23,6 +26,20 @@ tests:
       auth.podAnnotations: {a: auth}
       jetstream.nodeSelector: {a: jetstream}
       auth.affinity: {podAntiAffinity: {}}
+      tolerations: [{key: a, operator: Exists}]
+      priorityClassName: p
+      topologySpreadConstraints: [{maxSkew: 1, topologyKey: k, whenUnsatisfiable: ScheduleAnyway}]
+      extraArgs: [--zap-devel]
+      env: [{name: A, value: a}]
+      cluster.tolerations: [{key: a, operator: Exists}]
+      auth.priorityClassName: p
+      jetstream.topologySpreadConstraints: [{maxSkew: 1, topologyKey: k, whenUnsatisfiable: ScheduleAnyway}]
+      cluster.extraArgs: [--zap-devel]
+      auth.env: [{name: A, value: a}]
+      metrics.service.enabled: true
+      metrics.serviceMonitor.enabled: true
+      metrics.serviceMonitor.labels: {release: prometheus}
+      metrics.serviceMonitor.interval: 1m30s
     asserts:
       - notFailedTemplate: {}
   - it: refuses a misspelled top-level key
@@ -43,6 +60,12 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "at '/auth/image': additional properties 'tga' not allowed"
+  - it: refuses an image digest that is not sha256
+    set:
+      jetstream.image.digest: latest
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/jetstream/image/digest'"
   - it: refuses a misspelled key under metrics.scraper
     set:
       metrics.scraper.serviceAcount: monitoring/prometheus
@@ -67,6 +90,30 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "at '/jetstream/affinity': additional properties 'podAntiAffinty' not allowed"
+  - it: refuses an extraArgs entry that is not a string
+    set:
+      cluster.extraArgs: [1]
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/cluster/extraArgs/0': got number, want string"
+  - it: refuses an env entry without a name
+    set:
+      env: [{value: a}]
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/env/0': missing property 'name'"
+  - it: refuses a misspelled key under metrics.serviceMonitor
+    set:
+      metrics.serviceMonitor.enabeld: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/metrics/serviceMonitor': additional properties 'enabeld' not allowed"
+  - it: refuses a watched namespace that is not a namespace name
+    set:
+      watchNamespaces: [Team_A]
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/watchNamespaces/0'"
   - it: refuses an annotation that is not a string
     set:
       podAnnotations.replicas: 3

@@ -35,9 +35,9 @@ type NatsClusterSpec struct {
 	// +kubebuilder:validation:XValidation:rule="!isSemver(self) || !isSemver(oldSelf) || (semver(self).major() == semver(oldSelf).major() && semver(self).minor() >= semver(oldSelf).minor() - 1 && semver(self).minor() <= semver(oldSelf).minor() + 1)",message="version moves at most one minor at a time, up or down"
 	Version string `json:"version"`
 
-	// Image overrides the image repository; the tag is always Version.
+	// Image is the nats-server image; its tag is always Version.
 	// +optional
-	Image string `json:"image,omitempty"`
+	Image *Image `json:"image,omitempty"`
 
 	// Replicas is the number of servers.
 	// +required
@@ -370,6 +370,39 @@ type Exporter struct {
 	// +optional
 	// +kubebuilder:default=true
 	Enabled *bool `json:"enabled,omitempty"`
+
+	// Image is the sidecar's image.
+	// +optional
+	Image *ExporterImage `json:"image,omitempty"`
+}
+
+// Image names the nats-server image of a NATS cluster's servers.
+type Image struct {
+	// Repository is the image repository; empty, it is nats.
+	// +optional
+	Repository string `json:"repository,omitempty"`
+
+	// Digest pins the image to one manifest, rendered after the tag.
+	// +optional
+	// +kubebuilder:validation:Pattern=`^sha256:[a-f0-9]{64}$`
+	Digest string `json:"digest,omitempty"`
+}
+
+// ExporterImage names the prometheus-nats-exporter sidecar's image.
+type ExporterImage struct {
+	// Repository is the image repository; empty, it is
+	// natsio/prometheus-nats-exporter.
+	// +optional
+	Repository string `json:"repository,omitempty"`
+
+	// Tag is the image tag; empty, it is 0.17.3.
+	// +optional
+	Tag string `json:"tag,omitempty"`
+
+	// Digest pins the image to one manifest, rendered after the tag.
+	// +optional
+	// +kubebuilder:validation:Pattern=`^sha256:[a-f0-9]{64}$`
+	Digest string `json:"digest,omitempty"`
 }
 
 // Monitor configures access to the monitoring port.

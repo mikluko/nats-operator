@@ -27,10 +27,11 @@ const (
 	envtestTick = 100 * time.Millisecond
 )
 
-// TestEnvtestOwnedCache runs setup in a manager scoped to owned against a
-// real API server: story 1's NatsCluster comes up to date and counts its
-// servers ready, which it reads through that cache, and every object of an
-// owned kind it renders carries the owner label.
+// TestEnvtestOwnedCache runs setup in a manager scoped to owned and to
+// story 1's namespace against a real API server: story 1's NatsCluster comes
+// up to date and counts its servers ready, which it reads through that
+// cache, every object of an owned kind it renders carries the owner label,
+// and a NatsCluster in another namespace is never reconciled.
 func TestEnvtestOwnedCache(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")
@@ -40,21 +41,27 @@ func TestEnvtestOwnedCache(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, env.Stop()) })
 
-	scheme, err := newScheme()
+	scheme, err := manager.NewScheme(schemes...)
 	require.NoError(t, err)
-	mgr, err := manager.New(cfg, &manager.Options{MetricsAddr: "0", ProbeAddr: "0"}, scheme, owned)
+	b, err := os.ReadFile("../../docs/content/docs/stories/01-quickstart/01-natscluster.yaml")
+	require.NoError(t, err)
+	nc := &clusterv1beta1.NatsCluster{}
+	require.NoError(t, yaml.UnmarshalStrict(b, nc))
+
+	opts := &manager.Options{MetricsAddr: "0", ProbeAddr: "0", WatchNamespaces: []string{nc.Namespace}}
+	mgr, err := manager.New(cfg, opts, scheme, owned)
 	require.NoError(t, err)
 	require.NoError(t, setup(t.Context(), mgr))
 	go func() { _ = mgr.Start(t.Context()) }()
 
 	c, err := client.New(cfg, client.Options{Scheme: scheme})
 	require.NoError(t, err)
-	b, err := os.ReadFile("../../docs/content/docs/stories/01-quickstart/01-natscluster.yaml")
-	require.NoError(t, err)
-	nc := &clusterv1beta1.NatsCluster{}
-	require.NoError(t, yaml.UnmarshalStrict(b, nc))
-	require.NoError(t, c.Create(t.Context(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nc.Namespace}}))
-	require.NoError(t, c.Create(t.Context(), nc))
+	outside := nc.DeepCopy()
+	outside.Namespace = "outside"
+	for _, n := range []*clusterv1beta1.NatsCluster{outside, nc} {
+		require.NoError(t, c.Create(t.Context(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: n.Namespace}}))
+		require.NoError(t, c.Create(t.Context(), n))
+	}
 	key := client.ObjectKeyFromObject(nc)
 
 	require.EventuallyWithT(t, func(ct *assert.CollectT) {
@@ -98,4 +105,11 @@ func TestEnvtestOwnedCache(t *testing.T) {
 			return nil
 		}))
 	}
+
+	got := &clusterv1beta1.NatsCluster{}
+	require.NoError(t, c.Get(t.Context(), client.ObjectKeyFromObject(outside), got))
+	require.Empty(t, got.Finalizers, "a NatsCluster outside the watched namespaces")
+	require.Empty(t, got.Status.Conditions, "a NatsCluster outside the watched namespaces")
+	require.NoError(t, c.List(t.Context(), &sets, client.InNamespace(outside.Namespace)))
+	require.Empty(t, sets.Items, "StatefulSets outside the watched namespaces")
 }

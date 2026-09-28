@@ -69,3 +69,11 @@ tests:
       - equal:
           path: spec.containers[0].image
           value: registry.example/busybox:1.36
+  - it: pins tests.image to its digest when set
+    set:
+      tests.image.digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    documentSelector: {path: kind, value: Pod}
+    asserts:
+      - equal:
+          path: spec.containers[0].image
+          value: busybox:1.37.0@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef

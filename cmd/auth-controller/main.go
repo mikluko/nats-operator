@@ -11,13 +11,14 @@ import (
 	"go.opentelemetry.io/otel"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/authctl"
+	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/manager"
+	"github.com/mikluko/nats-operator/internal/natsconn"
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
@@ -26,9 +27,9 @@ func main() {
 		"namespace/name of the NatsConnection the auth controller reaches NATS through, whose creds are a user of a NatsOperator's "+
 			"system account holding the auth-controller preset; unset, JWTs are signed but neither pushed nor deleted, and no connection is kicked")
 	if err := manager.Run(manager.Controller{
-		Name:      telemetry.AuthController,
-		Group:     authv1beta1.GroupVersion.Group,
-		NewScheme: newScheme,
+		Name:        telemetry.AuthController,
+		Group:       authv1beta1.GroupVersion.Group,
+		AddToScheme: schemes,
 		Setup: func(ctx context.Context, mgr ctrl.Manager) error {
 			return setup(ctx, mgr, *systemConnection)
 		},
@@ -37,24 +38,7 @@ func main() {
 	}
 }
 
-func newScheme() (*runtime.Scheme, error) {
-	scheme := runtime.NewScheme()
-	for _, add := range []func(*runtime.Scheme) error{
-		clientgoscheme.AddToScheme,
-		natsv1beta1.AddToScheme,
-		authv1beta1.AddToScheme,
-	} {
-		if err := add(scheme); err != nil {
-			return nil, err
-		}
-	}
-	return scheme, nil
-}
-
-// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
-// +kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
-// +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+var schemes = []func(*runtime.Scheme) error{natsv1beta1.AddToScheme, authv1beta1.AddToScheme}
 
 // setup registers the auth controller's instruments and adds its
 // reconcilers to mgr; with systemConnection set, as namespace/name, it adds
@@ -70,7 +54,7 @@ func setup(ctx context.Context, mgr ctrl.Manager, systemConnection string) error
 		if err != nil {
 			return fmt.Errorf("parse --system-connection: %w", err)
 		}
-		pool := authctl.NewPool()
+		pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetAuthController))
 		conn := &authctl.SystemConnection{Reader: mgr.GetClient(), Pool: pool, Name: name}
 		resolvers := &authctl.Resolvers{Conn: conn.Conn, Log: ctrl.Log.WithName("resolvers")}
 		for _, r := range []interface {

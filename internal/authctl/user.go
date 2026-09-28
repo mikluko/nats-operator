@@ -27,6 +27,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/natsconn"
+	"github.com/mikluko/nats-operator/internal/refindex"
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
@@ -490,15 +491,15 @@ func (r *UserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return sameKeyUsers(ctx, c, obj)
 		})).
 		Watches(&authv1beta1.NatsAccount{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
-			return listIndexed(ctx, c, &authv1beta1.NatsUserList{}, userAccountField, accountValue(authv1beta1.AccountKindAccount, client.ObjectKeyFromObject(obj)))
+			return refindex.Requests(ctx, c, &authv1beta1.NatsUserList{}, client.MatchingFields{userAccountField: accountValue(authv1beta1.AccountKindAccount, client.ObjectKeyFromObject(obj))})
 		})).
 		Watches(&authv1beta1.NatsSystemAccount{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
-			return listIndexed(ctx, c, &authv1beta1.NatsUserList{}, userAccountField, accountValue(authv1beta1.AccountKindSystemAccount, client.ObjectKeyFromObject(obj)))
+			return refindex.Requests(ctx, c, &authv1beta1.NatsUserList{}, client.MatchingFields{userAccountField: accountValue(authv1beta1.AccountKindSystemAccount, client.ObjectKeyFromObject(obj))})
 		})).
 		Watches(&authv1beta1.NatsOperator{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			op := obj.(*authv1beta1.NatsOperator)
 			sys := refKey(op.Spec.SystemAccountRef, op.Namespace)
-			return listIndexed(ctx, c, &authv1beta1.NatsUserList{}, userAccountField, accountValue(authv1beta1.AccountKindSystemAccount, sys))
+			return refindex.Requests(ctx, c, &authv1beta1.NatsUserList{}, client.MatchingFields{userAccountField: accountValue(authv1beta1.AccountKindSystemAccount, sys)})
 		})).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, schema.GroupKind{Group: authGroup, Kind: "NatsUser"}, &authv1beta1.NatsUserList{})).
 		Complete(telemetry.Traced("NatsUser", r))

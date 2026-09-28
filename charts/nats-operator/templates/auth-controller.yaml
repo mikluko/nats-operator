@@ -2,6 +2,10 @@
 {{- $args := list }}
 {{- with .Values.auth.systemConnection }}
 {{- $args = append $args (printf "--system-connection=%s" .) }}
+{{- $ns := first (splitList "/" .) }}
+{{- if and $.Values.watchNamespaces (not (has $ns $.Values.watchNamespaces)) }}
+{{- fail (printf "auth.systemConnection names namespace %s, which watchNamespaces does not" $ns) }}
+{{- end }}
 {{- end }}
 {{- include "nats-operator.controller" (dict "root" . "name" "auth-controller" "group" "auth.nats.mikluko.io" "values" .Values.auth "args" $args) }}
 {{- end }}

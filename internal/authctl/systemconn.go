@@ -14,7 +14,6 @@ import (
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
@@ -22,12 +21,6 @@ import (
 // connection's credentials are not those of a user of the NatsOperator's
 // system account.
 var ErrForeignConnection = errors.New("system connection is not a user of the operator's system account")
-
-// NewPool returns the auth controller's connection pool, whose connections
-// take replies under the auth-controller preset's inbox prefix.
-func NewPool() *natsconn.Pool {
-	return natsconn.NewPool(natsconn.WithNATSOptions(nats.CustomInboxPrefix(jwtplane.InboxPrefix(jwtplane.PresetAuthController))))
-}
 
 // SystemConnection is the auth controller's system connection: the
 // NatsConnection Name, pooled in Pool. It serves a NatsOperator only if the

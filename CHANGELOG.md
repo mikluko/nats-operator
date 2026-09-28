@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The cluster controller caches only the StatefulSets, ConfigMaps, Services, PersistentVolumeClaims, PodDisruptionBudgets and NetworkPolicies labelled `cluster.nats.mikluko.io/cluster`; every controller reads Secrets from the API server rather than its cache.
 - A controller's `/readyz` passes once its cache is synced.
 - Every controller's OpenTelemetry resource carries its host name as `service.instance.id`, unless `OTEL_RESOURCE_ATTRIBUTES` sets one.
-- Every controller serves its Prometheus metrics over HTTPS, to a bearer token of a user allowed `get` on the non-resource URL `/metrics`.
+- Every controller serves its Prometheus metrics over HTTPS, to a bearer token of a user allowed `get` on the non-resource URL `/metrics`; an allow is cached for five minutes and a denial for thirty seconds.
 - Chart value `metrics.scraper.serviceAccount`, the `namespace/name` of a ServiceAccount granted `get` on `/metrics`.
 - `helm test` on the chart checks every enabled controller's `/readyz`.
 - A failed `NatsCluster` reconcile reads `Progressing=False, reason: ReconcileFailed` and records a `ReconcileFailed` Warning event.
@@ -27,7 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The chart requires Kubernetes 1.29 or later.
 - The chart refuses a value key it does not know, checked against `values.schema.json`.
 - Chart values `nodeSelector`, `annotations`, `podAnnotations` and `affinity`, globally and per controller.
+- Chart values `tolerations`, `priorityClassName`, `topologySpreadConstraints`, `extraArgs` and `env`, globally and per controller.
+- Chart values `metrics.service.enabled` and `metrics.serviceMonitor.enabled`, off by default, render a metrics Service and a prometheus-operator ServiceMonitor per controller; the ServiceMonitor skips certificate verification.
 - Chart value `auth.systemConnection`, passed to the auth controller as `--system-connection`.
+- Every controller's `--watch-namespaces` confines it to the namespaces named; chart value `watchNamespaces` passes it and grants each controller a Role in each of those namespaces, its ClusterRole keeping only `tokenreviews` and `subjectaccessreviews`.
+- Chart values `cluster.image.digest`, `auth.image.digest`, `jetstream.image.digest` and `tests.image.digest` pin an image by digest after its tag.
+- `NatsCluster` `spec.image` takes `repository` and `digest`, and `spec.exporter.image` takes `repository`, `tag` and `digest`; a digest is rendered after the tag.
 - Each release publishes the three controller images for linux/amd64 and linux/arm64, the chart as an OCI artifact, and a GitHub release carrying the version's changelog entry.
 - Documentation site at <https://mikluko.github.io/nats-operator/>, of the latest release: the stories, the design and the ADRs.
 - Documentation page `/docs/install/`: installing the chart, its values, the controllers' flags and RBAC, upgrade and uninstall.

@@ -1,0 +1,75 @@
+suite: metrics
+templates:
+  - templates/metrics.yaml
+release:
+  name: rel
+  namespace: nats
+tests:
+  - it: renders nothing by default
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: renders a metrics Service per enabled controller
+    set:
+      metrics.service.enabled: true
+      auth.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 2
+      - containsDocument: {kind: Service, apiVersion: v1, name: rel-cluster-controller-metrics, namespace: nats, any: true}
+      - containsDocument: {kind: Service, apiVersion: v1, name: rel-jetstream-controller-metrics, namespace: nats, any: true}
+  - it: selects the controller's pods on its metrics port
+    set:
+      metrics.service.enabled: true
+      auth.enabled: false
+      jetstream.enabled: false
+    asserts:
+      - equal:
+          path: spec.selector
+          value:
+            app.kubernetes.io/name: nats-operator
+            app.kubernetes.io/instance: rel
+            app.kubernetes.io/component: cluster-controller
+      - equal:
+          path: spec.ports
+          value: [{name: metrics, port: 8080, targetPort: metrics}]
+  - it: renders a ServiceMonitor beside each Service, scraping HTTPS with the scraper's token and no certificate verification
+    set:
+      metrics.service.enabled: true
+      metrics.serviceMonitor.enabled: true
+      metrics.serviceMonitor.labels: {release: prometheus}
+      metrics.serviceMonitor.interval: 30s
+      cluster.enabled: false
+      jetstream.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 2
+      - containsDocument: {kind: ServiceMonitor, apiVersion: monitoring.coreos.com/v1, name: rel-auth-controller-metrics, namespace: nats}
+        documentIndex: 1
+      - equal:
+          path: metadata.labels.release
+          value: prometheus
+        documentIndex: 1
+      - equal:
+          path: spec.selector.matchLabels
+          value:
+            app.kubernetes.io/name: nats-operator
+            app.kubernetes.io/instance: rel
+            app.kubernetes.io/component: auth-controller
+        documentIndex: 1
+      - equal:
+          path: spec.endpoints
+          value:
+            - port: metrics
+              path: /metrics
+              scheme: https
+              bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+              tlsConfig: {insecureSkipVerify: true}
+              interval: 30s
+        documentIndex: 1
+  - it: refuses a ServiceMonitor without the Service
+    set:
+      metrics.serviceMonitor.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: metrics.serviceMonitor.enabled requires metrics.service.enabled
