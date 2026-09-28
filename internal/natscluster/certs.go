@@ -29,7 +29,7 @@ import (
 // Certs are the TLS Secrets the servers mount, by listener; a listener
 // without TLS has the zero MountedCert.
 type Certs struct {
-	Routes, Gateway, Leafnodes MountedCert
+	Client, Routes, Gateway, Leafnodes MountedCert
 }
 
 // MountedCert is what a render reads of a TLS Secret the servers mount.
@@ -40,8 +40,6 @@ type MountedCert struct {
 	// NotAfter is the expiry of the Secret's tls.crt, zero when it does not
 	// parse.
 	NotAfter time.Time
-	// CA reports whether the Secret holds ca.crt.
-	CA bool
 }
 
 // mountedCert reads s, or returns the zero MountedCert for nil.
@@ -59,7 +57,7 @@ func mountedCert(s *corev1.Secret) MountedCert {
 		h.Write(binary.BigEndian.AppendUint64(append([]byte(k), 0), uint64(len(s.Data[k]))))
 		h.Write(s.Data[k])
 	}
-	m := MountedCert{Digest: hex.EncodeToString(h.Sum(nil))[:16], CA: len(s.Data[caKey]) > 0}
+	m := MountedCert{Digest: hex.EncodeToString(h.Sum(nil))[:16]}
 	if b, _ := pem.Decode(s.Data[corev1.TLSCertKey]); b != nil {
 		if c, err := x509.ParseCertificate(b.Bytes); err == nil {
 			m.NotAfter = c.NotAfter
@@ -73,7 +71,8 @@ func mountedCert(s *corev1.Secret) MountedCert {
 // compared.
 func (c Certs) loaded(got sysobs.CertNotAfter) bool {
 	same := func(want, got time.Time) bool { return want.IsZero() || got.IsZero() || want.Equal(got) }
-	return same(c.Routes.NotAfter, got.Cluster) && same(c.Gateway.NotAfter, got.Gateway) && same(c.Leafnodes.NotAfter, got.Leafnode)
+	return same(c.Client.NotAfter, got.Client) && same(c.Routes.NotAfter, got.Cluster) &&
+		same(c.Gateway.NotAfter, got.Gateway) && same(c.Leafnodes.NotAfter, got.Leafnode)
 }
 
 // ensureCerts reads every listener's certificate Secret, and while one is
@@ -87,14 +86,25 @@ func (r *Reconciler) ensureCerts(ctx context.Context, nc *clusterv1beta1.NatsClu
 		}
 	}
 
+	var want *unstructured.Unstructured
+	if issuer := clientIssuer(nc); issuer != nil {
+		want = clientCertificate(nc, issuer)
+	}
+	w, s, err := r.ensureCertSecret(ctx, nc, clientCertificateName(nc), want, clientCertSecret(nc), corev1.TLSCertKey, corev1.TLSPrivateKeyKey)
+	if err != nil {
+		return certs, "", "", err
+	}
+	note(w, ReasonClientCertNotReady)
+	certs.Client = mountedCert(s)
+
 	if err := r.ensureSelfSignedRouteSecret(ctx, nc); err != nil {
 		return certs, "", "", err
 	}
-	var want *unstructured.Unstructured
+	want = nil
 	if issuer := certManagerIssuer(nc); issuer != nil {
 		want = routesCertificate(nc, issuer)
 	}
-	w, s, err := r.ensureCertSecret(ctx, nc, routesCertificateName(nc), want, routesSecret(nc), corev1.TLSCertKey, corev1.TLSPrivateKeyKey, caKey)
+	w, s, err = r.ensureCertSecret(ctx, nc, routesCertificateName(nc), want, routesSecret(nc), corev1.TLSCertKey, corev1.TLSPrivateKeyKey, caKey)
 	if err != nil {
 		return certs, "", "", err
 	}
@@ -111,7 +121,7 @@ func (r *Reconciler) ensureCerts(ctx context.Context, nc *clusterv1beta1.NatsClu
 		}
 	}
 	if gatewayWait == "" {
-		gatewayWait, s, err = r.ensureCertSecret(ctx, nc, gatewayCertificateName(nc), want, gatewaySecret(nc), corev1.TLSCertKey, corev1.TLSPrivateKeyKey)
+		gatewayWait, s, err = r.ensureCertSecret(ctx, nc, gatewayCertificateName(nc), want, gatewaySecret(nc), corev1.TLSCertKey, corev1.TLSPrivateKeyKey, caKey)
 		if err != nil {
 			return certs, "", "", err
 		}

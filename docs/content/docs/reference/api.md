@@ -467,7 +467,7 @@ Appears on: [NatsClusterSpec](#NatsClusterSpec).
 | :---- | :--- | :------: | :---------- |
 | `discovery` | [{{< type "GatewayDiscovery" >}}](#GatewayDiscovery) | Yes | Discovery is how remotes are rendered: Explicit as gateway remotes with reject_unknown on, Gossip as seeds with reject_unknown off. |
 | `remotes` | [{{< type "[]GatewayRemote" >}}](#GatewayRemote) | Yes | Remotes are every member of the supercluster; this NATS cluster's own entry is skipped. |
-| `tls` | [{{< type "ListenerTLS" >}}](#ListenerTLS) | No | TLS on the gateway listener; absent, gateways run in the clear. |
+| `tls` | [{{< type "ListenerTLS" >}}](#ListenerTLS) | No | TLS on the gateway listener; absent, gateways run in the clear. The certificate's Secret must hold ca.crt, which peers are verified against both ways. |
 | `service` | [{{< type "ServiceTemplate" >}}](#ServiceTemplate) | No | Service is the template of the external gateway Service. |
 | `advertise` | {{< type "string" >}} | No | Advertise is the host:port the servers advertise for gateways. |
 
@@ -562,11 +562,18 @@ Appears on: [NatsClusterSpec](#NatsClusterSpec).
 
 ### ListenerTLS {#ListenerTLS}
 ListenerTLS is TLS on a listener that has it only when configured.\
-Appears on: [Gateway](#Gateway), [Leafnodes](#Leafnodes).
+Appears on: [Gateway](#Gateway), [Leafnodes](#Leafnodes), [NatsClusterSpec](#NatsClusterSpec).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `secretRef` | [{{< type "SecretReference" >}}](#SecretReference) | No | SecretRef names a kubernetes.io/tls Secret. |
 | `certManager` | [{{< type "CertManagerCertificate" >}}](#CertManagerCertificate) | No | CertManager has cert-manager issue the certificate. |
+
+### Monitor {#Monitor}
+Monitor configures access to the monitoring port.\
+Appears on: [NatsClusterSpec](#NatsClusterSpec).
+| Field | Type | Required | Description |
+| :---- | :--- | :------: | :---------- |
+| `networkPolicy` | {{< type "bool" >}} | No | NetworkPolicy renders a NetworkPolicy over the servers' pods that admits the monitoring port only from the cluster controller's namespace, and from anywhere the ports the cluster controller renders; a port podTemplate adds is not admitted. False renders none. Default: `true`. |
 
 ### NatsCluster {#NatsCluster}
 NatsCluster is a NATS cluster the cluster controller deploys, one StatefulSet per server.
@@ -591,10 +598,12 @@ Appears on: [NatsCluster](#NatsCluster).
 | `serverTags` | {{< type "map[string]string" >}} | No | ServerTags are rendered as key:value server tags. |
 | `podTemplate` | [{{< type "PodTemplate" >}}](#PodTemplate) | No | PodTemplate is merged into every server's pod, over its security context and automountServiceAccountToken too: whoever may write a NatsCluster runs pods with any privilege its namespace admits. |
 | `exporter` | [{{< type "Exporter" >}}](#Exporter) | No | Exporter configures the prometheus-nats-exporter sidecar; absent, it runs. |
+| `monitor` | [{{< type "Monitor" >}}](#Monitor) | No | Monitor configures access to the monitoring port, 8222, which has no authentication. |
+| `tls` | [{{< type "ListenerTLS" >}}](#ListenerTLS) | No | TLS on the client listener; absent, clients connect in the clear. Clients verify the certificate against the CA that issued it; the cluster controller reads that CA from the Secret's ca.crt, and without one trusts the system roots. |
 | `routes` | [{{< type "Routes" >}}](#Routes) | No | Routes configures the route listener; absent, route TLS is on and self-signed. |
 | `auth` | [{{< type "Auth" >}}](#Auth) | No | Auth puts the NATS cluster under a NATS operator; absent, servers run with no accounts and no client auth. |
 | `gateway` | [{{< type "Gateway" >}}](#Gateway) | No | Gateway joins the NATS cluster into a supercluster under its own name, the NatsCluster's name. |
-| `leafnodes` | [{{< type "Leafnodes" >}}](#Leafnodes) | No | Leafnodes opens a listener for leaf connections. |
+| `leafnodes` | [{{< type "Leafnodes" >}}](#Leafnodes) | No | Leafnodes opens a listener for leaf connections; it requires Auth. |
 | `leafRemotes` | [{{< type "[]LeafRemote" >}}](#LeafRemote) | No | LeafRemotes are the hubs this NATS cluster dials as a leaf. |
 | `rollout` | [{{< type "Rollout" >}}](#Rollout) | No | Rollout steers the restarts a spec change rolls out one server at a time. |
 

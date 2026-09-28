@@ -484,6 +484,9 @@ func TestLeafWatches(t *testing.T) {
 	} {
 		b = b.WithIndex(&clusterv1beta1.NatsCluster{}, field, func(o client.Object) []string { return keys(o.(*clusterv1beta1.NatsCluster)) })
 	}
+	b = b.WithIndex(&natsv1beta1.NatsConnection{}, ConnectionSecretField, func(o client.Object) []string {
+		return connectionSecretKeys(o.(*natsv1beta1.NatsConnection))
+	})
 	c := b.WithObjects(
 		leaf("a", "same", clusterv1beta1.LeafRemote{ConnectionRef: natsv1beta1.ObjectReference{Name: "hub"}}),
 		leaf("b", "cross", clusterv1beta1.LeafRemote{
@@ -506,4 +509,9 @@ func TestLeafWatches(t *testing.T) {
 	require.ElementsMatch(t, []string{"b/cross"}, names(r.clustersByField(ctx, LeafAccountTrustField, "a/telemetry")))
 	require.ElementsMatch(t, []string{"a/same", "b/cross"}, names(r.clustersReadingSecret(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "hub-creds"}})))
 	require.Empty(t, r.clustersReadingSecret(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "b", Name: "hub-creds"}}))
+
+	require.True(t, r.readByConnection(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "hub-creds"}}))
+	require.False(t, r.readByConnection(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "b", Name: "hub-creds"}}))
+	require.False(t, r.readByConnection(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "unrelated"}}),
+		"a Secret no NatsConnection reads passes the watch")
 }

@@ -11,9 +11,9 @@ The Helm chart `nats-operator` installs the CRDs of all four API groups and any 
 - **Kubernetes 1.29 or later.** The chart declares `kubeVersion: ">=1.29.0-0"`; Helm refuses to install it on an older cluster.
 - **Helm**, to install from an OCI registry.
 - **nats-server 2.15.0 or later.** The API server refuses a `NatsCluster` whose `spec.version` is below 2.15.0.
-- **cert-manager, optional.** Only the cluster controller uses it, and only for a `NatsCluster` that names `certManager` under `routes.tls`, `gateway.tls` or `leafnodes.tls`. Without cert-manager, such a `NatsCluster` reports `Progressing` with the message `cert-manager Certificate is not a known kind: cert-manager is not installed`, and its servers wait for the certificate. Route TLS with no certificate named is self-signed and needs no cert-manager.
+- **cert-manager, optional.** Only the cluster controller uses it, and only for a `NatsCluster` that names `certManager` under `tls`, `routes.tls`, `gateway.tls` or `leafnodes.tls`. Without cert-manager, such a `NatsCluster` reports `Progressing` with the message `cert-manager Certificate is not a known kind: cert-manager is not installed`, and its servers wait for the certificate. Route TLS with no certificate named is self-signed and needs no cert-manager.
 
-A `NatsCluster` offers no TLS on its client listener, port 4222: clients and the controllers reach its servers unencrypted, so that traffic stays private only where the network keeps it so.
+A `NatsCluster` runs its client listener, port 4222, in the clear unless `spec.tls` names a certificate, from a Secret or from cert-manager. With it, `status.endpoints.client` reads `tls://`, and every client, the JetStream and auth controllers' `NatsConnection`s included, needs the CA that issued the certificate under `tls.ca`; the cluster controller reads it from the certificate Secret's `ca.crt` itself.
 
 ## Install
 
@@ -138,6 +138,7 @@ While `metrics.scraper.serviceAccount` is set, the ClusterRole `<release>-metric
 | `cluster.nats.mikluko.io` | `natsclusters/status` | `patch` |
 | `nats.mikluko.io` | `natsaccounttrusts`, `natsconnections`, `natsoperatortrusts` | `get`, `list`, `watch` |
 | `nats.mikluko.io` | `natsreferencegrants` | `list`, `watch` |
+| `networking.k8s.io` | `networkpolicies` | `get`, `list`, `watch`, `create`, `update`, `delete` |
 | `policy` | `poddisruptionbudgets` | `get`, `list`, `watch`, `create`, `update` |
 
 ### Auth controller
@@ -183,7 +184,7 @@ helm uninstall nats-operator --namespace nats-operator
 
 This removes the controllers' Deployments, ServiceAccounts and RBAC. It leaves behind:
 
-- the CRDs, and with them every custom resource and everything the controllers created for them: StatefulSets, Services, ConfigMaps, Secrets, PodDisruptionBudgets and cert-manager Certificates;
+- the CRDs, and with them every custom resource and everything the controllers created for them: StatefulSets, Services, ConfigMaps, Secrets, PodDisruptionBudgets, NetworkPolicies and cert-manager Certificates;
 - after a `helm test`, its Pods and Services `<release>-<controller>-test`;
 - with leader election on, the Leases `cluster.nats.mikluko.io`, `auth.nats.mikluko.io` and `jetstream.nats.mikluko.io` in the release namespace.
 

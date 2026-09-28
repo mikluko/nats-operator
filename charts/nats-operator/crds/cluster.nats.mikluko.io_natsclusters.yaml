@@ -179,8 +179,10 @@ spec:
                         type: string
                     type: object
                   tls:
-                    description: TLS on the gateway listener; absent, gateways run
-                      in the clear.
+                    description: |-
+                      TLS on the gateway listener; absent, gateways run in the clear. The
+                      certificate's Secret must hold ca.crt, which peers are verified
+                      against both ways.
                     properties:
                       certManager:
                         description: CertManager has cert-manager issue the certificate.
@@ -537,7 +539,8 @@ spec:
                       && self.localSystemAccount)'
                 type: array
               leafnodes:
-                description: Leafnodes opens a listener for leaf connections.
+                description: Leafnodes opens a listener for leaf connections; it requires
+                  Auth.
                 properties:
                   advertise:
                     description: |-
@@ -603,6 +606,20 @@ spec:
                     x-kubernetes-validations:
                     - message: set exactly one of secretRef and certManager
                       rule: has(self.secretRef) != has(self.certManager)
+                type: object
+              monitor:
+                description: |-
+                  Monitor configures access to the monitoring port, 8222, which has no
+                  authentication.
+                properties:
+                  networkPolicy:
+                    default: true
+                    description: |-
+                      NetworkPolicy renders a NetworkPolicy over the servers' pods that
+                      admits the monitoring port only from the cluster controller's
+                      namespace, and from anywhere the ports the cluster controller renders;
+                      a port podTemplate adds is not admitted. False renders none.
+                    type: boolean
                 type: object
               podTemplate:
                 description: |-
@@ -769,6 +786,54 @@ spec:
                   type: string
                 description: ServerTags are rendered as key:value server tags.
                 type: object
+              tls:
+                description: |-
+                  TLS on the client listener; absent, clients connect in the clear.
+                  Clients verify the certificate against the CA that issued it; the
+                  cluster controller reads that CA from the Secret's ca.crt, and
+                  without one trusts the system roots.
+                properties:
+                  certManager:
+                    description: CertManager has cert-manager issue the certificate.
+                    properties:
+                      issuerRef:
+                        description: |-
+                          IssuerRef is copied into the Certificate the cluster controller
+                          creates in the NatsCluster's namespace.
+                        properties:
+                          group:
+                            description: Group of the issuer, cert-manager.io when
+                              omitted.
+                            type: string
+                          kind:
+                            description: Kind of the issuer, Issuer when omitted.
+                            type: string
+                          name:
+                            description: |-
+                              Name of an Issuer in the NatsCluster's namespace, or of a
+                              ClusterIssuer.
+                            minLength: 1
+                            type: string
+                        required:
+                        - name
+                        type: object
+                    required:
+                    - issuerRef
+                    type: object
+                  secretRef:
+                    description: SecretRef names a kubernetes.io/tls Secret.
+                    properties:
+                      name:
+                        description: Name of a Secret in the referrer's namespace.
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                type: object
+                x-kubernetes-validations:
+                - message: set exactly one of secretRef and certManager
+                  rule: has(self.secretRef) != has(self.certManager)
               version:
                 description: |-
                   Version is the nats-server version rendered for, 2.15.0 or later. A
@@ -791,6 +856,9 @@ spec:
             - message: a leaf running JetStream must set jetstream.domain
               rule: '!has(self.leafRemotes) || size(self.leafRemotes) == 0 || !has(self.jetstream)
                 || has(self.jetstream.domain)'
+            - message: 'a leafnode listener requires auth: without it any leaf connects
+                into the global account'
+              rule: '!has(self.leafnodes) || has(self.auth)'
           status:
             description: NatsClusterStatus is the observed state of a NATS cluster.
             properties:

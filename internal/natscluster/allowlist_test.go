@@ -21,7 +21,8 @@ import (
 // TestReloadAllowLists_EverySupportedVersion fails when a minor version
 // from 2.15 up to the nats-server this module builds against has no
 // reload allow-list, or when a list names a diffOptions case that is not
-// an Options field of that nats-server.
+// an Options field of that nats-server; only a key reloading the system
+// account's entry names an unexported one.
 func TestReloadAllowLists_EverySupportedVersion(t *testing.T) {
 	linked := minorVersion(server.VERSION)
 	require.NotEmpty(t, linked, server.VERSION)
@@ -33,15 +34,16 @@ func TestReloadAllowLists_EverySupportedVersion(t *testing.T) {
 		require.NotEmpty(t, reloadAllowLists[v], "no reload allow-list for nats-server %s", v)
 	}
 
-	fields := map[string]bool{}
+	exported := map[string]bool{}
 	opts := reflect.TypeFor[server.Options]()
 	for i := range opts.NumField() {
-		if f := opts.Field(i); f.IsExported() {
-			fields[strings.ToLower(f.Name)] = true
-		}
+		f := opts.Field(i)
+		exported[strings.ToLower(f.Name)] = f.IsExported()
 	}
 	for _, k := range reloadAllowLists[linked] {
-		require.True(t, fields[k.Case], "%s: diffOptions case %q is not an Options field", k.Path, k.Case)
+		want, ok := exported[k.Case]
+		require.True(t, ok, "%s: %q is not an Options field", k.Path, k.Case)
+		require.Equal(t, k.Rule != reloadSystemAccountEntry, want, "%s: %q", k.Path, k.Case)
 	}
 }
 
@@ -229,6 +231,16 @@ func TestRestartReason(t *testing.T) {
 		from := map[string]any{"resolver_preload": map[string]any{"A": "jwt1"}}
 		to := map[string]any{"resolver_preload": map[string]any{"A": "jwt2"}}
 		require.Equal(t, "resolver_preload.A is restart-only", restartReason("2.15.0", encode(t, from), encode(t, to)))
+
+		from["system_account"], to["system_account"] = "A", "A"
+		require.Empty(t, restartReason("2.15.0", encode(t, from), encode(t, to)))
+
+		from["resolver_preload"] = map[string]any{"A": "jwt1", "B": "jwt1"}
+		to["resolver_preload"] = map[string]any{"A": "jwt2", "B": "jwt2"}
+		require.Equal(t, "resolver_preload.B is restart-only", restartReason("2.15.0", encode(t, from), encode(t, to)))
+
+		to["system_account"] = "B"
+		require.Equal(t, "resolver_preload.A, resolver_preload.B, system_account are restart-only", restartReason("2.15.0", encode(t, from), encode(t, to)))
 	})
 	t.Run("version without a list", func(t *testing.T) {
 		b := encode(t, map[string]any{"server_tags": []any{"a"}})

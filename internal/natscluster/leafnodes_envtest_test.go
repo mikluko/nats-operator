@@ -23,7 +23,7 @@ import (
 
 // TestEnvtestLeafnodes drives the reconciler against a real API server for
 // story 10: the CEL rule on jetstream.domain, a leaf's remotes Secret and
-// status, and a hub's leafnode Service and certificate wait.
+// status, and a hub's leafnode Service, certificate wait and auth rule.
 func TestEnvtestLeafnodes(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")
@@ -143,6 +143,17 @@ func TestEnvtestLeafnodes(t *testing.T) {
 		nc.Namespace = "hub"
 		nc.Spec.Leafnodes = hubNC.Spec.Leafnodes
 		nc.Spec.Leafnodes.TLS = &clusterv1beta1.ListenerTLS{CertificateSource: clusterv1beta1.CertificateSource{SecretRef: &natsv1beta1.SecretReference{Name: "leaf-cert"}}}
+		err := c.Create(ctx, nc)
+		require.True(t, apierrors.IsInvalid(err), "%v", err)
+		require.ErrorContains(t, err, "a leafnode listener requires auth")
+
+		nc.Spec.Auth = hubNC.Spec.Auth
+		nc.Spec.Auth.SystemCredentials = nil
+		trust := mintPlane(t).trust
+		require.NoError(t, c.Create(ctx, &natsv1beta1.NatsOperatorTrust{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "hub", Name: nc.Spec.Auth.TrustRef.Name},
+			Spec:       natsv1beta1.NatsOperatorTrustSpec{OperatorJWT: trust.OperatorJWT, SystemAccountJWT: trust.SystemAccountJWT},
+		}))
 		require.NoError(t, c.Create(ctx, nc))
 		key := client.ObjectKeyFromObject(nc)
 

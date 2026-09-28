@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -90,11 +91,14 @@ func (s *SystemConnections) client(ctx context.Context, nc *clusterv1beta1.NatsC
 	if err != nil {
 		return nil, fmt.Errorf("read auth.systemCredentials: %w", err)
 	}
-	servers := []string{fmt.Sprintf("nats://%s.%s.svc:%d", clientServiceName(nc), nc.Namespace, PortClient)}
+	ep := natsconn.Endpoint{Servers: []string{clientURL(nc)}, Creds: creds}
 	if s.Servers != nil {
-		servers = s.Servers(nc)
+		ep.Servers = s.Servers(nc)
 	}
-	conn, err := s.Pool.Get(ctx, natsconn.Key{Kind: PoolKind, NamespacedName: client.ObjectKeyFromObject(nc)}, natsconn.Endpoint{Servers: servers, Creds: creds})
+	if ep.CA, err = s.clientCA(ctx, nc); err != nil {
+		return nil, err
+	}
+	conn, err := s.Pool.Get(ctx, natsconn.Key{Kind: PoolKind, NamespacedName: client.ObjectKeyFromObject(nc)}, ep)
 	if err != nil {
 		return nil, err
 	}
@@ -103,6 +107,20 @@ func (s *SystemConnections) client(ctx context.Context, nc *clusterv1beta1.NatsC
 		opts = append(opts, sysobs.WithWait(s.Wait))
 	}
 	return sysobs.New(conn, nc.Name, opts...), nil
+}
+
+// clientCA is the ca.crt of nc's client certificate Secret, nil when nc
+// has no client TLS or the Secret holds none.
+func (s *SystemConnections) clientCA(ctx context.Context, nc *clusterv1beta1.NatsCluster) ([]byte, error) {
+	name := clientCertSecret(nc)
+	if name == "" {
+		return nil, nil
+	}
+	secret := &corev1.Secret{}
+	if err := s.Client.Get(ctx, client.ObjectKey{Namespace: nc.Namespace, Name: name}, secret); err != nil {
+		return nil, fmt.Errorf("read client certificate Secret %s: %w", name, err)
+	}
+	return secret.Data[caKey], nil
 }
 
 func hasSystemUser(nc *clusterv1beta1.NatsCluster) bool {

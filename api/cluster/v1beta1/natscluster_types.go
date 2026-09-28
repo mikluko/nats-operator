@@ -25,6 +25,7 @@ const (
 
 // NatsClusterSpec is the desired state of a NATS cluster.
 // +kubebuilder:validation:XValidation:rule="!has(self.leafRemotes) || size(self.leafRemotes) == 0 || !has(self.jetstream) || has(self.jetstream.domain)",message="a leaf running JetStream must set jetstream.domain"
+// +kubebuilder:validation:XValidation:rule="!has(self.leafnodes) || has(self.auth)",message="a leafnode listener requires auth: without it any leaf connects into the global account"
 type NatsClusterSpec struct {
 	// Version is the nats-server version rendered for, 2.15.0 or later. A
 	// change moves at most one minor at a time, up or down; any patch
@@ -67,6 +68,18 @@ type NatsClusterSpec struct {
 	// +optional
 	Exporter *Exporter `json:"exporter,omitempty"`
 
+	// Monitor configures access to the monitoring port, 8222, which has no
+	// authentication.
+	// +optional
+	Monitor *Monitor `json:"monitor,omitempty"`
+
+	// TLS on the client listener; absent, clients connect in the clear.
+	// Clients verify the certificate against the CA that issued it; the
+	// cluster controller reads that CA from the Secret's ca.crt, and
+	// without one trusts the system roots.
+	// +optional
+	TLS *ListenerTLS `json:"tls,omitempty"`
+
 	// Routes configures the route listener; absent, route TLS is on and
 	// self-signed.
 	// +optional
@@ -82,7 +95,7 @@ type NatsClusterSpec struct {
 	// +optional
 	Gateway *Gateway `json:"gateway,omitempty"`
 
-	// Leafnodes opens a listener for leaf connections.
+	// Leafnodes opens a listener for leaf connections; it requires Auth.
 	// +optional
 	Leafnodes *Leafnodes `json:"leafnodes,omitempty"`
 
@@ -263,7 +276,9 @@ type Gateway struct {
 	// +listMapKey=name
 	Remotes []GatewayRemote `json:"remotes"`
 
-	// TLS on the gateway listener; absent, gateways run in the clear.
+	// TLS on the gateway listener; absent, gateways run in the clear. The
+	// certificate's Secret must hold ca.crt, which peers are verified
+	// against both ways.
 	// +optional
 	TLS *ListenerTLS `json:"tls,omitempty"`
 
@@ -355,6 +370,17 @@ type Exporter struct {
 	// +optional
 	// +kubebuilder:default=true
 	Enabled *bool `json:"enabled,omitempty"`
+}
+
+// Monitor configures access to the monitoring port.
+type Monitor struct {
+	// NetworkPolicy renders a NetworkPolicy over the servers' pods that
+	// admits the monitoring port only from the cluster controller's
+	// namespace, and from anywhere the ports the cluster controller renders;
+	// a port podTemplate adds is not admitted. False renders none.
+	// +optional
+	// +kubebuilder:default=true
+	NetworkPolicy *bool `json:"networkPolicy,omitempty"`
 }
 
 // Rollout steers a NATS cluster's one-server-at-a-time restarts.

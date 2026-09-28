@@ -230,7 +230,7 @@ func rolloutCondition(rs *clusterv1beta1.RolloutStatus, gate gateState, paused b
 	c.Message += "; waiting for " + gate.waitingFor
 	if closedFor >= gateBlockedAfter {
 		c.Reason = ReasonGateBlocked
-		c.Message += fmt.Sprintf(" for %s: %s", closedFor.Round(time.Second), gate.detail)
+		c.Message += ": " + gate.detail
 	}
 	return c
 }

@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vulnerabilities are reported through the repository's GitHub private vulnerability reporting, as `SECURITY.md` states.
 - `SECURITY.md` states the supported versions, the acknowledgement time for a report, and how to verify a release's signatures and provenance.
 - Each release's controller images and chart are signed keylessly with cosign and carry a GitHub build provenance attestation.
-- The cluster controller caches only the StatefulSets, ConfigMaps, Services, PersistentVolumeClaims and PodDisruptionBudgets labelled `cluster.nats.mikluko.io/cluster`; every controller reads Secrets from the API server rather than its cache.
+- The cluster controller caches only the StatefulSets, ConfigMaps, Services, PersistentVolumeClaims, PodDisruptionBudgets and NetworkPolicies labelled `cluster.nats.mikluko.io/cluster`; every controller reads Secrets from the API server rather than its cache.
 - A controller's `/readyz` passes once its cache is synced.
 - Every controller's OpenTelemetry resource carries its host name as `service.instance.id`, unless `OTEL_RESOURCE_ATTRIBUTES` sets one.
 - Every controller serves its Prometheus metrics over HTTPS, to a bearer token of a user allowed `get` on the non-resource URL `/metrics`.
@@ -46,10 +46,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - With `auth.systemCredentials` the cluster controller reloads servers over `$SYS`; without it every config change restarts.
 - A self-signed route certificate is valid for one year and renewed under the same CA once a third of that remains; the CA is kept in the Secret `<name>-routes-ca`.
 - A `NatsCluster`'s client Service serves only the client port; the monitoring port is on the headless Service, which `status.endpoints.monitor` names.
+- A `NatsCluster` renders a NetworkPolicy admitting its monitoring port only from the cluster controller's namespace; `monitor.networkPolicy: false` renders none.
 - A `NatsCluster`'s pods meet the restricted Pod Security Standard and mount no ServiceAccount token; `podTemplate` can still escalate what the pod runs.
-- A change to the trust roots, `system_account` or the resolver restarts servers one at a time.
+- A change to the trusted NATS operator, `system_account` or the resolver restarts servers one at a time; a re-signed system account JWT reloads them.
+- `NatsCluster` `tls` puts the client listener under TLS, from a Secret or cert-manager, and `status.endpoints.client` then reads `tls://`.
 - `NatsCluster` `gateway` joins a supercluster, and status reports `GatewaysConnected`.
-- `NatsCluster` `leafnodes` accepts leaf connections on port 7422.
+- Gateway TLS requires `ca.crt` in the certificate Secret and verifies peers both ways against it.
+- `NatsCluster` `leafnodes` accepts leaf connections on port 7422, and is refused at apply without `auth`.
 - `NatsCluster` `leafRemotes` dials hubs as a leaf through `NatsConnection`s, and status reports `LeafnodesConnected`.
 - A renewed route, gateway or leafnode certificate reaches running servers by reload.
 - The cluster controller deletes a cert-manager `Certificate` it created once its listener no longer names it.

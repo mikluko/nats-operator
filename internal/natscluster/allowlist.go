@@ -22,11 +22,15 @@ const (
 	// reloadChildren reloads when the objects at the key, an absent one
 	// counting as empty, differ only under the key's Children.
 	reloadChildren
+	// reloadSystemAccountEntry reloads a change to the entry under the key
+	// named by system_account, itself unchanged.
+	reloadSystemAccountEntry
 )
 
 // reloadKey is a config key nats-server applies on reload. Path is the
 // key's dotted path in the rendered config and covers every key beneath
-// it; Case is the diffOptions switch case that applies it.
+// it; Case is the diffOptions switch case that applies it, or the
+// unexported Options field diffOptions skips.
 type reloadKey struct {
 	Path     string
 	Case     string
@@ -37,10 +41,14 @@ type reloadKey struct {
 // reloadAllowLists are the reloadable config keys by nats-server
 // major.minor, read off that version's diffOptions in server/reload.go. A
 // key absent from a version's list restarts: diffOptions rejects it, or
-// silently keeps the old value, as it does for resolver_preload. resolver
-// is absent although diffOptions accepts it: 2.15's reload replaces the
-// running resolver with one it never starts, which keeps answering claim
-// updates into the old directory while lookups read the new one.
+// silently keeps the old value. resolver is absent although diffOptions
+// accepts it: 2.15's reload replaces the running resolver with one it
+// never starts, which keeps answering claim updates into the old directory
+// while lookups read the new one. resolver_preload is a value a reload
+// keeps, and reloads only for the system account: its re-signed JWT reaches
+// running servers as a claims update, and the preload matters only at the
+// next start. Another account's preload is replaced by nothing but a
+// restart.
 var reloadAllowLists = map[string][]reloadKey{
 	"2.15": {
 		{Path: "pid_file", Case: "pidfile", Rule: reloadAlways},
@@ -52,6 +60,7 @@ var reloadAllowLists = map[string][]reloadKey{
 		{Path: "jetstream.max_memory_store", Case: "jetstreammaxmemory", Rule: reloadRaiseOnly},
 		{Path: "jetstream.max_file_store", Case: "jetstreammaxstore", Rule: reloadRaiseOnly},
 		{Path: "leafnodes", Case: "leafnode", Rule: reloadChildren, Children: []string{"remotes"}},
+		{Path: "resolver_preload", Case: "resolverpreloads", Rule: reloadSystemAccountEntry},
 	},
 }
 
@@ -153,6 +162,9 @@ func reloads(allow []reloadKey, path string, old, next map[string]any) bool {
 		a, _ := lookup(old, key.Path).(map[string]any)
 		b, _ := lookup(next, key.Path).(map[string]any)
 		return reflect.DeepEqual(without(a, key.Children), without(b, key.Children))
+	case reloadSystemAccountEntry:
+		sys, _ := next["system_account"].(string)
+		return sys != "" && old["system_account"] == sys && path == key.Path+"."+sys
 	default:
 		return true
 	}

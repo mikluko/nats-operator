@@ -15,18 +15,19 @@ import (
 // Config is one server's nats-server configuration. Its JSON encoding is
 // the config file: nats-server parses JSON as its own syntax.
 type Config struct {
-	ServerName     string            `json:"server_name"`
-	Listen         string            `json:"listen"`
-	HTTP           string            `json:"http"`
-	PidFile        string            `json:"pid_file"`
-	LameDuck       string            `json:"lame_duck_duration"`
-	LameDuckGrace  string            `json:"lame_duck_grace_period"`
-	ServerTags     []string          `json:"server_tags,omitempty"`
-	ServerMetadata map[string]string `json:"server_metadata,omitempty"`
-	Cluster        ClusterConfig     `json:"cluster"`
-	Gateway        *GatewayConfig    `json:"gateway,omitempty"`
-	JetStream      *JetStreamConfig  `json:"jetstream,omitempty"`
-	Leafnodes      *LeafnodesConfig  `json:"leafnodes,omitempty"`
+	ServerName     string             `json:"server_name"`
+	Listen         string             `json:"listen"`
+	HTTP           string             `json:"http"`
+	PidFile        string             `json:"pid_file"`
+	LameDuck       string             `json:"lame_duck_duration"`
+	LameDuckGrace  string             `json:"lame_duck_grace_period"`
+	ServerTags     []string           `json:"server_tags,omitempty"`
+	ServerMetadata map[string]string  `json:"server_metadata,omitempty"`
+	Cluster        ClusterConfig      `json:"cluster"`
+	Gateway        *GatewayConfig     `json:"gateway,omitempty"`
+	JetStream      *JetStreamConfig   `json:"jetstream,omitempty"`
+	Leafnodes      *LeafnodesConfig   `json:"leafnodes,omitempty"`
+	TLS            *ListenerTLSConfig `json:"tls,omitempty"`
 
 	Operator        string            `json:"operator,omitempty"`
 	SystemAccount   string            `json:"system_account,omitempty"`
@@ -110,9 +111,10 @@ type Layout struct {
 
 	// TLSDir holds tls.crt, tls.key and ca.crt for route TLS.
 	TLSDir string
+	// ClientTLSDir holds tls.crt and tls.key for client TLS.
+	ClientTLSDir string
 
-	// GatewayTLSDir holds tls.crt and tls.key for gateway TLS, and ca.crt
-	// when Inputs.GatewayCA is set.
+	// GatewayTLSDir holds tls.crt, tls.key and ca.crt for gateway TLS.
 	GatewayTLSDir   string
 	LeafnodesListen string
 	// LeafnodesTLSDir holds tls.crt and tls.key for the leafnode listener.
@@ -128,6 +130,7 @@ const (
 	pidDir        = "/var/run/nats"
 	dataDir       = "/data"
 	resolverDir   = dataDir + "/resolver"
+	clientTLSDir  = "/etc/nats-client-tls"
 	routesTLSDir  = "/etc/nats-routes-tls"
 	gatewayTLSDir = "/etc/nats-gateway-tls"
 )
@@ -143,6 +146,7 @@ func podLayout(nc *clusterv1beta1.NatsCluster) Layout {
 		StoreDir:      dataDir + "/jetstream",
 		ResolverDir:   resolverDir,
 		TLSDir:        routesTLSDir,
+		ClientTLSDir:  clientTLSDir,
 		GatewayTLSDir: gatewayTLSDir,
 
 		LeafnodesListen: fmt.Sprintf("0.0.0.0:%d", PortLeafnodes),
@@ -205,11 +209,11 @@ func routeTLSEnabled(spec *clusterv1beta1.NatsClusterSpec) bool {
 type Inputs struct {
 	// Trust is nil exactly when the NatsCluster has no auth plane.
 	Trust *Trust
-	// GatewayCA reports whether the gateway certificate Secret holds
-	// ca.crt; gateway peers are then verified against it, both ways.
-	GatewayCA bool
 	// Certs are the TLS Secrets the servers mount.
 	Certs Certs
+	// MonitorNamespace is the namespace the NetworkPolicy admits to the
+	// monitoring port.
+	MonitorNamespace string
 }
 
 // serverConfig renders server's config within nc from in under layout l,
@@ -233,6 +237,12 @@ func serverConfig(nc *clusterv1beta1.NatsCluster, in Inputs, server string, l La
 	if revision != "" {
 		c.ServerMetadata = map[string]string{MetadataConfigRevision: revision}
 	}
+	if nc.Spec.TLS != nil {
+		c.TLS = &ListenerTLSConfig{
+			CertFile: l.ClientTLSDir + "/" + corev1.TLSCertKey,
+			KeyFile:  l.ClientTLSDir + "/" + corev1.TLSPrivateKeyKey,
+		}
+	}
 	if routeTLSEnabled(&nc.Spec) {
 		c.Cluster.TLS = &TLSConfig{
 			CertFile: l.TLSDir + "/" + corev1.TLSCertKey,
@@ -242,7 +252,7 @@ func serverConfig(nc *clusterv1beta1.NatsCluster, in Inputs, server string, l La
 		}
 	}
 	if g := nc.Spec.Gateway; g != nil {
-		c.Gateway = gatewayConfig(nc.Name, g, l, in.GatewayCA)
+		c.Gateway = gatewayConfig(nc.Name, g, l)
 	}
 	if js := nc.Spec.JetStream; js != nil {
 		limits := deriveLimits(&nc.Spec).JetStream
@@ -269,8 +279,11 @@ func serverConfig(nc *clusterv1beta1.NatsCluster, in Inputs, server string, l La
 	return c
 }
 
-// gatewayConfig renders the gateway of the NATS cluster named name.
-func gatewayConfig(name string, g *clusterv1beta1.Gateway, l Layout, withCA bool) *GatewayConfig {
+// gatewayConfig renders the gateway of the NATS cluster named name. Its
+// TLS verifies peers both ways against ca.crt: nats-server asks every
+// inbound gateway for a certificate (opts.go:3310), and without a CA file
+// would accept one from any public root.
+func gatewayConfig(name string, g *clusterv1beta1.Gateway, l Layout) *GatewayConfig {
 	gc := &GatewayConfig{
 		Name:          name,
 		Listen:        l.GatewayListen,
@@ -286,10 +299,8 @@ func gatewayConfig(name string, g *clusterv1beta1.Gateway, l Layout, withCA bool
 		gc.TLS = &TLSConfig{
 			CertFile: l.GatewayTLSDir + "/" + corev1.TLSCertKey,
 			KeyFile:  l.GatewayTLSDir + "/" + corev1.TLSPrivateKeyKey,
-		}
-		if withCA {
-			gc.TLS.CAFile = l.GatewayTLSDir + "/" + caKey
-			gc.TLS.Verify = true
+			CAFile:   l.GatewayTLSDir + "/" + caKey,
+			Verify:   true,
 		}
 	}
 	return gc

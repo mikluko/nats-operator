@@ -268,7 +268,7 @@ func TestDecide_ReissuedRemovalKeepsGateTimer(t *testing.T) {
 	}
 	require.Equal(t, entered, d.Status.Gate.Since.Time)
 	require.Equal(t, ReasonGateBlocked, d.Progressing.Reason)
-	require.Equal(t, "removing demo-4 (4 of 5); waiting for Settled for 11m0s: removing demo-4 from the meta group", d.Progressing.Message)
+	require.Equal(t, "removing demo-4 (4 of 5); waiting for Settled: removing demo-4 from the meta group", d.Progressing.Message)
 }
 
 // silent stops server answering while it stays a member of everything.

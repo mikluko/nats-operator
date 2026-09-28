@@ -247,7 +247,7 @@ func authCases(t *testing.T, p testPlane) []authCase {
 		}, "operator is restart-only", true},
 		{"system account re-signed", func(_ *testing.T, m map[string]any) {
 			m["resolver_preload"] = map[string]any{sysPub: revoked.SystemAccountJWT}
-		}, "resolver_preload." + sysPub + " is restart-only", false},
+		}, "", false},
 		{"another operator", func(_ *testing.T, m map[string]any) {
 			m["operator"] = other.trust.OperatorJWT
 			m["system_account"] = otherPub
@@ -262,8 +262,8 @@ func authCases(t *testing.T, p testPlane) []authCase {
 
 // TestRestartReason_Auth pins the classification of trust changes: the
 // trusted NATS operator and system_account are restart-only and nats-server
-// refuses to reload them; the preloaded system account JWT is restart-only
-// because a reload does not apply it.
+// refuses to reload them; the system account re-signed, as a revocation or
+// a jetstream-stepdown export does, reloads.
 func TestRestartReason_Auth(t *testing.T) {
 	p := mintPlane(t)
 	nc := storyAuthCluster(t)

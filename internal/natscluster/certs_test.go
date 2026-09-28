@@ -21,6 +21,7 @@ func TestCertsLoaded(t *testing.T) {
 		{"no TLS", Certs{}, sysobs.CertNotAfter{}, true},
 		{"same", Certs{Routes: MountedCert{NotAfter: a}, Gateway: MountedCert{NotAfter: b}}, sysobs.CertNotAfter{Cluster: a, Gateway: b}, true},
 		{"routes behind", Certs{Routes: MountedCert{NotAfter: b}}, sysobs.CertNotAfter{Cluster: a}, false},
+		{"client behind", Certs{Client: MountedCert{NotAfter: b}}, sysobs.CertNotAfter{Client: a}, false},
 		{"leafnodes behind", Certs{Leafnodes: MountedCert{NotAfter: b}}, sysobs.CertNotAfter{Leafnode: a}, false},
 		{"unreported", Certs{Gateway: MountedCert{NotAfter: b}}, sysobs.CertNotAfter{}, true},
 	} {

@@ -11,6 +11,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -67,6 +68,8 @@ type Plan struct {
 	// GatewayService is nil unless gateway.service is set.
 	GatewayService *corev1.Service
 	PDB            *policyv1.PodDisruptionBudget
+	// NetworkPolicy is nil when monitor.networkPolicy is false.
+	NetworkPolicy *networkingv1.NetworkPolicy
 }
 
 // Render renders nc from in, with remotes, nc's leafRemotes resolved. It
@@ -80,6 +83,7 @@ func Render(nc *clusterv1beta1.NatsCluster, in Inputs, remotes ...LeafRemote) (*
 		ClientService:   clientService(nc),
 		GatewayService:  gatewayService(nc),
 		PDB:             pdb(nc),
+		NetworkPolicy:   networkPolicy(nc, in.MonitorNamespace),
 	}
 	layout := podLayout(nc)
 	h := sha256.New()
@@ -108,7 +112,7 @@ func Render(nc *clusterv1beta1.NatsCluster, in Inputs, remotes ...LeafRemote) (*
 		}
 		p.Servers = append(p.Servers, Server{Name: name, StatefulSet: sts})
 	}
-	for _, c := range []MountedCert{in.Certs.Routes, in.Certs.Gateway, in.Certs.Leafnodes} {
+	for _, c := range []MountedCert{in.Certs.Client, in.Certs.Routes, in.Certs.Gateway, in.Certs.Leafnodes} {
 		h.Write([]byte(c.Digest))
 	}
 	p.Revision = hex.EncodeToString(h.Sum(nil))[:10]
@@ -344,6 +348,9 @@ func natsContainer(nc *clusterv1beta1.NatsCluster, limits Limits) corev1.Contain
 	if hasData(nc) {
 		c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{Name: "data", MountPath: dataDir})
 	}
+	if clientCertSecret(nc) != "" {
+		c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{Name: "client-tls", MountPath: clientTLSDir, ReadOnly: true})
+	}
 	if routesSecret(nc) != "" {
 		c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{Name: "routes-tls", MountPath: routesTLSDir, ReadOnly: true})
 	}
@@ -387,6 +394,9 @@ func volumes(nc *clusterv1beta1.NatsCluster, server string) []corev1.Volume {
 		{Name: "pid", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 	}
 	vs = append(vs, leafnodesVolumes(nc)...)
+	if s := clientCertSecret(nc); s != "" {
+		vs = append(vs, corev1.Volume{Name: "client-tls", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: s}}})
+	}
 	if s := routesSecret(nc); s != "" {
 		vs = append(vs, corev1.Volume{Name: "routes-tls", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: s}}})
 	}

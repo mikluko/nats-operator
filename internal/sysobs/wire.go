@@ -110,11 +110,12 @@ type wirePeer struct {
 
 type wireVarzResponse struct {
 	Data *struct {
-		ConfigDigest   string          `json:"config_digest"`
-		ConfigLoadTime time.Time       `json:"config_load_time"`
-		Cluster        wireListenerTLS `json:"cluster"`
-		Gateway        wireListenerTLS `json:"gateway"`
-		Leafnode       wireListenerTLS `json:"leaf"`
+		ConfigDigest    string          `json:"config_digest"`
+		ConfigLoadTime  time.Time       `json:"config_load_time"`
+		TLSCertNotAfter time.Time       `json:"tls_cert_not_after"`
+		Cluster         wireListenerTLS `json:"cluster"`
+		Gateway         wireListenerTLS `json:"gateway"`
+		Leafnode        wireListenerTLS `json:"leaf"`
 	} `json:"data"`
 	Error *wireError `json:"error"`
 }

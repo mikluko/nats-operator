@@ -14,7 +14,7 @@ import (
 // rollout's gate turns Progressing to GateBlocked.
 func TestRecordGateBlocked(t *testing.T) {
 	blocked := metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionTrue, Reason: ReasonGateBlocked,
-		Message: "restarting demo-2 (1 of 3); waiting for Settled for 10m0s: stream ORDERS lagging on demo-1"}
+		Message: "restarting demo-2 (1 of 3); waiting for Settled: stream ORDERS lagging on demo-1"}
 	rolling := metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionTrue, Reason: ReasonRollingRestart}
 	tests := []struct {
 		name   string

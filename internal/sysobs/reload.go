@@ -22,7 +22,7 @@ type ConfigState struct {
 // CertNotAfter is the expiry of the certificate each TLS listener of a
 // server loaded, zero on a listener without one.
 type CertNotAfter struct {
-	Cluster, Gateway, Leafnode time.Time
+	Client, Cluster, Gateway, Leafnode time.Time
 }
 
 // Config returns the ConfigState of the server with ID serverID.
@@ -39,6 +39,7 @@ func (o *SystemClient) Config(ctx context.Context, serverID string) (ConfigState
 	}
 	d := r.Data
 	return ConfigState{Digest: d.ConfigDigest, LoadTime: d.ConfigLoadTime, CertNotAfter: CertNotAfter{
+		Client:   d.TLSCertNotAfter,
 		Cluster:  d.Cluster.TLSCertNotAfter,
 		Gateway:  d.Gateway.TLSCertNotAfter,
 		Leafnode: d.Leafnode.TLSCertNotAfter,

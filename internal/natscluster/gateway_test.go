@@ -51,20 +51,24 @@ func TestServerConfig_Gateway(t *testing.T) {
 	tests := []struct {
 		name   string
 		mutate func(*clusterv1beta1.NatsCluster)
-		in     Inputs
 		want   string
 	}{
-		{"story 6 west, Explicit, issuer without a CA", func(*clusterv1beta1.NatsCluster) {}, Inputs{}, `{
+		{"story 6 west, Explicit", func(*clusterv1beta1.NatsCluster) {}, `{
 			"name": "west",
 			"listen": "0.0.0.0:7222",
 			"advertise": "nats-west.example.net:7222",
 			"reject_unknown": true,
-			"tls": {"cert_file": "/etc/nats-gateway-tls/tls.crt", "key_file": "/etc/nats-gateway-tls/tls.key", "verify": false},
+			"tls": {
+				"cert_file": "/etc/nats-gateway-tls/tls.crt",
+				"key_file": "/etc/nats-gateway-tls/tls.key",
+				"ca_file": "/etc/nats-gateway-tls/ca.crt",
+				"verify": true
+			},
 			"gateways": [{"name": "east", "urls": ["tls://nats-east.example.net:7222"]}]
 		}`},
-		{"Gossip, certificate with a CA", func(nc *clusterv1beta1.NatsCluster) {
+		{"Gossip", func(nc *clusterv1beta1.NatsCluster) {
 			nc.Spec.Gateway.Discovery = clusterv1beta1.GatewayDiscoveryGossip
-		}, Inputs{GatewayCA: true}, `{
+		}, `{
 			"name": "west",
 			"listen": "0.0.0.0:7222",
 			"advertise": "nats-west.example.net:7222",
@@ -81,13 +85,13 @@ func TestServerConfig_Gateway(t *testing.T) {
 			nc.Spec.Gateway.TLS = nil
 			nc.Spec.Gateway.Advertise = ""
 			nc.Spec.Gateway.Remotes = []clusterv1beta1.GatewayRemote{{Name: "west", URL: "nats://w:7222"}}
-		}, Inputs{GatewayCA: true}, `{"name": "west", "listen": "0.0.0.0:7222", "reject_unknown": true}`},
+		}, `{"name": "west", "listen": "0.0.0.0:7222", "reject_unknown": true}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			nc := storySupercluster(t, "west")
 			tt.mutate(nc)
-			require.JSONEq(t, tt.want, gatewayJSON(t, nc, tt.in))
+			require.JSONEq(t, tt.want, gatewayJSON(t, nc, Inputs{}))
 		})
 	}
 
@@ -400,7 +404,7 @@ func supercluster(t *testing.T, mutate func(east, west *clusterv1beta1.NatsClust
 	t.Cleanup(pool.Close)
 	start := func(name string) *member {
 		m := &member{nc: ncs[name]}
-		in := Inputs{Trust: p.trust, GatewayCA: true}
+		in := Inputs{Trust: p.trust}
 		m.plan, err = Render(m.nc, in)
 		require.NoError(t, err)
 		_, _, m.url, _ = startRenderedWith(t, m.nc, in, m.plan.Revision, func(i int, l *Layout) {

@@ -11,6 +11,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -19,9 +20,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
@@ -89,6 +93,10 @@ type Reconciler struct {
 	Now    func() time.Time
 	// Recorder records the rollout's events; nil records none.
 	Recorder events.EventRecorder
+	// ControllerNamespace is the namespace the NetworkPolicy admits to the
+	// monitoring port; SetupWithManager fills in the namespace of its own
+	// pod when it is empty.
+	ControllerNamespace string
 }
 
 // +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters,verbs=get;list;watch;patch
@@ -99,6 +107,7 @@ type Reconciler struct {
 // +kubebuilder:rbac:groups="",resources=services;secrets,verbs=get;list;watch;create;update;delete
 // +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;delete
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;delete
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;create;update;delete
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsoperatortrusts,verbs=get;list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
@@ -109,6 +118,9 @@ const TrustField = "cluster.nats.mikluko.io/trust"
 
 // SetupWithManager registers r and its field indexes with mgr.
 func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
+	if r.ControllerNamespace == "" {
+		r.ControllerNamespace = inClusterNamespace()
+	}
 	idx := mgr.GetFieldIndexer()
 	if err := idx.IndexField(ctx, &clusterv1beta1.NatsCluster{}, TrustField, func(o client.Object) []string {
 		if key := trustKey(o.(*clusterv1beta1.NatsCluster)); key != "" {
@@ -132,7 +144,7 @@ func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) err
 		return err
 	}
 	return r.watchLeafRefs(ctrl.NewControllerManagedBy(mgr)).
-		For(&clusterv1beta1.NatsCluster{}).
+		For(&clusterv1beta1.NatsCluster{}, builder.WithPredicates(specChanged)).
 		Watches(&natsv1beta1.NatsOperatorTrust{}, handler.EnqueueRequestsFromMapFunc(r.clustersTrusting)).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(mgr.GetClient(),
 			schema.GroupKind{Group: clusterv1beta1.GroupVersion.Group, Kind: "NatsCluster"}, &clusterv1beta1.NatsClusterList{})).
@@ -141,9 +153,20 @@ func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) err
 		Owns(&corev1.Service{}).
 		Owns(&corev1.Secret{}).
 		Owns(&policyv1.PodDisruptionBudget{}).
+		Owns(&networkingv1.NetworkPolicy{}).
 		Named("natscluster").
 		Complete(telemetry.Traced("NatsCluster", r))
 }
+
+// specChanged passes a NatsCluster update that changes its generation, its
+// annotations or its deletion timestamp, and drops a status-only write.
+var specChanged = predicate.Or(
+	predicate.GenerationChangedPredicate{},
+	predicate.AnnotationChangedPredicate{},
+	predicate.Funcs{UpdateFunc: func(e event.UpdateEvent) bool {
+		return !e.ObjectOld.GetDeletionTimestamp().Equal(e.ObjectNew.GetDeletionTimestamp())
+	}},
+)
 
 // trustKey is the namespace/name of the NatsOperatorTrust nc reads, or "".
 func trustKey(nc *clusterv1beta1.NatsCluster) string {
@@ -220,7 +243,7 @@ func (r *Reconciler) reconcile(ctx context.Context, nc *clusterv1beta1.NatsClust
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	plan, err := Render(nc, Inputs{Trust: trust, GatewayCA: certs.Gateway.CA, Certs: certs}, remotes...)
+	plan, err := Render(nc, Inputs{Trust: trust, Certs: certs, MonitorNamespace: r.ControllerNamespace}, remotes...)
 	if err != nil {
 		return ctrl.Result{}, r.hold(ctx, orig, nc, unsupportedSpec(err.Error()))
 	}
@@ -314,8 +337,9 @@ func (r *Reconciler) patchStatus(ctx context.Context, orig, nc *clusterv1beta1.N
 	return nil
 }
 
-// applyShared creates or updates the Services and the PodDisruptionBudget,
-// and deletes the gateway Service once gateway.service is unset.
+// applyShared creates or updates the Services, the PodDisruptionBudget and
+// the NetworkPolicy, and deletes the gateway Service once gateway.service is
+// unset and the NetworkPolicy once monitor.networkPolicy is false.
 func (r *Reconciler) applyShared(ctx context.Context, nc *clusterv1beta1.NatsCluster, plan *Plan) error {
 	services := []*corev1.Service{plan.HeadlessService, plan.ClientService}
 	if plan.GatewayService != nil {
@@ -350,7 +374,13 @@ func (r *Reconciler) applyShared(ctx context.Context, nc *clusterv1beta1.NatsClu
 	}); err != nil {
 		return fmt.Errorf("apply pdb %s: %w", want.Name, err)
 	}
-	return nil
+	var np client.Object
+	if plan.NetworkPolicy != nil {
+		np = plan.NetworkPolicy
+	}
+	return r.applyOwned(ctx, nc, &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: networkPolicyName(nc), Namespace: nc.Namespace}}, np, func(have, want client.Object) {
+		have.(*networkingv1.NetworkPolicy).Spec = want.(*networkingv1.NetworkPolicy).Spec
+	})
 }
 
 // deleteOwned deletes obj when it exists and nc controls it.

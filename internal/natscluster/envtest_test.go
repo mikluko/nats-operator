@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -148,7 +149,7 @@ func TestEnvtestReconcile(t *testing.T) {
 	require.NoError(t, err)
 
 	obs := &fakeObserver{}
-	r := &Reconciler{Client: c, Observer: obs}
+	r := &Reconciler{Client: c, Observer: obs, ControllerNamespace: "nats-operator"}
 	ctx := t.Context()
 
 	newCluster := func(t *testing.T, ns string, mutate func(*clusterv1beta1.NatsCluster)) *clusterv1beta1.NatsCluster {
@@ -220,6 +221,10 @@ func TestEnvtestReconcile(t *testing.T) {
 		var pdb policyv1.PodDisruptionBudget
 		require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "story1", Name: "demo"}, &pdb))
 		require.Equal(t, 1, pdb.Spec.MaxUnavailable.IntValue())
+		var np networkingv1.NetworkPolicy
+		require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "story1", Name: "demo"}, &np))
+		require.True(t, metav1.IsControlledBy(&np, got))
+		require.Equal(t, networkPolicy(got, "nats-operator").Spec, np.Spec)
 		var secret corev1.Secret
 		require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "story1", Name: "demo-routes-tls"}, &secret))
 		require.True(t, metav1.IsControlledBy(&secret, got))
@@ -573,6 +578,46 @@ func TestEnvtestReconcile(t *testing.T) {
 		require.Empty(t, statefulSets(t, "unsupported"))
 	})
 
+	t.Run("monitor.networkPolicy false deletes the NetworkPolicy", func(t *testing.T) {
+		nc := newCluster(t, "netpol", func(*clusterv1beta1.NatsCluster) {})
+		_, got := reconcile(t, nc)
+		key := types.NamespacedName{Namespace: "netpol", Name: "demo"}
+		require.NoError(t, c.Get(ctx, key, &networkingv1.NetworkPolicy{}))
+
+		got.Spec.Monitor = &clusterv1beta1.Monitor{NetworkPolicy: ptr.To(false)}
+		require.NoError(t, c.Update(ctx, got))
+		reconcile(t, got)
+		require.True(t, apierrors.IsNotFound(c.Get(ctx, key, &networkingv1.NetworkPolicy{})), "NetworkPolicy kept")
+	})
+
+	t.Run("client TLS", func(t *testing.T) {
+		nc := newCluster(t, "clienttls", func(nc *clusterv1beta1.NatsCluster) {
+			nc.Spec.TLS = &clusterv1beta1.ListenerTLS{CertificateSource: clusterv1beta1.CertificateSource{SecretRef: &natsv1beta1.SecretReference{Name: "clients"}}}
+		})
+		_, got := reconcile(t, nc)
+		condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonClientCertNotReady)
+		require.Equal(t, "Secret clients does not exist", meta.FindStatusCondition(got.Status.Conditions, ConditionProgressing).Message)
+		require.Empty(t, statefulSets(t, "clienttls"))
+
+		cert, err := selfSignedRouteSecret(nc, clientHosts(nc), r.now())
+		require.NoError(t, err)
+		cert.Name = "clients"
+		require.NoError(t, c.Create(ctx, cert))
+		_, got = reconcile(t, got)
+		condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonCreating)
+		require.Equal(t, "tls://demo.clienttls.svc:4222", got.Status.Endpoints.Client)
+		cm := &corev1.ConfigMap{}
+		require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "clienttls", Name: "demo-0-config"}, cm))
+		var cfg Config
+		require.NoError(t, json.Unmarshal([]byte(cm.Data[configFile]), &cfg))
+		require.Equal(t, &ListenerTLSConfig{CertFile: clientTLSDir + "/tls.crt", KeyFile: clientTLSDir + "/tls.key"}, cfg.TLS)
+
+		got.Spec.TLS.CertManager = &clusterv1beta1.CertManagerCertificate{IssuerRef: clusterv1beta1.IssuerReference{Name: "ca"}}
+		err = c.Update(ctx, got)
+		require.True(t, apierrors.IsInvalid(err), "%v", err)
+		require.ErrorContains(t, err, "set exactly one of secretRef and certManager")
+	})
+
 	t.Run("gateway", func(t *testing.T) {
 		west := storySupercluster(t, "west")
 		nc := newCluster(t, "gateway", func(nc *clusterv1beta1.NatsCluster) {
@@ -608,8 +653,16 @@ func TestEnvtestReconcile(t *testing.T) {
 		own, err := selfSignedRouteSecret(nc, []string{"nats-west.example.net"}, r.now())
 		require.NoError(t, err)
 		own.Name = "gw"
+		ca := own.Data[caKey]
 		delete(own.Data, caKey)
 		require.NoError(t, c.Create(ctx, own))
+		_, got = reconcile(t, got)
+		condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonGatewayCertNotReady)
+		require.Equal(t, "Secret gw has no ca.crt", meta.FindStatusCondition(got.Status.Conditions, ConditionProgressing).Message)
+		require.Empty(t, statefulSets(t, "gateway"), "a gateway without a CA accepts a peer certificate from any public root")
+
+		own.Data[caKey] = ca
+		require.NoError(t, c.Update(ctx, own))
 		_, got = reconcile(t, got)
 		condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonCreating)
 		require.Len(t, statefulSets(t, "gateway"), 3)
@@ -619,7 +672,7 @@ func TestEnvtestReconcile(t *testing.T) {
 		require.NoError(t, json.Unmarshal([]byte(cm.Data[configFile]), &cfg))
 		require.Equal(t, &GatewayConfig{
 			Name: "demo", Listen: "0.0.0.0:7222", Advertise: "nats-west.example.net:7222", RejectUnknown: true,
-			TLS:      &TLSConfig{CertFile: gatewayTLSDir + "/tls.crt", KeyFile: gatewayTLSDir + "/tls.key"},
+			TLS:      &TLSConfig{CertFile: gatewayTLSDir + "/tls.crt", KeyFile: gatewayTLSDir + "/tls.key", CAFile: gatewayTLSDir + "/ca.crt", Verify: true},
 			Gateways: []RemoteGatewayConfig{{Name: "east", URLs: []string{"tls://nats-east.example.net:7222"}}},
 		}, cfg.Gateway)
 
@@ -867,7 +920,13 @@ func TestEnvtestReconcile(t *testing.T) {
 		nc := newCluster(t, "issuer", func(nc *clusterv1beta1.NatsCluster) {
 			nc.Spec.Routes = &clusterv1beta1.Routes{TLS: &clusterv1beta1.RoutesTLS{CertificateSource: clusterv1beta1.CertificateSource{CertManager: issuer}}}
 			nc.Spec.Leafnodes = &clusterv1beta1.Leafnodes{TLS: &clusterv1beta1.ListenerTLS{CertificateSource: clusterv1beta1.CertificateSource{CertManager: issuer}}}
+			nc.Spec.Auth = storyAuthCluster(t).Spec.Auth
 		})
+		trust := mintPlane(t).trust
+		require.NoError(t, c.Create(ctx, &natsv1beta1.NatsOperatorTrust{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "issuer", Name: nc.Spec.Auth.TrustRef.Name},
+			Spec:       natsv1beta1.NatsOperatorTrustSpec{OperatorJWT: trust.OperatorJWT, SystemAccountJWT: trust.SystemAccountJWT},
+		}))
 		certificate := func(name string) error {
 			u := &unstructured.Unstructured{}
 			u.SetGroupVersionKind(certificateGVK)

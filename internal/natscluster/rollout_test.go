@@ -237,15 +237,17 @@ func TestDecide_GateBlocked(t *testing.T) {
 	d = f.decide()
 	require.Empty(t, d.Step)
 	require.Equal(t, since, d.Status.Gate.Since.Time)
-	requireProgressing(t, d, ReasonGateBlocked, "restarting demo-2 (1 of 3); waiting for Settled for 10m0s: "+
+	requireProgressing(t, d, ReasonGateBlocked, "restarting demo-2 (1 of 3); waiting for Settled: "+
 		"consumer ORDERS/C0 MemberBehind on demo-2; consumer ORDERS/C1 MemberBehind on demo-2; "+
 		"consumer ORDERS/C2 MemberBehind on demo-2; consumer ORDERS/C3 MemberBehind on demo-2; "+
 		"consumer ORDERS/C4 MemberBehind on demo-2; and 2 more")
 
+	blocked := d.Progressing.Message
 	f.tick(24 * time.Hour)
 	d = f.decide()
 	require.Empty(t, d.Step, "a closed gate timed out")
 	require.Equal(t, ReasonGateBlocked, d.Progressing.Reason)
+	require.Equal(t, blocked, d.Progressing.Message, "the message changes with the gate's age, so each status patch re-enqueues")
 
 	f.recover("demo-2")
 	d = f.decide()
@@ -338,7 +340,7 @@ func TestDecide_InvoluntaryDisruption(t *testing.T) {
 
 		f.tick(gateBlockedAfter)
 		d = f.decide()
-		requireProgressing(t, d, ReasonGateBlocked, "before restarting demo-2 (1 of 3); waiting for Ready for 10m0s: demo-1 not ready")
+		requireProgressing(t, d, ReasonGateBlocked, "before restarting demo-2 (1 of 3); waiting for Ready: demo-1 not ready")
 
 		f.server("demo-1").Ready = true
 		require.Equal(t, "demo-2", f.decide().Step)
