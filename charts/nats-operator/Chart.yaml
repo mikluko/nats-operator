@@ -8,3 +8,5 @@ kubeVersion: ">=1.29.0-0"
 home: https://mikluko.github.io/nats-operator/
 sources:
   - https://github.com/mikluko/nats-operator
+annotations:
+  artifacthub.io/license: Apache-2.0

@@ -1,13 +1,16 @@
 name: release
 
-# The changelog decides the version: a push to main whose newest CHANGELOG.md
-# entry names a version no tag carries publishes it, and nothing else does.
-# One workflow, because a tag pushed with GITHUB_TOKEN triggers no other.
+# The changelog decides the version: a push to main that passes ci, whose
+# newest CHANGELOG.md entry names a version no tag carries, publishes it at
+# the commit ci tested, and nothing else does. One workflow, because a tag
+# pushed with GITHUB_TOKEN triggers no other.
 #
 # A manual run builds and packages everything and publishes nothing unless
 # dry-run is switched off on main.
 on:
-  push:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -25,34 +28,34 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io/mikluko/nats-operator
+  # A workflow_run event runs at main's tip, which may be past the commit ci
+  # passed.
+  SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
   CHART_REPOSITORY: oci://ghcr.io/mikluko/nats-operator/charts
 
 jobs:
   plan:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     outputs:
-      due: ${{ steps.plan.outputs.due }}
-      version: ${{ steps.plan.outputs.version }}
-      tag: ${{ steps.plan.outputs.tag }}
-      prerelease: ${{ steps.plan.outputs.prerelease }}
+      due: ${{ steps.changelog.outputs.version != '' && steps.changelog.outputs['already-tagged'] == 'false' }}
+      version: ${{ steps.changelog.outputs.version }}
+      tag: v${{ steps.changelog.outputs.version }}
+      prerelease: ${{ steps.changelog.outputs.prerelease }}
       notes: ${{ steps.changelog.outputs.notes }}
       publish: ${{ steps.publish.outputs.publish }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          ref: ${{ env.SHA }}
           fetch-depth: 0
       - id: changelog
-        uses: mikluko/action-changelog@v1
-      - id: plan
-        env:
-          VALID: ${{ steps.changelog.outputs.valid }}
-          VERSION: ${{ steps.changelog.outputs.version }}
-          TAGGED: ${{ steps.changelog.outputs.already-tagged }}
-          PRERELEASE: ${{ steps.changelog.outputs.prerelease }}
-        run: hack/release-plan.sh
+        uses: mikluko/action-changelog@6dc550835d89afd4e826611ec06b9e054a362cb0 # v1.3.1
       - id: publish
         env:
-          PUBLISH: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || !inputs.dry-run) }}
+          PUBLISH: ${{ github.event_name == 'workflow_run' || (github.ref == 'refs/heads/main' && !inputs.dry-run) }}
         run: echo "publish=$PUBLISH" >>"$GITHUB_OUTPUT"
 
   images:
@@ -62,18 +65,26 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+    outputs:
+      subjects: ${{ steps.sign.outputs.subjects }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ env.SHA }}
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
-      - uses: ko-build/setup-ko@v0.9
+      - uses: ko-build/setup-ko@d006021bd0c28d1ce33a07e7943d48b079944c8d # v0.9
+        with:
+          version: v0.19.1
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Log in
         if: needs.plan.outputs.publish == 'true'
         env:
           ACTOR: ${{ github.actor }}
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: printf '%s' "$TOKEN" | ko login ghcr.io --username "$ACTOR" --password-stdin
+        run: printf '%s' "$TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
       - name: Build
         env:
           KO_DOCKER_REPO: ${{ env.REGISTRY }}
@@ -86,11 +97,48 @@ jobs:
             set -- "$@" "./$c"
           done
           ko build --base-import-paths --push="$PUSH" \
+            --image-refs "$RUNNER_TEMP/image-refs" \
             --platform linux/amd64,linux/arm64 --tags "$VERSION" \
             --image-label "org.opencontainers.image.source=$SOURCE" \
-            --image-label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --image-label "org.opencontainers.image.revision=$SHA" \
             --image-label "org.opencontainers.image.version=$VERSION" \
             "$@"
+      - id: sign
+        name: Sign
+        if: needs.plan.outputs.publish == 'true'
+        run: |
+          subjects='[]'
+          while read -r ref; do
+            name=${ref%@*}
+            digest=${ref#*@}
+            cosign sign --yes "${name%:*}@$digest"
+            subjects=$(jq -c --arg name "${name%:*}" --arg digest "$digest" \
+              '. + [{name: $name, digest: $digest}]' <<<"$subjects")
+          done <"$RUNNER_TEMP/image-refs"
+          echo "subjects=$subjects" >>"$GITHUB_OUTPUT"
+
+  provenance:
+    needs: [plan, images]
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      matrix:
+        subject: ${{ fromJSON(needs.images.outputs.subjects) }}
+    steps:
+      - name: Log in
+        env:
+          ACTOR: ${{ github.actor }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ matrix.subject.name }}
+          subject-digest: ${{ matrix.subject.digest }}
+          push-to-registry: true
 
   chart:
     needs: plan
@@ -99,9 +147,16 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ env.SHA }}
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v4.3.0
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Package
         env:
           VERSION: ${{ needs.plan.outputs.version }}
@@ -109,32 +164,49 @@ jobs:
           helm package charts/nats-operator \
             --version "$VERSION" --app-version "$VERSION" \
             --destination "$RUNNER_TEMP/chart"
-      - name: Push
+      - id: push
+        name: Push and sign
         if: needs.plan.outputs.publish == 'true'
+        shell: bash
         env:
           VERSION: ${{ needs.plan.outputs.version }}
           ACTOR: ${{ github.actor }}
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          printf '%s' "$TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
           printf '%s' "$TOKEN" | helm registry login ghcr.io --username "$ACTOR" --password-stdin
-          helm push "$RUNNER_TEMP/chart/nats-operator-$VERSION.tgz" "$CHART_REPOSITORY"
+          helm push "$RUNNER_TEMP/chart/nats-operator-$VERSION.tgz" "$CHART_REPOSITORY" 2>&1 | tee "$RUNNER_TEMP/push.log"
+          digest=$(awk '$1 == "Digest:" { print $2 }' "$RUNNER_TEMP/push.log")
+          test -n "$digest"
+          name=${CHART_REPOSITORY#oci://}/nats-operator
+          cosign sign --yes "$name@$digest"
+          echo "name=$name" >>"$GITHUB_OUTPUT"
+          echo "digest=$digest" >>"$GITHUB_OUTPUT"
+      - if: needs.plan.outputs.publish == 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ steps.push.outputs.name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
 
   # Last, so a tag and a release exist only once every artifact they name does.
   release:
-    needs: [plan, images, chart]
-    if: needs.plan.outputs.due == 'true'
+    needs: [plan, images, provenance, chart]
+    if: ${{ !cancelled() && !failure() && needs.plan.outputs.due == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ env.SHA }}
       - name: Notes
         env:
           TAG: ${{ needs.plan.outputs.tag }}
           NOTES: ${{ needs.plan.outputs.notes }}
         run: |
           printf '%s\n' "$NOTES" >"$RUNNER_TEMP/notes.md"
-          echo "release $TAG from $GITHUB_SHA:"
+          echo "release $TAG from $SHA:"
           cat "$RUNNER_TEMP/notes.md"
       - name: Tag and release
         if: needs.plan.outputs.publish == 'true'
@@ -143,7 +215,7 @@ jobs:
           TAG: ${{ needs.plan.outputs.tag }}
           PRERELEASE: ${{ needs.plan.outputs.prerelease }}
         run: |
-          git tag "$TAG" "$GITHUB_SHA"
+          git tag "$TAG" "$SHA"
           git push origin "refs/tags/$TAG"
           flags=
           if [ "$PRERELEASE" = true ]; then flags=--prerelease; fi

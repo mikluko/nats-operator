@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Licensed under Apache-2.0; the chart carries `artifacthub.io/license: Apache-2.0`.
+- Vulnerabilities are reported through the repository's GitHub private vulnerability reporting, as `SECURITY.md` states.
 - `helm test` on the chart checks every enabled controller's `/healthz` from a pod of chart value `tests.image` (`busybox:1.37.0`).
 - The chart validates its values against `values.schema.json`: `helm install`, `helm upgrade` and `helm lint` refuse a key the chart does not know.
 - The chart requires Kubernetes 1.29 or later.
@@ -27,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The API server refuses mutually exclusive fields set together, a `NatsCluster` version below 2.15.0 or moving more than one minor at once, and changes nats-server would refuse to the immutable fields of a stream, a consumer, a key-value bucket or an object store.
 - Helm chart `charts/nats-operator` installing the CRDs and any subset of the cluster, auth and JetStream controllers through `cluster.enabled`, `auth.enabled` and `jetstream.enabled`, each with its own ServiceAccount and a ClusterRole holding only the verbs its code uses, on its own API group, `nats.mikluko.io` and the core objects it uses; images default to `ghcr.io/mikluko/nats-operator/<controller>` at the chart's `appVersion`.
 - Each release publishes the three controller images for linux/amd64 and linux/arm64 at `ghcr.io/mikluko/nats-operator/<controller>:<version>`, the chart at `oci://ghcr.io/mikluko/nats-operator/charts/nats-operator` with that version as its version and `appVersion`, and a GitHub release carrying the version's changelog entry.
+- Each release's controller images and chart are signed keylessly with cosign and carry a GitHub build provenance attestation in the registry; the images are built on `cgr.dev/chainguard/static` pinned by digest.
 - The cluster controller deploys a `NatsCluster`: one StatefulSet and ConfigMap per server, client and headless Services, a PodDisruptionBudget with `maxUnavailable: 1`, route TLS self-signed unless a certificate is named, and a `prometheus-nats-exporter` sidecar unless `exporter.enabled` is false. Its status reports `Ready`, `Settled`, `Progressing`, `endpoints`, the config revision and one entry per server.
 - `NatsCluster` rolls a restart-only change, such as a version bump, one server at a time: highest ordinal first and the meta leader's server last, each step waiting until every server is Ready, every server on the new revision reports it, and the NATS cluster is Settled. `status.rollout` names the updated, current and pending servers and what the gate waits for; `Progressing` reads `RollingRestart`, `GateBlocked` once the gate has been closed for ten minutes, or `RolloutPaused`. `spec.rollout.paused` holds the next step, and the annotation `cluster.nats.mikluko.io/force-step: "<server>"` restarts that server at once.
 - Servers render `lame_duck_duration: 2m` and `lame_duck_grace_period: 10s`, inside the pod's 300-second termination grace period.

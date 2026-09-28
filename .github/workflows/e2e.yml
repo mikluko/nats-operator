@@ -1,0 +1,41 @@
+name: e2e
+
+# The single-cluster stories on one kind cluster over rootful podman, by hand.
+on:
+  workflow_dispatch:
+    inputs:
+      stories:
+        description: Comma-separated story numbers; empty runs every single-cluster story.
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  stories:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # v3.1.0
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v4.3.0
+      - uses: ko-build/setup-ko@d006021bd0c28d1ce33a07e7943d48b079944c8d # v0.9
+        with:
+          version: v0.19.1
+      - name: Rootful podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+          sudo systemctl enable --now podman.socket
+          sudo test -S /run/podman/podman.sock
+      - name: Stories
+        env:
+          E2E_CLUSTERS: "1"
+          E2E_STORIES: ${{ inputs.stories }}
+        run: sudo --preserve-env=E2E_CLUSTERS,E2E_STORIES,HOME,GOPATH,GOMODCACHE,GOCACHE env "PATH=$PATH" just e2e
