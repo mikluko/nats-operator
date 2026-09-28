@@ -19,12 +19,14 @@ import (
 )
 
 // ServerAdmin evacuates servers of one NATS cluster and removes them from
-// its meta group, over the system account; *sysobs.SystemClient is one.
+// its meta group, over the system account.
 type ServerAdmin interface {
 	Evacuate(ctx context.Context, server string) error
 	RemovePeer(ctx context.Context, server string) error
 	StepDownMeta(ctx context.Context) error
 }
+
+var _ ServerAdmin = (*sysobs.SystemClient)(nil)
 
 // AdminFunc returns the ServerAdmin of the NATS cluster nc deployed, or an
 // error saying why it has none.
@@ -118,11 +120,7 @@ func startRemoval(rm removalState, server string) removalStep {
 }
 
 // continueRemoval is the next action on the server being removed, or nil
-// while it waits, with what it waits for. An evacuated server is removed
-// from the meta group once it holds no Raft group and the NATS cluster is
-// Settled apart from it; a meta leader steps down first. A removed server
-// is deleted once the meta group no longer lists it, and is removed again
-// while it does or while the meta group is FromFollowers.
+// while it waits, with what it waits for.
 func continueRemoval(rm removalState, metaLeader string) (*removalStep, gateState) {
 	x, snap := rm.Removing, rm.Snapshot
 	if snap == nil {
@@ -383,8 +381,7 @@ func (r *Reconciler) deleteServer(ctx context.Context, nc *clusterv1beta1.NatsCl
 }
 
 // claimTerminating reports whether server's data volume claim is being
-// deleted. A StatefulSet created for server before the claim is gone would
-// bind it and lose its data with it.
+// deleted.
 func (r *Reconciler) claimTerminating(ctx context.Context, nc *clusterv1beta1.NatsCluster, server string) (bool, error) {
 	pvc := &corev1.PersistentVolumeClaim{}
 	err := r.Client.Get(ctx, client.ObjectKey{Namespace: nc.Namespace, Name: dataClaimName(server)}, pvc)

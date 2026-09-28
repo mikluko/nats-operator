@@ -40,7 +40,7 @@ type EvacuationTarget struct {
 
 // PinnedObject is a resource whose own spec pins the source cluster.
 type PinnedObject struct {
-	// Kind of the resource.
+	// Kind is NatsStream, NatsKeyValue or NatsObjectStore.
 	// +required
 	Kind string `json:"kind"`
 
@@ -102,7 +102,7 @@ type ServerStream struct {
 	// +required
 	Account string `json:"account"`
 
-	// Name of the stream.
+	// Name is the stream's server-side name.
 	// +required
 	Name string `json:"name"`
 }
@@ -113,7 +113,7 @@ type RequestedMove struct {
 	// +required
 	Account string `json:"account"`
 
-	// Stream is the name of the stream.
+	// Stream is the stream's server-side name.
 	// +required
 	Stream string `json:"stream"`
 

@@ -20,9 +20,8 @@ import (
 // the root, so a link that drops the base path is caught as broken.
 const siteBase = "https://site.test/base/"
 
-// buildSite renders docs/ the way .github/workflows/docs.yml does, under
-// siteBase, and returns the output directory. It needs hugo extended on PATH;
-// HUGO_CACHEDIR, when set, is where the theme module is read from.
+// buildSite renders docs/ under siteBase as .github/workflows/docs.yml does,
+// and returns the output directory; it needs hugo extended on PATH.
 func buildSite(t *testing.T) string {
 	t.Helper()
 	hugo, err := exec.LookPath("hugo")
@@ -35,8 +34,7 @@ func buildSite(t *testing.T) string {
 	return out
 }
 
-// page is one rendered HTML file: the ids it defines, the URLs it links to,
-// and how many h1 elements it holds.
+// page is one rendered HTML file.
 type page struct {
 	ids   map[string]bool
 	links []string
@@ -161,7 +159,6 @@ func linkResolves(root string, pages map[string]*page, base, from *url.URL, name
 	return ok && pg.ids[target.Fragment]
 }
 
-// duplicateH1 returns every page under root holding more than one h1.
 func duplicateH1(t *testing.T, root string) []string {
 	t.Helper()
 	var dup []string

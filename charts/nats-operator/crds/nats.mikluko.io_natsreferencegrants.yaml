@@ -23,7 +23,7 @@ spec:
       openAPIV3Schema:
         description: |-
           NatsReferenceGrant admits references into its own namespace from the
-          namespaces it lists; it has no status, since nothing acts on it.
+          namespaces it lists; it has no status.
         properties:
           apiVersion:
             description: |-
@@ -54,15 +54,18 @@ spec:
                     namespace.
                   properties:
                     group:
-                      description: Group of the referrer.
+                      description: |-
+                        Group is the referrer's API group, matched exactly, such as
+                        cluster.nats.mikluko.io.
                       minLength: 1
                       type: string
                     kind:
-                      description: Kind of the referrer.
+                      description: Kind is the referrer's kind, matched exactly, such
+                        as NatsCluster.
                       minLength: 1
                       type: string
                     namespace:
-                      description: Namespace of the referrer.
+                      description: Namespace the referrers live in, matched exactly.
                       minLength: 1
                       type: string
                   required:
@@ -79,11 +82,15 @@ spec:
                     namespace.
                   properties:
                     group:
-                      description: Group of the referenced object.
+                      description: |-
+                        Group is the referenced object's API group, matched exactly, such as
+                        nats.mikluko.io.
                       minLength: 1
                       type: string
                     kind:
-                      description: Kind of the referenced object.
+                      description: |-
+                        Kind is the referenced object's kind, matched exactly, such as
+                        NatsConnection.
                       minLength: 1
                       type: string
                     name:

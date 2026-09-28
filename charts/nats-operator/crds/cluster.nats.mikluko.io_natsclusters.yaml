@@ -85,7 +85,7 @@ spec:
                             minLength: 1
                             type: string
                           name:
-                            description: Name of the Secret.
+                            description: Name of a Secret in the referrer's namespace.
                             minLength: 1
                             type: string
                         required:
@@ -152,7 +152,9 @@ spec:
                           minLength: 1
                           type: string
                         url:
-                          description: URL is the member's gateway URL.
+                          description: |-
+                            URL is where the member's gateway is dialled; on this cluster's own
+                            entry, its host is a name on the gateway certificate.
                           minLength: 1
                           type: string
                       required:
@@ -170,10 +172,10 @@ spec:
                       annotations:
                         additionalProperties:
                           type: string
-                        description: Annotations on the Service.
+                        description: Annotations set on the Service.
                         type: object
                       type:
-                        description: Type of the Service.
+                        description: Type of the Service, ClusterIP when omitted.
                         type: string
                     type: object
                   tls:
@@ -184,7 +186,9 @@ spec:
                         description: CertManager has cert-manager issue the certificate.
                         properties:
                           issuerRef:
-                            description: IssuerRef names the cert-manager issuer.
+                            description: |-
+                              IssuerRef is copied into the Certificate the cluster controller
+                              creates in the NatsCluster's namespace.
                             properties:
                               group:
                                 description: Group of the issuer, cert-manager.io
@@ -194,7 +198,9 @@ spec:
                                 description: Kind of the issuer, Issuer when omitted.
                                 type: string
                               name:
-                                description: Name of the issuer.
+                                description: |-
+                                  Name of an Issuer in the NatsCluster's namespace, or of a
+                                  ClusterIssuer.
                                 minLength: 1
                                 type: string
                             required:
@@ -207,7 +213,7 @@ spec:
                         description: SecretRef names a kubernetes.io/tls Secret.
                         properties:
                           name:
-                            description: Name of the Secret.
+                            description: Name of a Secret in the referrer's namespace.
                             minLength: 1
                             type: string
                         required:
@@ -274,7 +280,9 @@ spec:
                             type: object
                         type: object
                       spec:
-                        description: Spec of the claim.
+                        description: |-
+                          PersistentVolumeClaimSpec describes the common attributes of storage devices
+                          and allows a Source for provider-specific attributes
                         properties:
                           accessModes:
                             description: |-
@@ -543,10 +551,10 @@ spec:
                       annotations:
                         additionalProperties:
                           type: string
-                        description: Annotations on the Service.
+                        description: Annotations set on the Service.
                         type: object
                       type:
-                        description: Type of the Service.
+                        description: Type of the Service, ClusterIP when omitted.
                         type: string
                     type: object
                   tls:
@@ -558,7 +566,9 @@ spec:
                         description: CertManager has cert-manager issue the certificate.
                         properties:
                           issuerRef:
-                            description: IssuerRef names the cert-manager issuer.
+                            description: |-
+                              IssuerRef is copied into the Certificate the cluster controller
+                              creates in the NatsCluster's namespace.
                             properties:
                               group:
                                 description: Group of the issuer, cert-manager.io
@@ -568,7 +578,9 @@ spec:
                                 description: Kind of the issuer, Issuer when omitted.
                                 type: string
                               name:
-                                description: Name of the issuer.
+                                description: |-
+                                  Name of an Issuer in the NatsCluster's namespace, or of a
+                                  ClusterIssuer.
                                 minLength: 1
                                 type: string
                             required:
@@ -581,7 +593,7 @@ spec:
                         description: SecretRef names a kubernetes.io/tls Secret.
                         properties:
                           name:
-                            description: Name of the Secret.
+                            description: Name of a Secret in the referrer's namespace.
                             minLength: 1
                             type: string
                         required:
@@ -704,7 +716,9 @@ spec:
                         description: CertManager has cert-manager issue the certificate.
                         properties:
                           issuerRef:
-                            description: IssuerRef names the cert-manager issuer.
+                            description: |-
+                              IssuerRef is copied into the Certificate the cluster controller
+                              creates in the NatsCluster's namespace.
                             properties:
                               group:
                                 description: Group of the issuer, cert-manager.io
@@ -714,7 +728,9 @@ spec:
                                 description: Kind of the issuer, Issuer when omitted.
                                 type: string
                               name:
-                                description: Name of the issuer.
+                                description: |-
+                                  Name of an Issuer in the NatsCluster's namespace, or of a
+                                  ClusterIssuer.
                                 minLength: 1
                                 type: string
                             required:
@@ -731,7 +747,7 @@ spec:
                         description: SecretRef names a kubernetes.io/tls Secret.
                         properties:
                           name:
-                            description: Name of the Secret.
+                            description: Name of a Secret in the referrer's namespace.
                             minLength: 1
                             type: string
                         required:
@@ -851,7 +867,9 @@ spec:
                     description: RestartReason names what made a restart necessary.
                     type: string
                   revision:
-                    description: Revision of the rendered config.
+                    description: |-
+                      Revision is a digest of the rendered config, StatefulSets and
+                      certificates; each server reports its own as config_revision.
                     type: string
                 type: object
               endpoints:
@@ -885,7 +903,7 @@ spec:
                       format: int32
                       type: integer
                     name:
-                      description: Name of the member.
+                      description: Name is the member's gateway name.
                       type: string
                     outbound:
                       description: Outbound is the number of outbound gateway connections.
@@ -920,7 +938,9 @@ spec:
                         x-kubernetes-int-or-string: true
                     type: object
                   metaLeader:
-                    description: MetaLeader is the server leading the meta group.
+                    description: |-
+                      MetaLeader is the server name of the meta group's leader, empty while
+                      none is known.
                     type: string
                 type: object
               leafRemotes:

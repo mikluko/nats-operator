@@ -81,11 +81,8 @@ const requestGrace = time.Minute
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
 
 // EvacuationReconciler empties each NatsClusterEvacuation's source NATS
-// cluster, observed through a NatsConnection of the system account, one
-// $JS.API.ACCOUNT.STREAM.MOVE per stream with the target tags. It moves no
-// stream while a source server carries every target tag, never moves a
-// stream whose owning resource declares a placement.cluster, and on the
-// evacuation's deletion cancels the moves still in flight.
+// cluster through a NatsConnection of the system account, and cancels the
+// moves still in flight when the evacuation is deleted.
 type EvacuationReconciler struct {
 	Client client.Client
 	Dialer *natsconn.Dialer
@@ -318,8 +315,8 @@ func (r *EvacuationReconciler) pendingPoll() time.Duration {
 	return DefaultPendingPoll
 }
 
-// An owner is a resource that owns a stream on the server, and the NATS
-// cluster its spec declares, "" where it declares none.
+// An owner is the resource owning a server stream, and the NATS cluster its
+// spec pins the stream to, "" where it pins none.
 type owner struct {
 	object  js.PinnedObject
 	cluster string
@@ -522,10 +519,7 @@ func evacuationReferrer(namespace string) grant.Referrer {
 	return grant.Referrer{Group: js.GroupVersion.Group, Kind: EvacuationKind, Namespace: namespace}
 }
 
-// SetupWithManager registers the reconciler with mgr. It reconciles an
-// evacuation on its spec changing or its deletion, its NatsConnection
-// changing, a grant that admits it changing, and any NatsStream,
-// NatsKeyValue or NatsObjectStore changing.
+// SetupWithManager registers the reconciler with mgr.
 func (r *EvacuationReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	idx := mgr.GetFieldIndexer()
 	refs := func(o client.Object) []natsv1beta1.ObjectReference {

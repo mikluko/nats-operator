@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -54,6 +55,8 @@ type recorder struct {
 	hook   func(accountJWT string)
 }
 
+var _ authctl.Distributor = (*recorder)(nil)
+
 func (r *recorder) Push(_ context.Context, operator types.NamespacedName, accountJWT string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -67,13 +70,13 @@ func (r *recorder) Push(_ context.Context, operator types.NamespacedName, accoun
 	return nil
 }
 
-// Current implements authctl.Distributor; a recorder reaches no server.
+// Current answers ErrUnreachable: a recorder reaches no server.
 func (r *recorder) Current(context.Context, types.NamespacedName, string) (authv1beta1.Distribution, error) {
 	return authv1beta1.Distribution{}, authctl.ErrUnreachable
 }
 
-// Lookup implements authctl.Distributor: the newest JWT for account pushed
-// for operator, standing for the servers that would hold it.
+// Lookup answers the newest JWT for account pushed for operator, standing
+// for the servers that would hold it.
 func (r *recorder) Lookup(_ context.Context, operator types.NamespacedName, account string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -88,7 +91,6 @@ func (r *recorder) Lookup(_ context.Context, operator types.NamespacedName, acco
 	return newest, nil
 }
 
-// Delete implements authctl.Distributor.
 func (r *recorder) Delete(context.Context, types.NamespacedName, string) error {
 	return nil
 }
@@ -114,7 +116,8 @@ type eventLog struct {
 	events []string
 }
 
-// Eventf implements events.EventRecorder.
+var _ events.EventRecorder = (*eventLog)(nil)
+
 func (l *eventLog) Eventf(_, _ runtime.Object, eventtype, reason, _, note string, args ...any) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -139,7 +142,8 @@ type env struct {
 }
 
 // TestEnvtest runs the reconcilers against a real API server: stories 2, 4
-// and 5 as their manifests declare them, user deletion against a nats-server, the revocation record, the JWTs served by a nats-server,
+// and 5 as their manifests declare them, user deletion against a
+// nats-server, the revocation record, the JWTs served by a nats-server,
 // cross-namespace imports under grants, signing key rotation, offline
 // identities, jwtTTL: 0, a system account flip and the stepdown preset.
 func TestEnvtest(t *testing.T) {

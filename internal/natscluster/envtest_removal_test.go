@@ -167,9 +167,6 @@ func TestEnvtestRemoval(t *testing.T) {
 	require.NoError(t, err)
 	ctx := t.Context()
 
-	// setUp creates story 1's NatsCluster with replicas servers in ns and
-	// brings it to rest, an R3 stream ORDERS on its first three servers
-	// and the meta group led by leader.
 	setUp := func(t *testing.T, ns string, replicas int32, leader string) *removalHarness {
 		t.Helper()
 		require.NoError(t, c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}))

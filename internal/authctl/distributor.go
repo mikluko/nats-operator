@@ -25,13 +25,8 @@ var (
 // resolvers of the NATS clusters that trust a NATS operator. Its methods
 // are called concurrently from several reconcilers.
 type Distributor interface {
-	// Push sends accountJWT to every server trusting operator. It is called
-	// with every account JWT the reconcilers newly sign, the system
-	// account's included, before the JWT is written to status, and again
-	// whenever Current finds a server without it. An error other than
-	// ErrUnreachable requeues the account, which is then signed and pushed
-	// afresh; a JWT issued before one the account already has is never
-	// sent.
+	// Push sends accountJWT to every server trusting operator, unless a JWT
+	// issued after it was already pushed or is held for the same account.
 	Push(ctx context.Context, operator types.NamespacedName, accountJWT string) error
 
 	// Current returns how many servers trust operator, how many of them

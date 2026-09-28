@@ -94,7 +94,7 @@ spec:
                     others.
                   properties:
                     name:
-                      description: Name of the pool.
+                      description: Name, unique within the balancer.
                       maxLength: 63
                       pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                       type: string
@@ -238,7 +238,9 @@ spec:
                     description: From is the server moved off.
                     type: string
                   kind:
-                    description: Kind of move.
+                    description: |-
+                      Kind is Leader for a leader stepdown, Placement for moving the
+                      stream's replicas off a server.
                     enum:
                     - Leader
                     - Placement

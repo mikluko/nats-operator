@@ -10,11 +10,7 @@ import (
 )
 
 // Setup registers the field indexes and every reconciler of this package
-// with mgr. d receives newly signed account JWTs and deletes; nil pushes
-// nothing. A d that is also a RosterNotifier has accounts reconciled
-// whenever their servers change. s closes deleted users' connections; nil
-// reaches no NATS server. rec records the reconcilers' events; nil records
-// none.
+// with mgr; d, s and rec may each be nil.
 func Setup(ctx context.Context, mgr ctrl.Manager, d Distributor, s Sessions, rec events.EventRecorder) error {
 	if err := indexes(ctx, mgr.GetFieldIndexer()); err != nil {
 		return fmt.Errorf("register indexes: %w", err)

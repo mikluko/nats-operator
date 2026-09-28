@@ -133,9 +133,7 @@ func (k Kind[P]) finalize(ctx context.Context, c client.Client, d *natsconn.Dial
 	return reconcile.Result{}, RemoveFinalizer(ctx, c, obj)
 }
 
-// SetupWithManager registers the field indexes the reconcile loop reads and
-// builds r's controller, watching the kind, the NatsConnections it names and
-// the NatsReferenceGrants that admit it, besides what k.Watches adds.
+// SetupWithManager registers r and the field indexes it reads with mgr.
 func (k Kind[P]) SetupWithManager(ctx context.Context, mgr ctrl.Manager, r reconcile.Reconciler) error {
 	idx := mgr.GetFieldIndexer()
 	typed := func(of func(P) []natsv1beta1.ObjectReference) func(client.Object) []natsv1beta1.ObjectReference {

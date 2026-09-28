@@ -91,7 +91,7 @@ type SeedSecrets struct {
 
 // SystemAccountStatus is the system account an operator JWT names.
 type SystemAccountStatus struct {
-	// Name of the NatsSystemAccount.
+	// Name of the NatsSystemAccount spec.systemAccountRef resolves to.
 	// +optional
 	Name string `json:"name,omitempty"`
 

@@ -57,8 +57,7 @@ type Runner struct {
 	// Namespaces are watched for stuck pods and failed Jobs in every
 	// cluster, besides the story's own.
 	Namespaces []string
-	// Log receives one line per phase of each story.
-	Log io.Writer
+	Log        io.Writer
 	// Publish, where set, runs with Clients at the start of every round of
 	// a step's wait; its error fails the round as an API error does.
 	Publish func(ctx context.Context, clients []client.Client) error
@@ -84,22 +83,10 @@ type stage struct {
 	shares []share
 }
 
-// Run runs one bundle, after every bundle it starts from. In each Kubernetes
-// cluster the bundles place files in, the home cluster when they place none,
-// it deletes and recreates every namespace the cluster's objects are
-// declared in; then, bundle by bundle and step by step, it server-side
-// applies the step's manifests and deletes the objects it deletes in their
-// clusters, and polls until each of its expectations' target objects, read
-// in the expectation's cluster, contains it, or the step's wait passes: the
-// bundle's Waits entry for it, else Timeout. A step fails at once on a
-// signal that its expectations will not be met: a target whose Terminal
-// condition is True or whose Ready condition is False for a terminal
-// reason, unless the expectation holds that condition itself, or, in the
-// story's namespaces or Namespaces of the step's clusters, a container
-// stuck waiting or a failed Job. An expectation that names no object of its
-// cluster fails the story before anything is applied; a bundle whose
-// SkipReason is not "", or that places files in more clusters than Clients
-// reach, is skipped.
+// Run runs b after every bundle it starts from, in namespaces it deletes and
+// recreates first, waiting after each step for its expectations up to the
+// step's Waits entry, else Timeout. A step fails before its wait on a signal
+// that its expectations will not be met.
 func (r *Runner) Run(ctx context.Context, b *Bundle) Result {
 	start := time.Now()
 	res := func(o Outcome, detail string) Result {
@@ -183,7 +170,8 @@ type runPlan struct {
 }
 
 // plan returns how b runs on r's Kubernetes clusters, reading none of
-// them. It fails with skipped where Run skips b, and otherwise where an
+// them. It fails with skipped where b's SkipReason is not "" or b places
+// files in more clusters than r.Clients reach, and otherwise where an
 // expectation names no object of its cluster.
 func (r *Runner) plan(b *Bundle) (runPlan, error) {
 	if reason := b.SkipReason(); reason != "" {
@@ -254,8 +242,7 @@ type outcome struct {
 
 // poll waits up to st.wait for every expectation of st to hold. A round
 // failing on an API error is retried until the deadline; a round finding a
-// signal ends the wait. Each round first calls Publish. Every Report the
-// diff of the last check is logged.
+// signal ends the wait.
 func (r *Runner) poll(ctx context.Context, st stage, namespaces [][]string) (outcome, error) {
 	ctx, cancel := context.WithTimeout(ctx, st.wait)
 	defer cancel()
@@ -353,9 +340,7 @@ func (r *Runner) freshNamespace(ctx context.Context, c client.Client, name strin
 
 // releaseGuards lets every object in namespace ns that guards its deletion
 // on a NATS server go without reaching one: a story's namespaces are deleted
-// together, NATS servers and connections with the rest. NatsClusters get
-// forceDeleteAnnotation; JetStream resources that delete their server
-// object are set to retain it.
+// together, NATS servers and connections with the rest.
 func releaseGuards(ctx context.Context, c client.Client, ns string) error {
 	if err := forceDeletes(ctx, c, ns); err != nil {
 		return err

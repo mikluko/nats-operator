@@ -80,10 +80,8 @@ func newScheme() (*runtime.Scheme, error) {
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections,verbs=get;list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections/status,verbs=patch
 
-// setup registers the JetStream controller's instruments and adds the
-// connection pool, the NatsConnection reconciler, the stream, consumer,
-// key-value and object store reconcilers, the system and account balancer
-// reconcilers and the evacuation reconciler to mgr.
+// setup registers the JetStream controller's instruments, connection pool and
+// reconcilers with mgr.
 func setup(ctx context.Context, mgr ctrl.Manager, resync time.Duration) error {
 	metrics, err := telemetry.RegisterJetStream(otel.Meter(telemetry.JetStreamController), mgr.GetClient())
 	if err != nil {

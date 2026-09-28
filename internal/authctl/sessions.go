@@ -38,12 +38,7 @@ type ConnSessions struct {
 	Resolvers *Resolvers
 }
 
-// Kick implements Sessions. Each server in the roster is asked for the
-// user's connections by a CONNZ ping filtered on user and account
-// server-side, and every connection found is kicked by its server ID and
-// client ID. A connection gone before its kick counts as kicked. An empty
-// roster is ErrUnreachable, and a server in it not answering CONNZ is
-// ErrServerSilent.
+// Kick implements Sessions over each server in the roster.
 func (s ConnSessions) Kick(ctx context.Context, operator types.NamespacedName, account, user string) (int, error) {
 	r := s.Resolvers
 	st := r.state(operator)

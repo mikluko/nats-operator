@@ -33,13 +33,7 @@ var ErrOperatorGone = errors.New("NatsOperator does not exist")
 
 // Resolvers is the Distributor over each NatsOperator's system connection
 // to the full resolvers of the servers trusting it, and a RosterNotifier.
-//
-// The roster is the servers answering $SYS.REQ.SERVER.PING.STATSZ. Run as a
-// manager Runnable, Resolvers polls the roster of every operator it has
-// been called for, notifies subscribers when it changes, and sends the
-// operator's delete request to every server in it that has not
-// acknowledged that request, which includes every server that joined since.
-// A restarted server joins under a new server ID.
+// A restarted server joins the roster under a new server ID.
 type Resolvers struct {
 	// Conn returns the system connection to the servers trusting operator,
 	// authenticated as a user holding the auth-controller preset.
@@ -431,7 +425,6 @@ func (r *Resolvers) Start(ctx context.Context) error {
 	}
 }
 
-// poll polls every registered operator's roster concurrently.
 func (r *Resolvers) poll(ctx context.Context) {
 	r.mu.Lock()
 	ops := slices.Collect(maps.Keys(r.operators))

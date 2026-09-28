@@ -81,8 +81,6 @@ func TestEnvtestDistribution(t *testing.T) {
 		e.apply(t, string(raw))
 	}
 
-	// No server exists yet, so every push is unreachable: the system
-	// account JWT the servers boot from reaches status all the same.
 	op := &authv1beta1.NatsOperator{}
 	e.eventually(t, func(ct *assert.CollectT) {
 		e.get(ct, demo, op)
@@ -400,7 +398,6 @@ func issuedAt(t *testing.T, accountJWT string) int64 {
 	return c.IssuedAt
 }
 
-// revokesKey reports whether accountJWT revokes the user key pub.
 func revokesKey(accountJWT, pub string) bool {
 	c, err := jwt.DecodeAccountClaims(accountJWT)
 	if err != nil {

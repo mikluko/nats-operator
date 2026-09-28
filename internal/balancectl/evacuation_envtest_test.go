@@ -28,11 +28,7 @@ import (
 
 // TestEvacuationEnvtest runs the reconciler in a manager against a real API
 // server over story 11's evacuation of prod-east into prod-east-2, NATS
-// clusters of one in-process supercluster whose second carries the tag
-// cluster:prod-east-2. prod-east holds a stream and a key-value bucket whose
-// resources pin it, a stream with no resource whose config names it, and a
-// stream that declares nothing. The story's NatsCluster is applied and
-// stands for nothing: no cluster controller runs.
+// clusters of one in-process supercluster.
 func TestEvacuationEnvtest(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")

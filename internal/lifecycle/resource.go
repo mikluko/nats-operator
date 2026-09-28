@@ -56,10 +56,9 @@ func SpecOrDeletion() predicate.Predicate {
 	}
 }
 
-// PatchSpec persists want, a modified copy of obj, with an optimistic lock
-// where newSpec, want's spec, differs from *spec, obj's; it then sets *spec
-// to newSpec and obj's resource version and generation to what was stored,
-// leaving obj's status alone.
+// PatchSpec persists want, a copy of obj whose spec is newSpec, under an
+// optimistic lock where newSpec differs from *spec, and brings obj's spec,
+// resource version and generation, but not its status, up to what was stored.
 func PatchSpec[S any](ctx context.Context, c client.Client, obj, want client.Object, spec *S, newSpec S) error {
 	if equality.Semantic.DeepEqual(*spec, newSpec) {
 		return nil

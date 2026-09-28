@@ -36,11 +36,10 @@ var (
 	ErrConnectionType = errors.New("invalid allowed connection types")
 )
 
-// User is a user of an account.
+// User is the spec SignUser signs.
 type User struct {
-	Name      string
-	PublicKey string
-	// SystemAccount is whether the user belongs to the system account.
+	Name          string
+	PublicKey     string
 	SystemAccount bool
 	// Preset and Permissions are exclusive; with neither, the user may
 	// publish and subscribe to anything.

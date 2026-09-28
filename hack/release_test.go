@@ -120,8 +120,7 @@ type chartValues struct {
 	JetStream controllerValues `json:"jetstream"`
 }
 
-// controllers are the commands under cmd/ named *-controller, which the
-// Justfile, the release workflow and hack/e2e build.
+// controllers are the commands under cmd/ named *-controller.
 func controllers(t *testing.T) []string {
 	t.Helper()
 	dirs, err := filepath.Glob("../cmd/*-controller")

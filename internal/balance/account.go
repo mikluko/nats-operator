@@ -10,14 +10,9 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-// AccountObserver is an [Observer] over one account's own JetStream API, for a
-// balancer that holds no system credentials.
-//
-// What one account can see bounds it. The roster is the servers its groups
-// name, so a server holding none of them is invisible and carries no tags;
-// Settled is judged over its own groups alone; and the streams and consumers
-// the server lists while their leaders change can come back short, which is
-// read as unsettled only where the stream is named in Expect.
+// AccountObserver is an [Observer] over one account's own JetStream API, whose
+// roster and Settled cover only the servers and groups that account's streams
+// name.
 type AccountObserver struct {
 	JS jetstream.JetStream
 	// Account is the account's name as the server knows it: its public key

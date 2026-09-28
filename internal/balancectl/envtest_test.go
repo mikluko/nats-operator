@@ -32,9 +32,7 @@ const storiesDir = "../../docs/content/docs/stories"
 
 // TestEnvtest runs the reconciler in a manager against a real API server
 // over story 7's system balancer, pointed at C1 of a two-cluster
-// supercluster whose leaders all start on C1-0 and where one of two accounts
-// carries the jetstream-stepdown export. Only the NatsConnection's servers
-// are rewritten to reach it.
+// supercluster.
 func TestEnvtest(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")

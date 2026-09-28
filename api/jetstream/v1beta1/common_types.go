@@ -89,7 +89,7 @@ type Placement struct {
 
 // StreamSource is a stream a mirror or source copies from.
 type StreamSource struct {
-	// Name of the origin stream.
+	// Name is the origin stream's server-side name.
 	// +required
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
@@ -133,33 +133,34 @@ type ExternalStream struct {
 
 // StreamConsumerSource is a durable consumer used for sourcing.
 type StreamConsumerSource struct {
-	// Name of the consumer.
+	// Name is the server's consumer name.
 	// +optional
 	Name string `json:"name,omitempty"`
 
-	// DeliverSubject of the consumer.
+	// DeliverSubject is the server's deliver_subject.
 	// +optional
 	DeliverSubject string `json:"deliverSubject,omitempty"`
 }
 
 // SubjectTransform maps a source subject to a destination subject.
 type SubjectTransform struct {
-	// Source subject.
+	// Source is the server's src, the subjects transformed.
 	// +optional
 	Source string `json:"source,omitempty"`
 
-	// Destination subject.
+	// Destination is the server's dest, the subject they become.
 	// +required
 	Destination string `json:"destination"`
 }
 
 // Republish republishes stored messages.
 type Republish struct {
-	// Source subject filter.
+	// Source is the server's src, the stored subjects republished.
 	// +optional
 	Source string `json:"source,omitempty"`
 
-	// Destination subject.
+	// Destination is the server's dest, the subject they are republished
+	// to.
 	// +required
 	Destination string `json:"destination"`
 
@@ -218,7 +219,7 @@ type SyncStatus struct {
 
 // ReplicaStatus is one replica of a Raft group.
 type ReplicaStatus struct {
-	// Name of the server holding the replica.
+	// Name is the server_name of the server holding the replica.
 	// +required
 	Name string `json:"name"`
 

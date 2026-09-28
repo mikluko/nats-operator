@@ -34,7 +34,7 @@ type storyDoc struct {
 	obj  *unstructured.Unstructured
 }
 
-// apiScheme holds every kind of the four groups.
+// apiScheme returns a scheme holding every kind of the four groups.
 func apiScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	s := runtime.NewScheme()

@@ -104,11 +104,13 @@ spec:
                       - Chunked
                       type: string
                     subject:
-                      description: Subject exported.
+                      description: Subject is signed into the account JWT as the export's
+                        subject.
                       minLength: 1
                       type: string
                     type:
-                      description: Type of the export.
+                      description: Type is signed into the account JWT as the export's
+                        type.
                       enum:
                       - Stream
                       - Service
@@ -190,7 +192,7 @@ spec:
                             minLength: 1
                             type: string
                           name:
-                            description: Name of the Secret.
+                            description: Name of a Secret in the referrer's namespace.
                             minLength: 1
                             type: string
                         required:
@@ -222,7 +224,7 @@ spec:
                               minLength: 1
                               type: string
                             name:
-                              description: Name of the Secret.
+                              description: Name of a Secret in the referrer's namespace.
                               minLength: 1
                               type: string
                           required:
@@ -418,7 +420,7 @@ spec:
                       description: Subject is the exported subject.
                       type: string
                     type:
-                      description: Type of the export.
+                      description: Type is the type of the export taken.
                       enum:
                       - Stream
                       - Service

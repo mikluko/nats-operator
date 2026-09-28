@@ -44,8 +44,6 @@ type StreamID struct {
 func (s StreamID) String() string { return s.Account + "/" + s.Stream }
 
 // A Group is one Raft group: a stream's, or a consumer's when Consumer is set.
-// A consumer elects its leader apart from its stream, so each is a group of its
-// own.
 type Group struct {
 	Account  string
 	Stream   string
@@ -118,8 +116,7 @@ func (g Group) holds(server string) bool { return slices.Contains(g.Holders(), s
 
 // Unsettled names the first group that keeps groups from being Settled, and is
 // empty when there is none: every group has a leader and every member is
-// online. A member that is merely behind is not a reason; [Member.Takes] keeps
-// leadership off it instead.
+// online. A member that is merely behind is not a reason.
 func Unsettled(groups []Group) string {
 	for _, g := range groups {
 		if g.Offline {

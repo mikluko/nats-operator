@@ -27,10 +27,8 @@ import (
 )
 
 // TestBalancerEnvtest runs the reconciler in a manager against a real API
-// server over story 7's account balancer, on a connection of account A to C1
-// where REQ_07 and a stream with no resource live, while a NatsSystemBalancer
-// has a placement move of REQ_07 pending: the story's status file, which
-// shows the balancer at rest, with Holding yielding to that move.
+// server over story 7's account balancer, yielding to a NatsSystemBalancer's
+// pending placement move.
 func TestBalancerEnvtest(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")

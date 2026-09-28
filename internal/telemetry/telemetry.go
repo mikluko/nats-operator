@@ -29,7 +29,6 @@ const (
 	JetStreamController = "jetstream-controller"
 )
 
-// shutdownTimeout bounds the final flush once the manager stops.
 const shutdownTimeout = 5 * time.Second
 
 // Shutdown flushes and stops the providers Start installed. It is a manager
@@ -152,8 +151,7 @@ func newResource(ctx context.Context, service string) (*resource.Resource, error
 	return res, nil
 }
 
-// Install starts telemetry for the controller named service and adds its
-// shutdown to mgr.
+// Install starts telemetry for service and adds its shutdown to mgr.
 func Install(ctx context.Context, mgr manager.Manager, service string) error {
 	stop, err := Start(ctx, service, mgr.GetLogger().WithName("opentelemetry"))
 	if err != nil {

@@ -60,7 +60,6 @@ type resolvedKeys struct {
 	Generated authv1beta1.SeedSecrets
 }
 
-// identityPublicKey returns the identity public key.
 func (k resolvedKeys) identityPublicKey() (string, error) {
 	if k.Identity == nil {
 		return k.PublicKey, nil

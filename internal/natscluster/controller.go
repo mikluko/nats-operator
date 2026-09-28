@@ -1,7 +1,4 @@
-// Package natscluster is the cluster controller's reconciler: it renders a
-// NatsCluster into one StatefulSet and ConfigMap per server, the Services, a
-// PodDisruptionBudget and the route and gateway certificates, and reports
-// Ready, Settled, Progressing and GatewaysConnected.
+// Package natscluster reconciles NatsCluster.
 package natscluster
 
 import (
@@ -108,10 +105,7 @@ type Reconciler struct {
 // the namespace/name of the NatsOperatorTrust auth.trustRef names.
 const TrustField = "cluster.nats.mikluko.io/trust"
 
-// SetupWithManager registers TrustField, the leaf reference indexes and the
-// grant index on mgr's cache and registers r with mgr, watching the
-// NatsOperatorTrusts, NatsConnections, NatsAccountTrusts, Secrets and
-// NatsReferenceGrants NatsClusters read.
+// SetupWithManager registers r and its field indexes with mgr.
 func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	idx := mgr.GetFieldIndexer()
 	if err := idx.IndexField(ctx, &clusterv1beta1.NatsCluster{}, TrustField, func(o client.Object) []string {
@@ -167,12 +161,7 @@ func (r *Reconciler) clustersTrusting(ctx context.Context, t client.Object) []re
 	return r.clustersByField(ctx, TrustField, t.GetNamespace()+"/"+t.GetName())
 }
 
-// Reconcile creates what a NatsCluster renders and reports its status. A
-// server's ConfigMap and StatefulSet are created when absent, once the
-// data volume claim of any earlier StatefulSet of that server is gone; a
-// changed revision is reloaded where the change reloads, and is otherwise
-// rolled out one restart at a time, beside scale-down and server
-// replacement. Deletion is guarded by finalize.
+// Reconcile creates what a NatsCluster renders and reports its status.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	nc := &clusterv1beta1.NatsCluster{}
 	if err := r.Client.Get(ctx, req.NamespacedName, nc); err != nil {

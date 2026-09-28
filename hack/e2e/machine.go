@@ -16,14 +16,10 @@ import (
 	"strings"
 )
 
-// machineScript brings the machine to what the harness runs on.
-//
 //go:embed machine.sh
 var machineScript string
 
 const (
-	// machineImage is the image a machine is created from, built from
-	// hack/machine.Containerfile.
 	machineImage = "localhost/nats-operator/e2e-machine"
 	// machineTree is where the working tree is shipped to in the machine,
 	// on the machine's own disk.
@@ -38,10 +34,8 @@ const (
 	machineLock = "/var/lib/nats-operator-e2e/run.lock"
 )
 
-// viaMachine runs the harness inside the Apple container machine
-// cfg.machine: it builds the images, unless down, and this command for
-// Linux on the host, brings the machine up, ships the working tree at root
-// with both builds into it, and runs the command there as root.
+// viaMachine runs the harness as root inside the Apple container machine
+// cfg.machine, on the working tree at root and builds made on the host.
 func viaMachine(ctx context.Context, cfg config, root string, down bool) error {
 	work := filepath.Join(root, "bin", "e2e")
 	platform := "linux/" + runtime.GOARCH

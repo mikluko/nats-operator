@@ -22,9 +22,8 @@ type Balancer struct {
 	Pools Pooler
 	// Leaders makes leader moves; nil makes none.
 	Leaders LeaderMover
-	// Placement makes placement moves; nil makes none. A pass that has a
-	// placement move to make makes it ahead of any leader move, since a leader
-	// evened out in the middle of one would be handed straight back.
+	// Placement makes placement moves; nil makes none. A pass makes a
+	// placement move ahead of any leader move.
 	Placement PlacementMover
 	// Yield returns why a stream is not this balancer's to move, and "" where it
 	// is: a move pending on it from another balancer, or an evacuation. A

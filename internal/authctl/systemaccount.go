@@ -23,17 +23,11 @@ import (
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
-// SystemAccountReconciler keeps a NatsSystemAccount's keys and reports
-// whether it is the live system account. Its JWT is signed by the
-// OperatorReconciler of the NatsOperator whose systemAccountRef names it,
-// and lives in that operator's status; an unreferenced one is not signed.
-// status.revocations records what that JWT revokes, and what the next one
-// is to revoke, as AccountReconciler records an account's.
-// It is not pushed again while the operator's RevocationsUnrecovered is
-// True, so the servers keep the JWT the revocations are recovered from.
-// A newly signed JWT resets status.distribution to no server current; with
-// a Distributor, status.distribution and the Distributed condition then
-// follow the servers holding it.
+// SystemAccountReconciler keeps a NatsSystemAccount's keys, revocations and
+// distribution; its JWT is signed into the status of the NatsOperator
+// naming it. The JWT is not pushed again while that operator's
+// RevocationsUnrecovered is True, so the servers keep the JWT the
+// revocations are recovered from.
 type SystemAccountReconciler struct {
 	client.Client
 	// Distributor pushes the JWT again to servers without it; nil pushes

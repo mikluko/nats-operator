@@ -22,7 +22,6 @@ import (
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 )
 
-// caKey is the key of the CA certificate in a TLS Secret.
 const caKey = "ca.crt"
 
 const selfSignedValidity = 10 * 365 * 24 * time.Hour

@@ -130,6 +130,13 @@ func TestAccountRevocations(t *testing.T) {
 			},
 		},
 		{
+			name:     "a later deletion moves a revocation forward, issued by the keys of both",
+			recorded: []authv1beta1.Revocation{rev(deleting, t0, keyA)},
+			signing:  []string{keyB},
+			users:    []authv1beta1.NatsUser{user(deleting, deleted(t0.Add(time.Hour), true))},
+			want:     []authv1beta1.Revocation{rev(deleting, t0.Add(time.Hour), keyA, keyB)},
+		},
+		{
 			name:     "an earlier deletion neither moves a revocation back nor widens its issuers",
 			recorded: []authv1beta1.Revocation{rev(deleting, t0.Add(time.Hour), keyA)},
 			signing:  []string{keyA, keyB},

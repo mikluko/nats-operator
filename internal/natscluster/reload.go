@@ -16,11 +16,13 @@ import (
 )
 
 // ServerReloader reads and reloads one server's config over the system
-// account; *sysobs.SystemClient is one.
+// account.
 type ServerReloader interface {
 	Config(ctx context.Context, serverID string) (sysobs.ConfigState, error)
 	Reload(ctx context.Context, serverID string) (sysobs.ConfigState, error)
 }
+
+var _ ServerReloader = (*sysobs.SystemClient)(nil)
 
 // ReloaderFunc returns the ServerReloader of the NATS cluster nc deployed,
 // or an error saying why it has none.

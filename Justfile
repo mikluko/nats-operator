@@ -1,11 +1,9 @@
-# The controllers are the commands under cmd/ named *-controller.
 controllers := `cd cmd && echo *-controller`
 envtest_k8s_version := env("ENVTEST_K8S_VERSION", "1.36.x")
 bin := justfile_directory() / "bin"
 
 default: generate build test lint
 
-# Build every controller binary into bin/.
 build:
     #!/usr/bin/env sh
     set -eu
@@ -13,8 +11,6 @@ build:
         CGO_ENABLED=0 go build -o "{{ bin }}/$c" "./cmd/$c"
     done
 
-# Build every controller image for platform with ko, pushing nothing, and
-# print their references.
 image platform=("linux/" + if arch() == "aarch64" { "arm64" } else { "amd64" }):
     #!/usr/bin/env sh
     set -eu
@@ -38,22 +34,16 @@ fmt:
 tidy:
     go mod tidy
 
-# controller-gen from the tool directive in go.mod: deep-copy methods for
-# every api/ package, CRDs into config/crd, and each controller's ClusterRole
-# into config/rbac/<controller> from the markers hack/rbac names.
 generate:
     go tool controller-gen object paths=./api/...
     go tool controller-gen crd paths=./api/... output:crd:artifacts:config=config/crd
     go run ./hack/rbac
 
-# The chart's crds/ is a copy of config/crd.
 chart-crds:
     rm -f charts/nats-operator/crds/*.yaml
     mkdir -p charts/nats-operator/crds
     cp config/crd/*.yaml charts/nats-operator/crds/
 
-# The chart's files/rbac/<controller>.yaml is a copy of
-# config/rbac/<controller>/role.yaml.
 chart-rbac:
     #!/usr/bin/env sh
     set -eu
@@ -63,8 +53,6 @@ chart-rbac:
         cp "config/rbac/$c/role.yaml" "charts/nats-operator/files/rbac/$c.yaml"
     done
 
-# helm lint under the defaults and each chart-testing values file, a lint that
-# must fail on a misspelled key, and the chart's helm-unittest suites.
 chart:
     #!/usr/bin/env sh
     set -eu
@@ -78,8 +66,6 @@ chart:
     fi
     helm unittest charts/nats-operator
 
-# The API reference page, from the Go types under api/ and the templates
-# under hack/api-docs/.
 api-docs:
     go tool gen-crd-api-reference-docs \
         -api-dir=github.com/mikluko/nats-operator/api \
@@ -87,13 +73,9 @@ api-docs:
         -template-dir=hack/api-docs/template \
         -out-file=docs/content/docs/reference/api.md
 
-# The documentation site's NATS permissions page, from hack/permdocs and the
-# presets in internal/jwtplane.
 perm-docs:
     go run ./hack/permdocs
 
-# The documentation site's telemetry page, from hack/telemetrydocs and the
-# instruments and events in internal/telemetry.
 telemetry-docs:
     go run ./hack/telemetrydocs
 
@@ -118,7 +100,6 @@ envtest:
 e2e:
     go run ./hack/e2e
 
-# Deletes the kind clusters `just e2e` runs on.
 e2e-down:
     go run ./hack/e2e -down
 

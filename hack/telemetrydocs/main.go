@@ -16,20 +16,15 @@ import (
 // page is the page's path from the repository root.
 const page = "docs/content/docs/reference/telemetry.md"
 
-// operator is the page's section on the OpenTelemetry Operator.
-//
 //go:embed operator.md
 var operator string
 
-// envVar is one environment variable the SDK reads, as the page lists it.
 type envVar struct {
 	Names   []string
 	Default string
 	Effect  string
 }
 
-// environment are the variables the SDK reads. Every Default a row names is
-// pinned by TestEnvironmentDefaults against the SDK go.mod names.
 var environment = []envVar{
 	{[]string{"OTEL_SDK_DISABLED"}, "`false`", "`true`, in any case, exports nothing whatever else is set; no exporter is built and no Prometheus listener opened."},
 	{[]string{"OTEL_SERVICE_NAME"}, "the controller's name, such as `cluster-controller`", "`service.name` of every metric and span."},

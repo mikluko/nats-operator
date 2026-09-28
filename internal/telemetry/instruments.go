@@ -361,7 +361,6 @@ func (j *JetStreamInstruments) BalancerPass(ctx context.Context, kind string, ob
 	j.heldPasses.Add(ctx, 1, attrs(kind, obj.GetNamespace(), obj.GetName(), attribute.String(AttrReason, c.Reason)))
 }
 
-// observeConditions observes every condition of every object of kinds.
 func observeConditions(ctx context.Context, o metric.Observer, g metric.Int64ObservableGauge, r client.Reader, kinds []Kind) error {
 	var errs []error
 	for _, k := range kinds {
@@ -390,7 +389,6 @@ func observeConditions(ctx context.Context, o metric.Observer, g metric.Int64Obs
 	return errors.Join(errs...)
 }
 
-// conditions reads status.conditions off obj, whatever its kind.
 func conditions(obj runtime.Object) ([]metav1.Condition, error) {
 	u, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 	if err != nil {

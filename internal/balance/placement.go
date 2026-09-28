@@ -72,11 +72,8 @@ func carries(have, want []string) bool {
 // of roster hold copies of streams, and how many copies sit above an even
 // share. A group skip admits is counted and never moved.
 //
-// A copy is moved first where every server it could land on holds at least two
-// fewer: whatever the server picks, the pool ends up more even. Where no such
-// move is left, one is offered that a good pick makes more even and a bad one
-// leaves as even as it was, marked Unsure; a group tried admits is never
-// offered one, which is what keeps the planner from chasing the server's picks.
+// A move that evens the pool whatever the server picks comes before an Unsure
+// one, and a group tried admits is never offered an Unsure one.
 func PlanPlacement(streams []Group, roster []Server, cluster string, skip, tried func(Group) bool) (*PlacementMove, int) {
 	holds := make(map[string]int, len(roster))
 	for _, s := range roster {

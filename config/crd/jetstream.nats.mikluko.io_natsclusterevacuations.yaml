@@ -182,7 +182,7 @@ spec:
                     source cluster.
                   properties:
                     kind:
-                      description: Kind of the resource.
+                      description: Kind is NatsStream, NatsKeyValue or NatsObjectStore.
                       type: string
                     name:
                       description: Name of the resource.
@@ -215,7 +215,7 @@ spec:
                       description: Account is the account's public key.
                       type: string
                     stream:
-                      description: Stream is the name of the stream.
+                      description: Stream is the stream's server-side name.
                       type: string
                     time:
                       description: Time the move was last requested.
@@ -239,7 +239,7 @@ spec:
                       description: Account is the account's public key.
                       type: string
                     name:
-                      description: Name of the stream.
+                      description: Name is the stream's server-side name.
                       type: string
                   required:
                   - account

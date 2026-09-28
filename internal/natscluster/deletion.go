@@ -21,7 +21,7 @@ const FinalizerJetStreamData = "cluster.nats.mikluko.io/jetstream-data"
 // ConditionDeleting is True while a deleted NatsCluster waits.
 const ConditionDeleting = "Deleting"
 
-// Deleting reasons.
+// Reasons of ConditionDeleting.
 const (
 	ReasonJetStreamDataRemains = "JetStreamDataRemains"
 	ReasonNoJetStreamData      = "NoJetStreamData"

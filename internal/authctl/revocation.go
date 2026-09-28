@@ -22,14 +22,9 @@ import (
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
-// accountRevocations returns the revocations an account with public key pub
-// and signing keys signing records and signs: those recorded, those prev,
-// its current JWT, carries when it names pub, and one per user among users
-// that has been signed and is being deleted or no longer admitted. A
-// revocation new to the record has as issuers the signing keys prev lists,
-// or signing for a user's. A key revoked again later is revoked at the later
-// time, by the issuers of both. A revocation none of whose issuers is in signing
-// is dropped: no JWT it revokes is still valid.
+// accountRevocations merges the revocations recorded, those prev carries for
+// pub, and those of users revoked in the account, less any none of whose
+// issuers is in signing.
 func accountRevocations(recorded []authv1beta1.Revocation, prev, pub string, signing []string, users []authv1beta1.NatsUser) []authv1beta1.Revocation {
 	byKey := map[string]*authv1beta1.Revocation{}
 	revoke := func(key string, at time.Time, issuers []string) {
@@ -84,14 +79,10 @@ type recoveredRevocations struct {
 	unasked error
 }
 
-// recoverRevocations returns the revocations to sign into the JWT of the
-// account pub. They are accountRevocations', merged with those of the
-// newest JWT d finds on the servers trusting operator where the status
-// cannot be trusted to hold them all: recorded and prev both empty, or
-// unrecovered set by an earlier signing that could not ask. Where no
-// server can be asked, an account whose status records it distributed is
-// not to be signed, and the error wraps ErrUnreachable; any other is
-// signed with what the status and users give. A nil d is asked nothing.
+// recoverRevocations returns accountRevocations merged with those of the
+// newest JWT d holds for pub wherever the status may have lost some.
+// Where no server can be asked, the error wraps ErrUnreachable for a
+// distributed account, which is not to be signed.
 func recoverRevocations(ctx context.Context, d Distributor, operator types.NamespacedName, recorded []authv1beta1.Revocation, prev, pub string, signing []string, users []authv1beta1.NatsUser, unrecovered, distributed bool) (recoveredRevocations, error) {
 	revs := accountRevocations(recorded, prev, pub, signing, users)
 	if d == nil || !unrecovered && (prev != "" || len(recorded) > 0) {

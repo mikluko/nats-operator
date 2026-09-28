@@ -7,8 +7,7 @@ import (
 	"strings"
 )
 
-// Mismatch is one place where a live object's status does not contain what
-// a status file states.
+// Mismatch is one field where Diff's got fails to contain its want.
 type Mismatch struct {
 	Path string
 	Want string

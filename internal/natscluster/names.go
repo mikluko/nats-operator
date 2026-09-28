@@ -72,7 +72,6 @@ func serverNames(nc *clusterv1beta1.NatsCluster) []string {
 	return out
 }
 
-// clientServiceName is the client Service, the NatsCluster's own name.
 func clientServiceName(nc *clusterv1beta1.NatsCluster) string { return nc.Name }
 
 func headlessServiceName(nc *clusterv1beta1.NatsCluster) string { return nc.Name + "-headless" }
@@ -81,7 +80,6 @@ func configMapName(server string) string { return server + "-config" }
 
 func routesSecretName(nc *clusterv1beta1.NatsCluster) string { return nc.Name + "-routes-tls" }
 
-// gatewayServiceName is the external gateway Service.
 func gatewayServiceName(nc *clusterv1beta1.NatsCluster) string { return nc.Name + "-gateway" }
 
 // gatewaySecretName is the Secret cert-manager issues the gateway

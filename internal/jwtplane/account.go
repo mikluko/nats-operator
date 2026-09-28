@@ -30,7 +30,7 @@ var (
 	ErrNotPrivate = errors.New("export is public")
 )
 
-// Account is an ordinary account.
+// Account is the spec SignAccount signs.
 type Account struct {
 	Name string
 	Keys Keys
@@ -129,7 +129,7 @@ func SignAccount(a Account, operator Keys, now time.Time) (string, error) {
 	return signAccountClaims(c, operator)
 }
 
-// SystemAccount is the system account.
+// SystemAccount is the spec SignSystemAccount signs.
 type SystemAccount struct {
 	Name string
 	Keys Keys

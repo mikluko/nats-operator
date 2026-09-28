@@ -47,7 +47,7 @@ type SigningKey struct {
 // SeedSecretKeySelector selects an nkey seed from a Secret in the
 // referrer's namespace.
 type SeedSecretKeySelector struct {
-	// Name of the Secret.
+	// Name of a Secret in the referrer's namespace.
 	// +required
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`

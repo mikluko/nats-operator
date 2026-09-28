@@ -138,7 +138,6 @@ type VolumeClaimTemplate struct {
 	// +optional
 	Metadata EmbeddedObjectMetadata `json:"metadata,omitempty"`
 
-	// Spec of the claim.
 	// +required
 	Spec corev1.PersistentVolumeClaimSpec `json:"spec"`
 }
@@ -170,14 +169,16 @@ type CertificateSource struct {
 
 // CertManagerCertificate is a certificate cert-manager issues.
 type CertManagerCertificate struct {
-	// IssuerRef names the cert-manager issuer.
+	// IssuerRef is copied into the Certificate the cluster controller
+	// creates in the NatsCluster's namespace.
 	// +required
 	IssuerRef IssuerReference `json:"issuerRef"`
 }
 
 // IssuerReference names a cert-manager Issuer or ClusterIssuer.
 type IssuerReference struct {
-	// Name of the issuer.
+	// Name of an Issuer in the NatsCluster's namespace, or of a
+	// ClusterIssuer.
 	// +required
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
@@ -289,7 +290,8 @@ type GatewayRemote struct {
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
-	// URL is the member's gateway URL.
+	// URL is where the member's gateway is dialled; on this cluster's own
+	// entry, its host is a name on the gateway certificate.
 	// +required
 	// +kubebuilder:validation:MinLength=1
 	URL string `json:"url"`
@@ -297,11 +299,11 @@ type GatewayRemote struct {
 
 // ServiceTemplate is the template of an external Service.
 type ServiceTemplate struct {
-	// Type of the Service.
+	// Type of the Service, ClusterIP when omitted.
 	// +optional
 	Type corev1.ServiceType `json:"type,omitempty"`
 
-	// Annotations on the Service.
+	// Annotations set on the Service.
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
@@ -448,7 +450,8 @@ const (
 
 // ConfigStatus is the rendered config revision.
 type ConfigStatus struct {
-	// Revision of the rendered config.
+	// Revision is a digest of the rendered config, StatefulSets and
+	// certificates; each server reports its own as config_revision.
 	// +optional
 	Revision string `json:"revision,omitempty"`
 
@@ -497,7 +500,8 @@ type RolloutGate struct {
 
 // JetStreamStatus is a NATS cluster's JetStream state.
 type JetStreamStatus struct {
-	// MetaLeader is the server leading the meta group.
+	// MetaLeader is the server name of the meta group's leader, empty while
+	// none is known.
 	// +optional
 	MetaLeader string `json:"metaLeader,omitempty"`
 
@@ -508,7 +512,7 @@ type JetStreamStatus struct {
 
 // GatewayStatus is the connection to one supercluster member.
 type GatewayStatus struct {
-	// Name of the member.
+	// Name is the member's gateway name.
 	// +required
 	Name string `json:"name"`
 

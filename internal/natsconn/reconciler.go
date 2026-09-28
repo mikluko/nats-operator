@@ -44,10 +44,8 @@ const SecretField = "natsconn.nats.mikluko.io/secret"
 const DefaultRetryAfter = 30 * time.Second
 
 // Reconciler reports Ready on NatsConnections from their pooled
-// connections: True while connected, False with the reason otherwise. It
-// closes a connection whose NatsConnection is deleted or no longer
-// resolves, and reconciles again when a Secret it reads changes or its
-// connection disconnects or reconnects.
+// connections, closing the connection of one deleted or no longer
+// resolving.
 type Reconciler struct {
 	Client     client.Client
 	Pool       *Pool
@@ -159,9 +157,8 @@ func (r *Reconciler) enqueue(key Key) {
 	}
 }
 
-// SetupWithManager registers SecretField on mgr's cache and builds the
-// controller, watching NatsConnections, the Secrets they read and the
-// pool's connection changes.
+// SetupWithManager registers SecretField on mgr's cache and the reconciler
+// with mgr.
 func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &natsv1beta1.NatsConnection{}, SecretField, func(o client.Object) []string {
 		return SecretNames(&o.(*natsv1beta1.NatsConnection).Spec)

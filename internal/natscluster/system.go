@@ -36,6 +36,12 @@ type SystemConnections struct {
 	Wait time.Duration
 }
 
+var (
+	_ Observer     = (*SystemConnections)(nil)
+	_ ReloaderFunc = (*SystemConnections)(nil).Reloader
+	_ AdminFunc    = (*SystemConnections)(nil).Admin
+)
+
 // Observe observes nc over $SYS when it names a system user, and through
 // Fallback otherwise.
 func (s *SystemConnections) Observe(ctx context.Context, nc *clusterv1beta1.NatsCluster) (*sysobs.Snapshot, error) {
@@ -49,8 +55,8 @@ func (s *SystemConnections) Observe(ctx context.Context, nc *clusterv1beta1.Nats
 	return o.Observe(ctx)
 }
 
-// Reloader is a ReloaderFunc: it reloads nc's servers over $SYS, and
-// returns ErrNoSystemUser when nc names no system user.
+// Reloader reloads nc's servers over $SYS, and returns ErrNoSystemUser
+// when nc names no system user.
 func (s *SystemConnections) Reloader(ctx context.Context, nc *clusterv1beta1.NatsCluster) (ServerReloader, error) {
 	if !hasSystemUser(nc) {
 		return nil, ErrNoSystemUser
@@ -58,8 +64,8 @@ func (s *SystemConnections) Reloader(ctx context.Context, nc *clusterv1beta1.Nat
 	return s.client(ctx, nc)
 }
 
-// Admin is an AdminFunc: it evacuates and removes nc's servers over $SYS,
-// and returns ErrNoSystemUser when nc names no system user.
+// Admin evacuates and removes nc's servers over $SYS, and returns
+// ErrNoSystemUser when nc names no system user.
 func (s *SystemConnections) Admin(ctx context.Context, nc *clusterv1beta1.NatsCluster) (ServerAdmin, error) {
 	if !hasSystemUser(nc) {
 		return nil, ErrNoSystemUser

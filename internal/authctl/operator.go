@@ -25,27 +25,8 @@ import (
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
-// OperatorReconciler signs a NatsOperator's JWT and the JWT of the
-// NatsSystemAccount its systemAccountRef names, and writes both to its
-// status. It generates the keys spec omits.
-//
-// The system account JWT imports the jetstream-stepdown exports of every
-// NatsAccount the operator signs that carries the preset, and revokes the
-// keys of its NatsUsers as AccountReconciler does an account's, the
-// revocations SystemAccountReconciler records in the NatsSystemAccount's
-// status among them. Where neither that record nor status.systemAccount
-// holds anything to sign them from, they are recovered as AccountReconciler
-// recovers an account's, the NatsSystemAccount's status.distribution
-// saying whether it was distributed and the operator carrying
-// RevocationsUnrecovered; an operator whose status holds no JWT is taken
-// to have signed nothing yet. A system account JWT in status that the
-// servers hold a newer one of, as after a push whose status write was
-// lost, is signed and pushed afresh.
-//
-// status.deletedAccounts records each NatsAccount naming the operator that
-// is being deleted and has a JWT, and keeps it until that JWT expires or
-// its key is signed again; the Distributor is handed the request deleting
-// them.
+// OperatorReconciler signs a NatsOperator's JWT and its live system
+// account's JWT into its status.
 type OperatorReconciler struct {
 	client.Client
 	// Distributor receives the system account JWT whenever it is newly
@@ -195,11 +176,9 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	return max(time.Until(next), time.Second), nil
 }
 
-// deletes prunes op's deleted accounts of those whose JWTs have expired
-// and those whose keys its system account, or an account in accounts not
-// being deleted, holds again, and hands the Distributor the request
-// deleting the rest. It returns when the next of them expires, the zero
-// time for never.
+// deletes prunes op's deleted accounts and hands the Distributor the
+// request deleting the rest, returning when the next of them expires, the
+// zero time for never.
 func (r *OperatorReconciler) deletes(ctx context.Context, op *authv1beta1.NatsOperator, keys jwtplane.Keys, accounts []authv1beta1.NatsAccount) (time.Time, error) {
 	live := liveKeys(op, accounts)
 	pruned, next := pruneDeleted(op.Status.DeletedAccounts, live, time.Now())

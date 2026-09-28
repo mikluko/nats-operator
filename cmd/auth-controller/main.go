@@ -1,4 +1,4 @@
-// The auth controller owns authctl.nats.mikluko.io and reads nats.mikluko.io.
+// The auth controller owns auth.nats.mikluko.io and reads nats.mikluko.io.
 package main
 
 import (
@@ -60,7 +60,6 @@ func main() {
 	}
 }
 
-// newScheme is the auth controller's scheme.
 func newScheme() (*runtime.Scheme, error) {
 	scheme := runtime.NewScheme()
 	for _, add := range []func(*runtime.Scheme) error{

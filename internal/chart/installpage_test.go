@@ -113,7 +113,6 @@ func tableGrants(t *testing.T, tb pageTable) grants {
 	return g
 }
 
-// installTables parses the install page and returns its tables in order.
 func installTables(t *testing.T) []pageTable {
 	t.Helper()
 	src, err := os.ReadFile(installPage)
@@ -159,7 +158,6 @@ func codeSpans(n ast.Node, src []byte) []string {
 	return out
 }
 
-// plain concatenates the text segments under n.
 func plain(n ast.Node, src []byte) string {
 	var b strings.Builder
 	_ = ast.Walk(n, func(c ast.Node, entering bool) (ast.WalkStatus, error) {

@@ -120,12 +120,8 @@ func consumerIn(ctx context.Context, j jetstream.JetStream, stream, consumer str
 }
 
 // TestEvacuation_Supercluster empties C1 of a two-cluster operator-mode
-// supercluster into C2, whose servers alone carry the tag "new", over two
-// accounts: plain streams, a stream whose config names C1 without a
-// resource, a consumer, a key-value bucket, an object store, and three
-// streams whose NatsStreams pin C1. The evacuation observes C1 through a
-// connection to C2, and a system balancer and an account balancer of C1 run
-// beside it.
+// supercluster into C2 while a system balancer and an account balancer of C1
+// run beside the evacuation.
 func TestEvacuation_Supercluster(t *testing.T) {
 	t.Parallel()
 	p := newPlane(t)

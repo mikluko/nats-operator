@@ -39,17 +39,8 @@ const UserFinalizer = "auth.nats.mikluko.io/revoke"
 const kickInterval = time.Second
 
 // UserReconciler signs a NatsUser's JWT with its account's active signing
-// key. With publicKey the JWT goes to status; otherwise a key generated for
-// the user is kept in a creds file written to the Secret credentials names,
-// or to "<name>-creds" when it names none, owned by the user. A Secret of
-// that name the user does not own is never written.
-//
-// A user whose reference to its account is no longer admitted keeps its
-// public key in status, and the account revokes it; admitted again, it is
-// re-signed. Deletion is held by UserFinalizer until the account JWT revokes
-// the user's key, then, with Sessions set, until the account's distribution
-// shows every server current and a kick pass finds no connection; the creds
-// Secret goes last.
+// key, into status or into a creds Secret. A creds Secret the user does not
+// own is never written.
 type UserReconciler struct {
 	client.Client
 	// Sessions closes a deleted user's connections; nil reaches no NATS
@@ -299,11 +290,9 @@ func sameUserClaims(a, b string) bool {
 // userAccount is the account a NatsUser belongs to, as far as signing and
 // revoking its users needs it.
 type userAccount struct {
-	key  types.NamespacedName
-	keys keySource
-	// operator is the NatsOperator signing the account.
-	operator types.NamespacedName
-	// publicKey is the account's identity; empty until it has one.
+	key       types.NamespacedName
+	keys      keySource
+	operator  types.NamespacedName
 	publicKey string
 	// jwt is the account JWT as signed; empty where it is not signed, as
 	// for a system account no operator names.
@@ -336,7 +325,6 @@ func (r *UserReconciler) account(ctx context.Context, u *authv1beta1.NatsUser, n
 	return acc, true, nil
 }
 
-// lookupAccount reads the account of kind at key.
 func (r *UserReconciler) lookupAccount(ctx context.Context, kind authv1beta1.AccountKind, key types.NamespacedName) (userAccount, bool, error) {
 	out := userAccount{key: key}
 	switch kind {

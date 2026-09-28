@@ -114,7 +114,6 @@ func (c *fullCluster) held(i int, account string) string {
 	return string(raw)
 }
 
-// newAccount returns a new account's keys and public key.
 func newAccount(t *testing.T) (jwtplane.Keys, string) {
 	t.Helper()
 	id, err := nkeys.CreateAccount()

@@ -43,13 +43,10 @@ func foreignNamespaces(own string, namespaces []string) []string {
 	return out
 }
 
-// EnqueueReferrers returns the handler a controller watches
-// NatsReferenceGrants with. For each event it enqueues every object of kind,
-// listed through list's type, that sits in a namespace a grant's from entry
-// names for kind and whose references cross into the grant's namespace. An
-// update enqueues for the old spec and the new, so dropping a from entry
-// requeues what it had admitted. r must carry the index IndexReferrers
-// registers for kind; a failed list is logged and enqueues nothing.
+// EnqueueReferrers returns the handler that enqueues, for a
+// NatsReferenceGrant event, every object of kind whose references the grant,
+// before or after an update, may admit. r must carry the index
+// IndexReferrers registers for kind.
 func EnqueueReferrers(r client.Reader, kind schema.GroupKind, list client.ObjectList) handler.EventHandler {
 	e := &enqueuer{r: r, kind: kind, list: list}
 	return handler.Funcs{

@@ -18,11 +18,9 @@ import (
 // is looked at again.
 const distributionRecheck = 5 * time.Second
 
-// distribute counts the servers trusting operator that hold token, an
-// account's current JWT, pushing it again when one does not. It returns the
-// account's distribution, which is prev where the servers were not counted,
-// the Distributed condition, and how soon to look again, zero for not until
-// something changes. With d nil or no token the condition has no Type.
+// distribute pushes token again where a server trusting operator lacks it
+// and returns the account's distribution, the Distributed condition and how
+// soon to look again. With d nil or no token the condition has no Type.
 func distribute(ctx context.Context, d Distributor, operator types.NamespacedName, token string, prev *authv1beta1.Distribution) (*authv1beta1.Distribution, metav1.Condition, time.Duration, error) {
 	if d == nil || token == "" {
 		return prev, metav1.Condition{}, 0, nil

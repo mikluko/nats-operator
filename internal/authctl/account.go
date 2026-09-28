@@ -33,32 +33,7 @@ import (
 
 // AccountReconciler signs a NatsAccount's JWT with its operator's active
 // signing key and writes it to status, generating the keys spec omits.
-//
-// The JWT is re-signed when its claims change, when the operator's active
-// signing key changes, and at half its lifetime; a jwtTTL of zero signs one
-// that never expires. An import is signed in only while it resolves: the
-// exporter exists and has a public key, a NatsReferenceGrant admits a
-// cross-namespace reference, and a private export lists the importer, in
-// which case an activation token is minted with the exporter's signing key.
-// An import that does not resolve is left out of the JWT and reported.
-//
-// The JWT revokes the keys of its NatsUsers being deleted or no longer
-// admitted, and keeps every revocation status.revocations records or it
-// already carried until none of the revocation's issuers is among the
-// account's signing keys. A status holding neither a JWT nor revocations
-// is recovered, with a Distributor, from the JWT the servers hold. While
-// no server can be asked, an account whose status.distribution records it
-// distributed is not signed, and any other is signed with
-// RevocationsUnrecovered True until a server answers. Each newly
-// signed JWT resets status.distribution to no server current; with a
-// Distributor, status.distribution and the Distributed condition then
-// follow the servers holding it. A JWT in status older than one the
-// Distributor already pushed, as a push whose status write was lost
-// leaves it, is replaced by one signed afresh.
-//
-// Deletion is held by AccountFinalizer until the account's public key is
-// in its NatsOperator's status.deletedAccounts, from which the operator's
-// reconciler has it deleted from the resolvers.
+// A jwtTTL of zero signs a JWT that never expires.
 type AccountReconciler struct {
 	client.Client
 	// Distributor receives every newly signed account JWT; nil pushes
@@ -252,7 +227,6 @@ func (r *AccountReconciler) deletionPending(ctx context.Context, acc *authv1beta
 	return !deletionRecorded(&op, list.Items, d, time.Now()), nil
 }
 
-// listUsers lists the NatsUsers of the account of kind at key.
 func listUsers(ctx context.Context, c client.Reader, kind authv1beta1.AccountKind, key types.NamespacedName) ([]authv1beta1.NatsUser, error) {
 	var list authv1beta1.NatsUserList
 	if err := c.List(ctx, &list, client.MatchingFields{userAccountField: accountValue(kind, key)}); err != nil {

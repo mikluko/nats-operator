@@ -131,7 +131,6 @@ func collect(t *testing.T, register func(metric.Meter) error, after func()) coll
 	return out
 }
 
-// key is attrs as k=v pairs, sorted and joined by commas.
 func key(attrs []attribute.KeyValue) string {
 	pairs := make([]string, len(attrs))
 	for i, a := range attrs {
@@ -236,7 +235,6 @@ func TestInstrumentsListed(t *testing.T) {
 	}
 }
 
-// attrKey is kvs as key renders a point's attributes.
 func attrKey(kvs map[string]string) string {
 	pairs := make([]string, 0, len(kvs))
 	for k, v := range kvs {

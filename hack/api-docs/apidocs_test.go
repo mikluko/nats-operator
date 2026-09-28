@@ -41,7 +41,6 @@ type section struct {
 	rows []string
 }
 
-// apiPage is the parsed page.
 type apiPage struct {
 	front    map[string]any
 	sections map[string]*section
@@ -108,7 +107,6 @@ func readPage(t *testing.T) apiPage {
 	return p
 }
 
-// codeText returns a code span's content.
 func codeText(code *gast.CodeSpan, src []byte) string {
 	var b strings.Builder
 	for c := code.FirstChild(); c != nil; c = c.NextSibling() {
@@ -215,7 +213,6 @@ func TestPageCoversEveryType(t *testing.T) {
 	}
 }
 
-// decls parses the non-generated Go files of every api/ package.
 func decls(t *testing.T) []*ast.GenDecl {
 	t.Helper()
 	files, err := filepath.Glob(filepath.Join(apiDir, "*", "v1beta1", "*.go"))

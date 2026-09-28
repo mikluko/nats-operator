@@ -88,8 +88,8 @@ Appears on: [NatsAccountSpec](#NatsAccountSpec).
 | :---- | :--- | :------: | :---------- |
 | `preset` | [{{< type "ExportPreset" >}}](#ExportPreset) | No | Preset expands to a fixed set of exports. |
 | `name` | {{< type "string" >}} | No | Name is what imports name the export by. |
-| `type` | [{{< type "ExportType" >}}](#ExportType) | No | Type of the export. |
-| `subject` | {{< type "string" >}} | No | Subject exported. |
+| `type` | [{{< type "ExportType" >}}](#ExportType) | No | Type is signed into the account JWT as the export's type. |
+| `subject` | {{< type "string" >}} | No | Subject is signed into the account JWT as the export's subject. |
 | `responseType` | [{{< type "ResponseType" >}}](#ResponseType) | No | ResponseType of a service export, Singleton when omitted. |
 | `access` | [{{< type "ExportAccess" >}}](#ExportAccess) | No | Access is Public when omitted; a Private export is importable only by its importers. |
 | `importers` | [{{< type "[]AccountReference" >}}](#AccountReference) | No | Importers of a Private export, each minted an activation token. |
@@ -138,7 +138,7 @@ Appears on: [NatsAccountStatus](#NatsAccountStatus).
 | `export` | {{< type "string" >}} | No | Export is the export taken, as account/export. |
 | `subject` | {{< type "string" >}} | No | Subject is the exported subject. |
 | `localSubject` | {{< type "string" >}} | No | LocalSubject is where the import appears in this account. |
-| `type` | [{{< type "ExportType" >}}](#ExportType) | No | Type of the export. |
+| `type` | [{{< type "ExportType" >}}](#ExportType) | No | Type is the type of the export taken. |
 | `activation` | [{{< type "ActivationState" >}}](#ActivationState) | No | Activation is the state of the activation token of a Private export. |
 ### Keys {#Keys}
 Keys adopts existing seeds; omitted, the auth controller generates keys into Secrets it owns.\
@@ -297,7 +297,7 @@ SeedSecretKeySelector selects an nkey seed from a Secret in the referrer's names
 Appears on: [IdentityKey](#IdentityKey), [SigningKey](#SigningKey).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `name` | {{< type "string" >}} | Yes | Name of the Secret. |
+| `name` | {{< type "string" >}} | Yes | Name of a Secret in the referrer's namespace. |
 | `key` | {{< type "string" >}} | Yes | Key within the Secret. |
 ### SeedSecrets {#SeedSecrets}
 SeedSecrets name the Secrets holding generated seeds.\
@@ -326,7 +326,7 @@ SystemAccountStatus is the system account an operator JWT names.\
 Appears on: [NatsOperatorStatus](#NatsOperatorStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `name` | {{< type "string" >}} | No | Name of the NatsSystemAccount. |
+| `name` | {{< type "string" >}} | No | Name of the NatsSystemAccount spec.systemAccountRef resolves to. |
 | `publicKey` | {{< type "string" >}} | No | PublicKey of the system account. |
 | `jwt` | {{< type "string" >}} | No | JWT of the system account. |
 ### UserPreset {#UserPreset}
@@ -358,7 +358,7 @@ CertManagerCertificate is a certificate cert-manager issues.\
 Appears on: [CertificateSource](#CertificateSource).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `issuerRef` | [{{< type "IssuerReference" >}}](#IssuerReference) | Yes | IssuerRef names the cert-manager issuer. |
+| `issuerRef` | [{{< type "IssuerReference" >}}](#IssuerReference) | Yes | IssuerRef is copied into the Certificate the cluster controller creates in the NatsCluster's namespace. |
 ### CertificateSource {#CertificateSource}
 CertificateSource names where a listener's certificate comes from.\
 Appears on: [ListenerTLS](#ListenerTLS), [RoutesTLS](#RoutesTLS).
@@ -379,7 +379,7 @@ ConfigStatus is the rendered config revision.\
 Appears on: [NatsClusterStatus](#NatsClusterStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `revision` | {{< type "string" >}} | No | Revision of the rendered config. |
+| `revision` | {{< type "string" >}} | No | Revision is a digest of the rendered config, StatefulSets and certificates; each server reports its own as config_revision. |
 | `appliedBy` | [{{< type "ConfigApplyMethod" >}}](#ConfigApplyMethod) | No | AppliedBy is how the revision is applied. |
 | `restartReason` | {{< type "string" >}} | No | RestartReason names what made a restart necessary. |
 ### EmbeddedObjectMetadata {#EmbeddedObjectMetadata}
@@ -427,13 +427,13 @@ Appears on: [Gateway](#Gateway).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `name` | {{< type "string" >}} | Yes | Name is the member's gateway name. |
-| `url` | {{< type "string" >}} | Yes | URL is the member's gateway URL. |
+| `url` | {{< type "string" >}} | Yes | URL is where the member's gateway is dialled; on this cluster's own entry, its host is a name on the gateway certificate. |
 ### GatewayStatus {#GatewayStatus}
 GatewayStatus is the connection to one supercluster member.\
 Appears on: [NatsClusterStatus](#NatsClusterStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `name` | {{< type "string" >}} | Yes | Name of the member. |
+| `name` | {{< type "string" >}} | Yes | Name is the member's gateway name. |
 | `connected` | {{< type "bool" >}} | No | Connected reports whether the member is reachable. |
 | `inbound` | {{< type "int32" >}} | No | Inbound is the number of inbound gateway connections. |
 | `outbound` | {{< type "int32" >}} | No | Outbound is the number of outbound gateway connections. |
@@ -442,7 +442,7 @@ IssuerReference names a cert-manager Issuer or ClusterIssuer.\
 Appears on: [CertManagerCertificate](#CertManagerCertificate).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `name` | {{< type "string" >}} | Yes | Name of the issuer. |
+| `name` | {{< type "string" >}} | Yes | Name of an Issuer in the NatsCluster's namespace, or of a ClusterIssuer. |
 | `kind` | {{< type "string" >}} | No | Kind of the issuer, Issuer when omitted. |
 | `group` | {{< type "string" >}} | No | Group of the issuer, cert-manager.io when omitted. |
 ### JetStream {#JetStream}
@@ -465,7 +465,7 @@ JetStreamStatus is a NATS cluster's JetStream state.\
 Appears on: [NatsClusterStatus](#NatsClusterStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `metaLeader` | {{< type "string" >}} | No | MetaLeader is the server leading the meta group. |
+| `metaLeader` | {{< type "string" >}} | No | MetaLeader is the server name of the meta group's leader, empty while none is known. |
 | `limits` | [{{< type "JetStreamLimits" >}}](#JetStreamLimits) | No | Limits are the effective store limits. |
 ### LeafRemote {#LeafRemote}
 LeafRemote is a hub a leaf dials, and the local account it binds. With neither localAccountTrustRef nor localSystemAccount it binds the global account.\
@@ -610,15 +610,15 @@ ServiceTemplate is the template of an external Service.\
 Appears on: [Gateway](#Gateway), [Leafnodes](#Leafnodes).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `type` | [{{< type "ServiceType" >}}](https://pkg.go.dev/k8s.io/api/core/v1#ServiceType) | No | Type of the Service. |
-| `annotations` | {{< type "map[string]string" >}} | No | Annotations on the Service. |
+| `type` | [{{< type "ServiceType" >}}](https://pkg.go.dev/k8s.io/api/core/v1#ServiceType) | No | Type of the Service, ClusterIP when omitted. |
+| `annotations` | {{< type "map[string]string" >}} | No | Annotations set on the Service. |
 ### VolumeClaimTemplate {#VolumeClaimTemplate}
 VolumeClaimTemplate is a PersistentVolumeClaim template.\
 Appears on: [JetStream](#JetStream).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `metadata` | [{{< type "EmbeddedObjectMetadata" >}}](#EmbeddedObjectMetadata) | No |  |
-| `spec` | [{{< type "PersistentVolumeClaimSpec" >}}](https://pkg.go.dev/k8s.io/api/core/v1#PersistentVolumeClaimSpec) | Yes | Spec of the claim. |
+| `spec` | [{{< type "PersistentVolumeClaimSpec" >}}](https://pkg.go.dev/k8s.io/api/core/v1#PersistentVolumeClaimSpec) | Yes |  |
 ## jetstream.nats.mikluko.io/v1beta1
 Package v1beta1 is the jetstream.nats.mikluko.io API group, owned by the JetStream controller.
 | Kind | Description |
@@ -782,7 +782,7 @@ Move is a leader or placement move.\
 Appears on: [NatsBalancerStatus](#NatsBalancerStatus), [NatsSystemBalancerStatus](#NatsSystemBalancerStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `kind` | [{{< type "MoveKind" >}}](#MoveKind) | No | Kind of move. |
+| `kind` | [{{< type "MoveKind" >}}](#MoveKind) | No | Kind is Leader for a leader stepdown, Placement for moving the stream's replicas off a server. |
 | `account` | {{< type "string" >}} | No | Account is the public key of the account whose stream moved. |
 | `stream` | {{< type "string" >}} | No | Stream is the name of the stream moved, or of the stream whose consumer's leader moved. |
 | `consumer` | {{< type "string" >}} | No | Consumer is the name of the consumer whose leader moved; empty on a stream's move. |
@@ -1146,7 +1146,7 @@ PinnedObject is a resource whose own spec pins the source cluster.\
 Appears on: [NatsClusterEvacuationStatus](#NatsClusterEvacuationStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `kind` | {{< type "string" >}} | Yes | Kind of the resource. |
+| `kind` | {{< type "string" >}} | Yes | Kind is NatsStream, NatsKeyValue or NatsObjectStore. |
 | `namespace` | {{< type "string" >}} | Yes | Namespace of the resource. |
 | `name` | {{< type "string" >}} | Yes | Name of the resource. |
 ### Placement {#Placement}
@@ -1169,7 +1169,7 @@ Pool is a declared group of streams balanced apart from the account's others.\
 Appears on: [NatsBalancerSpec](#NatsBalancerSpec).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `name` | {{< type "string" >}} | Yes | Name of the pool. |
+| `name` | {{< type "string" >}} | Yes | Name, unique within the balancer. |
 | `selector` | [{{< type "LabelSelector" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#LabelSelector) | Yes | Selector matches NatsStream, NatsKeyValue and NatsObjectStore resources in the balancer's namespace by label. |
 ### PoolStatus {#PoolStatus}
 PoolStatus is one pool's evenness.\
@@ -1202,7 +1202,7 @@ ReplicaStatus is one replica of a Raft group.\
 Appears on: [ConsumerServerStatus](#ConsumerServerStatus), [StreamServerStatus](#StreamServerStatus), [StreamTransfer](#StreamTransfer).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `name` | {{< type "string" >}} | Yes | Name of the server holding the replica. |
+| `name` | {{< type "string" >}} | Yes | Name is the server_name of the server holding the replica. |
 | `current` | {{< type "bool" >}} | No | Current reports whether the replica is current. |
 | `lag` | {{< type "int64" >}} | No | Lag is how many operations the replica is behind. |
 ### Republish {#Republish}
@@ -1210,8 +1210,8 @@ Republish republishes stored messages.\
 Appears on: [KeyValueConfig](#KeyValueConfig), [StreamConfig](#StreamConfig).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `source` | {{< type "string" >}} | No | Source subject filter. |
-| `destination` | {{< type "string" >}} | Yes | Destination subject. |
+| `source` | {{< type "string" >}} | No | Source is the server's src, the stored subjects republished. |
+| `destination` | {{< type "string" >}} | Yes | Destination is the server's dest, the subject they are republished to. |
 | `headersOnly` | {{< type "bool" >}} | No | HeadersOnly republishes headers without the payload. |
 ### RequestedMove {#RequestedMove}
 RequestedMove is a stream an evacuation asked the server to move.\
@@ -1219,7 +1219,7 @@ Appears on: [NatsClusterEvacuationStatus](#NatsClusterEvacuationStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `account` | {{< type "string" >}} | Yes | Account is the account's public key. |
-| `stream` | {{< type "string" >}} | Yes | Stream is the name of the stream. |
+| `stream` | {{< type "string" >}} | Yes | Stream is the stream's server-side name. |
 | `time` | [{{< type "Time" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Time) | Yes | Time the move was last requested. |
 ### RetentionPolicy {#RetentionPolicy}
 RetentionPolicy is a stream's retention policy.\
@@ -1235,7 +1235,7 @@ ServerLoad is one server's share of leaders and replicas.\
 Appears on: [NatsSystemBalancerStatus](#NatsSystemBalancerStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `name` | {{< type "string" >}} | Yes | Name of the server. |
+| `name` | {{< type "string" >}} | Yes | Name is the server's server_name. |
 | `leaders` | {{< type "int32" >}} | No | Leaders is the number of Raft groups the server leads. |
 | `replicas` | {{< type "int32" >}} | No | Replicas is the number of replicas the server holds. |
 ### ServerStream {#ServerStream}
@@ -1244,7 +1244,7 @@ Appears on: [NatsClusterEvacuationStatus](#NatsClusterEvacuationStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `account` | {{< type "string" >}} | Yes | Account is the account's public key. |
-| `name` | {{< type "string" >}} | Yes | Name of the stream. |
+| `name` | {{< type "string" >}} | Yes | Name is the stream's server-side name. |
 ### Skew {#Skew}
 Skew is the spread between the most and least loaded servers.\
 Appears on: [NatsSystemBalancerStatus](#NatsSystemBalancerStatus).
@@ -1323,8 +1323,8 @@ StreamConsumerSource is a durable consumer used for sourcing.\
 Appears on: [StreamSource](#StreamSource).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `name` | {{< type "string" >}} | No | Name of the consumer. |
-| `deliverSubject` | {{< type "string" >}} | No | DeliverSubject of the consumer. |
+| `name` | {{< type "string" >}} | No | Name is the server's consumer name. |
+| `deliverSubject` | {{< type "string" >}} | No | DeliverSubject is the server's deliver_subject. |
 ### StreamServerStatus {#StreamServerStatus}
 StreamServerStatus is a stream's state as the server reports it.\
 Appears on: [NatsKeyValueStatus](#NatsKeyValueStatus), [NatsObjectStoreStatus](#NatsObjectStoreStatus), [NatsStreamStatus](#NatsStreamStatus).
@@ -1340,7 +1340,7 @@ StreamSource is a stream a mirror or source copies from.\
 Appears on: [KeyValueConfig](#KeyValueConfig), [StreamConfig](#StreamConfig).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `name` | {{< type "string" >}} | Yes | Name of the origin stream. |
+| `name` | {{< type "string" >}} | Yes | Name is the origin stream's server-side name. |
 | `optStartSeq` | {{< type "int64" >}} | No | OptStartSeq is the origin sequence to start at. |
 | `optStartTime` | [{{< type "Time" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Time) | No | OptStartTime is the origin time to start at. |
 | `filterSubject` | {{< type "string" >}} | No | FilterSubject filters the origin's messages. |
@@ -1362,8 +1362,8 @@ SubjectTransform maps a source subject to a destination subject.\
 Appears on: [StreamConfig](#StreamConfig), [StreamSource](#StreamSource).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `source` | {{< type "string" >}} | No | Source subject. |
-| `destination` | {{< type "string" >}} | Yes | Destination subject. |
+| `source` | {{< type "string" >}} | No | Source is the server's src, the subjects transformed. |
+| `destination` | {{< type "string" >}} | Yes | Destination is the server's dest, the subject they become. |
 ### SyncStatus {#SyncStatus}
 SyncStatus is the status every JetStream object resource reports.\
 Appears on: [NatsConsumerStatus](#NatsConsumerStatus), [NatsKeyValueStatus](#NatsKeyValueStatus), [NatsObjectStoreStatus](#NatsObjectStoreStatus), [NatsStreamStatus](#NatsStreamStatus).
@@ -1396,7 +1396,7 @@ Package v1beta1 is the nats.mikluko.io API group: the kinds every controller rea
 | [NatsAccountTrust](#NatsAccountTrust) | NatsAccountTrust is an account a leaf binds a remote to. |
 | [NatsConnection](#NatsConnection) | NatsConnection is an address and an identity on a NATS cluster, managed or not; the only way the JetStream controller reaches one. |
 | [NatsOperatorTrust](#NatsOperatorTrust) | NatsOperatorTrust is the trust roots a NatsCluster boots from: the NATS operator JWT and system account JWT. |
-| [NatsReferenceGrant](#NatsReferenceGrant) | NatsReferenceGrant admits references into its own namespace from the namespaces it lists; it has no status, since nothing acts on it. |
+| [NatsReferenceGrant](#NatsReferenceGrant) | NatsReferenceGrant admits references into its own namespace from the namespaces it lists; it has no status. |
 ### CA {#CA}
 CA is where a CA bundle is read from.\
 Appears on: [ConnectionTLS](#ConnectionTLS).
@@ -1408,7 +1408,7 @@ CASecretKeySelector selects a PEM CA bundle from a Secret in the referrer's name
 Appears on: [CA](#CA).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `name` | {{< type "string" >}} | Yes | Name of the Secret. |
+| `name` | {{< type "string" >}} | Yes | Name of a Secret in the referrer's namespace. |
 | `key` | {{< type "string" >}} | No | Key within the Secret, the key cert-manager writes by default. Default: `ca.crt`. |
 ### ConnectionTLS {#ConnectionTLS}
 ConnectionTLS is the client side of TLS toward NATS servers.\
@@ -1427,7 +1427,7 @@ CredentialsSecretKeySelector selects a NATS creds file from a Secret in the refe
 Appears on: [Credentials](#Credentials).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `name` | {{< type "string" >}} | Yes | Name of the Secret. |
+| `name` | {{< type "string" >}} | Yes | Name of a Secret in the referrer's namespace. |
 | `key` | {{< type "string" >}} | No | Key within the Secret, the key a NatsUser writes by default. Default: `user.creds`. |
 ### NatsAccountTrust {#NatsAccountTrust}
 NatsAccountTrust is an account a leaf binds a remote to.
@@ -1506,7 +1506,7 @@ Appears on: [NatsOperatorTrust](#NatsOperatorTrust).
 | `operatorJWT` | {{< type "string" >}} | No | OperatorJWT is the referenced operator's JWT, written by the auth controller in the reference form. |
 | `systemAccountJWT` | {{< type "string" >}} | No | SystemAccountJWT is the referenced operator's system account JWT, written by the auth controller in the reference form. |
 ### NatsReferenceGrant {#NatsReferenceGrant}
-NatsReferenceGrant admits references into its own namespace from the namespaces it lists; it has no status, since nothing acts on it.
+NatsReferenceGrant admits references into its own namespace from the namespaces it lists; it has no status.
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `apiVersion` | {{< type "string" >}} | Yes | `nats.mikluko.io/v1beta1` |
@@ -1532,20 +1532,20 @@ ReferenceGrantFrom names a kind of referrer in one namespace.\
 Appears on: [NatsReferenceGrantSpec](#NatsReferenceGrantSpec).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `group` | {{< type "string" >}} | Yes | Group of the referrer. |
-| `kind` | {{< type "string" >}} | Yes | Kind of the referrer. |
-| `namespace` | {{< type "string" >}} | Yes | Namespace of the referrer. |
+| `group` | {{< type "string" >}} | Yes | Group is the referrer's API group, matched exactly, such as cluster.nats.mikluko.io. |
+| `kind` | {{< type "string" >}} | Yes | Kind is the referrer's kind, matched exactly, such as NatsCluster. |
+| `namespace` | {{< type "string" >}} | Yes | Namespace the referrers live in, matched exactly. |
 ### ReferenceGrantTo {#ReferenceGrantTo}
 ReferenceGrantTo names a kind of object in the grant's namespace.\
 Appears on: [NatsReferenceGrantSpec](#NatsReferenceGrantSpec).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `group` | {{< type "string" >}} | Yes | Group of the referenced object. |
-| `kind` | {{< type "string" >}} | Yes | Kind of the referenced object. |
+| `group` | {{< type "string" >}} | Yes | Group is the referenced object's API group, matched exactly, such as nats.mikluko.io. |
+| `kind` | {{< type "string" >}} | Yes | Kind is the referenced object's kind, matched exactly, such as NatsConnection. |
 | `name` | {{< type "string" >}} | No | Name of the referenced object; omitted, every object of the kind. |
 ### SecretReference {#SecretReference}
 SecretReference names a Secret in the referrer's namespace.\
 Appears on: [CertificateSource](#CertificateSource).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `name` | {{< type "string" >}} | Yes | Name of the Secret. |
+| `name` | {{< type "string" >}} | Yes | Name of a Secret in the referrer's namespace. |

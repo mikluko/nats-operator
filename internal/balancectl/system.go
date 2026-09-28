@@ -83,9 +83,7 @@ const (
 
 // SystemBalancerReconciler runs each NatsSystemBalancer's passes over the
 // NATS cluster its NatsConnection reaches, which must be as a user of the
-// system account: one move per interval, none while the NATS cluster is not
-// Settled, none of a stream a NatsClusterEvacuation moves, and none by a
-// second balancer of the same NATS cluster.
+// system account.
 type SystemBalancerReconciler struct {
 	Client client.Client
 	Dialer *natsconn.Dialer
@@ -251,9 +249,7 @@ func moves(m *js.Moves) movesOn {
 	return out
 }
 
-// record writes what a pass found and did into st. A held pass leaves the
-// load as last read, since a NATS cluster in the middle of an election
-// counts leaders it is about to lose.
+// record writes what a pass that was not held found and did into st.
 func record(st *js.NatsSystemBalancerStatus, p balance.Passed, now time.Time) {
 	if p.Held != "" {
 		return
@@ -374,9 +370,7 @@ func referrer(namespace string) grant.Referrer {
 	return grant.Referrer{Group: js.GroupVersion.Group, Kind: SystemBalancerKind, Namespace: namespace}
 }
 
-// SetupWithManager registers the reconciler with mgr. It reconciles a
-// balancer on its spec changing, its NatsConnection changing, a grant that
-// admits it changing, and any NatsClusterEvacuation changing.
+// SetupWithManager registers the reconciler with mgr.
 func (r *SystemBalancerReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	idx := mgr.GetFieldIndexer()
 	refs := func(o client.Object) []natsv1beta1.ObjectReference {

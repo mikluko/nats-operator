@@ -38,11 +38,8 @@ func (d *Dialer) Connection(ctx context.Context, nc *natsv1beta1.NatsConnection)
 }
 
 // Reference returns the connection for the NatsConnection that from's ref
-// names. A ref into another namespace is dialed only where a
-// NatsReferenceGrant there admits from; otherwise Reference returns the
-// grant package's ReferencesResolved=False condition, no connection and no
-// error. The Secrets are those of the NatsConnection's namespace, so the
-// grant is what admits from to them.
+// names, or, where grant.Admit denies the reference, its condition and no
+// connection or error.
 func (d *Dialer) Reference(ctx context.Context, from grant.Referrer, ref natsv1beta1.ObjectReference) (*nats.Conn, *metav1.Condition, error) {
 	ns := ref.Namespace
 	if ns == "" {

@@ -536,12 +536,9 @@ func (r *Reconciler) observeLeafs(ctx context.Context, nc *clusterv1beta1.NatsCl
 }
 
 // leafStatus reports each remote's connected servers and hub account, and
-// LeafnodesConnected: True once every server holds every remote. A
-// server holds a remote when it has dialed at least as many connections in
-// the remote's local account as there are remotes binding that account;
-// leafz names no remote, so remotes sharing a local account are told apart
-// by count alone. Without leafs, the counts keep their last values and the
-// condition is Unknown.
+// LeafnodesConnected: True once every server holds every remote. LEAFZ
+// names no remote, so a server holds one once it has dialed as many
+// connections in its local account as there are remotes binding it.
 func leafStatus(st *clusterv1beta1.NatsClusterStatus, nc *clusterv1beta1.NatsCluster, plan *Plan, leafs map[string][]sysobs.Leaf, observeErr error) {
 	gen := nc.Generation
 	prev := map[types.NamespacedName]int32{}

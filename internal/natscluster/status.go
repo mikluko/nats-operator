@@ -15,7 +15,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
-// Condition types.
+// Condition types a NatsCluster's status reports.
 const (
 	ConditionReady       = "Ready"
 	ConditionSettled     = "Settled"
@@ -25,7 +25,8 @@ const (
 	ConditionGatewaysConnected = "GatewaysConnected"
 )
 
-// Condition reasons.
+// Reasons of the Ready, Settled, GatewaysConnected and Progressing
+// conditions.
 const (
 	ReasonAllServersReady   = "AllServersReady"
 	ReasonQuorumAvailable   = "QuorumAvailable"
@@ -61,11 +62,7 @@ const (
 	ReasonTrustInvalid        = "TrustInvalid"
 )
 
-// Observed is what one reconcile saw and did: what holds it before
-// anything is rendered, the certificate its servers wait for, the servers'
-// StatefulSets by name, which of them it created, the observation of the
-// NATS cluster or why there is none, how the revision is applied to servers
-// not on it, and the rollout decision.
+// Observed is what one reconcile saw and did.
 type Observed struct {
 	// Held is the Progressing condition of a spec, trust or leaf remote
 	// that nothing is rendered past, nil when none holds the reconcile.

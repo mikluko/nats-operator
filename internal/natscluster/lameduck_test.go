@@ -116,15 +116,15 @@ func TestLameDuckHandsOffLeaders(t *testing.T) {
 
 	go x.LameDuckShutdown()
 	handedOff, late := map[string]bool{}, map[string]bool{}
-	for deadline := time.Now().Add(5 * time.Second); len(handedOff) < len(roles) && time.Now().Before(deadline); time.Sleep(2 * time.Millisecond) {
+	require.Eventually(t, func() bool {
 		for role, is := range roles {
 			if l := leaderOf(is); l != nil && l != x && !handedOff[role] {
 				handedOff[role] = true
 				late[role] = clientTold() || !x.Running()
 			}
 		}
-	}
-	require.Len(t, handedOff, len(roles), "leaders not handed off")
+		return len(handedOff) == len(roles)
+	}, 5*time.Second, 2*time.Millisecond, "leaders not handed off")
 	for role := range roles {
 		require.False(t, late[role], "%s handed off after clients were told or %s exited", role, x.Name())
 	}

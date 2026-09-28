@@ -63,12 +63,8 @@ const (
 // +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsstreams;natskeyvalues;natsobjectstores;natssystembalancers;natsclusterevacuations,verbs=list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
 
-// BalancerReconciler runs each NatsBalancer's passes over the NATS cluster
-// its NatsConnection reaches, as a user of the account it balances: its
-// streams split into the declared pools and the default pool, one move per
-// interval, none while the NATS cluster is not Settled, none of a stream a
-// NatsClusterEvacuation moves, and none while any NatsSystemBalancer has a
-// move pending on one of the account's streams.
+// BalancerReconciler runs each NatsBalancer's passes over its account's
+// streams, which its NatsConnection must reach as a user of that account.
 type BalancerReconciler struct {
 	Client client.Client
 	Dialer *natsconn.Dialer
@@ -200,11 +196,10 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 // the server runs a system account.
 const userInfoSubject = "$SYS.REQ.USER.INFO"
 
-// accountOf is the account nc is a user of, as the server names it: the
-// account's public key under a NATS operator. It is "" where the server runs
-// no system account, which leaves no system balancer to yield to. A user
-// JWT names its account, so a connection with one asks no server, and needs
-// no permission to publish to userInfoSubject.
+// accountOf is the account nc is a user of, as the server names it, or ""
+// where nc has no user JWT and the server runs no system account. A
+// connection with a user JWT needs no permission to publish to
+// userInfoSubject.
 func accountOf(ctx context.Context, nc *nats.Conn) (string, error) {
 	if account := jwtAccount(nc); account != "" {
 		return account, nil
@@ -307,8 +302,7 @@ func inCluster(cluster string, clusters map[types.NamespacedName]string, items [
 }
 
 // pendingOrSpec passes creates, deletes, spec changes, deletion marks, and
-// status writes that change a NatsSystemBalancer's pending moves, the one
-// part of its status a NatsBalancer reads.
+// status writes that change a NatsSystemBalancer's pending moves.
 func pendingOrSpec() predicate.Predicate {
 	return predicate.Or(lifecycle.SpecOrDeletion(), predicate.Funcs{
 		CreateFunc:  func(event.CreateEvent) bool { return false },
@@ -333,12 +327,7 @@ func balancerReferrer(namespace string) grant.Referrer {
 	return grant.Referrer{Group: js.GroupVersion.Group, Kind: BalancerKind, Namespace: namespace}
 }
 
-// SetupWithManager registers the reconciler with mgr. It reconciles a
-// balancer on its spec changing, its NatsConnection changing, a grant that
-// admits it changing, the spec, labels or deletion of any NatsStream,
-// NatsKeyValue or NatsObjectStore in its namespace changing, the spec or
-// pending moves of a NatsSystemBalancer of its NATS cluster changing, and any
-// NatsClusterEvacuation changing.
+// SetupWithManager registers the reconciler with mgr.
 func (r *BalancerReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	idx := mgr.GetFieldIndexer()
 	refs := func(o client.Object) []natsv1beta1.ObjectReference {

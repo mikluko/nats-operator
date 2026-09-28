@@ -125,10 +125,10 @@ spec:
                       for sourcing.
                     properties:
                       deliverSubject:
-                        description: DeliverSubject of the consumer.
+                        description: DeliverSubject is the server's deliver_subject.
                         type: string
                       name:
-                        description: Name of the consumer.
+                        description: Name is the server's consumer name.
                         type: string
                     type: object
                   external:
@@ -148,7 +148,7 @@ spec:
                     description: FilterSubject filters the origin's messages.
                     type: string
                   name:
-                    description: Name of the origin stream.
+                    description: Name is the origin stream's server-side name.
                     minLength: 1
                     type: string
                   optStartSeq:
@@ -167,10 +167,11 @@ spec:
                         subject.
                       properties:
                         destination:
-                          description: Destination subject.
+                          description: Destination is the server's dest, the subject
+                            they become.
                           type: string
                         source:
-                          description: Source subject.
+                          description: Source is the server's src, the subjects transformed.
                           type: string
                       required:
                       - destination
@@ -208,13 +209,15 @@ spec:
                 description: Republish republishes stored messages.
                 properties:
                   destination:
-                    description: Destination subject.
+                    description: |-
+                      Destination is the server's dest, the subject they are republished
+                      to.
                     type: string
                   headersOnly:
                     description: HeadersOnly republishes headers without the payload.
                     type: boolean
                   source:
-                    description: Source subject filter.
+                    description: Source is the server's src, the stored subjects republished.
                     type: string
                 required:
                 - destination
@@ -229,10 +232,10 @@ spec:
                         for sourcing.
                       properties:
                         deliverSubject:
-                          description: DeliverSubject of the consumer.
+                          description: DeliverSubject is the server's deliver_subject.
                           type: string
                         name:
-                          description: Name of the consumer.
+                          description: Name is the server's consumer name.
                           type: string
                       type: object
                     external:
@@ -252,7 +255,7 @@ spec:
                       description: FilterSubject filters the origin's messages.
                       type: string
                     name:
-                      description: Name of the origin stream.
+                      description: Name is the origin stream's server-side name.
                       minLength: 1
                       type: string
                     optStartSeq:
@@ -271,10 +274,12 @@ spec:
                           subject.
                         properties:
                           destination:
-                            description: Destination subject.
+                            description: Destination is the server's dest, the subject
+                              they become.
                             type: string
                           source:
-                            description: Source subject.
+                            description: Source is the server's src, the subjects
+                              transformed.
                             type: string
                         required:
                         - destination
@@ -431,7 +436,8 @@ spec:
                           format: int64
                           type: integer
                         name:
-                          description: Name of the server holding the replica.
+                          description: Name is the server_name of the server holding
+                            the replica.
                           type: string
                       required:
                       - name

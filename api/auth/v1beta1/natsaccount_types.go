@@ -139,11 +139,11 @@ type Export struct {
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name,omitempty"`
 
-	// Type of the export.
+	// Type is signed into the account JWT as the export's type.
 	// +optional
 	Type ExportType `json:"type,omitempty"`
 
-	// Subject exported.
+	// Subject is signed into the account JWT as the export's subject.
 	// +optional
 	// +kubebuilder:validation:MinLength=1
 	Subject string `json:"subject,omitempty"`
@@ -233,7 +233,7 @@ type ImportStatus struct {
 	// +optional
 	LocalSubject string `json:"localSubject,omitempty"`
 
-	// Type of the export.
+	// Type is the type of the export taken.
 	// +optional
 	Type ExportType `json:"type,omitempty"`
 

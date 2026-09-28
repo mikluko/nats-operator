@@ -69,9 +69,7 @@ func compareIDs(a, b StreamID) int {
 	return cmp.Or(cmp.Compare(a.Account, b.Account), cmp.Compare(a.Stream, b.Stream))
 }
 
-// split is the groups of p: its streams' own, and their consumers'. The two are
-// evened apart, since a server leading a pool's streams and none of its
-// consumers is even by count and not by work.
+// split is the groups of p: its streams' own, and their consumers'.
 func (p Pool) split(groups []Group) (streams, consumers []Group) {
 	for _, g := range groups {
 		switch {

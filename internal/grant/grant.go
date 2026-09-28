@@ -14,7 +14,6 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 )
 
-// Condition vocabulary a referrer's status carries for its references.
 const (
 	// ConditionReferencesResolved is the condition type Admit reports on.
 	ConditionReferencesResolved = "ReferencesResolved"
@@ -42,12 +41,9 @@ type Target struct {
 	Name      string
 }
 
-// Admit reports whether from may reference to. It returns nil when the
-// reference stays in from's namespace, without reading anything, or when a
-// NatsReferenceGrant in to's namespace lists from in its from and to in its
-// to. Otherwise it returns a ReferencesResolved=False condition with
-// ReasonNoGrant; the caller sets ObservedGeneration. An error is a failure to
-// list grants, never a denial.
+// Admit returns nil where from may reference to, and otherwise a
+// ReferencesResolved=False condition whose ObservedGeneration the caller
+// sets. An error is a failure to list grants, never a denial.
 func Admit(ctx context.Context, r client.Reader, from Referrer, to Target) (*metav1.Condition, error) {
 	if to.Namespace == "" || to.Namespace == from.Namespace {
 		return nil, nil

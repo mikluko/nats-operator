@@ -10,7 +10,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-// tracerName is the instrumentation scope of the reconcile spans.
 const tracerName = "github.com/mikluko/nats-operator/internal/telemetry"
 
 // Traced wraps r so each reconcile of a resource of kind runs in a span

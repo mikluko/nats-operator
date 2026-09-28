@@ -164,8 +164,6 @@ spec: {servers: ["nats://demo:4222"]}
 	require.Contains(t, log.String(), "step 1: polling 1 files, timeout 2m0s")
 }
 
-// crashLoopWhenPresent plays the kubelet for pod ns/name, whose container
-// crash-loops.
 func crashLoopWhenPresent(ctx context.Context, c client.WithWatch, ns, name string) {
 	whenPresent(ctx, c, corev1.SchemeGroupVersion.WithKind("Pod"), ns, name, func(u *unstructured.Unstructured) error {
 		u.Object["status"] = map[string]any{"containerStatuses": []any{map[string]any{
@@ -318,7 +316,6 @@ func startAPIServer(t *testing.T) client.WithWatch {
 	return c
 }
 
-// setReadyWhenPresent plays the controller for NatsConnection ns/name.
 func setReadyWhenPresent(ctx context.Context, c client.WithWatch, ns, name string) {
 	gvk := schema.GroupVersionKind{Group: "nats.mikluko.io", Version: "v1beta1", Kind: "NatsConnection"}
 	whenPresent(ctx, c, gvk, ns, name, func(u *unstructured.Unstructured) error {

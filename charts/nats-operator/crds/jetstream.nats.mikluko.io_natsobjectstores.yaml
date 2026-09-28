@@ -278,7 +278,8 @@ spec:
                           format: int64
                           type: integer
                         name:
-                          description: Name of the server holding the replica.
+                          description: Name is the server_name of the server holding
+                            the replica.
                           type: string
                       required:
                       - name

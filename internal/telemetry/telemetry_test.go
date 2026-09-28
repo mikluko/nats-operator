@@ -31,8 +31,8 @@ func clearSignalVars(t *testing.T) {
 	}
 }
 
-// TestExporters pins the rule of Q2200: a signal is exported only while
-// its exporter or an OTLP endpoint applying to it is named.
+// TestExporters pins that a signal is exported only while its exporter or
+// an OTLP endpoint applying to it is named.
 func TestExporters(t *testing.T) {
 	tests := []struct {
 		name           string

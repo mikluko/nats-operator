@@ -288,8 +288,6 @@ func TestEnvtestReconcile(t *testing.T) {
 			require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(nc), got))
 			return got
 		}
-		// setUp creates a NatsCluster in ns, brings its servers up on the
-		// first revision, and applies change to its spec.
 		setUp := func(t *testing.T, ns string, change func(*clusterv1beta1.NatsClusterSpec)) (*clusterv1beta1.NatsCluster, string) {
 			t.Helper()
 			nc := newCluster(t, ns, func(*clusterv1beta1.NatsCluster) {})
@@ -433,8 +431,6 @@ func TestEnvtestReconcile(t *testing.T) {
 			require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(nc), got))
 			return got
 		}
-		// running is what each server runs: its version and revision, as a
-		// Settled observation reports them with demo-0 leading the meta group.
 		running := map[string][2]string{}
 		observe := func() {
 			snap := &sysobs.Snapshot{}
@@ -447,9 +443,6 @@ func TestEnvtestReconcile(t *testing.T) {
 			snap.Groups = []sysobs.Group{{Kind: sysobs.KindMeta, Leader: "demo-0", Members: members}}
 			robs.set(snap)
 		}
-		// podUp plays the StatefulSet controller and kubelet: the pod of sts's
-		// current template is Ready, its server running what the template
-		// and ConfigMap name.
 		podUp := func(t *testing.T, sts *appsv1.StatefulSet) {
 			t.Helper()
 			sts.Status.ObservedGeneration = sts.Generation

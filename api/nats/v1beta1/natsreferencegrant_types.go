@@ -20,17 +20,18 @@ type NatsReferenceGrantSpec struct {
 
 // ReferenceGrantFrom names a kind of referrer in one namespace.
 type ReferenceGrantFrom struct {
-	// Group of the referrer.
+	// Group is the referrer's API group, matched exactly, such as
+	// cluster.nats.mikluko.io.
 	// +required
 	// +kubebuilder:validation:MinLength=1
 	Group string `json:"group"`
 
-	// Kind of the referrer.
+	// Kind is the referrer's kind, matched exactly, such as NatsCluster.
 	// +required
 	// +kubebuilder:validation:MinLength=1
 	Kind string `json:"kind"`
 
-	// Namespace of the referrer.
+	// Namespace the referrers live in, matched exactly.
 	// +required
 	// +kubebuilder:validation:MinLength=1
 	Namespace string `json:"namespace"`
@@ -38,12 +39,14 @@ type ReferenceGrantFrom struct {
 
 // ReferenceGrantTo names a kind of object in the grant's namespace.
 type ReferenceGrantTo struct {
-	// Group of the referenced object.
+	// Group is the referenced object's API group, matched exactly, such as
+	// nats.mikluko.io.
 	// +required
 	// +kubebuilder:validation:MinLength=1
 	Group string `json:"group"`
 
-	// Kind of the referenced object.
+	// Kind is the referenced object's kind, matched exactly, such as
+	// NatsConnection.
 	// +required
 	// +kubebuilder:validation:MinLength=1
 	Kind string `json:"kind"`
@@ -57,7 +60,7 @@ type ReferenceGrantTo struct {
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // NatsReferenceGrant admits references into its own namespace from the
-// namespaces it lists; it has no status, since nothing acts on it.
+// namespaces it lists; it has no status.
 type NatsReferenceGrant struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

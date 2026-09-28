@@ -100,16 +100,7 @@ type gateState struct {
 
 func (g gateState) open() bool { return g.waitingFor == "" }
 
-// decide takes one rollout decision. It takes at most one step: removing
-// a server beyond spec.replicas, highest ordinal first; then restarting a
-// server waiting for one; then replacing a server whose volume is to be
-// replaced; restarts and replacements highest ordinal first, the meta
-// leader's server last. A step starts only once every server is Ready,
-// every server on the target revision reports it, every server is a member
-// of the meta group, and the NATS cluster is Settled; a closed gate holds
-// with no timeout. Paused holds before the next step; a force-step naming a
-// server waiting for a restart restarts it through a closed gate and
-// through Paused. A removal once begun is carried through, paused or not.
+// decide takes one rollout decision, of at most one step.
 func decide(st rolloutState) rolloutDecision {
 	d := rolloutDecision{ClearForceStep: st.ForceStep != ""}
 	rm := st.Removal
@@ -246,8 +237,7 @@ func rolloutCondition(rs *clusterv1beta1.RolloutStatus, gate gateState, paused b
 
 // judgeGate reports what holds the gate to the next step, in order: the
 // NATS cluster not Settled, a server outside the meta group, a server not
-// Ready, a server on the target
-// revision not reporting it.
+// Ready, a server on the target revision not reporting it.
 func judgeGate(st rolloutState) gateState {
 	var notReady, behind []string
 	for _, s := range st.Servers {
@@ -369,10 +359,8 @@ func (r *Reconciler) rolloutState(nc *clusterv1beta1.NatsCluster, plan *Plan, o 
 	return st
 }
 
-// rollout takes one rollout decision and carries it out: it restarts or
-// removes the server decided on, marks the server a replace-server
-// annotation names, and clears the force-step and replace-server
-// annotations it read.
+// rollout takes one rollout decision and carries it out, clearing the
+// force-step and replace-server annotations it read.
 func (r *Reconciler) rollout(ctx context.Context, nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed) (rolloutDecision, error) {
 	if err := r.requestReplacement(ctx, nc, plan, o.StatefulSets); err != nil {
 		return rolloutDecision{}, err
@@ -423,8 +411,7 @@ func (r *Reconciler) rollout(ctx context.Context, nc *clusterv1beta1.NatsCluster
 
 // restartServer writes server s's rendered ConfigMap, marked for a restart
 // for reason, then its rendered pod template into cur. The template names
-// the revision, so writing it restarts the pod, whose preStop enters lame
-// duck mode.
+// the revision, so writing it restarts the pod.
 func (r *Reconciler) restartServer(ctx context.Context, nc *clusterv1beta1.NatsCluster, s Server, cur *appsv1.StatefulSet, reason string) (*appsv1.StatefulSet, error) {
 	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: s.ConfigMap.Name, Namespace: s.ConfigMap.Namespace}}
 	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, cm, func() error {

@@ -1,8 +1,5 @@
 // Package e2e runs the story bundles under docs/content/docs/stories against
-// live Kubernetes clusters: step by step, it applies each step's manifests,
-// deletes what the step deletes, and waits for the live objects to contain
-// every status and live file of the step, each file in the cluster its
-// story places it in.
+// live Kubernetes clusters.
 package e2e
 
 import (
@@ -25,25 +22,20 @@ import (
 )
 
 // FixtureDir is the directory in a story's bundle holding files the harness
-// loads as the story's own and the story's page does not show: what a
-// story assumes exists before its first step. They are named as the
-// story's files are, and placed by their path from the bundle, as in
-// "e2e/00-cluster.yaml".
+// loads as the story's own and the story's page does not show; placements
+// name them by their path from the bundle, as in "e2e/00-cluster.yaml".
 const FixtureDir = "e2e"
 
 // Bundle is one story directory: its steps, and how the harness treats it
 // as declared in its index.md front matter under params.e2e.
 type Bundle struct {
-	// Name is the directory name, such as "01-quickstart".
-	Name string
-	// Number is the story number the directory name starts with.
+	Name   string
 	Number int
 	// After is the number of the story whose end state this one starts
 	// from, or 0.
 	After int
 	// Base is the bundle After names; nil when After is 0.
 	Base *Bundle
-	// Skip is why the harness does not run the story, or "".
 	Skip string
 	// Clusters places the bundle's files in Kubernetes clusters, the home
 	// cluster first; empty means the story runs in one Kubernetes cluster.
@@ -53,7 +45,6 @@ type Bundle struct {
 	// Waits are the steps that wait longer than the run's default for
 	// their expectations, by step number.
 	Waits map[int]StepWait
-	// Steps are ordered by step number.
 	Steps []Step
 
 	files []bundleFile
@@ -86,8 +77,7 @@ type Substitution struct {
 
 // StepWait is how long one step of a bundle waits for its expectations.
 type StepWait struct {
-	Step int `json:"step"`
-	// Wait is a Go duration, such as "4m".
+	Step int           `json:"step"`
 	Wait time.Duration `json:"-"`
 	// Reason says what makes the step slow; it is required.
 	Reason string `json:"reason"`
@@ -116,7 +106,6 @@ func (s Substitution) selects(o *unstructured.Unstructured) bool {
 	return (s.Kind == "" || o.GetKind() == s.Kind) && (s.Name == "" || o.GetName() == s.Name)
 }
 
-// bundleFile is one loaded bundle file.
 type bundleFile struct {
 	base string
 	name FileName
@@ -137,7 +126,6 @@ type Step struct {
 // Role is what a bundle file is for.
 type Role int
 
-// The roles a file name can give a file.
 const (
 	// RoleApply is a manifest to apply: NN-<anything>.yaml.
 	RoleApply Role = iota
@@ -192,7 +180,6 @@ func ParseFileName(base string) (FileName, error) {
 // Expectation is one status or live file: the object it names must come to
 // contain Want.
 type Expectation struct {
-	// File is the file's base name.
 	File string
 	FileName
 	// Want is the file's document; a status file's is its status block
@@ -349,7 +336,6 @@ func checkSubstitutions(dir string, files []string, subs []Substitution) error {
 	return nil
 }
 
-// add files f under its step.
 func (b *Bundle) add(f bundleFile) {
 	b.files = append(b.files, f)
 	b.Steps = addFile(b.Steps, f)

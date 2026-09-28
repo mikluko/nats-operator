@@ -16,17 +16,14 @@ import (
 
 const chartDir = "../../charts/nats-operator"
 
-// rbacDir holds each controller's ClusterRole as controller-gen generates it.
 const rbacDir = "../../config/rbac"
 
 // rulesTest is the name of the test in each controller's helm-unittest suite
 // whose equal assertion is that controller's ClusterRole rules, exactly.
 const rulesTest = "grants exactly its ClusterRole rules"
 
-// controllers are the chart's three controllers by values key.
 var controllers = []string{"cluster", "auth", "jetstream"}
 
-// ownGroups is each controller's own API group.
 var ownGroups = map[string]string{
 	"cluster":   "cluster.nats.mikluko.io",
 	"auth":      "auth.nats.mikluko.io",

@@ -51,7 +51,7 @@ type Capabilities struct {
 
 // ServerLoad is one server's share of leaders and replicas.
 type ServerLoad struct {
-	// Name of the server.
+	// Name is the server's server_name.
 	// +required
 	Name string `json:"name"`
 
@@ -87,7 +87,8 @@ const (
 
 // Move is a leader or placement move.
 type Move struct {
-	// Kind of move.
+	// Kind is Leader for a leader stepdown, Placement for moving the
+	// stream's replicas off a server.
 	// +optional
 	Kind MoveKind `json:"kind,omitempty"`
 

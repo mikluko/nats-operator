@@ -15,7 +15,7 @@ type ObjectReference struct {
 
 // SecretReference names a Secret in the referrer's namespace.
 type SecretReference struct {
-	// Name of the Secret.
+	// Name of a Secret in the referrer's namespace.
 	// +required
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
@@ -24,7 +24,7 @@ type SecretReference struct {
 // CredentialsSecretKeySelector selects a NATS creds file from a Secret in
 // the referrer's namespace.
 type CredentialsSecretKeySelector struct {
-	// Name of the Secret.
+	// Name of a Secret in the referrer's namespace.
 	// +required
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
@@ -39,7 +39,7 @@ type CredentialsSecretKeySelector struct {
 // CASecretKeySelector selects a PEM CA bundle from a Secret in the
 // referrer's namespace.
 type CASecretKeySelector struct {
-	// Name of the Secret.
+	// Name of a Secret in the referrer's namespace.
 	// +required
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
