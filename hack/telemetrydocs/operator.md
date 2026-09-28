@@ -1,7 +1,7 @@
 
 ## The OpenTelemetry Operator
 
-The chart sets none of the variables above. The [OpenTelemetry Operator](https://opentelemetry.io/docs/platforms/kubernetes/operator/) sets them from an `Instrumentation` in the release namespace:
+The chart sets none of the variables above but the two `metrics.prometheus.enabled` sets. The [OpenTelemetry Operator](https://opentelemetry.io/docs/platforms/kubernetes/operator/) sets them from an `Instrumentation` in the release namespace:
 
 ```yaml
 apiVersion: opentelemetry.io/v1alpha1

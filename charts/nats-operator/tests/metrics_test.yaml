@@ -73,3 +73,44 @@ tests:
     asserts:
       - failedTemplate:
           errorMessage: metrics.serviceMonitor.enabled requires metrics.service.enabled
+  - it: adds the OpenTelemetry metrics port to the Service while metrics.prometheus.enabled is set
+    set:
+      metrics.service.enabled: true
+      metrics.prometheus.enabled: true
+      auth.enabled: false
+      jetstream.enabled: false
+    asserts:
+      - equal:
+          path: spec.ports
+          value:
+            - {name: metrics, port: 8080, targetPort: metrics}
+            - {name: otel-metrics, port: 9464, targetPort: otel-metrics}
+  - it: scrapes the OpenTelemetry metrics port over plain HTTP, with no token, beside the metrics port
+    set:
+      metrics.service.enabled: true
+      metrics.serviceMonitor.enabled: true
+      metrics.serviceMonitor.interval: 30s
+      metrics.prometheus.enabled: true
+      cluster.enabled: false
+      jetstream.enabled: false
+    asserts:
+      - equal:
+          path: spec.endpoints
+          value:
+            - port: metrics
+              path: /metrics
+              scheme: https
+              bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+              tlsConfig: {insecureSkipVerify: true}
+              interval: 30s
+            - port: otel-metrics
+              path: /metrics
+              scheme: http
+              interval: 30s
+        documentIndex: 1
+  - it: refuses metrics.prometheus.enabled without the Service
+    set:
+      metrics.prometheus.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: metrics.prometheus.enabled requires metrics.service.enabled

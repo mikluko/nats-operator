@@ -14,7 +14,7 @@
 | `OTEL_EXPORTER_OTLP_HEADERS`<br>`OTEL_EXPORTER_OTLP_METRICS_HEADERS`<br>`OTEL_EXPORTER_OTLP_TRACES_HEADERS` | unset | Headers sent with each export, as `key=value` pairs separated by commas. |
 | `OTEL_EXPORTER_OTLP_TIMEOUT`<br>`OTEL_EXPORTER_OTLP_METRICS_TIMEOUT`<br>`OTEL_EXPORTER_OTLP_TRACES_TIMEOUT` | unset | Milliseconds an export may take. |
 | `OTEL_EXPORTER_OTLP_COMPRESSION`<br>`OTEL_EXPORTER_OTLP_METRICS_COMPRESSION`<br>`OTEL_EXPORTER_OTLP_TRACES_COMPRESSION` | none | `gzip` compresses each export. |
-| `OTEL_EXPORTER_PROMETHEUS_HOST`<br>`OTEL_EXPORTER_PROMETHEUS_PORT` | `localhost`, `9464` | Where `OTEL_METRICS_EXPORTER=prometheus` serves `/metrics` for scraping. |
+| `OTEL_EXPORTER_PROMETHEUS_HOST`<br>`OTEL_EXPORTER_PROMETHEUS_PORT` | `localhost`, `9464` | Where `OTEL_METRICS_EXPORTER=prometheus` serves `/metrics` for scraping. The chart value `metrics.prometheus.enabled` sets `OTEL_METRICS_EXPORTER=prometheus` and `OTEL_EXPORTER_PROMETHEUS_HOST=0.0.0.0`, and puts port `9464` on the metrics Service and ServiceMonitor. |
 | `OTEL_METRIC_EXPORT_INTERVAL` | unset | Milliseconds between two exports of the `otlp` and `console` metrics exporters, each reading the resources' status; `prometheus` reads it at each scrape. |
 | `OTEL_METRIC_EXPORT_TIMEOUT` | unset | Milliseconds a metric export may take. |
 | `OTEL_TRACES_SAMPLER`<br>`OTEL_TRACES_SAMPLER_ARG` | `parentbased_always_on` | Which reconcile spans are kept. |

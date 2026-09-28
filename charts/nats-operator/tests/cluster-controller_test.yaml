@@ -305,6 +305,43 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].env
           value: [{name: A, value: global}, {name: B, value: own}, {name: C, value: own}]
+  - it: exposes only the metrics and probes ports by default
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].ports
+          value: [{name: metrics, containerPort: 8080}, {name: probes, containerPort: 8081}]
+  - it: serves its OpenTelemetry metrics on the pod IP's port 9464 while metrics.prometheus.enabled is set
+    set:
+      metrics.service.enabled: true
+      metrics.prometheus.enabled: true
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env
+          value:
+            - {name: OTEL_METRICS_EXPORTER, value: prometheus}
+            - {name: OTEL_EXPORTER_PROMETHEUS_HOST, value: 0.0.0.0}
+      - equal:
+          path: spec.template.spec.containers[0].ports
+          value:
+            - {name: metrics, containerPort: 8080}
+            - {name: probes, containerPort: 8081}
+            - {name: otel-metrics, containerPort: 9464}
+  - it: lets the global env, then its own, replace the variables metrics.prometheus.enabled sets
+    set:
+      metrics.service.enabled: true
+      metrics.prometheus.enabled: true
+      env: [{name: OTEL_EXPORTER_PROMETHEUS_HOST, value: global}, {name: A, value: global}]
+      cluster.env: [{name: OTEL_METRICS_EXPORTER, value: own}]
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env
+          value:
+            - {name: OTEL_EXPORTER_PROMETHEUS_HOST, value: global}
+            - {name: A, value: global}
+            - {name: OTEL_METRICS_EXPORTER, value: own}
   - it: takes none of another controller's tolerations, extraArgs or env
     set:
       auth.tolerations: [{key: a, operator: Exists}]

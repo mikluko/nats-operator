@@ -115,6 +115,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `jetstream.env` | `[]` | Its container's environment, an entry replacing the one of the same name under `env`. |
 | `metrics.scraper.serviceAccount` | `""` | A ServiceAccount, as `namespace/name`, granted the controllers' metrics under [RBAC](#rbac); empty, the chart grants them to no one. |
 | `metrics.service.enabled` | `false` | A Service `<release>-<controller>-metrics` per enabled controller, port `metrics` (`8080`) onto its metrics endpoint. |
+| `metrics.prometheus.enabled` | `false` | Each controller's OpenTelemetry metrics served over plain HTTP on the pod IP's port `9464`, as port `otel-metrics` of its container, its metrics Service and its ServiceMonitor; sets `OTEL_METRICS_EXPORTER=prometheus` and `OTEL_EXPORTER_PROMETHEUS_HOST=0.0.0.0`, which an `env` entry of the same name replaces. Requires `metrics.service.enabled`. See [Metrics](#metrics). |
 | `metrics.serviceMonitor.enabled` | `false` | A prometheus-operator `ServiceMonitor` `<release>-<controller>-metrics` per enabled controller, over that Service; requires `metrics.service.enabled` and the `monitoring.coreos.com/v1` CRDs. See [Metrics](#metrics). |
 | `metrics.serviceMonitor.labels` | `{}` | Labels of each ServiceMonitor, for a Prometheus that selects them by label. |
 | `metrics.serviceMonitor.interval` | `""` | Scrape interval of each ServiceMonitor; empty, Prometheus's own. |
@@ -143,6 +144,8 @@ The flags below are the binaries' own. Of those not named above, the chart sets 
 ## Metrics
 
 Each controller serves its metrics over HTTPS on port `8080` under a self-signed certificate it generates at start, so a scraper cannot verify it and must skip verification; what authenticates the scrape is the bearer token, which must be that of a ServiceAccount allowed `get` on `/metrics`, such as `metrics.scraper.serviceAccount`. With `metrics.serviceMonitor.enabled`, each ServiceMonitor scrapes with `scheme: https`, `tlsConfig.insecureSkipVerify: true` and the Prometheus pod's own ServiceAccount token, read from `/var/run/secrets/kubernetes.io/serviceaccount/token`; set `metrics.scraper.serviceAccount` to that ServiceAccount.
+
+Port `8080` serves controller-runtime's metrics only. The controllers' own instruments, `nats_operator.account.jwt_expiry` among them, are OpenTelemetry metrics under [Telemetry]({{< relref "/docs/reference/telemetry#metrics" >}}); with `metrics.prometheus.enabled`, each controller serves them at `/metrics` on port `9464` over plain HTTP to any client that reaches the pod, and each ServiceMonitor scrapes that port with `scheme: http` and no token.
 
 ## RBAC
 

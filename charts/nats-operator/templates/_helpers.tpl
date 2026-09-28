@@ -46,24 +46,25 @@ Both empty, it returns nothing.
 {{- end }}
 
 {{/*
-nats-operator.env takes a list of a global env and a controller's env and
-returns, as YAML, the global entries the controller's does not name followed
-by the controller's. Both empty, it returns nothing.
+nats-operator.env takes a list of env lists and returns, as YAML, each list's
+entries that no later list names, followed by the later list's. All empty, it
+returns nothing.
 */}}
 {{- define "nats-operator.env" -}}
-{{- $global := index . 0 -}}
-{{- $own := index . 1 -}}
+{{- $out := list -}}
+{{- range $env := . -}}
 {{- $names := list -}}
-{{- range $own -}}
+{{- range $env -}}
 {{- $names = append $names .name -}}
 {{- end -}}
-{{- $out := list -}}
-{{- range $global -}}
+{{- $kept := list -}}
+{{- range $out -}}
 {{- if not (has .name $names) -}}
-{{- $out = append $out . -}}
+{{- $kept = append $kept . -}}
 {{- end -}}
 {{- end -}}
-{{- $out = concat $out $own -}}
+{{- $out = concat $kept $env -}}
+{{- end -}}
 {{- if $out -}}
 {{- toYaml $out -}}
 {{- end -}}
@@ -88,6 +89,11 @@ and RoleBinding of those of files/rbac/<name>-namespaced.yaml.
 {{- $role = printf "files/rbac/%s-cluster-scoped.yaml" .name -}}
 {{- end -}}
 {{- $rules := required (printf "%s has no rules" $role) (.root.Files.Get $role | fromYaml).rules -}}
+{{- $prometheus := .root.Values.metrics.prometheus.enabled -}}
+{{- $prometheusEnv := list -}}
+{{- if $prometheus -}}
+{{- $prometheusEnv = list (dict "name" "OTEL_METRICS_EXPORTER" "value" "prometheus") (dict "name" "OTEL_EXPORTER_PROMETHEUS_HOST" "value" "0.0.0.0") -}}
+{{- end -}}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -253,7 +259,7 @@ spec:
             {{- range concat (.args | default list) .root.Values.extraArgs .values.extraArgs }}
             - {{ . | quote }}
             {{- end }}
-          {{- with include "nats-operator.env" (list .root.Values.env .values.env) }}
+          {{- with include "nats-operator.env" (list $prometheusEnv .root.Values.env .values.env) }}
           env:
             {{- . | nindent 12 }}
           {{- end }}
@@ -262,6 +268,10 @@ spec:
               containerPort: 8080
             - name: probes
               containerPort: 8081
+            {{- if $prometheus }}
+            - name: otel-metrics
+              containerPort: 9464
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz

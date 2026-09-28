@@ -2,6 +2,9 @@
 {{- if and $metrics.serviceMonitor.enabled (not $metrics.service.enabled) }}
 {{- fail "metrics.serviceMonitor.enabled requires metrics.service.enabled" }}
 {{- end }}
+{{- if and $metrics.prometheus.enabled (not $metrics.service.enabled) }}
+{{- fail "metrics.prometheus.enabled requires metrics.service.enabled" }}
+{{- end }}
 {{- if $metrics.service.enabled }}
 {{- range $name, $values := dict "cluster-controller" .Values.cluster "auth-controller" .Values.auth "jetstream-controller" .Values.jetstream }}
 {{- if $values.enabled }}
@@ -22,6 +25,11 @@ spec:
     - name: metrics
       port: 8080
       targetPort: metrics
+    {{- if $metrics.prometheus.enabled }}
+    - name: otel-metrics
+      port: 9464
+      targetPort: otel-metrics
+    {{- end }}
 {{- if $metrics.serviceMonitor.enabled }}
 ---
 apiVersion: monitoring.coreos.com/v1
@@ -48,6 +56,14 @@ spec:
       {{- with $metrics.serviceMonitor.interval }}
       interval: {{ . }}
       {{- end }}
+    {{- if $metrics.prometheus.enabled }}
+    - port: otel-metrics
+      path: /metrics
+      scheme: http
+      {{- with $metrics.serviceMonitor.interval }}
+      interval: {{ . }}
+      {{- end }}
+    {{- end }}
 {{- end }}
 {{- end }}
 {{- end }}

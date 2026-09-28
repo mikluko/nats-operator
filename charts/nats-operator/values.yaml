@@ -123,6 +123,14 @@ metrics:
   # metrics port, which serves HTTPS under a self-signed certificate.
   service:
     enabled: false
+  # Each controller's OpenTelemetry metrics served for scraping, over plain
+  # HTTP and without authentication, on the pod IP's port 9464, named
+  # otel-metrics on the container, the metrics Service, which it requires, and
+  # the ServiceMonitor; it sets OTEL_METRICS_EXPORTER=prometheus and
+  # OTEL_EXPORTER_PROMETHEUS_HOST=0.0.0.0, which an env entry of the same name
+  # replaces.
+  prometheus:
+    enabled: false
   # A prometheus-operator ServiceMonitor per enabled controller over that
   # Service, which it requires, scraping with the Prometheus pod's own token,
   # whose ServiceAccount metrics.scraper.serviceAccount must name, and without

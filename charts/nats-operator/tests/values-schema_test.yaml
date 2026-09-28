@@ -37,6 +37,7 @@ tests:
       cluster.extraArgs: [--zap-devel]
       auth.env: [{name: A, value: a}]
       metrics.service.enabled: true
+      metrics.prometheus.enabled: true
       metrics.serviceMonitor.enabled: true
       metrics.serviceMonitor.labels: {release: prometheus}
       metrics.serviceMonitor.interval: 1m30s

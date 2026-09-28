@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Every controller's OpenTelemetry resource carries its host name as `service.instance.id`, unless `OTEL_RESOURCE_ATTRIBUTES` sets one.
 - Every controller serves its Prometheus metrics over HTTPS, to a bearer token of a user allowed `get` on the non-resource URL `/metrics`; an allow is cached for five minutes and a denial for thirty seconds.
 - Chart value `metrics.scraper.serviceAccount`, the `namespace/name` of a ServiceAccount granted `get` on `/metrics`.
+- Chart value `metrics.prometheus.enabled` serves each controller's OpenTelemetry metrics on port `9464` over plain HTTP, through the metrics Service and ServiceMonitor.
 - `helm test` on the chart checks every enabled controller's `/readyz`.
 - A failed `NatsCluster` reconcile reads `Progressing=False, reason: ReconcileFailed` and records a `ReconcileFailed` Warning event.
 - `NatsCluster` `status.removals` names each server being removed or replaced, its phase and since when; a replaced server is recreated only once its old volume claim is gone.

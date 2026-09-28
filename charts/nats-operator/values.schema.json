@@ -160,6 +160,11 @@
           "additionalProperties": false,
           "properties": {"enabled": {"type": "boolean"}}
         },
+        "prometheus": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"enabled": {"type": "boolean"}}
+        },
         "serviceMonitor": {
           "type": "object",
           "additionalProperties": false,
