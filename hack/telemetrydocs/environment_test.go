@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -16,6 +17,11 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/yuin/goldmark"
+	gast "github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
+	east "github.com/yuin/goldmark/extension/ast"
+	"github.com/yuin/goldmark/text"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
@@ -32,11 +38,50 @@ func init() {
 	resolver.SetDefaultScheme("passthrough")
 }
 
+// envVar is one row of the environment table.
+type envVar struct {
+	// Names are the row's variables, the first the one it is known by.
+	Names []string
+	// Default is the cell's Markdown source, "unset" for none.
+	Default string
+}
+
+// envTable returns the rows of the table in environment.md.
+func envTable(t *testing.T) []envVar {
+	t.Helper()
+	src := []byte(environment)
+	doc := goldmark.New(goldmark.WithExtensions(extension.Table)).Parser().Parse(text.NewReader(src))
+	var rows []envVar
+	require.NoError(t, gast.Walk(doc, func(n gast.Node, entering bool) (gast.WalkStatus, error) {
+		row, ok := n.(*east.TableRow)
+		if !entering || !ok {
+			return gast.WalkContinue, nil
+		}
+		var v envVar
+		for c := row.FirstChild().FirstChild(); c != nil; c = c.NextSibling() {
+			if code, ok := c.(*gast.CodeSpan); ok {
+				var name strings.Builder
+				for t := code.FirstChild(); t != nil; t = t.NextSibling() {
+					name.Write(t.(*gast.Text).Value(src))
+				}
+				v.Names = append(v.Names, name.String())
+			}
+		}
+		lines := row.FirstChild().NextSibling().Lines()
+		v.Default = strings.TrimSpace(string(lines.Value(src)))
+		require.NotEmpty(t, v.Names, "a row names its variables in code spans")
+		rows = append(rows, v)
+		return gast.WalkSkipChildren, nil
+	}))
+	require.NotEmpty(t, rows)
+	return rows
+}
+
 // clearEnvironment unsets every variable the environment table names until
 // t ends.
 func clearEnvironment(t *testing.T) {
 	t.Helper()
-	for _, v := range environment {
+	for _, v := range envTable(t) {
 		for _, name := range v.Names {
 			t.Setenv(name, "")
 			require.NoError(t, os.Unsetenv(name))
@@ -256,8 +301,8 @@ func TestEnvironmentDefaults(t *testing.T) {
 			child.End()
 		}},
 	}
-	for _, v := range environment {
-		if v.Default == "" {
+	for _, v := range envTable(t) {
+		if v.Default == "unset" {
 			continue
 		}
 		name := v.Names[0]

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"text/template"
 
 	"github.com/nats-io/nkeys"
@@ -18,7 +19,7 @@ import (
 // bucket whose resources pin prod-east, and a Job creating, as a service
 // would at runtime, a stream no resource owns whose config names prod-east
 // and one that names no cluster.
-func evacuation(dir string) error {
+func evacuation(dir string, _ io.Writer) error {
 	var e evac
 	for _, k := range []struct {
 		kind           nkeys.PrefixByte

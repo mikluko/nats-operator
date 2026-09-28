@@ -16,16 +16,17 @@ import (
 	"golang.org/x/net/html"
 )
 
-// siteBase is the base URL the site is built under in tests. Its path is not
-// the root, so a link that drops the base path is caught as broken.
+// siteBase is the base URL the site is built under in tests.
 const siteBase = "https://site.test/base/"
 
-// buildSite renders docs/ under siteBase as .github/workflows/docs.yml does,
-// and returns the output directory; it needs hugo extended on PATH.
+// buildSite renders docs/ under siteBase and returns the output directory.
+// It skips the test when hugo is not on PATH.
 func buildSite(t *testing.T) string {
 	t.Helper()
 	hugo, err := exec.LookPath("hugo")
-	require.NoError(t, err, "the site test needs hugo extended on PATH")
+	if err != nil {
+		t.Skip("hugo is not on PATH")
+	}
 	out := t.TempDir()
 	cmd := exec.Command(hugo, "--gc", "--minify", "--baseURL", siteBase, "--destination", out, "--panicOnWarning")
 	cmd.Dir = "../docs"
@@ -34,18 +35,17 @@ func buildSite(t *testing.T) string {
 	return out
 }
 
-// page is one rendered HTML file.
+// page is what the checks read off one rendered HTML file.
 type page struct {
-	ids   map[string]bool
-	links []string
-	h1    int
+	h1      int
+	refresh []string
 }
 
 // parsePages reads every .html file under root, keyed by its slash path
 // relative to root.
-func parsePages(t *testing.T, root string) map[string]*page {
+func parsePages(t *testing.T, root string) map[string]page {
 	t.Helper()
-	pages := map[string]*page{}
+	pages := map[string]page{}
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || filepath.Ext(p) != ".html" {
 			return err
@@ -69,121 +69,84 @@ func parsePages(t *testing.T, root string) map[string]*page {
 	return pages
 }
 
-func scan(doc *html.Node) *page {
-	pg := &page{ids: map[string]bool{}}
+func scan(doc *html.Node) page {
+	var pg page
 	for n := range doc.Descendants() {
 		if n.Type != html.ElementNode {
 			continue
-		}
-		if n.Data == "h1" {
-			pg.h1++
 		}
 		attrs := map[string]string{}
 		for _, a := range n.Attr {
 			attrs[a.Key] = a.Val
 		}
-		if id, ok := attrs["id"]; ok {
-			pg.ids[id] = true
-		}
-		switch n.Data {
-		case "a", "link":
-			if v, ok := attrs["href"]; ok {
-				pg.links = append(pg.links, v)
-			}
-		case "img", "script":
-			if v, ok := attrs["src"]; ok {
-				pg.links = append(pg.links, v)
-			}
-		case "meta":
-			if strings.EqualFold(attrs["http-equiv"], "refresh") {
-				if _, target, ok := strings.Cut(attrs["content"], "url="); ok {
-					pg.links = append(pg.links, target)
-				}
+		switch {
+		case n.Data == "h1":
+			pg.h1++
+		case n.Data == "meta" && strings.EqualFold(attrs["http-equiv"], "refresh"):
+			if _, target, ok := strings.Cut(attrs["content"], "url="); ok {
+				pg.refresh = append(pg.refresh, target)
 			}
 		}
 	}
 	return pg
 }
 
-// brokenLinks returns "<page> -> <link>" for every link from a page under
-// root that stays on the site at base but names no file under root, or names
-// a fragment its target page does not define.
-func brokenLinks(t *testing.T, root, base string) []string {
+// siteProblems returns "<page>: <problem>" for every page under root, built
+// under base, with more than one h1 or a meta refresh to a page not under
+// root. Links and fragments are lychee's, in `just site-check`, which does
+// not read meta refresh.
+func siteProblems(t *testing.T, root, base string) []string {
 	t.Helper()
 	baseURL, err := url.Parse(base)
 	require.NoError(t, err)
-	pages := parsePages(t, root)
-	var broken []string
-	for name, pg := range pages {
+	var problems []string
+	for name, pg := range parsePages(t, root) {
+		if pg.h1 > 1 {
+			problems = append(problems, name+": more than one h1")
+		}
 		from := baseURL.JoinPath(path.Dir(name) + "/")
-		for _, link := range pg.links {
-			if !linkResolves(root, pages, baseURL, from, name, link) {
-				broken = append(broken, name+" -> "+link)
+		for _, link := range pg.refresh {
+			if !resolves(root, baseURL, from, link) {
+				problems = append(problems, name+": refresh to "+link)
 			}
 		}
 	}
-	sort.Strings(broken)
-	return broken
+	sort.Strings(problems)
+	return problems
 }
 
-func linkResolves(root string, pages map[string]*page, base, from *url.URL, name, link string) bool {
+// resolves reports whether link, on a page at from, names a file under root,
+// the directory the site at base is rendered into.
+func resolves(root string, base, from *url.URL, link string) bool {
 	ref, err := url.Parse(link)
 	if err != nil {
 		return false
 	}
-	if ref.Scheme != "" && ref.Scheme != "http" && ref.Scheme != "https" {
-		return true
-	}
 	target := from.ResolveReference(ref)
-	if target.Host != base.Host {
-		return true
-	}
-	if !strings.HasPrefix(target.Path, base.Path) {
+	rel, ok := strings.CutPrefix(target.Path, base.Path)
+	if !ok || target.Host != base.Host {
 		return false
 	}
-	rel := strings.TrimPrefix(target.Path, base.Path)
-	file := rel
 	if rel == "" || strings.HasSuffix(rel, "/") {
-		file = rel + "index.html"
+		rel += "index.html"
 	}
-	if ref.Path == "" && ref.Host == "" {
-		file = name
-	}
-	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(file))); err != nil {
-		return false
-	}
-	if target.Fragment == "" {
-		return true
-	}
-	pg, ok := pages[file]
-	return ok && pg.ids[target.Fragment]
-}
-
-func duplicateH1(t *testing.T, root string) []string {
-	t.Helper()
-	var dup []string
-	for name, pg := range parsePages(t, root) {
-		if pg.h1 > 1 {
-			dup = append(dup, name)
-		}
-	}
-	sort.Strings(dup)
-	return dup
+	_, err = os.Stat(filepath.Join(root, filepath.FromSlash(rel)))
+	return err == nil
 }
 
 func TestSite(t *testing.T) {
-	root := buildSite(t)
-	require.Empty(t, brokenLinks(t, root, siteBase), "broken internal links")
-	require.Empty(t, duplicateH1(t, root), "pages with more than one h1")
+	require.Empty(t, siteProblems(t, buildSite(t), siteBase))
 }
 
-func TestSiteChecks(t *testing.T) {
+func TestSiteProblems(t *testing.T) {
 	files := map[string]string{
-		"index.html":        `<h1>Home</h1><a href="docs/">docs</a><a href="https://elsewhere.test/x">out</a><a href="mailto:a@b">mail</a>`,
+		"index.html":        `<h1>Home</h1>`,
 		"docs/index.html":   `<meta http-equiv="refresh" content="0; url=https://site.test/base/docs/a/">`,
-		"docs/a/index.html": `<h1>A</h1><h2 id="sec">S</h2><a href="#sec">self</a><a href="../b/#top">b</a><script src="/base/app.js"></script>`,
-		"docs/b/index.html": `<h1 id="top">B</h1><h1>B again</h1><a href="/docs/a/">rootless</a><a href="../a/#missing">frag</a><a href="../c/">gone</a>`,
-		"app.js":            ``,
+		"docs/a/index.html": `<h1>A</h1><h2>S</h2>`,
+		"docs/b/index.html": `<h1>B</h1><h1>B again</h1>`,
+		"docs/c/index.html": `<meta http-equiv="refresh" content="0; url=../gone/">`,
+		"docs/d/index.html": `<meta http-equiv="refresh" content="0; url=/docs/a/">`,
+		"docs/e/index.html": `<meta http-equiv="refresh" content="0; url=https://elsewhere.test/base/docs/a/">`,
 	}
 	root := t.TempDir()
 	for name, body := range files {
@@ -192,9 +155,9 @@ func TestSiteChecks(t *testing.T) {
 		require.NoError(t, os.WriteFile(p, []byte(body), 0o644))
 	}
 	require.Equal(t, []string{
-		"docs/b/index.html -> ../a/#missing",
-		"docs/b/index.html -> ../c/",
-		"docs/b/index.html -> /docs/a/",
-	}, brokenLinks(t, root, siteBase))
-	require.Equal(t, []string{"docs/b/index.html"}, duplicateH1(t, root))
+		"docs/b/index.html: more than one h1",
+		"docs/c/index.html: refresh to ../gone/",
+		"docs/d/index.html: refresh to /docs/a/",
+		"docs/e/index.html: refresh to https://elsewhere.test/base/docs/a/",
+	}, siteProblems(t, root, siteBase))
 }

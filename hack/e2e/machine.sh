@@ -7,11 +7,17 @@
 # points the resolver at M_DNS when that is set, applies the limits, starts
 # the socket, and stops a Docker Engine left over from an older image and
 # drops the iptables rules it left, whose FORWARD policy drops every packet
-# the kind nodes send.
+# the kind nodes send. Given the argument versions, it prints the helm and
+# kind versions it installs and does nothing else.
 set -eu
 
 helm_version=v4.3.0
 kind_version=v0.33.0
+if [ "${1:-}" = versions ]; then
+	echo "helm $helm_version"
+	echo "kind $kind_version"
+	exit 0
+fi
 case $(uname -m) in
 aarch64 | arm64)
 	arch=arm64

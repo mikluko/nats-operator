@@ -16,33 +16,11 @@ import (
 // page is the page's path from the repository root.
 const page = "docs/content/docs/reference/telemetry.md"
 
+//go:embed environment.md
+var environment string
+
 //go:embed operator.md
 var operator string
-
-type envVar struct {
-	Names   []string
-	Default string
-	Effect  string
-}
-
-var environment = []envVar{
-	{[]string{"OTEL_SDK_DISABLED"}, "`false`", "`true`, in any case, exports nothing whatever else is set; no exporter is built and no Prometheus listener opened."},
-	{[]string{"OTEL_SERVICE_NAME"}, "the controller's name, such as `cluster-controller`", "`service.name` of every metric and span."},
-	{[]string{"OTEL_RESOURCE_ATTRIBUTES"}, "", "Further resource attributes, as `key=value` pairs separated by commas."},
-	{[]string{"OTEL_METRICS_EXPORTER"}, "`otlp` once metrics are on", "`otlp`, `prometheus`, `console` or `none`; set to any of them, it turns metrics on."},
-	{[]string{"OTEL_TRACES_EXPORTER"}, "`otlp` once traces are on", "`otlp`, `console` or `none`; set to any of them, it turns traces on."},
-	{[]string{"OTEL_EXPORTER_OTLP_PROTOCOL", "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL", "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"}, "`http/protobuf`", "`http/protobuf` or `grpc`."},
-	{[]string{"OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"}, "`https://localhost:4318` over `http/protobuf`, `https://localhost:4317` over `grpc`", "Where OTLP is sent; set, it turns on the signals it applies to. An `http://` endpoint sends without TLS."},
-	{[]string{"OTEL_EXPORTER_OTLP_INSECURE", "OTEL_EXPORTER_OTLP_METRICS_INSECURE", "OTEL_EXPORTER_OTLP_TRACES_INSECURE"}, "`false`", "`true` sends OTLP without TLS."},
-	{[]string{"OTEL_EXPORTER_OTLP_CERTIFICATE", "OTEL_EXPORTER_OTLP_METRICS_CERTIFICATE", "OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE"}, "", "PEM file of the CA certificates the collector's certificate is verified against."},
-	{[]string{"OTEL_EXPORTER_OTLP_HEADERS", "OTEL_EXPORTER_OTLP_METRICS_HEADERS", "OTEL_EXPORTER_OTLP_TRACES_HEADERS"}, "", "Headers sent with each export, as `key=value` pairs separated by commas."},
-	{[]string{"OTEL_EXPORTER_OTLP_TIMEOUT", "OTEL_EXPORTER_OTLP_METRICS_TIMEOUT", "OTEL_EXPORTER_OTLP_TRACES_TIMEOUT"}, "", "Milliseconds an export may take."},
-	{[]string{"OTEL_EXPORTER_OTLP_COMPRESSION", "OTEL_EXPORTER_OTLP_METRICS_COMPRESSION", "OTEL_EXPORTER_OTLP_TRACES_COMPRESSION"}, "none", "`gzip` compresses each export."},
-	{[]string{"OTEL_EXPORTER_PROMETHEUS_HOST", "OTEL_EXPORTER_PROMETHEUS_PORT"}, "`localhost`, `9464`", "Where `OTEL_METRICS_EXPORTER=prometheus` serves `/metrics` for scraping."},
-	{[]string{"OTEL_METRIC_EXPORT_INTERVAL"}, "", "Milliseconds between two exports of the `otlp` and `console` metrics exporters, each reading the resources' status; `prometheus` reads it at each scrape."},
-	{[]string{"OTEL_METRIC_EXPORT_TIMEOUT"}, "", "Milliseconds a metric export may take."},
-	{[]string{"OTEL_TRACES_SAMPLER", "OTEL_TRACES_SAMPLER_ARG"}, "`parentbased_always_on`", "Which reconcile spans are kept."},
-}
 
 func main() {
 	out := flag.String("o", page, "file to write")
@@ -65,20 +43,8 @@ description: The OpenTelemetry metrics and traces each controller exports, the e
 
 Each controller exports metrics and traces through the OpenTelemetry Go SDK, configured by the environment alone; it has no flag of its own for them. A signal is exported only once one of ` + "`OTEL_<SIGNAL>_EXPORTER`" + `, ` + "`OTEL_EXPORTER_OTLP_<SIGNAL>_ENDPOINT`" + ` or ` + "`OTEL_EXPORTER_OTLP_ENDPOINT`" + ` is set, ` + "`<SIGNAL>`" + ` being ` + "`METRICS`" + ` or ` + "`TRACES`" + `; with none of them set, or with ` + "`OTEL_SDK_DISABLED=true`" + `, the controller exports nothing and the instruments below are not collected. Once a signal is on, it is sent as OTLP over ` + "`http/protobuf`" + ` to ` + "`https://localhost:4318`" + ` unless the variables below say otherwise, and a failed export is logged. controller-runtime's own Prometheus metrics are served apart, on ` + "`--metrics-bind-address`" + `.
 
-## Environment
-
-| Variable | Default | Effect |
-|---|---|---|
 `)
-	for _, v := range environment {
-		def := v.Default
-		if def == "" {
-			def = "unset"
-		}
-		fmt.Fprintf(&b, "| %s | %s | %s |\n", code(v.Names, "<br>"), def, v.Effect)
-	}
-
-	b.WriteString("\nA variable with `METRICS` or `TRACES` in its name applies to that signal alone and overrides the one without.\n")
+	b.WriteString(environment)
 	b.WriteString(operator)
 
 	b.WriteString("\n## Metrics\n\nThe gauges are read off the resources' status at each export. Every point carries `kind`, `namespace` and `name` of the resource it describes.\n\n")

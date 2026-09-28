@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"text/template"
 	"time"
 
@@ -19,7 +20,7 @@ import (
 // signing keys, as External Secrets would carry them there. It prints the
 // literal JWTs the edge's NatsOperatorTrust and NatsAccountTrust take, as
 // the patches of substitutions.
-func leafnodes(dir string) error {
+func leafnodes(dir string, out io.Writer) error {
 	var h hub
 	op, opSeeds, err := keys(nkeys.PrefixByteOperator)
 	if err != nil {
@@ -84,7 +85,7 @@ func leafnodes(dir string) error {
 	if err := writeTemplate(dir, "00-edge.yaml", edgeTemplate, edge); err != nil {
 		return err
 	}
-	_, err = fmt.Printf("NatsOperatorTrust acme:\n  patch: {spec: {operatorJWT: %s, systemAccountJWT: %s}}\nNatsAccountTrust telemetry:\n  patch: {spec: {publicKey: %s, jwt: %s}}\n",
+	_, err = fmt.Fprintf(out, "NatsOperatorTrust acme:\n  patch: {spec: {operatorJWT: %s, systemAccountJWT: %s}}\nNatsAccountTrust telemetry:\n  patch: {spec: {publicKey: %s, jwt: %s}}\n",
 		operatorJWT, systemJWT, telPub, telemetryJWT)
 	return err
 }

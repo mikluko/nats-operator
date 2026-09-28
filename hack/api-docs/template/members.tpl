@@ -1,19 +1,14 @@
 {{- /* members renders one table row per field, inlined fields in place. */ -}}
 {{- define "members" }}
-{{- range .Members }}
-{{- if not (hiddenMember .) }}
-{{- if fieldEmbedded . }}
-{{- template "members" .Type }}
-{{- else }}
-| `{{ fieldName . | safe }}` | {{ template "typelink" .Type }} | {{ if isOptionalMember . }}No{{ else }}Yes{{ end }} | {{ template "doc" .CommentLines }}{{ template "default" .CommentLines }} |
-{{- end }}
-{{- end }}
+{{- range .Fields }}
+| `{{ .Name }}` | {{ template "typelink" .Type }} | {{ if index .Markers "optional" }}No{{ else }}Yes{{ end }} | {{ template "doc" .Doc }}{{ template "default" . }} |
 {{- end }}
 {{- end }}
 
-{{- /* default renders a +kubebuilder:default marker as a sentence. */ -}}
+{{- /* default renders a +kubebuilder:default marker as a sentence: a string
+       as written, anything else as JSON. */ -}}
 {{- define "default" -}}
-{{- range . -}}
-{{- if and (gt (len .) 21) (eq (slice . 0 21) "+kubebuilder:default=") }} Default: `{{ safe (slice . 21) }}`.{{ end -}}
+{{- with index .Markers "kubebuilder:default" -}}
+{{- $v := (last .).Value }} Default: `{{ if kindIs "string" $v }}{{ $v }}{{ else }}{{ toJson $v }}{{ end }}`.
 {{- end -}}
 {{- end -}}

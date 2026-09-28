@@ -8,10 +8,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"sigs.k8s.io/yaml"
 )
 
 func TestLoadConfig(t *testing.T) {
@@ -152,4 +155,51 @@ func TestShipTree(t *testing.T) {
 	require.Equal(t, "untracked", got["new.txt"])
 	require.Equal(t, int64(0o755), modes["bin/e2e/e2e-linux"])
 	require.Equal(t, int64(0o644), modes["go.mod"])
+}
+
+// TestMachineVersions pins the helm and kind CLI versions machine.sh
+// installs to the helm CI runs the chart with and the kind module the
+// harness is built against.
+func TestMachineVersions(t *testing.T) {
+	out, err := exec.Command("sh", "machine.sh", "versions").Output()
+	require.NoError(t, err)
+	got := map[string]string{}
+	for line := range strings.Lines(string(out)) {
+		tool, version, ok := strings.Cut(strings.TrimSpace(line), " ")
+		require.True(t, ok, "%q", line)
+		got[tool] = version
+	}
+
+	info, ok := debug.ReadBuildInfo()
+	require.True(t, ok)
+	var kind string
+	for _, m := range info.Deps {
+		if m.Path == "sigs.k8s.io/kind" {
+			kind = m.Version
+		}
+	}
+	require.NotEmpty(t, kind, "the harness is built against sigs.k8s.io/kind")
+	require.Equal(t, kind, got["kind"])
+
+	b, err := os.ReadFile("../../.github/workflows/ci.yml")
+	require.NoError(t, err)
+	var ci struct {
+		Jobs map[string]struct {
+			Steps []struct {
+				Uses string            `json:"uses"`
+				With map[string]string `json:"with"`
+			} `json:"steps"`
+		} `json:"jobs"`
+	}
+	require.NoError(t, yaml.Unmarshal(b, &ci))
+	var helms int
+	for job, j := range ci.Jobs {
+		for _, s := range j.Steps {
+			if strings.HasPrefix(s.Uses, "azure/setup-helm@") {
+				helms++
+				require.Equal(t, got["helm"], s.With["version"], "ci.yml job %s", job)
+			}
+		}
+	}
+	require.NotZero(t, helms, "ci.yml sets up helm")
 }

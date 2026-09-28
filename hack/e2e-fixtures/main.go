@@ -10,6 +10,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,7 +22,9 @@ import (
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
 
-var generators = map[string]func(dir string) error{
+// generators write a story's fixtures into dir and the substitutions they
+// take to out, keyed by story number.
+var generators = map[string]func(dir string, out io.Writer) error{
 	"3":  unmanaged,
 	"6":  supercluster,
 	"9":  acceptance,
@@ -54,7 +57,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "e2e-fixtures: story %s has no fixtures\n", os.Args[1])
 		os.Exit(2)
 	}
-	if err := gen(os.Args[2]); err != nil {
+	if err := gen(os.Args[2], os.Stdout); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "e2e-fixtures:", err)
 		os.Exit(1)
 	}

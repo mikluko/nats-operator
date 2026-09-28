@@ -1,29 +1,26 @@
 {{- define "type" }}
-{{- $kind := false }}
-{{- range .SecondClosestCommentLines }}{{ if eq . "+kubebuilder:object:root=true" }}{{ $kind = true }}{{ end }}{{ end }}
-{{- range .CommentLines }}{{ if eq . "+kubebuilder:object:root=true" }}{{ $kind = true }}{{ end }}{{ end }}
-### {{ .Name.Name | safe }} {#{{ .Name.Name | safe }}}
-{{ template "doc" .CommentLines }}
-{{- if eq .Kind "Alias" }}\
-Type: {{ template "badge" (print .Underlying) }}
+### {{ .Name }} {#{{ .Name }}}
+{{ template "doc" .Doc }}
+{{- if eq .Kind 0 }}\
+Type: {{ template "typebadge" .UnderlyingType }}
 {{- end }}
-{{- with (typeReferences .) }}\
+{{- with .SortedReferences }}\
 Appears on:
-{{- range $i, $t := . }}{{ if $i }},{{ end }} [{{ .Name.Name | safe }}](#{{ .Name.Name | safe }}){{ end }}.
+{{- range $i, $t := . }}{{ if $i }},{{ end }} [{{ .Name }}](#{{ .Name }}){{ end }}.
 {{- end }}
-{{- with (constantsOfType .) }}
+{{- with .EnumValues }}
 | Value | Description |
 | :---- | :---------- |
 {{- range . }}
-| `{{ .ConstValue | safe }}` | {{ template "doc" .CommentLines }} |
+| `{{ .Name }}` | {{ template "doc" .Doc }} |
 {{- end }}
 {{- end }}
-{{- if .Members }}
+{{- if .Fields }}
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-{{- if $kind }}
-| `apiVersion` | {{ template "badge" "string" }} | Yes | `{{ apiGroup . | safe }}` |
-| `kind` | {{ template "badge" "string" }} | Yes | `{{ .Name.Name | safe }}` |
+{{- with .GVK }}
+| `apiVersion` | {{ template "badge" "string" }} | Yes | `{{ .Group }}/{{ .Version }}` |
+| `kind` | {{ template "badge" "string" }} | Yes | `{{ .Kind }}` |
 {{- end }}
 {{- template "members" . }}
 {{- end }}

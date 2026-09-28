@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"text/template"
 	"time"
 
@@ -24,7 +25,7 @@ type seeds struct {
 // External Secrets would carry them there. It prints the literal operator
 // and system account JWTs the story's NatsOperatorTrust takes, as the patch
 // of a substitution.
-func supercluster(dir string) error {
+func supercluster(dir string, out io.Writer) error {
 	var s seeds
 	op, opSeed, err := keys(nkeys.PrefixByteOperator)
 	if err != nil {
@@ -59,7 +60,7 @@ func supercluster(dir string) error {
 	if err := writeTemplate(dir, "00-west.yaml", west, secret{Name: "west-cluster-controller-creds", Namespace: "nats-system", Lines: s.WestCredsLines}); err != nil {
 		return err
 	}
-	_, err = fmt.Printf("patch: {spec: {operatorJWT: %s, systemAccountJWT: %s}}\n", operatorJWT, systemJWT)
+	_, err = fmt.Fprintf(out, "patch: {spec: {operatorJWT: %s, systemAccountJWT: %s}}\n", operatorJWT, systemJWT)
 	return err
 }
 

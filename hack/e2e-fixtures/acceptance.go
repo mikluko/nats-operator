@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"text/template"
 	"time"
 
@@ -20,7 +21,7 @@ type accept struct {
 
 // acceptance writes story 9's fixtures into dir and prints the operator and system account JWTs its
 // NatsOperatorTrust takes as a substitution's patch.
-func acceptance(dir string) error {
+func acceptance(dir string, out io.Writer) error {
 	var a accept
 	var op, sys, monitoring jwtplane.Keys
 	for _, k := range []struct {
@@ -68,7 +69,7 @@ func acceptance(dir string) error {
 	if err := writeTemplate(dir, "01-runtime-streams.yaml", acceptanceRuntime, nil); err != nil {
 		return err
 	}
-	_, err = fmt.Printf("patch: {spec: {operatorJWT: %s, systemAccountJWT: %s}}\n", operatorJWT, systemJWT)
+	_, err = fmt.Fprintf(out, "patch: {spec: {operatorJWT: %s, systemAccountJWT: %s}}\n", operatorJWT, systemJWT)
 	return err
 }
 

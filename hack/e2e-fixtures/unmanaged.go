@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"io"
 	"math/big"
 	"text/template"
 	"time"
@@ -27,7 +28,7 @@ type fixture struct {
 // creating the streams its services would have created at runtime, and the
 // CA and creds Secrets the story's NatsConnection reads in namespace
 // payments.
-func unmanaged(dir string) error {
+func unmanaged(dir string, _ io.Writer) error {
 	var f fixture
 	op, err := nkeys.CreateOperator()
 	if err != nil {
