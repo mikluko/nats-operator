@@ -87,6 +87,8 @@ jobs:
         with:
           version: v4.3.0
       - uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f # v2.8.0
+        with:
+          version: 3.14.0
       - run: ct lint --charts charts/nats-operator --check-version-increment=false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
@@ -95,6 +97,9 @@ jobs:
         with:
           version: v0.19.1
       - uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
+        with:
+          version: v0.33.0
+          node_image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
       - name: Load the controller images into kind
         env:
           KO_DOCKER_REPO: kind.local

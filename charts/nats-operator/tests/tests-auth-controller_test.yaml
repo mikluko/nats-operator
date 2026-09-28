@@ -42,7 +42,7 @@ tests:
           value: Never
       - equal:
           path: spec.containers[0].image
-          value: busybox:1.37.0
+          value: busybox:1.37.0@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e
       - equal:
           path: spec.containers[0].command
           value:
@@ -64,6 +64,7 @@ tests:
     set:
       tests.image.repository: registry.example/busybox
       tests.image.tag: "1.36"
+      tests.image.digest: ""
     documentSelector: {path: kind, value: Pod}
     asserts:
       - equal:

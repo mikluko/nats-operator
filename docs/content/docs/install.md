@@ -121,7 +121,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `metrics.serviceMonitor.interval` | `""` | Scrape interval of each ServiceMonitor; empty, Prometheus's own. |
 | `tests.image.repository` | `busybox` | Image of the `helm test` pods. |
 | `tests.image.tag` | `"1.37.0"` | Its image tag. |
-| `tests.image.digest` | `""` | `sha256:<hex>` appended to its image reference as `@<digest>`. |
+| `tests.image.digest` | `"sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e"` | `sha256:<hex>` appended to its image reference as `@<digest>`. |
 | `tests.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
 
 ## Controller flags

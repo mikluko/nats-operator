@@ -1,9 +1,6 @@
 name: docs
 
-# The release workflow deploys the site at the commit it tags, so the site is
-# the released version's. A pull request builds and checks it; a manual run
-# also keeps the build as the run's github-pages artifact, a preview that is
-# never deployed.
+# A manual run uploads the build as a preview artifact and never deploys it.
 on:
   pull_request:
   workflow_dispatch:
@@ -20,6 +17,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -38,6 +38,7 @@ jobs:
         if: inputs.ref != ''
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
       - name: Build
+        if: github.event_name != 'pull_request'
         working-directory: docs
         env:
           BASE_URL: ${{ steps.pages.outputs.base_url }}

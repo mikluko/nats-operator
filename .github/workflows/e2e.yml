@@ -1,7 +1,5 @@
 name: e2e
 
-# Single-cluster stories on one kind cluster over rootful podman: every one
-# by hand, the ones ci names on each of its runs.
 on:
   workflow_dispatch:
     inputs:

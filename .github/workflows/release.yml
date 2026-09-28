@@ -1,8 +1,6 @@
 name: release
 
-# A push to main that passes ci publishes the newest CHANGELOG.md version no
-# tag carries, at the commit ci tested; a manual run only builds. One
-# workflow, because a tag pushed with GITHUB_TOKEN triggers no other.
+# One workflow: a tag pushed with GITHUB_TOKEN triggers no other.
 on: # zizmor: ignore[dangerous-triggers] plan runs only after a push to main in this repository
   workflow_run:
     workflows: [ci]
@@ -59,7 +57,6 @@ jobs:
       packages: write
       id-token: write
     outputs:
-      subjects: ${{ steps.sign.outputs.subjects }}
       digests: ${{ steps.digests.outputs.digests }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -91,7 +88,6 @@ jobs:
             set -- "$@" "./$c"
           done
           ko build --base-import-paths --push="$PUSH" \
-            --image-refs "$RUNNER_TEMP/image-refs" \
             --platform linux/amd64,linux/arm64 --tags "$VERSION" \
             --image-label "org.opencontainers.image.source=$SOURCE" \
             --image-label "org.opencontainers.image.revision=$SHA" \
@@ -108,19 +104,14 @@ jobs:
               '. + [{name: $name, digest: $digest}]' <<<"$digests")
           done <"$RUNNER_TEMP/images"
           echo "digests=$digests" >>"$GITHUB_OUTPUT"
-      - id: sign
-        name: Sign
+      - name: Sign
         if: needs.plan.outputs.publish == 'true'
+        env:
+          DIGESTS: ${{ steps.digests.outputs.digests }}
         run: |
-          subjects='[]'
-          while read -r ref; do
-            name=${ref%@*}
-            digest=${ref#*@}
-            cosign sign --yes "${name%:*}@$digest"
-            subjects=$(jq -c --arg name "${name%:*}" --arg digest "$digest" \
-              '. + [{name: $name, digest: $digest}]' <<<"$subjects")
-          done <"$RUNNER_TEMP/image-refs"
-          echo "subjects=$subjects" >>"$GITHUB_OUTPUT"
+          jq -r '.[] | "\(.name)@\(.digest)"' <<<"$DIGESTS" | while read -r ref; do
+            cosign sign --yes "$ref"
+          done
 
   provenance:
     needs: [plan, images]
@@ -132,7 +123,7 @@ jobs:
       attestations: write
     strategy:
       matrix:
-        subject: ${{ fromJSON(needs.images.outputs.subjects) }}
+        subject: ${{ fromJSON(needs.images.outputs.digests) }}
     steps:
       - name: Log in
         env:

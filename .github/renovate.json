@@ -1,10 +1,23 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "enabledManagers": ["custom.regex", "dockerfile"],
+  "enabledManagers": ["custom.regex", "dockerfile", "github-actions", "gomod"],
   "minimumReleaseAge": "7 days",
   "dockerfile": {
     "managerFilePatterns": ["/(^|/)machine\\.Containerfile$/"]
   },
+  "postUpdateOptions": ["gomodTidy"],
+  "packageRules": [
+    {
+      "description": "Actions and Go modules, weekly",
+      "matchManagers": ["github-actions", "gomod"],
+      "schedule": ["* * * * 1"]
+    },
+    {
+      "description": "A kind node image is built for one kind release",
+      "matchPackageNames": ["sigs.k8s.io/kind", "kubernetes-sigs/kind", "kindest/node"],
+      "groupName": "kind"
+    }
+  ],
   "customManagers": [
     {
       "customType": "regex",
@@ -93,6 +106,44 @@
       "managerFilePatterns": ["/^\\.ko\\.yaml$/"],
       "matchStrings": ["defaultBaseImage: (?<depName>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]{64})"],
       "currentValueTemplate": "latest",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "chart-testing, wherever chart-testing-action installs it",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/"],
+      "matchStrings": ["uses: helm/chart-testing-action@\\S+ # \\S+\\s+with:\\s+version: (?<currentValue>\\S+)"],
+      "depNameTemplate": "helm/chart-testing",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "kind, wherever kind-action installs it",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/"],
+      "matchStrings": ["uses: helm/kind-action@\\S+ # \\S+\\s+with:\\s+version: (?<currentValue>v\\S+)"],
+      "depNameTemplate": "kubernetes-sigs/kind",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "The kind node image, by tag and digest",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/", "/^internal/e2e/kind\\.go$/"],
+      "matchStrings": ["(?<depName>kindest/node):(?<currentValue>v[0-9.]+)@(?<currentDigest>sha256:[0-9a-f]{64})"],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "The helm test image, by tag and digest",
+      "managerFilePatterns": ["/^charts/nats-operator/values\\.yaml$/"],
+      "matchStrings": ["tests:\\s+image:\\s+repository: (?<depName>\\S+)\\s+tag: \"(?<currentValue>[^\"]+)\"\\s+digest: \"(?<currentDigest>sha256:[0-9a-f]{64})\""],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "The helm test image's defaults in the install page",
+      "managerFilePatterns": ["/^docs/content/docs/install\\.md$/"],
+      "matchStrings": ["\\| `tests\\.image\\.repository` \\| `(?<depName>[^`]+)` \\|[^\\n]*\\n\\| `tests\\.image\\.tag` \\| `\"(?<currentValue>[^\"]+)\"` \\|[^\\n]*\\n\\| `tests\\.image\\.digest` \\| `\"(?<currentDigest>sha256:[0-9a-f]{64})\"`"],
       "datasourceTemplate": "docker"
     }
   ]

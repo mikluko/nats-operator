@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chart value `auth.systemConnection`, passed to the auth controller as `--system-connection`.
 - Every controller's `--watch-namespaces` confines it to the namespaces named; chart value `watchNamespaces` passes it and grants each controller a Role in each of those namespaces, its ClusterRole keeping only `tokenreviews` and `subjectaccessreviews`.
 - Chart values `cluster.image.digest`, `auth.image.digest`, `jetstream.image.digest` and `tests.image.digest` pin an image by digest after its tag.
+- Chart value `tests.image.digest` defaults to the digest of `busybox:1.37.0`.
 - Each release's chart sets `cluster.image.digest`, `auth.image.digest` and `jetstream.image.digest` to the digests of the images released with it.
 - `NatsCluster` `spec.image` takes `repository` and `digest`, and `spec.exporter.image` takes `repository`, `tag` and `digest`; a digest is rendered after the tag.
 - Each release publishes the three controller images for linux/amd64 and linux/arm64, the chart as an OCI artifact, and a GitHub release carrying the version's changelog entry.

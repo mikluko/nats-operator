@@ -12,6 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 	yamlv3 "go.yaml.in/yaml/v3"
 	"sigs.k8s.io/yaml"
+
+	"github.com/mikluko/nats-operator/internal/e2e"
 )
 
 type step struct {
@@ -39,13 +41,17 @@ func (n *needs) UnmarshalJSON(b []byte) error {
 type workflow struct {
 	Env  map[string]string `json:"env"`
 	Jobs map[string]struct {
-		If      string            `json:"if"`
-		Needs   needs             `json:"needs"`
-		Outputs map[string]string `json:"outputs"`
-		Env     map[string]string `json:"env"`
-		Steps   []step            `json:"steps"`
-		Uses    string            `json:"uses"`
-		With    map[string]string `json:"with"`
+		If          string            `json:"if"`
+		Needs       needs             `json:"needs"`
+		Permissions map[string]string `json:"permissions"`
+		Outputs     map[string]string `json:"outputs"`
+		Env         map[string]string `json:"env"`
+		Strategy    struct {
+			Matrix map[string]string `json:"matrix"`
+		} `json:"strategy"`
+		Steps []step            `json:"steps"`
+		Uses  string            `json:"uses"`
+		With  map[string]string `json:"with"`
 	} `json:"jobs"`
 }
 
@@ -109,7 +115,6 @@ type chartValues struct {
 	JetStream controllerValues `json:"jetstream"`
 }
 
-// controllers are the commands under cmd/ named *-controller.
 func controllers(t *testing.T) []string {
 	t.Helper()
 	dirs, err := filepath.Glob("../cmd/*-controller")
@@ -184,6 +189,48 @@ func TestRelease_ChartPinsImageDigests(t *testing.T) {
 		require.NotNil(t, v.Image.Digest, "%s has no image.digest", c)
 		require.Empty(t, *v.Image.Digest, c)
 	}
+}
+
+// TestRelease_OneDigestList holds signing and provenance to the list the
+// images job's digests step builds, and to no other.
+func TestRelease_OneDigestList(t *testing.T) {
+	wf := readWorkflow(t, "release.yml")
+	images := wf.Jobs["images"]
+	require.Equal(t, map[string]string{"digests": "${{ steps.digests.outputs.digests }}"}, images.Outputs)
+
+	var builds, signs int
+	for _, s := range images.Steps {
+		require.NotContains(t, s.Run, "--image-refs", s.Name)
+		if strings.Contains(s.Run, "{name: $name, digest: $digest}") {
+			builds++
+			require.Equal(t, "digests", s.ID)
+		}
+		if strings.Contains(s.Run, "cosign sign") {
+			signs++
+			require.Equal(t, "${{ steps.digests.outputs.digests }}", s.Env["DIGESTS"])
+		}
+	}
+	require.Equal(t, 1, builds)
+	require.Equal(t, 1, signs)
+	require.Equal(t, "${{ fromJSON(needs.images.outputs.digests) }}", wf.Jobs["provenance"].Strategy.Matrix["subject"])
+}
+
+// TestDocs_BuildJob holds the Pages build job to the permission
+// configure-pages reads the site with, and to one Hugo build on a pull request.
+func TestDocs_BuildJob(t *testing.T) {
+	build := readWorkflow(t, "docs.yml").Jobs["build"]
+	require.Equal(t, map[string]string{"contents": "read", "pages": "read"}, build.Permissions)
+
+	var hugo []step
+	for _, s := range build.Steps {
+		if strings.Contains(s.Run, "hugo ") || strings.Contains(s.Run, "just site-check") {
+			hugo = append(hugo, s)
+		}
+	}
+	require.Len(t, hugo, 2)
+	require.Contains(t, hugo[0].Run, "just site-check")
+	require.Empty(t, hugo[0].If)
+	require.Equal(t, "github.event_name != 'pull_request'", hugo[1].If)
 }
 
 // TestControllerList pins the Justfile's controller list to cmd/.
@@ -370,12 +417,15 @@ func TestRenovate_WatchesToolPins(t *testing.T) {
 	require.NoError(t, json.Unmarshal(b, &cfg))
 	found := renovateMatches(t, cfg)
 
-	inputs := map[string]struct{ input, dep string }{
-		"azure/setup-helm@":              {"version", "helm/helm"},
-		"ko-build/setup-ko@":             {"version", "ko-build/ko"},
-		"golangci/golangci-lint-action@": {"version", "golangci/golangci-lint"},
-		"extractions/setup-just@":        {"just-version", "casey/just"},
-		"zizmorcore/zizmor-action@":      {"version", "zizmorcore/zizmor"},
+	inputs := []struct{ prefix, input, dep string }{
+		{"azure/setup-helm@", "version", "helm/helm"},
+		{"ko-build/setup-ko@", "version", "ko-build/ko"},
+		{"golangci/golangci-lint-action@", "version", "golangci/golangci-lint"},
+		{"extractions/setup-just@", "just-version", "casey/just"},
+		{"zizmorcore/zizmor-action@", "version", "zizmorcore/zizmor"},
+		{"helm/chart-testing-action@", "version", "helm/chart-testing"},
+		{"helm/kind-action@", "version", "kubernetes-sigs/kind"},
+		{"helm/kind-action@", "node_image", "kindest/node"},
 	}
 	files, err := filepath.Glob("../.github/workflows/*.yml")
 	require.NoError(t, err)
@@ -383,8 +433,8 @@ func TestRenovate_WatchesToolPins(t *testing.T) {
 	for _, f := range files {
 		for job, j := range readWorkflow(t, filepath.Base(f)).Jobs {
 			for _, s := range j.Steps {
-				for prefix, in := range inputs {
-					if strings.HasPrefix(s.Uses, prefix) {
+				for _, in := range inputs {
+					if strings.HasPrefix(s.Uses, in.prefix) {
 						require.NotEmpty(t, s.With[in.input], "%s job %s: %s", f, job, s.Uses)
 						pinned[in.dep]++
 					}
@@ -392,6 +442,8 @@ func TestRenovate_WatchesToolPins(t *testing.T) {
 			}
 		}
 	}
+	require.NotZero(t, pinned["helm/chart-testing"])
+	require.NotZero(t, pinned["kindest/node"])
 	for dep, n := range pinned {
 		require.GreaterOrEqual(t, found[dep], n, dep)
 	}
@@ -405,4 +457,40 @@ func TestRenovate_WatchesToolPins(t *testing.T) {
 	} {
 		require.NotZero(t, found[dep], dep)
 	}
+	require.Equal(t, pinned["kindest/node"]+1, found["kindest/node"], "internal/e2e.KindNodeImage")
+	require.Equal(t, 2, found["busybox"], "values.yaml and install.md")
+}
+
+// TestRenovate_OwnsActionsAndGomod holds GitHub Actions and Go modules to
+// Renovate's own managers, with no second update bot.
+func TestRenovate_OwnsActionsAndGomod(t *testing.T) {
+	b, err := os.ReadFile("../.github/renovate.json")
+	require.NoError(t, err)
+	var cfg struct {
+		EnabledManagers []string `json:"enabledManagers"`
+	}
+	require.NoError(t, json.Unmarshal(b, &cfg))
+	require.Subset(t, cfg.EnabledManagers, []string{"github-actions", "gomod"})
+	for _, f := range []string{"../.github/dependabot.yml", "../.github/dependabot.yaml"} {
+		require.NoFileExists(t, f)
+	}
+}
+
+// TestKindPinnedOnce holds ci's kind-action to the kind module and node image
+// the e2e harness creates clusters with.
+func TestKindPinnedOnce(t *testing.T) {
+	out, err := exec.Command("go", "list", "-m", "-f", "{{.Version}}", "sigs.k8s.io/kind").Output()
+	require.NoError(t, err)
+
+	var runs int
+	for _, j := range readWorkflow(t, "ci.yml").Jobs {
+		for _, s := range j.Steps {
+			if strings.HasPrefix(s.Uses, "helm/kind-action@") {
+				runs++
+				require.Equal(t, strings.TrimSpace(string(out)), s.With["version"])
+				require.Equal(t, e2e.KindNodeImage, s.With["node_image"])
+			}
+		}
+	}
+	require.NotZero(t, runs)
 }
