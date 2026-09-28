@@ -473,12 +473,9 @@ spec:
 	})
 }
 
-// testRevocationRecord pins that an account's revocations are recorded in
-// its status, that the JWT is rebuilt from the record when lost and the
-// record from the JWT, that the system account's survive the loss of the
-// NatsOperator's status.systemAccount once the user is gone, and that
-// rotating out every signing key that may have issued a revoked JWT drops
-// the revocation.
+// testRevocationRecord pins that revocations survive the loss of the status
+// record, the JWT or status.systemAccount, and are dropped once no signing
+// key that may have issued them remains.
 func (e *env) testRevocationRecord(t *testing.T) {
 	ordersKey := key("nats-system", "orders")
 	var orders authv1beta1.NatsAccount

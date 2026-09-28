@@ -67,8 +67,8 @@ spec:
                 - name
                 type: object
               interval:
-                description: Interval is the least time between two moves, positive,
-                  1m when omitted.
+                description: Interval is the least time between two moves, 1m when
+                  omitted.
                 type: string
                 x-kubernetes-validations:
                 - message: interval must be a positive duration

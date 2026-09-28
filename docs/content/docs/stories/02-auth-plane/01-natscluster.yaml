@@ -28,8 +28,6 @@ spec:
     trustRef:
       name: demo
     # What the cluster controller connects as for reloads and settledness.
-    # A Secret, not a NatsUser reference, so the same field works in a
-    # Kubernetes cluster with no auth controller (story 6).
     systemCredentials:
       secretKeyRef:
         name: cluster-controller-creds   # key defaults to user.creds

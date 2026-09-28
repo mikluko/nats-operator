@@ -28,9 +28,7 @@ const (
 // +kubebuilder:validation:XValidation:rule="!has(self.leafRemotes) || size(self.leafRemotes) == 0 || !has(self.jetstream) || has(self.jetstream.domain)",message="a leaf running JetStream must set jetstream.domain"
 // +kubebuilder:validation:XValidation:rule="!has(self.leafnodes) || has(self.auth)",message="a leafnode listener requires auth: without it any leaf connects into the global account"
 type NatsClusterSpec struct {
-	// Version is the nats-server version rendered for, 2.15.0 or later. A
-	// change moves at most one minor at a time, up or down; any patch
-	// change is allowed.
+	// Version is the nats-server version rendered for.
 	// +required
 	// +kubebuilder:validation:XValidation:rule="isSemver(self) && semver(self).compareTo(semver('2.15.0')) >= 0",message="version must be a semantic version, 2.15.0 or later"
 	// +kubebuilder:validation:XValidation:rule="!isSemver(self) || !isSemver(oldSelf) || (semver(self).major() == semver(oldSelf).major() && semver(self).minor() >= semver(oldSelf).minor() - 1 && semver(self).minor() <= semver(oldSelf).minor() + 1)",message="version moves at most one minor at a time, up or down"
@@ -74,10 +72,9 @@ type NatsClusterSpec struct {
 	// +optional
 	Monitor *Monitor `json:"monitor,omitempty"`
 
-	// TLS on the client listener; absent, clients connect in the clear.
-	// Clients verify the certificate against the CA that issued it; the
-	// cluster controller reads that CA from the Secret's ca.crt, and
-	// without one trusts the system roots.
+	// TLS on the client listener; absent, clients connect in the clear. The
+	// cluster controller verifies it against the Secret's ca.crt, or the
+	// system roots without one.
 	// +optional
 	TLS *ListenerTLS `json:"tls,omitempty"`
 
@@ -96,7 +93,7 @@ type NatsClusterSpec struct {
 	// +optional
 	Gateway *Gateway `json:"gateway,omitempty"`
 
-	// Leafnodes opens a listener for leaf connections; it requires Auth.
+	// Leafnodes opens a listener for leaf connections.
 	// +optional
 	Leafnodes *Leafnodes `json:"leafnodes,omitempty"`
 
@@ -112,7 +109,7 @@ type NatsClusterSpec struct {
 
 // JetStream is the JetStream configuration of every server.
 type JetStream struct {
-	// Domain is the JetStream domain; a leaf running JetStream must set it.
+	// Domain is the JetStream domain.
 	// +optional
 	// +kubebuilder:validation:MinLength=1
 	Domain string `json:"domain,omitempty"`
@@ -418,8 +415,7 @@ type Monitor struct {
 	// admits the route port only from those pods, the monitoring port only
 	// from the cluster controller's namespace, the metrics port from there
 	// and exporter.from, and from anywhere the other ports the cluster
-	// controller renders; a port podTemplate adds is not admitted. False
-	// renders none.
+	// controller renders; a port podTemplate adds is not admitted.
 	// +optional
 	// +kubebuilder:default=true
 	NetworkPolicy *bool `json:"networkPolicy,omitempty"`

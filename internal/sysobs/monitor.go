@@ -11,9 +11,8 @@ import (
 	"time"
 )
 
-// Endpoint is one server's HTTP monitoring endpoint: Name is the server_name
-// the server is expected to report, URL the base URL its /varz and /jsz are
-// under.
+// Endpoint is one server's HTTP monitoring endpoint: the server_name it is
+// expected to report and the base URL of its /varz and /jsz.
 type Endpoint struct {
 	Name string
 	URL  string

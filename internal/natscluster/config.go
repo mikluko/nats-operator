@@ -279,10 +279,9 @@ func serverConfig(nc *clusterv1beta1.NatsCluster, in Inputs, server string, l La
 	return c
 }
 
-// gatewayConfig renders the gateway of the NATS cluster named name. Its
-// TLS verifies peers both ways against ca.crt: nats-server asks every
-// inbound gateway for a certificate (opts.go:3310), and without a CA file
-// would accept one from any public root.
+// gatewayConfig renders the gateway of the NATS cluster named name,
+// verifying peers both ways against ca.crt, without which nats-server
+// accepts any public root.
 func gatewayConfig(name string, g *clusterv1beta1.Gateway, l Layout) *GatewayConfig {
 	gc := &GatewayConfig{
 		Name:          name,
@@ -307,8 +306,7 @@ func gatewayConfig(name string, g *clusterv1beta1.Gateway, l Layout) *GatewayCon
 }
 
 // resolverConfig renders resolver type t, Full when empty, over dir. A
-// Full resolver allows deletes, so that an account deleted at home is
-// removed from every server.
+// Full resolver allows deletes.
 func resolverConfig(t clusterv1beta1.ResolverType, dir string) *ResolverConfig {
 	if t == clusterv1beta1.ResolverCache {
 		return &ResolverConfig{Type: "cache", Dir: dir}

@@ -23,7 +23,7 @@ import (
 
 // OperatorTrustReconciler mirrors into a reference-form NatsOperatorTrust's
 // status the NATS operator and system account JWTs of the NatsOperator it names.
-// A literal-form one is left alone. Where the reference is not admitted,
+// Where the reference is not admitted,
 // or the NatsOperator has not signed both JWTs, status carries neither.
 type OperatorTrustReconciler struct {
 	client.Client
@@ -96,8 +96,8 @@ func (r *OperatorTrustReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // AccountTrustReconciler mirrors into a reference-form NatsAccountTrust's
-// status the public key and JWT of the NatsAccount it names. A literal-form
-// one is left alone. Where the reference is not admitted, or the account
+// status the public key and JWT of the NatsAccount it names. Where the
+// reference is not admitted, or the account
 // has no JWT yet, status carries neither.
 type AccountTrustReconciler struct {
 	client.Client

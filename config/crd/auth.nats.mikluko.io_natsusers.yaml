@@ -50,8 +50,7 @@ spec:
             description: NatsUserSpec is the desired state of a user.
             properties:
               accountRef:
-                description: AccountRef names the account the user belongs to; it
-                  cannot change.
+                description: AccountRef names the account the user belongs to.
                 properties:
                   kind:
                     description: Kind of the account.

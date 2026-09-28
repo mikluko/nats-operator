@@ -25,9 +25,9 @@ import (
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
-// ReconciledKinds returns the kind each controller setup registers traces its
-// reconciles under, in registration order, failing the test for a controller
-// that records no span. It never runs in parallel, since it replaces the
+// ReconciledKinds returns, in registration order, the kind each controller
+// setup traces its reconciles under, failing the test for a controller that
+// records no span. It never runs in parallel, since it replaces the
 // global tracer provider. Its controllers skip controller-runtime's
 // process-wide name check, so another manager in the test binary may
 // register the same names.

@@ -118,7 +118,7 @@ func (p *plane) configure(t *testing.T, opts *server.Options) {
 const clusterSize = 3
 
 // startSupercluster runs one NATS cluster of clusterSize JetStream servers per
-// name, <name>-0 onwards, every cluster gatewayed to every other, under p. A
+// name, <name>-0 onwards, each gatewayed to every other, under p. A
 // clustered JetStream server refuses to start with no route configured, so
 // every port is settled before any server starts.
 func startSupercluster(t *testing.T, p *plane, names ...string) map[string][]*server.Server {

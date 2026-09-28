@@ -10,8 +10,7 @@ import (
 // +kubebuilder:validation:Enum=cluster-controller;jetstream-controller;auth-controller;readonly;leafnode
 type UserPreset string
 
-// User presets: the controller presets for system account users, readonly
-// for ordinary accounts.
+// User presets.
 const (
 	UserPresetClusterController   UserPreset = "cluster-controller"
 	UserPresetJetStreamController UserPreset = "jetstream-controller"
@@ -42,7 +41,7 @@ const (
 // +kubebuilder:validation:XValidation:rule="!has(self.preset) || !(self.preset in ['cluster-controller', 'jetstream-controller', 'auth-controller']) || self.accountRef.kind == 'NatsSystemAccount'",message="a controller preset is for a NatsSystemAccount user"
 // +kubebuilder:validation:XValidation:rule="!has(self.preset) || self.preset != 'readonly' || self.accountRef.kind == 'NatsAccount'",message="the readonly preset is for a NatsAccount user"
 type NatsUserSpec struct {
-	// AccountRef names the account the user belongs to; it cannot change.
+	// AccountRef names the account the user belongs to.
 	// +required
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="accountRef is immutable"
 	AccountRef AccountReference `json:"accountRef"`

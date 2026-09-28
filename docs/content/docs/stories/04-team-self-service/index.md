@@ -22,7 +22,7 @@ Users that reference the account across namespaces, and everything JetStream in 
 
 ## Without a grant
 
-A user from a namespace no grant covers is refused, and because grants are checked on every reconcile, deleting one later revokes users it had admitted.
+A user from a namespace no grant covers is refused, and deleting a grant later revokes the users it had admitted.
 
 {{< manifest "01-natsuser-payments-reader.yaml" >}}
 

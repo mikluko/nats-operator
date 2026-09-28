@@ -35,10 +35,8 @@ spec:
         resources:
           requests:
             storage: 20Gi
-  # A leaf is a NatsCluster that dials out. nats-server reloads added and
-  # removed remotes (2.15.0 reload.go:931), but the controller reloads over
-  # the system user in auth.systemCredentials; this leaf has none, so any
-  # change to its remotes restarts its servers.
+  # A leaf is a NatsCluster that dials out. This one sets no
+  # auth.systemCredentials, so any change to its remotes restarts its servers.
   leafRemotes:
     - connectionRef:
         name: hub

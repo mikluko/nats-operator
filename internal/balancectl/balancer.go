@@ -82,7 +82,7 @@ type BalancerReconciler struct {
 	balancers balancerSet
 }
 
-// Reconcile implements reconcile.Reconciler.
+// Reconcile runs one balancing pass for the NatsBalancer req names.
 func (r *BalancerReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	var b js.NatsBalancer
 	if err := r.Client.Get(ctx, req.NamespacedName, &b); err != nil {

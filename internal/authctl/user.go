@@ -151,8 +151,6 @@ func (r *UserReconciler) reconcile(ctx context.Context, u *authv1beta1.NatsUser)
 	return reconcile.Result{}, nil
 }
 
-// recordSystemConnection sets Distributed False, reason NoSystemConnection,
-// on u while Sessions is nil, and removes Distributed otherwise.
 func (r *UserReconciler) recordSystemConnection(u *authv1beta1.NatsUser) {
 	if r.Sessions != nil {
 		meta.RemoveStatusCondition(&u.Status.Conditions, ConditionDistributed)

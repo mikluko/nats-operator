@@ -48,8 +48,7 @@ func pinned(obs balance.Observation) map[balance.StreamID]string {
 func (o *SystemObserver) Last() *balance.Observation { return o.last }
 
 // Pinned is a [balance.Balancer] Yield: why a stream in the last observation
-// is not the balancer's to move, "" where it is. A stream whose declared
-// placement names another NATS cluster is never moved.
+// is not the balancer's to move, "" where it is.
 func (o *SystemObserver) Pinned(id balance.StreamID) string { return o.pinned[id] }
 
 // observation is snap as a balancer reads it.

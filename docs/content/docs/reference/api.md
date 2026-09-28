@@ -282,7 +282,7 @@ NatsUserSpec is the desired state of a user.\
 Appears on: [NatsUser](#NatsUser).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `accountRef` | [{{< type "AccountReference" >}}](#AccountReference) | Yes | AccountRef names the account the user belongs to; it cannot change. |
+| `accountRef` | [{{< type "AccountReference" >}}](#AccountReference) | Yes | AccountRef names the account the user belongs to. |
 | `permissions` | [{{< type "Permissions" >}}](#Permissions) | No | Permissions are the user's publish and subscribe permissions. |
 | `connectionTypes` | [{{< type "[]ConnectionType" >}}](#ConnectionType) | No | ConnectionTypes restricts how the user may connect; empty allows any. |
 | `preset` | [{{< type "UserPreset" >}}](#UserPreset) | No | Preset is a named permission set in place of Permissions and ConnectionTypes. |
@@ -532,7 +532,7 @@ JetStream is the JetStream configuration of every server.\
 Appears on: [NatsClusterSpec](#NatsClusterSpec).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `domain` | {{< type "string" >}} | No | Domain is the JetStream domain; a leaf running JetStream must set it. |
+| `domain` | {{< type "string" >}} | No | Domain is the JetStream domain. |
 | `limits` | [{{< type "JetStreamLimits" >}}](#JetStreamLimits) | No | Limits override the store limits derived from resources and the volume size. |
 | `volumeClaimTemplate` | [{{< type "VolumeClaimTemplate" >}}](#VolumeClaimTemplate) | No | VolumeClaimTemplate is each server's file store volume; a change replaces servers one at a time. |
 
@@ -593,7 +593,7 @@ Monitor configures access to the monitoring port.\
 Appears on: [NatsClusterSpec](#NatsClusterSpec).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `networkPolicy` | {{< type "bool" >}} | No | NetworkPolicy renders a NetworkPolicy over the servers' pods that admits the route port only from those pods, the monitoring port only from the cluster controller's namespace, the metrics port from there and exporter.from, and from anywhere the other ports the cluster controller renders; a port podTemplate adds is not admitted. False renders none. Default: `true`. |
+| `networkPolicy` | {{< type "bool" >}} | No | NetworkPolicy renders a NetworkPolicy over the servers' pods that admits the route port only from those pods, the monitoring port only from the cluster controller's namespace, the metrics port from there and exporter.from, and from anywhere the other ports the cluster controller renders; a port podTemplate adds is not admitted. Default: `true`. |
 
 ### NatsCluster {#NatsCluster}
 NatsCluster is a NATS cluster the cluster controller deploys, one StatefulSet per server.
@@ -610,7 +610,7 @@ NatsClusterSpec is the desired state of a NATS cluster.\
 Appears on: [NatsCluster](#NatsCluster).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `version` | {{< type "string" >}} | Yes | Version is the nats-server version rendered for, 2.15.0 or later. A change moves at most one minor at a time, up or down; any patch change is allowed. |
+| `version` | {{< type "string" >}} | Yes | Version is the nats-server version rendered for. |
 | `image` | [{{< type "Image" >}}](#Image) | No | Image is the nats-server image; its tag is always Version. |
 | `replicas` | {{< type "int32" >}} | Yes | Replicas is the number of servers. |
 | `resources` | [{{< type "ResourceRequirements" >}}](https://pkg.go.dev/k8s.io/api/core/v1#ResourceRequirements) | No | Resources of the nats-server container. GOMEMLIMIT and the JetStream memory store derive from limits.memory. |
@@ -619,11 +619,11 @@ Appears on: [NatsCluster](#NatsCluster).
 | `podTemplate` | [{{< type "PodTemplate" >}}](#PodTemplate) | No | PodTemplate is merged into every server's pod, over its security context and automountServiceAccountToken too: whoever may write a NatsCluster runs pods with any privilege its namespace admits. |
 | `exporter` | [{{< type "Exporter" >}}](#Exporter) | No | Exporter configures the prometheus-nats-exporter sidecar; absent, it runs. |
 | `monitor` | [{{< type "Monitor" >}}](#Monitor) | No | Monitor configures access to the monitoring port, 8222, which has no authentication. |
-| `tls` | [{{< type "ListenerTLS" >}}](#ListenerTLS) | No | TLS on the client listener; absent, clients connect in the clear. Clients verify the certificate against the CA that issued it; the cluster controller reads that CA from the Secret's ca.crt, and without one trusts the system roots. |
+| `tls` | [{{< type "ListenerTLS" >}}](#ListenerTLS) | No | TLS on the client listener; absent, clients connect in the clear. The cluster controller verifies it against the Secret's ca.crt, or the system roots without one. |
 | `routes` | [{{< type "Routes" >}}](#Routes) | No | Routes configures the route listener; absent, route TLS is on and self-signed. |
 | `auth` | [{{< type "Auth" >}}](#Auth) | No | Auth puts the NATS cluster under a NATS operator; absent, servers run with no accounts and no client auth. |
 | `gateway` | [{{< type "Gateway" >}}](#Gateway) | No | Gateway joins the NATS cluster into a supercluster under its own name, the NatsCluster's name. |
-| `leafnodes` | [{{< type "Leafnodes" >}}](#Leafnodes) | No | Leafnodes opens a listener for leaf connections; it requires Auth. |
+| `leafnodes` | [{{< type "Leafnodes" >}}](#Leafnodes) | No | Leafnodes opens a listener for leaf connections. |
 | `leafRemotes` | [{{< type "[]LeafRemote" >}}](#LeafRemote) | No | LeafRemotes are the hubs this NATS cluster dials as a leaf. |
 | `rollout` | [{{< type "Rollout" >}}](#Rollout) | No | Rollout steers the restarts a spec change rolls out one server at a time. |
 
@@ -972,7 +972,7 @@ Appears on: [NatsBalancer](#NatsBalancer).
 | `connectionRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | ConnectionRef names the NatsConnection whose credentials decide the account. |
 | `pools` | [{{< type "[]Pool" >}}](#Pool) | No | Pools are judged apart; a stream matching several belongs to the first. With none declared the account is one pool. |
 | `moves` | [{{< type "Moves" >}}](#Moves) | No | Moves selects the kinds of move made. Default: `{}`. |
-| `interval` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No | Interval is the least time between two moves, positive, 1m when omitted. |
+| `interval` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No | Interval is the least time between two moves, 1m when omitted. |
 
 ### NatsBalancerStatus {#NatsBalancerStatus}
 NatsBalancerStatus is the observed state of an account balancer.\
@@ -1260,7 +1260,7 @@ Appears on: [NatsSystemBalancer](#NatsSystemBalancer).
 | :---- | :--- | :------: | :---------- |
 | `connectionRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | ConnectionRef names a NatsConnection with system credentials. |
 | `moves` | [{{< type "Moves" >}}](#Moves) | No | Moves selects the kinds of move made. Default: `{}`. |
-| `interval` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No | Interval is the least time between two moves, positive, 1m when omitted. |
+| `interval` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No | Interval is the least time between two moves, 1m when omitted. |
 
 ### NatsSystemBalancerStatus {#NatsSystemBalancerStatus}
 NatsSystemBalancerStatus is the observed state of a system balancer.\

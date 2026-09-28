@@ -305,8 +305,8 @@ func unsupportedFields(spec *clusterv1beta1.NatsClusterSpec) []string {
 	return unsupportedLeafFields(spec)
 }
 
-// hold reports held as nc's Progressing condition and patches the status:
-// a spec, trust or leaf remote nothing is rendered past.
+// hold sets held, the condition of what nothing is rendered past, as nc's
+// Progressing condition and patches the status.
 func (r *Reconciler) hold(ctx context.Context, orig, nc *clusterv1beta1.NatsCluster, held *metav1.Condition) error {
 	conditions.Set(&nc.Status.Conditions, nc.Generation, progressingCondition(nc, nil, Observed{Held: held}))
 	return r.patchStatus(ctx, orig, nc)

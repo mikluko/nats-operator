@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
-	"errors"
 	"io"
-	"net"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,7 +13,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/yuin/goldmark"
 	gast "github.com/yuin/goldmark/ast"
@@ -23,20 +20,11 @@ import (
 	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
-
-// init makes the OTLP gRPC exporter resolve localhost without grpc-go's DNS
-// resolver, whose _grpc_config TXT lookup outlives the export's deadline
-// where the network's DNS server is slow to answer NXDOMAIN.
-func init() {
-	resolver.SetDefaultScheme("passthrough")
-}
 
 // envVar is one row of the environment table.
 type envVar struct {
@@ -161,71 +149,21 @@ func exportedTo(t *testing.T) map[string]received {
 	return byPath
 }
 
-// clientHello listens on port over both loopback addresses and
-// returns the first TLS ClientHello a client sends there, skipping the test
-// where port is taken on both: the port is the SDK's default, which no
-// endpoint variable can stand in for without replacing it.
-func clientHello(t *testing.T, port string) <-chan *tls.ClientHelloInfo {
-	t.Helper()
-	hellos := make(chan *tls.ClientHelloInfo, 1)
-	cfg := &tls.Config{GetConfigForClient: func(h *tls.ClientHelloInfo) (*tls.Config, error) {
-		select {
-		case hellos <- h:
-		default:
-		}
-		return nil, errors.New("captured")
-	}}
-	var listened bool
-	for _, addr := range []string{"127.0.0.1", "::1"} {
-		l, err := net.Listen("tcp", net.JoinHostPort(addr, port))
-		if err != nil {
-			continue
-		}
-		listened = true
-		t.Cleanup(func() { _ = l.Close() })
-		go func() {
-			for {
-				c, err := l.Accept()
-				if err != nil {
-					return
-				}
-				go func() {
-					defer func() { _ = c.Close() }()
-					_ = tls.Server(c, cfg).Handshake()
-				}()
-			}
-		}()
-	}
-	if !listened {
-		t.Skipf("port %s, the default under test, is taken on both loopback addresses", port)
-	}
-	return hellos
-}
-
-// defaultEndpoint pins that, with only an exporter named, the SDK dials
-// localhost on port over TLS offering proto by ALPN.
-func defaultEndpoint(t *testing.T, env map[string]string, port, proto string) {
-	t.Helper()
-	hellos := clientHello(t, port)
-	full := map[string]string{"OTEL_TRACES_EXPORTER": "otlp"}
-	for k, v := range env {
-		full[k] = v
-	}
-	_ = export(t, start(t, full), 5*time.Second)
-	select {
-	case h := <-hellos:
-		require.Equal(t, "localhost", h.ServerName)
-		if proto != "" {
-			require.Contains(t, h.SupportedProtos, proto)
-		}
-	default:
-		t.Fatalf("no TLS connection on localhost:%s", port)
-	}
+// sdkDefaults are the rows whose Default is the OpenTelemetry SDK's own
+// rather than the telemetry package's, which no check here re-tests.
+var sdkDefaults = map[string]string{
+	"OTEL_EXPORTER_OTLP_PROTOCOL":    "`http/protobuf`",
+	"OTEL_EXPORTER_OTLP_ENDPOINT":    "`https://localhost:4318` over `http/protobuf`, `https://localhost:4317` over `grpc`",
+	"OTEL_EXPORTER_OTLP_INSECURE":    "`false`",
+	"OTEL_EXPORTER_OTLP_COMPRESSION": "none",
+	"OTEL_EXPORTER_PROMETHEUS_HOST":  "`localhost`, `9464`",
+	"OTEL_TRACES_SAMPLER":            "`parentbased_always_on`",
 }
 
 // TestEnvironmentDefaults pins every Default the environment table names
-// to what the SDK does with the variable unset. A row with a Default and
-// no check here fails, as does a check whose row names another Default.
+// to what the controllers do with the variable unset, sdkDefaults aside. A
+// row with a Default and neither a check here nor an sdkDefaults entry
+// fails, as does a check or entry whose row names another Default.
 func TestEnvironmentDefaults(t *testing.T) {
 	checks := map[string]struct {
 		def   string
@@ -254,62 +192,18 @@ func TestEnvironmentDefaults(t *testing.T) {
 		"OTEL_TRACES_EXPORTER": {"`otlp` once traces are on", func(t *testing.T) {
 			require.Contains(t, exportedTo(t), "/v1/traces")
 		}},
-		"OTEL_EXPORTER_OTLP_PROTOCOL": {"`http/protobuf`", func(t *testing.T) {
-			got := exportedTo(t)
-			require.NotEmpty(t, got)
-			for path, r := range got {
-				require.Equal(t, "application/x-protobuf", r.contentType, path)
-			}
-		}},
-		"OTEL_EXPORTER_OTLP_ENDPOINT": {"`https://localhost:4318` over `http/protobuf`, `https://localhost:4317` over `grpc`", func(t *testing.T) {
-			t.Run("http/protobuf", func(t *testing.T) { defaultEndpoint(t, nil, "4318", "") })
-			t.Run("grpc", func(t *testing.T) {
-				defaultEndpoint(t, map[string]string{"OTEL_EXPORTER_OTLP_PROTOCOL": "grpc"}, "4317", "h2")
-			})
-		}},
-		"OTEL_EXPORTER_OTLP_INSECURE": {"`false`", func(t *testing.T) {
-			defaultEndpoint(t, nil, "4318", "")
-		}},
-		"OTEL_EXPORTER_OTLP_COMPRESSION": {"none", func(t *testing.T) {
-			got := exportedTo(t)
-			require.NotEmpty(t, got)
-			for path, r := range got {
-				require.Empty(t, r.contentEncoding, path)
-			}
-		}},
-		"OTEL_EXPORTER_PROMETHEUS_HOST": {"`localhost`, `9464`", func(t *testing.T) {
-			stop := start(t, map[string]string{"OTEL_METRICS_EXPORTER": "prometheus"})
-			t.Cleanup(func() { require.NoError(t, stop(context.Background())) })
-			require.EventuallyWithT(t, func(c *assert.CollectT) {
-				resp, err := http.Get("http://localhost:9464/metrics")
-				if !assert.NoError(c, err) {
-					return
-				}
-				assert.NoError(c, resp.Body.Close())
-				assert.Equal(c, http.StatusOK, resp.StatusCode)
-			}, 5*time.Second, 50*time.Millisecond, "the Prometheus listener serves on its start")
-		}},
-		"OTEL_TRACES_SAMPLER": {"`parentbased_always_on`", func(t *testing.T) {
-			url, _ := collector(t)
-			stop := start(t, map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": url})
-			t.Cleanup(func() { _ = stop(context.Background()) })
-			tracer := otel.Tracer("test")
-			_, root := tracer.Start(t.Context(), "root")
-			require.True(t, root.SpanContext().IsSampled(), "a root span was dropped")
-			root.End()
-			parent := trace.NewSpanContext(trace.SpanContextConfig{
-				TraceID: trace.TraceID{1}, SpanID: trace.SpanID{1}, Remote: true,
-			})
-			_, child := tracer.Start(trace.ContextWithRemoteSpanContext(t.Context(), parent), "child")
-			require.False(t, child.SpanContext().IsSampled(), "the child of an unsampled parent was kept")
-			child.End()
-		}},
 	}
+	sdk := maps.Clone(sdkDefaults)
 	for _, v := range envTable(t) {
 		if v.Default == "unset" {
 			continue
 		}
 		name := v.Names[0]
+		if def, ok := sdk[name]; ok {
+			require.Equal(t, def, v.Default, name)
+			delete(sdk, name)
+			continue
+		}
 		t.Run(name, func(t *testing.T) {
 			c, ok := checks[name]
 			require.True(t, ok, "no check pins the default of %s", name)
@@ -319,4 +213,5 @@ func TestEnvironmentDefaults(t *testing.T) {
 		delete(checks, name)
 	}
 	require.Empty(t, checks, "checks for rows without a Default")
+	require.Empty(t, sdk, "sdkDefaults for rows without a Default")
 }

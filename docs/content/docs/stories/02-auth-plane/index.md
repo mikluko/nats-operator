@@ -5,11 +5,11 @@ params:
   e2e:
     substitutions:
       - files: [01-natscluster.yaml]
-        reason: three servers share one kind node, on a host every cluster of the run shares
+        reason: three servers share one kind node, on a host every kind cluster of the run shares
         patch: {spec: {resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 256Mi}}}}
 ---
 
-The platform engineer from the first story wants that cluster to run under a NATS operator the auth controller owns, with accounts and users declared as resources instead of minted by hand.
+The platform engineer from the first story wants that NATS cluster to run under a NATS operator the auth controller owns, with accounts and users declared as resources instead of minted by hand.
 
 ## NATS operator and system account
 
@@ -49,9 +49,9 @@ A user that brings its own key gets only a signed JWT, in status:
 
 {{< manifest "01-status-natsuser-orders-batch.yaml" >}}
 
-## The cluster and the stream
+## The NATS cluster and the stream
 
-The cluster gains an `auth` block. Its trust roots come through a trust object that points at the NATS operator, and its controller connects with its own system user's creds.
+The `NatsCluster` gains an `auth` block. Its trust roots come through a trust object that points at the NATS operator, and its controller connects with its own system user's creds.
 
 {{< manifest "01-natsoperatortrust.yaml" >}}
 

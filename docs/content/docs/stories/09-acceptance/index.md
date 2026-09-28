@@ -56,9 +56,9 @@ params:
 
 Everything from the earlier stories at once, across three NATS clusters in three Kubernetes clusters: a five-server one in the home cluster, a development NATS cluster pinned to one zone, and a production NATS cluster in another region whose placement tag is not its name. Four services run in two environments, each service an account.
 
-## Trust roots and clusters
+## Trust roots and NATS clusters
 
-The trust roots and the gateway list are the same in every Kubernetes cluster; GitOps keeps them alike. The gateway certificates come from a private CA, as in [the supercluster story]({{< relref "/docs/stories/06-supercluster" >}}), since a public issuer would let any certificate it signs join the supercluster.
+The trust roots and the gateway list are the same in every Kubernetes cluster; GitOps keeps them alike. The gateway certificates come from a private CA, as in [the supercluster story]({{< relref "/docs/stories/06-supercluster" >}}).
 
 {{< manifest "01-natsoperatortrust.yaml" >}}
 
@@ -74,7 +74,7 @@ Each NatsCluster reports every other member's gateways connected.
 
 ## The auth plane
 
-The NATS operator, the system account, and the production account chain: checks exports a service to monitoring, which exports streams and services to core and to the collector. The development chain repeats it under `-dev` names and is left out, so the page shows each account's wiring once.
+The NATS operator, the system account, and the production account chain: checks exports a service to monitoring, which exports streams and services to core and to the collector. The development chain repeats it under `-dev` names and is left out.
 
 {{< manifest "01-auth.yaml" >}}
 

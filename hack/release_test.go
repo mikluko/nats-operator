@@ -85,7 +85,6 @@ func TestRelease_FailOnAndCIName(t *testing.T) {
 	require.Equal(t, []string{ci.Name}, release.On.WorkflowRun.Workflows)
 }
 
-// stepByID returns the step of steps whose id is id.
 func stepByID(t *testing.T, steps []step, id string) step {
 	t.Helper()
 	for _, s := range steps {
@@ -198,7 +197,6 @@ func TestControllerList(t *testing.T) {
 	require.ElementsMatch(t, controllers(t), strings.Fields(string(out)))
 }
 
-// setupHugo is the action every workflow installs Hugo with.
 const setupHugo = "./.github/actions/setup-hugo"
 
 // TestHugoInstalledOnce holds the workflows that build the site to the

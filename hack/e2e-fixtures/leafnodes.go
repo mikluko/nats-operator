@@ -13,7 +13,7 @@ import (
 )
 
 // leafnodes writes story 10's fixtures into dir and prints the JWTs the
-// edge's NatsOperatorTrust and NatsAccountTrust take as substitution patches.
+// leaf's NatsOperatorTrust and NatsAccountTrust take as substitution patches.
 func leafnodes(dir string, out io.Writer) error {
 	var h hub
 	op, opSeeds, err := keys(nkeys.PrefixByteOperator)

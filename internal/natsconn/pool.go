@@ -218,8 +218,7 @@ func (p *Pool) Close() {
 	}
 }
 
-// Start blocks until ctx is done and then closes the pool, so a manager
-// that runs it closes every connection on shutdown.
+// Start blocks until ctx is done, then closes the pool.
 func (p *Pool) Start(ctx context.Context) error {
 	<-ctx.Done()
 	p.Close()

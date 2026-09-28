@@ -82,7 +82,7 @@ func testStory8(t *testing.T, c client.Client, sc map[string]*testNATS) {
 
 // assertStreamStatus asserts that s's status holds what the story's status
 // file shows, examples tagged !any aside: observedGeneration, each
-// condition's status and reason, and of a transfer the clusters, the new
+// condition's status and reason, and of a transfer the NATS clusters, the new
 // replicas' names and the consumer total.
 func assertStreamStatus(ct *assert.CollectT, s *js.NatsStream, file string) {
 	raw, err := os.ReadFile(filepath.Join(storiesDir, file))

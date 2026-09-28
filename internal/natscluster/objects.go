@@ -271,8 +271,7 @@ func containerSecurityContext() *corev1.SecurityContext {
 	}
 }
 
-// mergePodSpec strategic-merges override over base. A field override does
-// not set is left as base has it.
+// mergePodSpec strategic-merges override over base.
 func mergePodSpec(base corev1.PodSpec, override *corev1.PodSpec) (corev1.PodSpec, error) {
 	baseJSON, err := json.Marshal(base)
 	if err != nil {

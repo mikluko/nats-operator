@@ -110,8 +110,7 @@ func (g Group) Holders() []string {
 func (g Group) holds(server string) bool { return slices.Contains(g.Holders(), server) }
 
 // Unsettled names the first group that is offline, has no leader or has a
-// member offline or not current, and is empty when there is none. No lag is
-// tolerated: a member one entry behind is not current.
+// member offline or not current, and is empty when there is none.
 func Unsettled(groups []Group) string {
 	for _, g := range groups {
 		if g.Offline {

@@ -1,5 +1,4 @@
-# A kind of its own so RBAC can grant it to the platform team alone, and so
-# the fields NATS refuses on a system account (JetStream) do not exist here.
+# A system account has no JetStream fields.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsSystemAccount
 metadata:

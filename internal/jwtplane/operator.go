@@ -23,14 +23,12 @@ type Operator struct {
 	JWT           string
 }
 
-// SignOperator returns the NATS operator JWT. With an identity key it is signed
-// from spec, listing every signing key and never expiring. With an offline
-// JWT that JWT is returned unchanged once it is shown to be self-signed, to
-// name SystemAccount, and to list every signing key that is not retiring;
-// otherwise the error wraps ErrOfflineOperatorMismatch.
-//
-// Strict signing-key usage stays off: adopted accounts keep user JWTs their
-// identity keys signed.
+// SignOperator returns the NATS operator JWT, with strict signing-key usage
+// off so adopted accounts keep user JWTs their identity keys signed: signed
+// from spec with an identity key, listing every signing key and never
+// expiring; with an offline JWT, that JWT unchanged once it is self-signed,
+// names SystemAccount and lists every signing key not retiring, and otherwise
+// an error wrapping ErrOfflineOperatorMismatch.
 func SignOperator(o Operator) (string, error) {
 	if !nkeys.IsValidPublicAccountKey(o.SystemAccount) {
 		return "", fmt.Errorf("%w: system account %q is not an account public key", ErrWrongKeyType, o.SystemAccount)

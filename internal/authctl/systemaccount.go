@@ -27,8 +27,7 @@ import (
 // SystemAccountReconciler keeps a NatsSystemAccount's keys, revocations and
 // distribution; its JWT is signed into the status of the NatsOperator
 // naming it. The JWT is not pushed again while that NatsOperator's
-// RevocationsUnrecovered is True, so the servers keep the JWT the
-// revocations are recovered from.
+// RevocationsUnrecovered is True.
 type SystemAccountReconciler struct {
 	client.Client
 	// Distributor pushes the JWT again to servers without it; nil pushes

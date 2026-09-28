@@ -25,8 +25,8 @@ import (
 const jszSubject = "$SYS.REQ.SERVER.%s.JSZ"
 
 // answers reports whether the server whose ID is id answers sys, a connection
-// of a system account: it does where both are in one NATS system, a cluster
-// or a supercluster, and does not in another NATS system.
+// of a system account: it does where both are in one NATS system, a NATS
+// cluster or a supercluster, and does not in another NATS system.
 func answers(ctx context.Context, sys *nats.Conn, id string) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
@@ -120,7 +120,7 @@ func plural(n int, one, many string) string {
 
 // evacuationOf names a NatsClusterEvacuation, not yet Ready, that empties the
 // NATS cluster nc is connected to, and is "" where none does. One empties it
-// where its source is nc's cluster by name and the server nc is connected to
+// where its source is nc's NATS cluster by name and the server nc is connected to
 // answers the evacuation's own connection; one whose connection cannot be
 // dialed or asked is taken to empty it. The error is one the Kubernetes API
 // server returned.

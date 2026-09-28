@@ -7,9 +7,8 @@ import (
 
 // metricsOptions serves metrics on addr over HTTPS, only to a bearer token
 // of a user the API server allows the request's verb on the request's path
-// as a non-resource URL. A revocation takes up to five minutes to show and a
-// grant up to thirty seconds, as long as controller-runtime caches an allow
-// and a denial.
+// as a non-resource URL. An allow is cached five minutes and a denial thirty
+// seconds.
 func metricsOptions(addr string) metricsserver.Options {
 	return metricsserver.Options{
 		BindAddress:    addr,

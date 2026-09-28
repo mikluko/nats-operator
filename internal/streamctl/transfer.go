@@ -136,7 +136,7 @@ func observeTransfer(ctx context.Context, o lifecycle.Object, s *js.NatsStream, 
 // seconds nats-server waits on the consumers' leaders before it answers.
 const consumerListTimeout = 10 * time.Second
 
-// consumerClusters returns the cluster of every consumer on the stream that
+// consumerClusters returns the cluster info of every consumer on the stream that
 // answered, and how many consumers the stream has.
 func (o *streamObject) consumerClusters(ctx context.Context) ([]clusterWire, int, error) {
 	subject := "$JS.API.CONSUMER.LIST." + streamName(o.obj)
@@ -160,7 +160,7 @@ func (o *streamObject) consumerClusters(ctx context.Context) ([]clusterWire, int
 	}
 }
 
-// consumerPage is one CONSUMER.LIST reply: the clusters of the consumers it
+// consumerPage is one CONSUMER.LIST reply: the cluster info of the consumers it
 // carries, how many consumers it covers, counting those listed as missing,
 // and how many the stream has.
 type consumerPage struct {

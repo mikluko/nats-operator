@@ -39,7 +39,7 @@ var ErrOperatorGone = errors.New("NatsOperator does not exist")
 // Resolvers is the Distributor over each NatsOperator's system connection
 // to the full resolvers of the servers trusting it.
 // The roster is every server that answered STATSZ within its last
-// rosterMisses polls; a restarted server joins it under a new server ID.
+// rosterMisses polls.
 type Resolvers struct {
 	// Conn returns the system connection to the servers trusting operator,
 	// authenticated as a user holding the auth-controller preset.

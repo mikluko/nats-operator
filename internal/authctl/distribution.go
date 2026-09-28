@@ -70,11 +70,8 @@ func recordDistribution(conds *[]metav1.Condition, gen int64, cond metav1.Condit
 	}
 }
 
-// repushStale pushes token to the servers trusting operator when one of
-// them does not hold it, and reports whether d refused it with
-// ErrStaleJWT: a server holds a JWT for token's account issued after
-// token. Any other outcome is false and left for distribute to report.
-// With d nil it is false.
+// repushStale pushes token where a server trusting operator lacks it and
+// reports whether d refused it with ErrStaleJWT; false with d nil.
 func repushStale(ctx context.Context, d Distributor, operator types.NamespacedName, token string) bool {
 	if d == nil || token == "" {
 		return false

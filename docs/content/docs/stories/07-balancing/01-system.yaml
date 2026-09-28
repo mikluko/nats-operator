@@ -21,9 +21,7 @@ spec:
   connectionRef:
     name: demo-sys
   moves:
-    # $JS.API.ACCOUNT.STREAM.MOVE accepts the system account for any account
-    # (nats-server 2.15.0 jetstream_api.go:3188). Opt-in, as every placement
-    # move is.
+    # Opt-in, as every placement move is.
     placement: true
     # Runs for every account carrying the jetstream-stepdown export preset
     # (below); the rest are reported in status.capabilities.

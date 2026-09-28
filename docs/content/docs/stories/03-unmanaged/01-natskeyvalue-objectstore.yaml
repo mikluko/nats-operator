@@ -1,8 +1,7 @@
 # A key-value bucket and an object store, on the same connection as the
-# streams above. Fields are nats.go's KeyValueConfig and ObjectStoreConfig
-# (v1.54.0, jetstream/kv.go and jetstream/object.go) in camelCase, with the
-# bucket under `name`, defaulting to metadata.name. The lifecycle policies
-# are the streams' own.
+# streams above. Fields are nats.go's KeyValueConfig and ObjectStoreConfig in
+# camelCase, with the bucket under `name`, defaulting to metadata.name. The
+# lifecycle policies are the streams' own.
 apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsKeyValue
 metadata:

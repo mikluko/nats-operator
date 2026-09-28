@@ -7,7 +7,7 @@ An application team runs on a NATS cluster someone else deployed, a Helm release
 
 ## The connection
 
-Same shape as a managed cluster's. The credentials come from whoever runs that NATS cluster's auth plane.
+Same shape as a managed NATS cluster's. The credentials come from whoever runs that NATS cluster's auth plane.
 
 {{< manifest "01-natsconnection.yaml" >}}
 

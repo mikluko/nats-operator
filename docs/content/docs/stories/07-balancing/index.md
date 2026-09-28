@@ -4,7 +4,7 @@ weight: 7
 params:
   e2e:
     waits:
-      - {step: 1, wait: 3m, reason: "the balancers settle after story 4's streams move; 1m40s on kind"}
+      - {step: 1, wait: 3m, reason: "the balancers settle after story 4's streams move"}
     after: 4
 ---
 

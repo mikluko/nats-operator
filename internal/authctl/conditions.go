@@ -66,9 +66,7 @@ const (
 	// public key another holds under the same NatsOperator or account.
 	ReasonPublicKeyInUse = "PublicKeyInUse"
 	// ReasonReconcileError is Ready's reason on an object whose last
-	// reconcile failed with an error no other reason names; its
-	// status.observedGeneration stays at the generation last reconciled in
-	// full.
+	// reconcile failed with an error no other reason names.
 	ReasonReconcileError = "ReconcileError"
 )
 

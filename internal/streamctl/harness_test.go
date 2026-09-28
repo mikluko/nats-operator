@@ -231,7 +231,7 @@ func (tn *testNATS) secure(t *testing.T) func(*server.Options) {
 	}
 }
 
-// connect is a client of the cluster in its JetStream account.
+// connect is a client of the NATS cluster in its JetStream account.
 func (tn *testNATS) connect(t *testing.T) jetstream.JetStream {
 	t.Helper()
 	var opts []nats.Option

@@ -4,7 +4,7 @@ weight: 10
 params:
   e2e:
     waits:
-      - {step: 1, wait: 4m, reason: "the hub and both edges start before the leaf remotes connect; 2m2s on kind"}
+      - {step: 1, wait: 4m, reason: "the hub and both leaves start before the leaf remotes connect"}
     clusters:
       - name: hub
         files: [e2e/00-hub.yaml, 01-hub.yaml]
@@ -21,12 +21,12 @@ params:
         patch: {spec: {publicKey: ACN25U6DCEF2KXHQLKZERG774MXE56M7EDEU2655PJAD2F5XWV32N2G2, jwt: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ.eyJqdGkiOiJWSlhJUlhFM05aUElYM1NERlZVSVpMTkJBUkZEQzNPMjVFSFhTRVEzQ0NPRFZFUFBFSExBIiwiaWF0IjoxNzkwNDU4MDYxLCJpc3MiOiJPQ0I2TFY0WktMUk5UWUtLTk9IMzdZVjNHNTNNTExIWkhJTFVSU1BVRlRPT1ZCMjVBRTM3SDc2UyIsIm5hbWUiOiJ0ZWxlbWV0cnkiLCJzdWIiOiJBQ04yNVU2RENFRjJLWEhRTEtaRVJHNzc0TVhFNTZNN0VERVUyNjU1UEpBRDJGNVhXVjMyTjJHMiIsIm5hdHMiOnsibGltaXRzIjp7InN1YnMiOi0xLCJkYXRhIjotMSwicGF5bG9hZCI6LTEsImltcG9ydHMiOi0xLCJleHBvcnRzIjotMSwid2lsZGNhcmRzIjp0cnVlLCJjb25uIjotMSwibGVhZiI6LTF9LCJzaWduaW5nX2tleXMiOlsiQUE3SUxNSklBV0JCRUdSRkZMWU42Q1pUNVNJS1k1SU1FQk9MUVNaWFhBM1RER1NOTVVQUVRIR1AiXSwiZGVmYXVsdF9wZXJtaXNzaW9ucyI6eyJwdWIiOnt9LCJzdWIiOnt9fSwiYXV0aG9yaXphdGlvbiI6e30sInR5cGUiOiJhY2NvdW50IiwidmVyc2lvbiI6Mn19.523SspTzkXsV099jNd5Cwu_AVCsePj6MH6PAPqPxbyQQoPvynE_Ho9M-CNOBxr_tNswimO8PPh0DRSb1kZk5BQ}}
       - files: [01-hub.yaml, 01-edge.yaml, 01-edge-operator.yaml]
         kind: NatsCluster
-        reason: a Kubernetes cluster is one kind node, on a host every cluster of the run shares
+        reason: a Kubernetes cluster is one kind node, on a host every kind cluster of the run shares
         patch: {spec: {resources: {requests: {cpu: 100m, memory: 192Mi}, limits: {memory: 192Mi}}}}
       - files: [01-hub.yaml]
         kind: NatsCluster
         reason: >-
-          one kind node, on a host every cluster of the run shares, holds three servers, without JetStream and without
+          one kind node, on a host every kind cluster of the run shares, holds three servers, without JetStream and without
           the rest of story 9's supercluster; no cert-manager, so the leafnode listener runs without TLS
         patch: {spec: {replicas: 3, jetstream: null, gateway: null, leafnodes: {tls: null}}}
       - files: [01-edge.yaml]
@@ -54,7 +54,7 @@ The hub is story 9's `prod-east`, whose NatsCluster gains a leafnode listener, a
 
 {{< manifest "01-hub.yaml" >}}
 
-## The edge
+## The leaf
 
 A leaf is a NatsCluster that dials out through a NatsConnection, the same kind the JetStream controller uses. Its JetStream runs in a domain of its own. A NatsConnection in another namespace needs a NatsReferenceGrant there, and that grant hands the connection's credentials to the leaf's namespace, where the cluster controller copies them into the Secret `<name>-leaf-remotes`.
 
@@ -62,7 +62,7 @@ A leaf is a NatsCluster that dials out through a NatsConnection, the same kind t
 
 {{< manifest "01-status-natscluster-edge-site-1.yaml" >}}
 
-## An edge that enforces the hub's accounts
+## A leaf that enforces the hub's accounts
 
 A second site trusts the hub's NATS operator, so its clients authenticate against the hub's accounts locally. It reads the same trust roots the supercluster members do, and resolves accounts over a second remote bound to the system account; without that remote it cannot fetch an account it has not cached. It preloads the telemetry account so that its clients authenticate while the link is down. A preload is a copy that no fetch replaces, so this leaf runs a `Full` resolver on its JetStream volume, whose sync with the hub keeps the copy current, and the copy expires with the account's `jwtTTL` unless the `NatsAccount` sets `jwtTTL: 0`.
 

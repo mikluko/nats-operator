@@ -58,9 +58,9 @@ spec:
     advertise: nats.prod-east-2.acme.example:7222
 ---
 # Empties prod-east of every stream, key-value bucket and object store, in
-# every account, with their consumers. System-level and whole-cluster only.
-# Each stream is moved by $JS.API.ACCOUNT.STREAM.MOVE with the target tags;
-# there is no bulk primitive, so the controller enumerates.
+# every account, with their consumers. System-level and whole NATS cluster
+# only. Each stream is moved by $JS.API.ACCOUNT.STREAM.MOVE with the target
+# tags.
 apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsClusterEvacuation
 metadata:

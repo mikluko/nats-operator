@@ -4,7 +4,7 @@ weight: 11
 params:
   e2e:
     waits:
-      - {step: 1, wait: 4m, reason: "six servers start before streams move off prod-east; 2m6s on kind"}
+      - {step: 1, wait: 4m, reason: "six servers start before streams move off prod-east"}
     substitutions:
       - files: [01-natscluster-prod-east.yaml, 01-evacuation.yaml]
         kind: NatsCluster

@@ -41,9 +41,8 @@ type Controller struct {
 	Setup       func(ctx context.Context, mgr ctrl.Manager) error
 }
 
-// Run registers the manager's flags and zap's on flag.CommandLine, parses
-// it along with any flag the caller registered there first, and runs c until
-// SIGINT or SIGTERM. An error it returns has already been logged.
+// Run parses flag.CommandLine and runs c until SIGINT or SIGTERM; an error it
+// returns has already been logged.
 func Run(c Controller) error {
 	opts := Flags(flag.CommandLine, c.Group)
 	zapOpts := zap.Options{}

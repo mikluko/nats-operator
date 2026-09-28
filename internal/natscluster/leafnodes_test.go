@@ -484,12 +484,8 @@ func operatorLeaf(t *testing.T, h *hub) (*booted, []LeafRemote) {
 	return bootRendered(t, nc, h.p.trust, remotes, ""), remotes
 }
 
-// TestLeaf_OperatorMode pins story 10's edge-site-2: rendered from
-// edge-operator.yaml, it runs a Full resolver with the telemetry account
-// preloaded, both remotes connect, the hub's system user sees them over
-// $SYS, a telemetry client of the leaf reaches
-// the hub, and an account the leaf never preloaded is fetched over the
-// system-account remote.
+// TestLeaf_OperatorMode pins story 10's edge-site-2 against a hub: remotes
+// connect, and preloaded and fetched accounts both authenticate.
 func TestLeaf_OperatorMode(t *testing.T) {
 	h := startHub(t)
 	leaf, remotes := operatorLeaf(t, h)

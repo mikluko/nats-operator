@@ -203,8 +203,7 @@ func isZero(v any) bool {
 }
 
 // FillOmitted copies into dst every top-level JSON field src sets that dst
-// omits, and reports whether it copied any. dst and src are the same struct
-// type, the spec a kind late-initializes and the spec read from the server.
+// omits, and reports whether it copied any.
 func FillOmitted[T any](dst, src *T) (bool, error) {
 	d, err := jsonObject(dst)
 	if err != nil {

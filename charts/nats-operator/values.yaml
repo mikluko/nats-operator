@@ -1,6 +1,3 @@
-# Each controller is enabled on its own. The CRDs of all four API groups are
-# installed whichever are enabled.
-
 imagePullSecrets: []
 
 leaderElection:

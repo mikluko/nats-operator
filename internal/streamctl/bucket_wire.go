@@ -7,8 +7,7 @@ import (
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 )
 
-// Stream name prefixes and the key subject template nats.go gives a bucket's
-// stream.
+// Stream name prefixes nats.go gives a bucket's stream.
 const (
 	kvStreamPrefix  = "KV_"
 	objStreamPrefix = "OBJ_"

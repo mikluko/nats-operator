@@ -79,7 +79,7 @@ func deleteEvacuation(t *testing.T, ctx context.Context, r *EvacuationReconciler
 func isGone(err error) bool { return client.IgnoreNotFound(err) == nil && err != nil }
 
 // placedIn is the NATS cluster stream sits in once no move is in progress,
-// "" while one is: every copy and the leader in one cluster, no desired
+// "" while one is: every copy and the leader in one NATS cluster, no desired
 // state.
 func placedIn(ctx context.Context, j jetstream.JetStream, stream string) string {
 	s, err := j.Stream(ctx, stream)

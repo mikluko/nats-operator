@@ -401,8 +401,7 @@ spec:
                 description: JetStream enables JetStream on every server.
                 properties:
                   domain:
-                    description: Domain is the JetStream domain; a leaf running JetStream
-                      must set it.
+                    description: Domain is the JetStream domain.
                     minLength: 1
                     type: string
                   limits:
@@ -703,8 +702,7 @@ spec:
                       && self.localSystemAccount)'
                 type: array
               leafnodes:
-                description: Leafnodes opens a listener for leaf connections; it requires
-                  Auth.
+                description: Leafnodes opens a listener for leaf connections.
                 properties:
                   advertise:
                     description: |-
@@ -783,8 +781,7 @@ spec:
                       admits the route port only from those pods, the monitoring port only
                       from the cluster controller's namespace, the metrics port from there
                       and exporter.from, and from anywhere the other ports the cluster
-                      controller renders; a port podTemplate adds is not admitted. False
-                      renders none.
+                      controller renders; a port podTemplate adds is not admitted.
                     type: boolean
                 type: object
               podTemplate:
@@ -954,10 +951,9 @@ spec:
                 type: object
               tls:
                 description: |-
-                  TLS on the client listener; absent, clients connect in the clear.
-                  Clients verify the certificate against the CA that issued it; the
-                  cluster controller reads that CA from the Secret's ca.crt, and
-                  without one trusts the system roots.
+                  TLS on the client listener; absent, clients connect in the clear. The
+                  cluster controller verifies it against the Secret's ca.crt, or the
+                  system roots without one.
                 properties:
                   certManager:
                     description: CertManager has cert-manager issue the certificate.
@@ -1001,10 +997,7 @@ spec:
                 - message: set exactly one of secretRef and certManager
                   rule: has(self.secretRef) != has(self.certManager)
               version:
-                description: |-
-                  Version is the nats-server version rendered for, 2.15.0 or later. A
-                  change moves at most one minor at a time, up or down; any patch
-                  change is allowed.
+                description: Version is the nats-server version rendered for.
                 type: string
                 x-kubernetes-validations:
                 - message: version must be a semantic version, 2.15.0 or later

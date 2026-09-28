@@ -434,8 +434,8 @@ func (r *Reconciler) restartServer(ctx context.Context, nc *clusterv1beta1.NatsC
 	return sts, nil
 }
 
-// recordGateBlocked records GateBlocked on nc when its Progressing reads
-// GateBlocked and before, the conditions it had, did not.
+// recordGateBlocked emits GateBlocked on nc when its Progressing reason is
+// GateBlocked and was not in before.
 func recordGateBlocked(rec events.EventRecorder, nc *clusterv1beta1.NatsCluster, before []metav1.Condition) {
 	now := meta.FindStatusCondition(nc.Status.Conditions, ConditionProgressing)
 	if now == nil || now.Reason != ReasonGateBlocked {

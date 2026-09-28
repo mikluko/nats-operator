@@ -75,8 +75,9 @@ func (c Certs) loaded(got sysobs.CertNotAfter) bool {
 		same(c.Gateway.NotAfter, got.Gateway) && same(c.Leafnodes.NotAfter, got.Leafnode)
 }
 
-// ensureCerts reads every listener's certificate Secret, and while one is
-// not ready what the servers wait for and the reason naming the first.
+// ensureCerts reads every listener's certificate Secret; while one is not
+// ready it also returns what the servers wait for and the reason naming the
+// first such Secret.
 func (r *Reconciler) ensureCerts(ctx context.Context, nc *clusterv1beta1.NatsCluster) (Certs, string, string, error) {
 	var certs Certs
 	var wait, reason string

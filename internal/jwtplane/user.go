@@ -55,7 +55,8 @@ type Permissions struct {
 	Subscribe SubjectPermissions
 }
 
-// SubjectPermissions allow and deny subjects.
+// SubjectPermissions allow and deny subjects: an empty Allow admits every
+// subject, and Deny wins over Allow.
 type SubjectPermissions struct {
 	Allow []string
 	Deny  []string

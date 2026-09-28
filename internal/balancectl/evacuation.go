@@ -100,7 +100,7 @@ type EvacuationReconciler struct {
 	Recorder events.EventRecorder
 }
 
-// Reconcile implements reconcile.Reconciler.
+// Reconcile runs one evacuation pass for the NatsClusterEvacuation req names.
 func (r *EvacuationReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	var e js.NatsClusterEvacuation
 	if err := r.Client.Get(ctx, req.NamespacedName, &e); err != nil {
@@ -372,7 +372,7 @@ func resources(ctx context.Context, c client.Reader) (map[types.UID]owner, error
 // pinnedIn is the resources whose spec declares placement.cluster from and
 // whose stream snap, the source NATS cluster, holds, sorted by namespace,
 // name and kind. A resource declaring from whose stream sits in another NATS
-// system with a cluster of that name is not among them.
+// system with a NATS cluster of that name is not among them.
 func pinnedIn(snap *sysobs.Snapshot, owners map[types.UID]owner, from string) []js.PinnedObject {
 	var out []js.PinnedObject
 	for _, g := range snap.Groups {
