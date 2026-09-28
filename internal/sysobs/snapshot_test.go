@@ -200,3 +200,22 @@ func TestMerge_RemoteMetaLeader(t *testing.T) {
 	g := remoteLeaderView(snap.Groups[0], &wireMeta{Leader: "x0", Replicas: []wirePeer{ok("x1"), ok("s2"), {Name: "s1", Lag: 3}}}, snap.Servers)
 	require.Equal(t, Group{Kind: KindMeta, Leader: "x0", Members: []Member{{Server: "s1", Lag: 3}, current("s2")}}, g)
 }
+
+func TestSnapshot_MetaLeader(t *testing.T) {
+	stream := Group{Kind: KindStream, Account: "A", Stream: "S", Leader: "s2"}
+	tests := []struct {
+		name string
+		snap Snapshot
+		want string
+	}{
+		{"led", Snapshot{Groups: []Group{{Kind: KindMeta, Leader: "s1"}, stream}}, "s1"},
+		{"leaderless", Snapshot{Groups: []Group{{Kind: KindMeta, NamedLeader: "s1"}, stream}}, ""},
+		{"no meta group", Snapshot{Groups: []Group{stream}}, ""},
+		{"empty", Snapshot{}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, tt.snap.MetaLeader())
+		})
+	}
+}

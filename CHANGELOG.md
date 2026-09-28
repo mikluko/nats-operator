@@ -105,7 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An auth object whose reconcile fails reads `Ready` False, reason `ReconcileError`, and keeps `status.observedGeneration` at the generation last reconciled in full.
 - `NatsClusterEvacuation` makes no move while any server of its NATS system is down or the meta group has no leader, reporting `Ready` and `Progressing` False with reason `ServersDown`.
 - The `NatsSystemBalancer` and the `NatsBalancer`s of one NATS cluster move one at a time; while one's move is in flight the others read `Holding`, reason `MoveLeaseHeld`.
-- A `NatsSystemBalancer` or `NatsBalancer` makes no move while any member of any group in its scope is not current.
+- A `NatsSystemBalancer` or `NatsBalancer` makes no move while any member of any group in its scope is not current, any server of its NATS cluster does not answer every page of JSZ, or the meta group has no leader.
 - The `cluster-controller`, `jetstream-controller` and `auth-controller` presets subscribe only to their own inbox, `_INBOX.<preset>.>`; a JetStream controller account user whose `permissions` restrict subscriptions must allow `_INBOX.jetstream-controller.>`.
 - The `readonly` preset subscribes only to its own inbox, `_INBOX.readonly.>`, which its client dials with.
 

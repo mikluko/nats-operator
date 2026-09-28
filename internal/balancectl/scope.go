@@ -50,11 +50,11 @@ func serversDown(ctx context.Context, sys *nats.Conn, snap *sysobs.Snapshot, clu
 	if len(snap.Silent) > 0 {
 		return fmt.Sprintf("%s of %s %s", servers(snap.Silent), cluster, plural(len(snap.Silent), "does not answer", "do not answer")), nil
 	}
-	i := slices.IndexFunc(snap.Groups, func(g sysobs.Group) bool { return g.Kind == sysobs.KindMeta })
-	if i < 0 || snap.Groups[i].Leader == "" {
+	leader := snap.MetaLeader()
+	if leader == "" {
 		return "the meta group has no leader", nil
 	}
-	offline, err := offlinePeers(ctx, sys, snap.Groups[i].Leader)
+	offline, err := offlinePeers(ctx, sys, leader)
 	if err != nil || len(offline) == 0 {
 		return "", err
 	}

@@ -57,18 +57,15 @@ func observation(cluster string, snap *sysobs.Snapshot) balance.Observation {
 	for _, s := range snap.Servers {
 		obs.Servers = append(obs.Servers, balance.Server{Name: s.Name, Tags: s.Tags})
 	}
-	metaLeader := true
 	for _, g := range snap.Groups {
-		if g.Kind == sysobs.KindMeta {
-			metaLeader = g.Leader != ""
-			continue
+		if g.Kind != sysobs.KindMeta {
+			obs.Groups = append(obs.Groups, group(g))
 		}
-		obs.Groups = append(obs.Groups, group(g))
 	}
 	switch {
 	case len(snap.Silent) > 0:
 		obs.Unsettled = strings.Join(snap.Silent, ", ") + " did not answer"
-	case !metaLeader:
+	case snap.MetaLeader() == "":
 		obs.Unsettled = "the meta group has no leader"
 	default:
 		obs.Unsettled = balance.Unsettled(obs.Groups)

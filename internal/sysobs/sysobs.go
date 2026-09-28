@@ -129,15 +129,9 @@ func (o *SystemClient) Observe(ctx context.Context) (*Snapshot, error) {
 			return nil, err
 		}
 	}
-	reports := map[string]*wireJSInfo{}
-	for offset := 0; ; offset += jszPageSize {
-		total, err := o.jszPage(ctx, roster, offset, reports)
-		if err != nil {
-			return nil, err
-		}
-		if total <= offset+jszPageSize {
-			break
-		}
+	reports, err := o.jsz(ctx, roster)
+	if err != nil {
+		return nil, err
 	}
 	snap := merge(roster, reports)
 	if err := o.readRemoteMeta(ctx, snap); err != nil {
@@ -202,14 +196,43 @@ func (o *SystemClient) readGateways(ctx context.Context, roster []Server) error 
 	})
 }
 
-// jszPage requests one page of accounts from every server, appends each
-// answer's accounts to reports, and returns the largest account total any
-// server reported.
-func (o *SystemClient) jszPage(ctx context.Context, roster []Server, offset int, reports map[string]*wireJSInfo) (int, error) {
+// jsz reads every page of accounts from the roster's servers, keyed by
+// server name; a server that misses any page is absent.
+func (o *SystemClient) jsz(ctx context.Context, roster []Server) (map[string]*wireJSInfo, error) {
 	want := make(map[string]bool, len(roster))
 	for _, s := range roster {
 		want[s.Name] = true
 	}
+	reports := map[string]*wireJSInfo{}
+	for offset := 0; len(want) > 0; offset += jszPageSize {
+		page, total, err := o.jszPage(ctx, want, offset)
+		if err != nil {
+			return nil, err
+		}
+		for name := range want {
+			r, ok := page[name]
+			switch {
+			case !ok:
+				delete(want, name)
+				delete(reports, name)
+			case reports[name] == nil:
+				reports[name] = r
+			default:
+				reports[name].Accounts = append(reports[name].Accounts, r.Accounts...)
+			}
+		}
+		if total <= offset+jszPageSize {
+			break
+		}
+	}
+	return reports, nil
+}
+
+// jszPage requests one page of accounts from the servers in want and
+// returns each answer keyed by server name, and the largest account total
+// any of them reported.
+func (o *SystemClient) jszPage(ctx context.Context, want map[string]bool, offset int) (map[string]*wireJSInfo, int, error) {
+	page := make(map[string]*wireJSInfo, len(want))
 	req := wireJszRequest{wireFilter: o.filter(), Accounts: true, Streams: true, Consumer: true, Config: true, Offset: offset, Limit: jszPageSize}
 	total := 0
 	err := o.gather(ctx, subjPingJsz, req, func(data []byte) (bool, error) {
@@ -220,19 +243,14 @@ func (o *SystemClient) jszPage(ctx context.Context, roster []Server, offset int,
 		if r.Error != nil {
 			return false, fmt.Errorf("%w: JSZ from %s: %d %s", ErrServer, r.Server.Name, r.Error.Code, r.Error.Description)
 		}
-		if r.Data == nil {
+		if r.Data == nil || !want[r.Server.Name] || page[r.Server.Name] != nil {
 			return false, nil
 		}
 		total = max(total, r.Data.Total)
-		if prev := reports[r.Server.Name]; prev != nil {
-			prev.Accounts = append(prev.Accounts, r.Data.Accounts...)
-		} else {
-			reports[r.Server.Name] = r.Data
-		}
-		delete(want, r.Server.Name)
-		return len(want) == 0, nil
+		page[r.Server.Name] = r.Data
+		return len(page) == len(want), nil
 	})
-	return total, err
+	return page, total, err
 }
 
 // gather publishes req to subject and hands each reply to handle until

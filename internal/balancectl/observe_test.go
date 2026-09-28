@@ -30,6 +30,7 @@ func TestObservation(t *testing.T) {
 		{"offline", sysobs.Snapshot{Servers: servers, Groups: []sysobs.Group{meta, stream(sysobs.Member{Server: "s2", Offline: true})}}, "s2 is offline for A/S"},
 		{"silent", sysobs.Snapshot{Servers: servers, Silent: []string{"s2"}, Groups: []sysobs.Group{meta, stream(sysobs.Member{Server: "s2", Current: true})}}, "s2 did not answer"},
 		{"meta leaderless", sysobs.Snapshot{Servers: servers, Groups: []sysobs.Group{{Kind: sysobs.KindMeta}, stream(sysobs.Member{Server: "s2", Current: true})}}, "the meta group has no leader"},
+		{"no meta group", sysobs.Snapshot{Servers: servers, Groups: []sysobs.Group{stream(sysobs.Member{Server: "s2", Current: true})}}, "the meta group has no leader"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

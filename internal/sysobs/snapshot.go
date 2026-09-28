@@ -94,13 +94,24 @@ type Group struct {
 type Snapshot struct {
 	Servers []Server
 
-	// Silent lists the roster's servers that did not answer the JSZ
-	// request; their groups may be missing from Groups.
+	// Silent lists the roster's servers that did not answer every page of
+	// the JSZ request; their groups may be missing from Groups.
 	Silent []string
 
 	// Groups has the meta group first, when any server reports one, then
 	// stream and consumer groups ordered by account, stream and consumer.
 	Groups []Group
+}
+
+// MetaLeader is the meta group's leader, "" when s has no meta group or
+// its meta group has no leader.
+func (s *Snapshot) MetaLeader() string {
+	for _, g := range s.Groups {
+		if g.Kind == KindMeta {
+			return g.Leader
+		}
+	}
+	return ""
 }
 
 // Reason says why a group is not settled.
