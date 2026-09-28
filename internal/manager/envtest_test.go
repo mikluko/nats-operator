@@ -13,35 +13,37 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	authnv1 "k8s.io/api/authentication/v1"
+	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-// startEnvtest starts an API server for the test.
-func startEnvtest(t *testing.T) *rest.Config {
+// startEnvtest starts an API server for the test, its admin's config in
+// the returned Config.
+func startEnvtest(t *testing.T) *envtest.Environment {
 	t.Helper()
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")
 	}
 	env := &envtest.Environment{}
-	cfg, err := env.Start()
+	_, err := env.Start()
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, env.Stop()) })
-	return cfg
+	return env
 }
 
 // TestEnvtestStart pins that start runs what Setup adds and returns nil once
 // its context ends.
 func TestEnvtestStart(t *testing.T) {
-	cfg := startEnvtest(t)
+	cfg := startEnvtest(t).Config
 	ran := make(chan struct{})
 	c := Controller{
 		Name:  "test-controller",
@@ -72,7 +74,7 @@ func TestEnvtestStart(t *testing.T) {
 // owned kind and Secrets without data or annotations, kept current, while the
 // manager's client reads a Secret whole.
 func TestEnvtestCache(t *testing.T) {
-	cfg := startEnvtest(t)
+	cfg := startEnvtest(t).Config
 	scheme, err := NewScheme()
 	require.NoError(t, err)
 	owned := Owned{Label: "test.nats.mikluko.io/owner", Kinds: []client.Object{&corev1.ConfigMap{}}}
@@ -129,7 +131,7 @@ func TestEnvtestCache(t *testing.T) {
 // only to a token allowed to get /metrics; a malformed token is answered
 // 500, not 401.
 func TestEnvtestMetrics(t *testing.T) {
-	cfg := startEnvtest(t)
+	cfg := startEnvtest(t).Config
 	scheme, err := NewScheme()
 	require.NoError(t, err)
 	l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -195,4 +197,77 @@ func TestEnvtestMetrics(t *testing.T) {
 	require.NoError(t, c.Create(t.Context(), role))
 	require.NoError(t, c.Create(t.Context(), binding))
 	requireStatus(t, token, http.StatusOK)
+}
+
+// TestEnvtestReadyUnelected pins that a replica another holds the lease
+// against is ready only once it can list and watch what its controllers
+// watch.
+func TestEnvtestReadyUnelected(t *testing.T) {
+	env := startEnvtest(t)
+	cfg := env.Config
+	scheme, err := NewScheme()
+	require.NoError(t, err)
+	admin, err := client.New(cfg, client.Options{Scheme: scheme})
+	require.NoError(t, err)
+
+	const ns, id = "default", "test.nats.mikluko.io"
+	now := metav1.NewMicroTime(time.Now())
+	require.NoError(t, admin.Create(t.Context(), &coordinationv1.Lease{
+		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: id},
+		Spec: coordinationv1.LeaseSpec{
+			HolderIdentity:       new("another-replica"),
+			LeaseDurationSeconds: new(int32(3600)),
+			AcquireTime:          &now,
+			RenewTime:            &now,
+		},
+	}))
+	replica, err := env.AddUser(envtest.User{Name: "replica"}, cfg)
+	require.NoError(t, err)
+	grant := func(name string, rule rbacv1.PolicyRule) {
+		role := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: name}, Rules: []rbacv1.PolicyRule{rule}}
+		binding := &rbacv1.ClusterRoleBinding{
+			ObjectMeta: metav1.ObjectMeta{Name: name},
+			RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: name},
+			Subjects:   []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: rbacv1.UserKind, Name: "replica"}},
+		}
+		require.NoError(t, admin.Create(t.Context(), role))
+		require.NoError(t, admin.Create(t.Context(), binding))
+	}
+	grant("leases", rbacv1.PolicyRule{APIGroups: []string{"coordination.k8s.io"}, Resources: []string{"leases"}, Verbs: []string{"get", "list", "watch", "create", "update", "patch"}})
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := l.Addr().String()
+	require.NoError(t, l.Close())
+	opts, err := managerOptions(&Options{MetricsAddr: "0", ProbeAddr: addr, LeaderElection: true, LeaderElectionID: id}, scheme, Owned{})
+	require.NoError(t, err)
+	opts.LeaderElectionNamespace = ns
+	mgr, err := newManager(replica.Config(), opts)
+	require.NoError(t, err)
+	require.NoError(t, ctrl.NewControllerManagedBy(mgr).
+		For(&corev1.ConfigMap{}).
+		Named("unelected").
+		Complete(reconcile.Func(func(context.Context, reconcile.Request) (reconcile.Result, error) {
+			return reconcile.Result{}, nil
+		})))
+	ready := func() bool {
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+"/readyz", nil)
+		require.NoError(t, err)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return false
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	}
+	go func() { _ = mgr.Start(t.Context()) }()
+
+	require.Never(t, ready, 5*time.Second, 20*time.Millisecond, "ready without list and watch on ConfigMaps")
+	grant("configmaps", rbacv1.PolicyRule{APIGroups: []string{""}, Resources: []string{"configmaps"}, Verbs: []string{"list", "watch"}})
+	require.Eventually(t, ready, 60*time.Second, 100*time.Millisecond)
+	select {
+	case <-mgr.Elected():
+		require.FailNow(t, "elected against another replica's lease")
+	default:
+	}
 }

@@ -133,7 +133,7 @@ The flags below are the binaries' own. Of those not named above, the chart sets 
 | Flag | Controller | Default | What it does |
 |---|---|---|---|
 | `--metrics-bind-address` | all | `:8080` | Address controller-runtime's Prometheus metrics are served on over HTTPS, with a self-signed certificate, at `/metrics`. A request needs a bearer token the API server authenticates, of a user allowed `get` on the non-resource URL `/metrics`; a token's identity is cached for a minute, an allow for five and a denial for thirty seconds. `0` disables it. |
-| `--health-probe-bind-address` | all | `:8081` | Address of `/healthz`, which always passes, and `/readyz`, which passes once the controller's cache is synced. |
+| `--health-probe-bind-address` | all | `:8081` | Address of `/healthz`, which always passes, and `/readyz`, which passes once the controller has listed and watched everything it reconciles from, on every replica, elected or not. |
 | `--leader-elect` | all | `false` | Leader election, so that one replica reconciles. |
 | `--leader-election-id` | all | the controller's API group | Name of the leader election lease. |
 | `--system-connection` | auth | unset | `namespace/name` of a `NatsConnection` whose creds are a user of a `NatsOperator`'s system account holding the `auth-controller` preset. Through it, account JWTs are pushed to the servers' resolvers and deleted from them, and a deleted user's connections are kicked. Unset, JWTs are signed and written to status, nothing reaches the servers, a deleted user's connections stay open, and accounts and users read `Distributed` `False`, reason `NoSystemConnection`. |

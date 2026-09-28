@@ -100,12 +100,18 @@ jobs:
           KO_DOCKER_REPO: kind.local
           KIND_CLUSTER_NAME: chart-testing
         run: ko build --base-import-paths --tags ci ./cmd/*-controller
+      - name: Create the namespaces ci/namespaced-values.yaml watches
+        run: |
+          for ns in $(yq '.watchNamespaces[]' charts/nats-operator/ci/namespaced-values.yaml); do
+            kubectl create namespace "$ns"
+          done
       - run: |
           set=
           for c in cluster auth jetstream; do
             set="$set --set=$c.image.repository=kind.local/$c-controller --set=$c.image.tag=ci"
           done
-          ct install --charts charts/nats-operator --helm-extra-set-args "$set"
+          ct install --charts charts/nats-operator --helm-extra-set-args "$set" \
+            --namespace "$(yq '.watchNamespaces[0]' charts/nats-operator/ci/namespaced-values.yaml)"
 
   changelog:
     if: github.event_name == 'pull_request'

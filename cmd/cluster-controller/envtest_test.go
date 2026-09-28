@@ -19,6 +19,7 @@ import (
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	"github.com/mikluko/nats-operator/internal/manager"
+	"github.com/mikluko/nats-operator/internal/manager/managertest"
 	"github.com/mikluko/nats-operator/internal/natscluster"
 )
 
@@ -111,4 +112,12 @@ func TestEnvtestOwnedCache(t *testing.T) {
 	require.Empty(t, got.Status.Conditions, "a NatsCluster outside the watched namespaces")
 	require.NoError(t, c.List(t.Context(), &sets, client.InNamespace(outside.Namespace)))
 	require.Empty(t, sets.Items, "StatefulSets outside the watched namespaces")
+}
+
+// TestEnvtestReadyUnderRoles pins config/rbac/cluster-controller as enough
+// for the cluster controller to become ready in namespace-scoped mode.
+func TestEnvtestReadyUnderRoles(t *testing.T) {
+	scheme, err := manager.NewScheme(schemes...)
+	require.NoError(t, err)
+	managertest.ReadyUnderRoles(t, scheme, owned, setup, "../../config/rbac/cluster-controller", "../../config/crd")
 }

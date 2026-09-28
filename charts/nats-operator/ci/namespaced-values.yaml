@@ -1,0 +1,9 @@
+# ci.yml creates both namespaces and installs every ci values file into the
+# first.
+watchNamespaces: [nats-operator-ci, nats-operator-ci-peer]
+cluster:
+  enabled: true
+auth:
+  enabled: true
+jetstream:
+  enabled: true

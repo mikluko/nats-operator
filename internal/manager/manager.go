@@ -17,6 +17,7 @@ import (
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -136,11 +137,41 @@ func Flags(fs *flag.FlagSet, id string) *Options {
 // New builds a manager for scheme against the API server cfg reaches, with
 // health and readiness probes registered and its cache scoped to owned and
 // to o.WatchNamespaces, for the caller to start. It fails while the API
-// server is unreachable, since scoping the cache reads its discovery.
+// server is unreachable, since scoping the cache reads its discovery. Its
+// controllers start their watches before the replica is elected, and it is
+// ready only once every controller added to it has synced them.
 func New(cfg *rest.Config, o *Options, scheme *runtime.Scheme, owned Owned) (ctrl.Manager, error) {
-	cacheOpts, err := cacheOptions(owned)
+	opts, err := managerOptions(o, scheme, owned)
 	if err != nil {
 		return nil, err
+	}
+	return newManager(cfg, opts)
+}
+
+// newManager is New's manager under opts.
+func newManager(cfg *rest.Config, opts ctrl.Options) (ctrl.Manager, error) {
+	mgr, err := ctrl.NewManager(cfg, opts)
+	if err != nil {
+		return nil, fmt.Errorf("new manager: %w", err)
+	}
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		return nil, fmt.Errorf("add healthz: %w", err)
+	}
+	w := &warming{Manager: mgr}
+	if err := mgr.AddReadyzCheck("warmup", w.warmedUp); err != nil {
+		return nil, fmt.Errorf("add readyz: %w", err)
+	}
+	if err := mgr.AddReadyzCheck("readyz", cacheSynced(mgr.GetCache().WaitForCacheSync)); err != nil {
+		return nil, fmt.Errorf("add readyz: %w", err)
+	}
+	return w, nil
+}
+
+// managerOptions returns New's options.
+func managerOptions(o *Options, scheme *runtime.Scheme, owned Owned) (ctrl.Options, error) {
+	cacheOpts, err := cacheOptions(owned)
+	if err != nil {
+		return ctrl.Options{}, err
 	}
 	if len(o.WatchNamespaces) > 0 {
 		cacheOpts.DefaultNamespaces = map[string]cache.Config{}
@@ -148,25 +179,16 @@ func New(cfg *rest.Config, o *Options, scheme *runtime.Scheme, owned Owned) (ctr
 			cacheOpts.DefaultNamespaces[ns] = cache.Config{}
 		}
 	}
-	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+	return ctrl.Options{
 		Scheme:                 scheme,
 		Cache:                  cacheOpts,
 		Client:                 clientOptions(),
+		Controller:             config.Controller{EnableWarmup: new(true)},
 		Metrics:                metricsOptions(o.MetricsAddr),
 		HealthProbeBindAddress: o.ProbeAddr,
 		LeaderElection:         o.LeaderElection,
 		LeaderElectionID:       o.LeaderElectionID,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("new manager: %w", err)
-	}
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		return nil, fmt.Errorf("add healthz: %w", err)
-	}
-	if err := mgr.AddReadyzCheck("readyz", cacheSynced(mgr.GetCache().WaitForCacheSync)); err != nil {
-		return nil, fmt.Errorf("add readyz: %w", err)
-	}
-	return mgr, nil
+	}, nil
 }
 
 // cacheSynced is a readiness check that passes once wait, a cache's
