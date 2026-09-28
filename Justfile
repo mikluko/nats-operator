@@ -21,9 +21,8 @@ image platform=("linux/" + if arch() == "aarch64" { "arm64" } else { "amd64" }):
     done
     KO_DOCKER_REPO=ghcr.io/mikluko/nats-operator ko build --push=false -B --platform "{{ platform }}" "$@"
 
-# The OperatorReload tests skip under -race and run again without it. The
-# API-server-backed tests skip here whatever the shell exports, as in CI;
-# `just envtest` runs them.
+# OperatorReload skips under -race, so it runs again without; `just envtest`
+# runs the API-server-backed tests.
 test:
     env -u KUBEBUILDER_ASSETS go test -race ./...
     env -u KUBEBUILDER_ASSETS go test -run OperatorReload ./internal/natscluster
@@ -108,8 +107,8 @@ lychee:
     mkdir -p "{{ bin }}"
     mv "$tmp/lychee-$target/lychee" "{{ bin }}/lychee"
 
-# Builds the site under a base path that is not the root, so a link that
-# drops it is caught, and fails on any broken internal link or fragment.
+# Fails on a broken internal link or fragment, or one that drops a non-root
+# base path.
 site-check: lychee
     #!/usr/bin/env sh
     set -eu
@@ -122,8 +121,7 @@ site-check: lychee
         --remap "^https://site\.test/base/(.*)\$ file://$out/base/\$1" \
         "$out/base"
 
-# Fails when generated files, tracked or not, are stale relative to their
-# sources.
+# Fails when a generated file, tracked or not, is stale.
 verify: generate chart-crds chart-rbac api-docs perm-docs telemetry-docs
     git diff --exit-code -- api config charts docs/content/docs/reference
     test -z "$(git status --porcelain -- api config charts docs/content/docs/reference)"

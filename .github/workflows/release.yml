@@ -1,10 +1,8 @@
 name: release
 
-# The changelog decides the version: a push to main that passes ci, whose
-# newest CHANGELOG.md entry names a version no tag carries, publishes it at
-# the commit ci tested, and nothing else does: a manual run builds and
-# packages without pushing, tagging or releasing. One workflow, because a tag
-# pushed with GITHUB_TOKEN triggers no other.
+# A push to main that passes ci publishes the newest CHANGELOG.md version no
+# tag carries, at the commit ci tested; a manual run only builds. One
+# workflow, because a tag pushed with GITHUB_TOKEN triggers no other.
 on: # zizmor: ignore[dangerous-triggers] plan runs only after a push to main in this repository
   workflow_run:
     workflows: [ci]
@@ -21,8 +19,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io/mikluko/nats-operator
-  # A workflow_run event runs at main's tip, which may be past the commit ci
-  # passed.
+  # A workflow_run event runs at main's tip, possibly past the commit ci passed.
   SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
   CHART_REPOSITORY: oci://ghcr.io/mikluko/nats-operator/charts
 
@@ -63,6 +60,7 @@ jobs:
       id-token: write
     outputs:
       subjects: ${{ steps.sign.outputs.subjects }}
+      digests: ${{ steps.digests.outputs.digests }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -98,7 +96,18 @@ jobs:
             --image-label "org.opencontainers.image.source=$SOURCE" \
             --image-label "org.opencontainers.image.revision=$SHA" \
             --image-label "org.opencontainers.image.version=$VERSION" \
-            "$@"
+            "$@" >"$RUNNER_TEMP/images"
+      - id: digests
+        name: Digests
+        run: |
+          digests='[]'
+          while read -r ref; do
+            name=${ref%@*}
+            digest=${ref#*@}
+            digests=$(jq -c --arg name "${name%:*}" --arg digest "$digest" \
+              '. + [{name: $name, digest: $digest}]' <<<"$digests")
+          done <"$RUNNER_TEMP/images"
+          echo "digests=$digests" >>"$GITHUB_OUTPUT"
       - id: sign
         name: Sign
         if: needs.plan.outputs.publish == 'true'
@@ -154,6 +163,17 @@ jobs:
         with:
           version: v4.3.0
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Pin digests
+        env:
+          DIGESTS: ${{ needs.images.outputs.digests }}
+        run: |
+          for c in cmd/*-controller; do
+            c=${c#cmd/}
+            digest=$(jq -er --arg name "$REGISTRY/$c" '.[] | select(.name == $name) | .digest' <<<"$DIGESTS")
+            export key=${c%-controller} digest
+            yq -e '.[strenv(key)].image | has("digest")' charts/nats-operator/values.yaml >/dev/null
+            yq -i '.[strenv(key)].image.digest = strenv(digest)' charts/nats-operator/values.yaml
+          done
       - name: Package
         env:
           VERSION: ${{ needs.plan.outputs.version }}

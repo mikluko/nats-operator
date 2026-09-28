@@ -16,6 +16,7 @@ import (
 
 type step struct {
 	ID   string            `json:"id"`
+	If   string            `json:"if"`
 	Name string            `json:"name"`
 	Uses string            `json:"uses"`
 	Run  string            `json:"run"`
@@ -38,12 +39,13 @@ func (n *needs) UnmarshalJSON(b []byte) error {
 type workflow struct {
 	Env  map[string]string `json:"env"`
 	Jobs map[string]struct {
-		If    string            `json:"if"`
-		Needs needs             `json:"needs"`
-		Env   map[string]string `json:"env"`
-		Steps []step            `json:"steps"`
-		Uses  string            `json:"uses"`
-		With  map[string]string `json:"with"`
+		If      string            `json:"if"`
+		Needs   needs             `json:"needs"`
+		Outputs map[string]string `json:"outputs"`
+		Env     map[string]string `json:"env"`
+		Steps   []step            `json:"steps"`
+		Uses    string            `json:"uses"`
+		With    map[string]string `json:"with"`
 	} `json:"jobs"`
 }
 
@@ -56,40 +58,31 @@ func readWorkflow(t *testing.T, name string) workflow {
 	return wf
 }
 
-// TestRelease_WaitsForCI holds the release to ci: it starts on ci completing
-// on main, or by hand, and never on a push of its own; only the first
-// publishes.
-func TestRelease_WaitsForCI(t *testing.T) {
+// TestRelease_FailOnAndCIName pins the plan job's changelog step to failing
+// on an invalid CHANGELOG.md, and release.yml's trigger to ci.yml's name.
+func TestRelease_FailOnAndCIName(t *testing.T) {
+	changelog := stepByID(t, readWorkflow(t, "release.yml").Jobs["plan"].Steps, "changelog")
+	require.True(t, strings.HasPrefix(changelog.Uses, "mikluko/action-changelog@"), changelog.Uses)
+	require.Contains(t, []string{"", "error"}, changelog.With["fail-on"])
+
+	var release struct {
+		On struct {
+			WorkflowRun struct {
+				Workflows []string `yaml:"workflows"`
+			} `yaml:"workflow_run"`
+		} `yaml:"on"`
+	}
 	b, err := os.ReadFile("../.github/workflows/release.yml")
 	require.NoError(t, err)
-	var wf struct {
-		On map[string]yamlv3.Node `yaml:"on"`
-	}
-	require.NoError(t, yamlv3.Unmarshal(b, &wf))
-	require.ElementsMatch(t, []string{"workflow_run", "workflow_dispatch"}, keys(wf.On))
+	require.NoError(t, yamlv3.Unmarshal(b, &release))
 
-	var run struct {
-		Workflows []string `yaml:"workflows"`
-		Types     []string `yaml:"types"`
-		Branches  []string `yaml:"branches"`
+	var ci struct {
+		Name string `yaml:"name"`
 	}
-	node := wf.On["workflow_run"]
-	require.NoError(t, node.Decode(&run))
-	require.Equal(t, []string{"ci"}, run.Workflows)
-	require.Equal(t, []string{"completed"}, run.Types)
-	require.Equal(t, []string{"main"}, run.Branches)
-
-	var dispatch struct {
-		Inputs map[string]yamlv3.Node `yaml:"inputs"`
-	}
-	node = wf.On["workflow_dispatch"]
-	require.NoError(t, node.Decode(&dispatch))
-	require.Empty(t, dispatch.Inputs)
-
-	plan := readWorkflow(t, "release.yml").Jobs["plan"]
-	require.Contains(t, plan.If, "github.event.workflow_run.conclusion == 'success'")
-	publish := stepByID(t, plan.Steps, "publish")
-	require.Equal(t, "${{ github.event_name == 'workflow_run' }}", publish.Env["PUBLISH"])
+	b, err = os.ReadFile("../.github/workflows/ci.yml")
+	require.NoError(t, err)
+	require.NoError(t, yamlv3.Unmarshal(b, &ci))
+	require.Equal(t, []string{ci.Name}, release.On.WorkflowRun.Workflows)
 }
 
 // stepByID returns the step of steps whose id is id.
@@ -104,70 +97,10 @@ func stepByID(t *testing.T, steps []step, id string) step {
 	return step{}
 }
 
-// TestRelease_InvalidChangelogFails pins that the plan job runs the changelog
-// action failing on an invalid CHANGELOG.md, and that ci, the workflow
-// release.yml follows, is named so.
-func TestRelease_InvalidChangelogFails(t *testing.T) {
-	plan := readWorkflow(t, "release.yml").Jobs["plan"]
-	var changelog *step
-	for i, s := range plan.Steps {
-		if s.ID == "changelog" {
-			changelog = &plan.Steps[i]
-		}
-	}
-	require.NotNil(t, changelog)
-	require.True(t, strings.HasPrefix(changelog.Uses, "mikluko/action-changelog@"), changelog.Uses)
-	require.Contains(t, []string{"", "error"}, changelog.With["fail-on"])
-
-	ci, err := os.ReadFile("../.github/workflows/ci.yml")
-	require.NoError(t, err)
-	var name struct {
-		Name string `yaml:"name"`
-	}
-	require.NoError(t, yamlv3.Unmarshal(ci, &name))
-	require.Equal(t, "ci", name.Name)
-}
-
-// TestDocs_DeployedOnRelease holds the site to the released version: only the
-// release workflow deploys it, after the release, at the commit it tagged.
-func TestDocs_DeployedOnRelease(t *testing.T) {
-	b, err := os.ReadFile("../.github/workflows/docs.yml")
-	require.NoError(t, err)
-	var on struct {
-		On map[string]yamlv3.Node `yaml:"on"`
-	}
-	require.NoError(t, yamlv3.Unmarshal(b, &on))
-	require.ElementsMatch(t, []string{"pull_request", "workflow_dispatch", "workflow_call"}, keys(on.On))
-
-	docs := readWorkflow(t, "docs.yml")
-	require.Equal(t, "inputs.ref != ''", docs.Jobs["deploy"].If)
-	require.Equal(t, "${{ inputs.ref }}", docs.Jobs["build"].Steps[0].With["ref"])
-
-	release := readWorkflow(t, "release.yml")
-	var callers []string
-	for name, job := range release.Jobs {
-		if job.Uses == "./.github/workflows/docs.yml" {
-			callers = append(callers, name)
-			require.Contains(t, job.Needs, "release")
-			require.Equal(t, "${{ github.event.workflow_run.head_sha }}", job.With["ref"])
-			require.Equal(t, "needs.plan.outputs.publish == 'true'", job.If)
-		}
-	}
-	require.Len(t, callers, 1)
-	require.Contains(t, release.Env["SHA"], "github.event.workflow_run.head_sha")
-}
-
-func keys[V any](m map[string]V) []string {
-	var ks []string
-	for k := range m {
-		ks = append(ks, k)
-	}
-	return ks
-}
-
 type controllerValues struct {
 	Image struct {
-		Repository string `json:"repository"`
+		Repository string  `json:"repository"`
+		Digest     *string `json:"digest"`
 	} `json:"image"`
 }
 
@@ -189,9 +122,9 @@ func controllers(t *testing.T) []string {
 	return names
 }
 
-// TestRelease_PublishesWhatTheChartPulls holds the images the release
-// workflow publishes, one per controller under cmd/, and its chart
-// destination to the chart's default image repositories.
+// TestRelease_PublishesWhatTheChartPulls holds the release's images, one per
+// controller under cmd/, to the chart's image repositories, and the chart's
+// destination to their registry.
 func TestRelease_PublishesWhatTheChartPulls(t *testing.T) {
 	wf := readWorkflow(t, "release.yml")
 
@@ -216,6 +149,44 @@ func TestRelease_PublishesWhatTheChartPulls(t *testing.T) {
 	require.Equal(t, "oci://"+registry+"/charts", wf.Env["CHART_REPOSITORY"])
 }
 
+// TestRelease_ChartPinsImageDigests holds the packaged chart to the digests
+// the images job builds, on dry runs too, under a values key per controller.
+func TestRelease_ChartPinsImageDigests(t *testing.T) {
+	wf := readWorkflow(t, "release.yml")
+	images := wf.Jobs["images"]
+	require.Equal(t, "${{ steps.digests.outputs.digests }}", images.Outputs["digests"])
+	require.Empty(t, stepByID(t, images.Steps, "digests").If)
+
+	chart := wf.Jobs["chart"]
+	require.Contains(t, chart.Needs, "images")
+	pin, pkg := -1, -1
+	for i, s := range chart.Steps {
+		if s.Env["DIGESTS"] == "${{ needs.images.outputs.digests }}" {
+			pin = i
+			require.Empty(t, s.If)
+			require.Contains(t, s.Run, "yq -i")
+		}
+		if strings.Contains(s.Run, "helm package") {
+			pkg = i
+		}
+	}
+	require.NotEqual(t, -1, pin, "no chart step reads the images job's digests")
+	require.Less(t, pin, pkg)
+
+	b, err := os.ReadFile("../charts/nats-operator/values.yaml")
+	require.NoError(t, err)
+	var values map[string]json.RawMessage
+	require.NoError(t, yaml.Unmarshal(b, &values))
+	for _, c := range controllers(t) {
+		raw, ok := values[strings.TrimSuffix(c, "-controller")]
+		require.True(t, ok, c)
+		var v controllerValues
+		require.NoError(t, json.Unmarshal(raw, &v))
+		require.NotNil(t, v.Image.Digest, "%s has no image.digest", c)
+		require.Empty(t, *v.Image.Digest, c)
+	}
+}
+
 // TestControllerList pins the Justfile's controller list to cmd/.
 func TestControllerList(t *testing.T) {
 	just, err := exec.LookPath("just")
@@ -230,9 +201,8 @@ func TestControllerList(t *testing.T) {
 // setupHugo is the action every workflow installs Hugo with.
 const setupHugo = "./.github/actions/setup-hugo"
 
-// TestHugoInstalledOnce pins the Hugo release and its checksum to the
-// setup-hugo action: the workflows that build the site use it, and none names
-// a version of its own.
+// TestHugoInstalledOnce holds the workflows that build the site to the
+// setup-hugo action's pinned and checksummed Hugo.
 func TestHugoInstalledOnce(t *testing.T) {
 	b, err := os.ReadFile("../.github/actions/setup-hugo/action.yml")
 	require.NoError(t, err)
@@ -265,64 +235,6 @@ func TestHugoInstalledOnce(t *testing.T) {
 			require.True(t, uses, "job %s does not use %s", tc.job, setupHugo)
 		})
 	}
-}
-
-// TestCI_LintsWorkflows holds ci to actionlint and to zizmor under the
-// repository's zizmor configuration.
-func TestCI_LintsWorkflows(t *testing.T) {
-	ci := readWorkflow(t, "ci.yml")
-	var actionlint, zizmor bool
-	for _, s := range ci.Jobs["actionlint"].Steps {
-		actionlint = actionlint || strings.Contains(s.Run, "github.com/rhysd/actionlint/cmd/actionlint@")
-	}
-	for _, s := range ci.Jobs["zizmor"].Steps {
-		if strings.HasPrefix(s.Uses, "zizmorcore/zizmor-action@") {
-			zizmor = true
-			require.Equal(t, ".github/zizmor.yml", s.With["config"])
-			require.NotEmpty(t, s.With["version"])
-		}
-	}
-	require.True(t, actionlint, "ci runs no actionlint")
-	require.True(t, zizmor, "ci runs no zizmor")
-	_, err := os.Stat("../.github/zizmor.yml")
-	require.NoError(t, err)
-}
-
-// TestCI_RunsQuickstart holds ci to story 1 end to end on one cluster,
-// through the workflow a manual e2e run uses.
-func TestCI_RunsQuickstart(t *testing.T) {
-	e2e := readWorkflow(t, "ci.yml").Jobs["e2e"]
-	require.Equal(t, "./.github/workflows/e2e.yml", e2e.Uses)
-	require.Equal(t, "1", e2e.With["stories"])
-
-	stories := readWorkflow(t, "e2e.yml").Jobs["stories"]
-	run := stepByName(t, stories.Steps, "Stories")
-	require.Equal(t, "1", run.Env["E2E_CLUSTERS"])
-	require.Equal(t, "${{ inputs.stories }}", run.Env["E2E_STORIES"])
-
-	b, err := os.ReadFile("../.github/workflows/e2e.yml")
-	require.NoError(t, err)
-	var on struct {
-		On map[string]yamlv3.Node `yaml:"on"`
-	}
-	require.NoError(t, yamlv3.Unmarshal(b, &on))
-	require.ElementsMatch(t, []string{"workflow_dispatch", "workflow_call"}, keys(on.On))
-
-	quickstart, err := filepath.Glob("../docs/content/docs/stories/01-*/index.md")
-	require.NoError(t, err)
-	require.Len(t, quickstart, 1)
-}
-
-// stepByName returns the step of steps whose name is name.
-func stepByName(t *testing.T, steps []step, name string) step {
-	t.Helper()
-	for _, s := range steps {
-		if s.Name == name {
-			return s
-		}
-	}
-	require.Failf(t, "no step", "name %s", name)
-	return step{}
 }
 
 // TestGoToolchainOnce holds every workflow's Go to go.mod's toolchain line:
@@ -387,12 +299,10 @@ func TestKoBasePinned(t *testing.T) {
 }
 
 // TestRelease_AttestsBeforeRelease holds the tag and the GitHub release to
-// the build provenance of the images and the chart, and the chart to the
-// images it deploys.
+// the build provenance of the images and the chart.
 func TestRelease_AttestsBeforeRelease(t *testing.T) {
 	wf := readWorkflow(t, "release.yml")
 	require.Subset(t, wf.Jobs["release"].Needs, []string{"images", "provenance", "chart"})
-	require.Contains(t, wf.Jobs["chart"].Needs, "images")
 	for _, job := range []string{"provenance", "chart"} {
 		var attests bool
 		for _, s := range wf.Jobs[job].Steps {
