@@ -83,7 +83,7 @@ func TestDiff(t *testing.T) {
 		},
 		{
 			name: "absent field equals the zero scalar",
-			want: `{inFlight: 0, ready: false, reason: "", pending: []}`,
+			want: `{inFlight: 0, ready: false, reason: "", pending: [], moved: null, config: {revision: "", peers: [0]}}`,
 			got:  `{}`,
 		},
 		{

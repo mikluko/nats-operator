@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +13,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -85,6 +88,49 @@ spec: {servers: ["nats://demo:4222"]}
 	})
 }
 
+// TestEnvtest_Chained pins that a story with after runs its base story's
+// steps first, in namespaces of both made fresh before either runs, and
+// then its own.
+func TestEnvtest_Chained(t *testing.T) {
+	c := startAPIServer(t)
+	cm := func(ns, name string) string {
+		return "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: " + name + ", namespace: " + ns + "}\ndata: {v: \"1\"}\n"
+	}
+	root := writeStories(t, map[string]map[string]string{
+		"01-base": {
+			"01-cm.yaml":             cm("chain-base", "base"),
+			"01-live-configmap.yaml": "data: {v: \"1\"}\n",
+		},
+		"02-next": {
+			"index.md":                    "---\nparams:\n  e2e:\n    after: 1\n---\n",
+			"01-cm.yaml":                  cm("chain-next", "next"),
+			"01-live-configmap-next.yaml": "data: {v: \"1\"}\n",
+			"02-delete-cm.yaml":           cm("chain-base", "base"),
+		},
+	})
+	bundles, err := LoadBundles(root)
+	require.NoError(t, err)
+
+	var log bytes.Buffer
+	r := &Runner{Clients: []client.Client{c}, Timeout: 20 * time.Second, Interval: 100 * time.Millisecond, Log: &log}
+	res := r.Run(t.Context(), bundles[1])
+	require.Equal(t, Pass, res.Outcome, res.Detail)
+	require.Equal(t, "02-next", res.Story)
+	lines := strings.Split(strings.TrimSpace(log.String()), "\n")
+	require.Equal(t, []string{
+		"02-next: fresh namespace chain-base",
+		"02-next: fresh namespace chain-next",
+		"01-base step 1: apply ConfigMap chain-base/base",
+		"01-base step 1: polling 1 files, timeout 20s",
+	}, lines[:4])
+	require.Contains(t, lines, "02-next step 1: apply ConfigMap chain-next/next")
+	require.Equal(t, "02-next step 2: delete ConfigMap chain-base/base", lines[len(lines)-1])
+
+	err = c.Get(t.Context(), client.ObjectKey{Namespace: "chain-base", Name: "base"}, &corev1.ConfigMap{})
+	require.True(t, apierrors.IsNotFound(err), "step 2 of 02-next deleted 01-base's object: %v", err)
+	require.NoError(t, c.Get(t.Context(), client.ObjectKey{Namespace: "chain-next", Name: "next"}, &corev1.ConfigMap{}))
+}
+
 // TestEnvtest_CrashLoopFailsFast pins that a story whose pod crash-loops
 // fails its step within seconds, naming the pod, rather than at the step's
 // wait, which its front matter sets.
@@ -120,22 +166,16 @@ spec: {servers: ["nats://demo:4222"]}
 
 // crashLoopWhenPresent plays the kubelet for pod ns/name, whose container
 // crash-loops.
-func crashLoopWhenPresent(ctx context.Context, c client.Client, ns, name string) {
-	for ctx.Err() == nil {
-		var p corev1.Pod
-		if c.Get(ctx, client.ObjectKey{Namespace: ns, Name: name}, &p) == nil {
-			p.Status.ContainerStatuses = []corev1.ContainerStatus{{
-				Name: "nats", Image: "nats:2.15.0", RestartCount: 3,
-				State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{
-					Reason: "CrashLoopBackOff", Message: "back-off 10s restarting failed container",
-				}},
-			}}
-			if c.Status().Update(ctx, &p) == nil {
-				return
-			}
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
+func crashLoopWhenPresent(ctx context.Context, c client.WithWatch, ns, name string) {
+	whenPresent(ctx, c, corev1.SchemeGroupVersion.WithKind("Pod"), ns, name, func(u *unstructured.Unstructured) error {
+		u.Object["status"] = map[string]any{"containerStatuses": []any{map[string]any{
+			"name": "nats", "image": "nats:2.15.0", "imageID": "", "restartCount": int64(3), "ready": false,
+			"state": map[string]any{"waiting": map[string]any{
+				"reason": "CrashLoopBackOff", "message": "back-off 10s restarting failed container",
+			}},
+		}}}
+		return c.Status().Update(ctx, u)
+	})
 }
 
 // TestEnvtest_ReleaseGuards pins that a namespace's NatsClusters are
@@ -261,7 +301,7 @@ spec: {servers: ["nats://west:4222"]}
 
 // startAPIServer starts an API server with the CRDs installed, stopped when
 // t ends, and skips t when KUBEBUILDER_ASSETS is unset.
-func startAPIServer(t *testing.T) client.Client {
+func startAPIServer(t *testing.T) client.WithWatch {
 	t.Helper()
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")
@@ -273,29 +313,45 @@ func startAPIServer(t *testing.T) client.Client {
 	cfg, err := env.Start()
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, env.Stop()) })
-	c, err := client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	c, err := client.NewWithWatch(cfg, client.Options{Scheme: scheme.Scheme})
 	require.NoError(t, err)
 	return c
 }
 
 // setReadyWhenPresent plays the controller for NatsConnection ns/name.
-func setReadyWhenPresent(ctx context.Context, c client.Client, ns, name string) {
+func setReadyWhenPresent(ctx context.Context, c client.WithWatch, ns, name string) {
+	gvk := schema.GroupVersionKind{Group: "nats.mikluko.io", Version: "v1beta1", Kind: "NatsConnection"}
+	whenPresent(ctx, c, gvk, ns, name, func(u *unstructured.Unstructured) error {
+		u.Object["status"] = map[string]any{
+			"observedGeneration": u.GetGeneration(),
+			"conditions": []any{map[string]any{
+				"type": "Ready", "status": "True", "reason": "Connected", "message": "",
+				"lastTransitionTime": "2026-09-26T00:00:00Z",
+			}},
+		}
+		return c.Status().Update(ctx, u)
+	})
+}
+
+// whenPresent watches for object ns/name of kind gvk and calls update with
+// it as it is added or changed, until update succeeds or ctx ends.
+func whenPresent(ctx context.Context, c client.WithWatch, gvk schema.GroupVersionKind, ns, name string, update func(*unstructured.Unstructured) error) {
+	list := &unstructured.UnstructuredList{}
+	list.SetGroupVersionKind(gvk.GroupVersion().WithKind(gvk.Kind + "List"))
 	for ctx.Err() == nil {
-		u := &unstructured.Unstructured{}
-		u.SetAPIVersion("nats.mikluko.io/v1beta1")
-		u.SetKind("NatsConnection")
-		if c.Get(ctx, client.ObjectKey{Namespace: ns, Name: name}, u) == nil {
-			u.Object["status"] = map[string]any{
-				"observedGeneration": u.GetGeneration(),
-				"conditions": []any{map[string]any{
-					"type": "Ready", "status": "True", "reason": "Connected", "message": "",
-					"lastTransitionTime": "2026-09-26T00:00:00Z",
-				}},
+		w, err := c.Watch(ctx, list, client.InNamespace(ns), client.MatchingFields{"metadata.name": name})
+		if err != nil {
+			return
+		}
+		for ev := range w.ResultChan() {
+			u, ok := ev.Object.(*unstructured.Unstructured)
+			if !ok || (ev.Type != watch.Added && ev.Type != watch.Modified) {
+				continue
 			}
-			if c.Status().Update(ctx, u) == nil {
+			if update(u) == nil {
+				w.Stop()
 				return
 			}
 		}
-		time.Sleep(50 * time.Millisecond)
 	}
 }

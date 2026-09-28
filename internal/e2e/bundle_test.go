@@ -244,8 +244,7 @@ func TestLoadBundles_SuperclusterParts(t *testing.T) {
 	}
 	var got []placed
 	for _, p := range super.Parts() {
-		require.Len(t, p.Clusters, 1)
-		pl := placed{cluster: p.Clusters[0].Name, targets: map[string]string{}}
+		pl := placed{cluster: p.Cluster, targets: map[string]string{}}
 		for _, o := range p.Objects(1) {
 			pl.objects = append(pl.objects, o.GetKind()+" "+o.GetName())
 		}
@@ -280,9 +279,7 @@ func TestLoadBundles_UnplacedIsOnePart(t *testing.T) {
 	bundles, err := LoadBundles(storiesDir)
 	require.NoError(t, err)
 	parts := bundles[0].Parts()
-	require.Len(t, parts, 1)
-	require.Same(t, bundles[0], parts[0])
-	require.Empty(t, parts[0].Clusters)
+	require.Equal(t, []Part{{Steps: bundles[0].Steps}}, parts)
 }
 
 func TestLoadBundles_PlacementErrors(t *testing.T) {

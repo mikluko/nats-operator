@@ -38,7 +38,7 @@ func runStories(ctx context.Context, root string, clients []client.Client, only 
 	}
 	r := &e2e.Runner{
 		Clients: clients, Timeout: wait, Teardown: teardown, Interval: 2 * time.Second, Report: report,
-		Namespaces: []string{releaseNS}, Log: os.Stderr,
+		Namespaces: []string{releaseNS}, Log: os.Stderr, Publish: e2e.PublishHosts,
 	}
 	var results []e2e.Result
 	failed := false

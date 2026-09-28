@@ -23,7 +23,7 @@ API groups, all `v1beta1`, every kind namespaced:
 - `NN-status-<kind>[-<qualifier>].yaml` is the `status` stanza `kubectl get -o yaml` would show for the object it names: the story's only object of that kind, or else the one the qualifier names.
 - `NN-live-<kind>[-<qualifier>].yaml` is the whole object as `kubectl get -o yaml` shows it.
 
-A live object matches when it holds every field the file states. Conditions are matched by type, and only their status is compared. A value tagged `!any` is an example: it differs from run to run, and any value there matches.
+A live object matches when it holds every field the file states. A field the file states as `0`, `false`, `""` or `null` matches an object that lacks it, as the API server leaves such fields out, and so does a map or list holding nothing else. Conditions are matched by type, and only their status is compared. A value tagged `!any` is an example: it differs from run to run, and any value there matches.
 
 A step waits 90 seconds for its expectations, `E2E_WAIT` to change that for the run, and logs the fields still unmatched every 15 seconds; a story therefore fails within the sum of its steps' waits. A step fails at once, naming the cause, when:
 

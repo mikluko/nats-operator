@@ -349,10 +349,20 @@ func checkSubstitutions(dir string, files []string, subs []Substitution) error {
 	return nil
 }
 
-// add files f under its step, keeping the steps ordered.
+// add files f under its step.
 func (b *Bundle) add(f bundleFile) {
 	b.files = append(b.files, f)
-	step := b.step(f.name.Step)
+	b.Steps = addFile(b.Steps, f)
+}
+
+// addFile returns steps with f filed under its step, ordered by step number.
+func addFile(steps []Step, f bundleFile) []Step {
+	i := slices.IndexFunc(steps, func(s Step) bool { return s.Number == f.name.Step })
+	if i < 0 {
+		steps = append(steps, Step{Number: f.name.Step})
+		i = len(steps) - 1
+	}
+	step := &steps[i]
 	switch f.name.Role {
 	case RoleStatus, RoleLive:
 		step.Expectations = append(step.Expectations, f.exp)
@@ -361,7 +371,8 @@ func (b *Bundle) add(f bundleFile) {
 	default:
 		step.Apply = append(step.Apply, f.objs...)
 	}
-	slices.SortFunc(b.Steps, func(x, y Step) int { return x.Number - y.Number })
+	slices.SortFunc(steps, func(x, y Step) int { return x.Number - y.Number })
+	return steps
 }
 
 // checkPlacement fails when a placement names a file the bundle lacks, or
@@ -387,20 +398,28 @@ func checkPlacement(dir string, files []string, clusters []Placement) error {
 	return nil
 }
 
-// Parts returns one bundle per Kubernetes cluster b is placed in, in the
-// order of Clusters, each holding the steps of its placement's files; a
-// bundle with no placement is its own only part. A part's Clusters holds its
-// own placement alone, and a part starts from no other bundle.
-func (b *Bundle) Parts() []*Bundle {
+// Part is what one bundle places in one Kubernetes cluster.
+type Part struct {
+	// Cluster is the story's name for the Kubernetes cluster, or "" for a
+	// bundle that places no files.
+	Cluster string
+	// Steps hold the files placed there, ordered by step number.
+	Steps []Step
+}
+
+// Parts returns one part per Kubernetes cluster b is placed in, in the
+// order of Clusters; a bundle with no placement has one part, holding all
+// its steps.
+func (b *Bundle) Parts() []Part {
 	if len(b.Clusters) == 0 {
-		return []*Bundle{b}
+		return []Part{{Steps: b.Steps}}
 	}
-	parts := make([]*Bundle, 0, len(b.Clusters))
+	parts := make([]Part, 0, len(b.Clusters))
 	for _, p := range b.Clusters {
-		part := &Bundle{Name: b.Name, Number: b.Number, Skip: b.Skip, Clusters: []Placement{p}}
+		part := Part{Cluster: p.Name}
 		for _, f := range b.files {
 			if slices.Contains(p.Files, f.base) {
-				part.add(f)
+				part.Steps = addFile(part.Steps, f)
 			}
 		}
 		parts = append(parts, part)
@@ -408,14 +427,15 @@ func (b *Bundle) Parts() []*Bundle {
 	return parts
 }
 
-func (b *Bundle) step(n int) *Step {
-	for i := range b.Steps {
-		if b.Steps[i].Number == n {
-			return &b.Steps[i]
-		}
-	}
-	b.Steps = append(b.Steps, Step{Number: n})
-	return &b.Steps[len(b.Steps)-1]
+// Objects returns every object p's steps up to and including step apply or
+// delete, once each, as last declared.
+func (p Part) Objects(step int) []*unstructured.Unstructured {
+	return objects(p.Steps, step)
+}
+
+// Target is Bundle.Target over p's steps alone.
+func (p Part) Target(step int, e Expectation) (*unstructured.Unstructured, error) {
+	return target(p.Steps, step, e)
 }
 
 // readFrontMatter sets b's After, Skip, Clusters, Substitutions and Waits
@@ -535,8 +555,12 @@ func loadExpectation(path string, name FileName) (Expectation, error) {
 // Objects returns every object b's steps up to and including step apply or
 // delete, once each, as last declared.
 func (b *Bundle) Objects(step int) []*unstructured.Unstructured {
+	return objects(b.Steps, step)
+}
+
+func objects(steps []Step, step int) []*unstructured.Unstructured {
 	var objs []*unstructured.Unstructured
-	for _, s := range b.Steps {
+	for _, s := range steps {
 		if s.Number > step {
 			break
 		}
@@ -562,8 +586,12 @@ func upsert(objs []*unstructured.Unstructured, obj *unstructured.Unstructured) [
 // one of that kind named e's qualifier. It fails when neither rule picks
 // exactly one object.
 func (b *Bundle) Target(step int, e Expectation) (*unstructured.Unstructured, error) {
+	return target(b.Steps, step, e)
+}
+
+func target(steps []Step, step int, e Expectation) (*unstructured.Unstructured, error) {
 	var ofKind []*unstructured.Unstructured
-	for _, o := range b.Objects(step) {
+	for _, o := range objects(steps, step) {
 		if strings.ToLower(o.GetKind()) == e.Kind {
 			ofKind = append(ofKind, o)
 		}
@@ -597,11 +625,18 @@ func (b *Bundle) Chain() []*Bundle {
 func (b *Bundle) Namespaces() []string {
 	var ns []string
 	for _, c := range b.Chain() {
-		for _, s := range c.Steps {
-			for _, o := range s.Apply {
-				if n := o.GetNamespace(); n != "" && !slices.Contains(ns, n) {
-					ns = append(ns, n)
-				}
+		ns = namespaces(ns, c.Steps)
+	}
+	return ns
+}
+
+// namespaces returns ns with the namespaces the objects steps apply are
+// declared in added, sorted.
+func namespaces(ns []string, steps []Step) []string {
+	for _, s := range steps {
+		for _, o := range s.Apply {
+			if n := o.GetNamespace(); n != "" && !slices.Contains(ns, n) {
+				ns = append(ns, n)
 			}
 		}
 	}

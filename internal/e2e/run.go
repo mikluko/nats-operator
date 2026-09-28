@@ -59,6 +59,9 @@ type Runner struct {
 	Namespaces []string
 	// Log receives one line per phase of each story.
 	Log io.Writer
+	// Publish, where set, runs with Clients at the start of every round of
+	// a step's wait; its error fails the round as an API error does.
+	Publish func(ctx context.Context, clients []client.Client) error
 }
 
 const fieldOwner = "nats-operator-e2e"
@@ -102,77 +105,31 @@ func (r *Runner) Run(ctx context.Context, b *Bundle) Result {
 	res := func(o Outcome, detail string) Result {
 		return Result{Story: b.Name, Outcome: o, Elapsed: time.Since(start).Round(time.Second), Detail: detail}
 	}
-	if reason := b.SkipReason(); reason != "" {
-		r.logf("%s: skipped: %s", b.Name, reason)
-		return res(Skip, reason)
+	pl, err := r.plan(b)
+	var skip skipped
+	switch {
+	case errors.As(err, &skip):
+		r.logf("%s: skipped: %s", b.Name, skip)
+		return res(Skip, string(skip))
+	case err != nil:
+		return res(Fail, err.Error())
 	}
-	namespaces := make([][]string, len(r.Clients))
-	wheres := make([]string, len(r.Clients))
-	var stages []stage
-	for _, c := range b.Chain() {
-		parts := c.Parts()
-		if len(parts) > len(r.Clients) {
-			reason := fmt.Sprintf("needs %d Kubernetes clusters, the run has %d", len(parts), len(r.Clients))
-			r.logf("%s: skipped: %s", b.Name, reason)
-			return res(Skip, reason)
-		}
-		var numbers []int
-		for i, p := range parts {
-			if wheres[i] == "" {
-				wheres[i] = where(p)
-			}
-			for _, ns := range p.Namespaces() {
-				if !slices.Contains(namespaces[i], ns) {
-					namespaces[i] = append(namespaces[i], ns)
-				}
-			}
-			for _, s := range p.Steps {
-				if !slices.Contains(numbers, s.Number) {
-					numbers = append(numbers, s.Number)
-				}
-			}
-		}
-		slices.Sort(numbers)
-		for _, n := range numbers {
-			st := stage{at: fmt.Sprintf("%s step %d", c.Name, n), wait: r.Timeout}
-			if w, ok := c.Waits[n]; ok {
-				st.wait = w.Wait
-			}
-			for i, p := range parts {
-				j := slices.IndexFunc(p.Steps, func(s Step) bool { return s.Number == n })
-				if j < 0 {
-					continue
-				}
-				sh := share{client: r.Clients[i], cluster: i, where: where(p), step: p.Steps[j]}
-				for _, e := range sh.step.Expectations {
-					t, err := p.Target(n, e)
-					if err != nil {
-						return res(Fail, fmt.Sprintf("%s: %v", c.Name+sh.where, err))
-					}
-					sh.targets = append(sh.targets, t)
-				}
-				st.shares = append(st.shares, sh)
-			}
-			stages = append(stages, st)
-		}
-	}
-	for i, nss := range namespaces {
+	for i, nss := range pl.namespaces {
 		for _, ns := range nss {
 			if err := releaseGuards(ctx, r.Clients[i], ns); err != nil {
 				return res(Fail, err.Error())
 			}
 		}
 	}
-	for i, nss := range namespaces {
-		slices.Sort(nss)
+	for i, nss := range pl.namespaces {
 		for _, ns := range nss {
-			r.logf("%s: fresh namespace %s%s", b.Name, ns, wheres[i])
+			r.logf("%s: fresh namespace %s%s", b.Name, ns, pl.wheres[i])
 			if err := r.freshNamespace(ctx, r.Clients[i], ns); err != nil {
 				return res(Fail, err.Error())
 			}
 		}
 	}
-	for _, st := range stages {
+	for _, st := range pl.stages {
 		n := 0
 		for _, sh := range st.shares {
 			for _, o := range sh.step.Apply {
@@ -194,7 +151,7 @@ func (r *Runner) Run(ctx context.Context, b *Bundle) Result {
 		}
 		r.logf("%s: polling %d files, timeout %s", st.at, n, st.wait)
 		began := time.Now()
-		o, err := r.poll(ctx, st, namespaces)
+		o, err := r.poll(ctx, st, pl.namespaces)
 		switch {
 		case err != nil:
 			return res(Fail, fmt.Sprintf("%s: %v", st.at, err))
@@ -208,13 +165,82 @@ func (r *Runner) Run(ctx context.Context, b *Bundle) Result {
 	return res(Pass, "")
 }
 
+// skipped is why a bundle is not run.
+type skipped string
+
+func (s skipped) Error() string { return string(s) }
+
+// runPlan is what running one bundle takes.
+type runPlan struct {
+	// stages are the steps of the bundle and of every bundle it starts
+	// from, bundle by bundle and step by step.
+	stages []stage
+	// namespaces and wheres are indexed as Runner.Clients: the namespaces,
+	// sorted, the bundles declare objects in there, and how log lines name
+	// the Kubernetes cluster.
+	namespaces [][]string
+	wheres     []string
+}
+
+// plan returns how b runs on r's Kubernetes clusters, reading none of
+// them. It fails with skipped where Run skips b, and otherwise where an
+// expectation names no object of its cluster.
+func (r *Runner) plan(b *Bundle) (runPlan, error) {
+	if reason := b.SkipReason(); reason != "" {
+		return runPlan{}, skipped(reason)
+	}
+	pl := runPlan{namespaces: make([][]string, len(r.Clients)), wheres: make([]string, len(r.Clients))}
+	for _, c := range b.Chain() {
+		parts := c.Parts()
+		if len(parts) > len(r.Clients) {
+			return runPlan{}, skipped(fmt.Sprintf("needs %d Kubernetes clusters, the run has %d", len(parts), len(r.Clients)))
+		}
+		var numbers []int
+		for i, p := range parts {
+			if pl.wheres[i] == "" {
+				pl.wheres[i] = where(p)
+			}
+			pl.namespaces[i] = namespaces(pl.namespaces[i], p.Steps)
+			for _, s := range p.Steps {
+				if !slices.Contains(numbers, s.Number) {
+					numbers = append(numbers, s.Number)
+				}
+			}
+		}
+		slices.Sort(numbers)
+		for _, n := range numbers {
+			st := stage{at: fmt.Sprintf("%s step %d", c.Name, n), wait: r.Timeout}
+			if w, ok := c.Waits[n]; ok {
+				st.wait = w.Wait
+			}
+			for i, p := range parts {
+				j := slices.IndexFunc(p.Steps, func(s Step) bool { return s.Number == n })
+				if j < 0 {
+					continue
+				}
+				sh := share{client: r.Clients[i], cluster: i, where: where(p), step: p.Steps[j]}
+				for _, e := range sh.step.Expectations {
+					t, err := p.Target(n, e)
+					if err != nil {
+						return runPlan{}, fmt.Errorf("%s%s: %w", c.Name, sh.where, err)
+					}
+					sh.targets = append(sh.targets, t)
+				}
+				st.shares = append(st.shares, sh)
+			}
+			pl.stages = append(pl.stages, st)
+		}
+	}
+	return pl, nil
+}
+
 // where names p's Kubernetes cluster in log lines and diffs, or is "" for a
 // bundle that places no files.
-func where(p *Bundle) string {
-	if len(p.Clusters) != 1 {
+func where(p Part) string {
+	if p.Cluster == "" {
 		return ""
 	}
-	return " in " + p.Clusters[0].Name
+	return " in " + p.Cluster
 }
 
 // outcome is how a step's wait ended: diff is "" once every expectation
@@ -228,8 +254,7 @@ type outcome struct {
 
 // poll waits up to st.wait for every expectation of st to hold. A round
 // failing on an API error is retried until the deadline; a round finding a
-// signal ends the wait. Each round first publishes the external hostnames
-// of every cluster's LoadBalancer Services to all of them. Every Report the
+// signal ends the wait. Each round first calls Publish. Every Report the
 // diff of the last check is logged.
 func (r *Runner) poll(ctx context.Context, st stage, namespaces [][]string) (outcome, error) {
 	ctx, cancel := context.WithTimeout(ctx, st.wait)
@@ -240,7 +265,10 @@ func (r *Runner) poll(ctx context.Context, st stage, namespaces [][]string) (out
 	diff := "  no status read before the deadline\n"
 	var lastErr error
 	for {
-		err := PublishHosts(ctx, r.Clients)
+		var err error
+		if r.Publish != nil {
+			err = r.Publish(ctx, r.Clients)
+		}
 		var d string
 		if err == nil {
 			d, err = r.check(ctx, st.shares)
