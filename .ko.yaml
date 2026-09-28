@@ -1,0 +1,3 @@
+# The controller images' base, pinned by digest; cgr.dev/chainguard/static is
+# ko's own default, held here so a release cannot move it.
+defaultBaseImage: cgr.dev/chainguard/static@sha256:41e17ed83c594a64a9396b6ab96dd26d5ddc290dacf4c177464712ff21ad534f
