@@ -133,7 +133,7 @@ func TestEvacuation_Supercluster(t *testing.T) {
 
 	create := func(j jetstream.JetStream, cfg jetstream.StreamConfig) {
 		t.Helper()
-		require.Eventually(t, func() bool { _, err := j.CreateStream(ctx, cfg); return err == nil }, 30*time.Second, 200*time.Millisecond, "create %s", cfg.Name)
+		createStream(t, ctx, j, cfg)
 	}
 	create(jsA, jetstream.StreamConfig{Name: "PLAIN", Subjects: []string{"plain.>"}, Replicas: 3})
 	_, err := jsA.CreateOrUpdateConsumer(ctx, "PLAIN", jetstream.ConsumerConfig{Durable: "D", AckPolicy: jetstream.AckExplicitPolicy})

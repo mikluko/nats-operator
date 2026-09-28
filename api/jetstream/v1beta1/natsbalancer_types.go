@@ -53,8 +53,9 @@ type NatsBalancerSpec struct {
 	// +kubebuilder:default={}
 	Moves *Moves `json:"moves,omitempty"`
 
-	// Interval is the least time between two moves, 1m when omitted.
+	// Interval is the least time between two moves, positive, 1m when omitted.
 	// +optional
+	// +kubebuilder:validation:XValidation:rule="duration(self) > duration('0s')",message="interval must be a positive duration"
 	Interval *metav1.Duration `json:"interval,omitempty"`
 }
 

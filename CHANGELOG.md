@@ -78,6 +78,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `NatsBalancer` evens leaders, and optionally copies, within pools of one account's streams.
 - `NatsClusterEvacuation` moves every JetStream object off one NATS cluster to servers carrying the target tags.
 - `NatsClusterEvacuation` `status.remaining` counts the streams still to leave the source cluster.
+- A `NatsStream` whose stream matches spec but whose transfer or consumers cannot be read reads `Ready` False, reason `ObserveFailed`, and is retried with backoff.
+- The API server refuses a `NatsBalancer` or `NatsSystemBalancer` `interval` that is not positive.
 - A `NatsAccount` or `NatsUser` whose `publicKey` another account or user under the same `NatsOperator` holds reads `Ready` False, reason `PublicKeyInUse`.
 - Generated seed Secrets are named `<name>-<operator|systemaccount|account>-<identity|signing-1>`; one the object does not own reads `Ready` False, reason `SecretConflict`.
 - A generated identity Secret lost after `status.publicKey` recorded its key reads `Ready` False, reason `SeedLost`, and no new identity is minted.

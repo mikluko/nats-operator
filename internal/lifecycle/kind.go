@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -12,6 +14,7 @@ import (
 
 	jetstreamv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 	"github.com/mikluko/nats-operator/internal/refindex"
@@ -45,7 +48,8 @@ type Kind[P interface {
 	// status.
 	Record func(obj P, info *Info)
 	// Observe, where set, runs after Record and records on obj what else the
-	// server reports; its error fails the reconcile after status is written.
+	// server reports; its error fails the reconcile, with no requeue, after
+	// status is written, and turns a True Ready False with ReasonObserveFailed.
 	Observe func(ctx context.Context, o Object, obj P, info *Info) error
 	// Conns is the NatsConnection references obj makes, nil being
 	// Connection's, and Refs every reference a grant must admit, nil being
@@ -110,10 +114,21 @@ func (k Kind[P]) sync(ctx context.Context, c client.Client, d *natsconn.Dialer, 
 	if info != nil {
 		k.Record(obj, info)
 		if k.Observe != nil {
-			err = errors.Join(err, k.Observe(ctx, o, obj, info))
+			if obsErr := k.Observe(ctx, o, obj, info); obsErr != nil {
+				observeFailed(f.Sync, obj.GetGeneration(), obsErr)
+				return reconcile.Result{}, errors.Join(err, obsErr)
+			}
 		}
 	}
 	return res, err
+}
+
+// observeFailed turns a Ready condition that is True False, naming err.
+func observeFailed(status *jetstreamv1beta1.SyncStatus, generation int64, err error) {
+	if !meta.IsStatusConditionTrue(status.Conditions, ConditionReady) {
+		return
+	}
+	conditions.Set(&status.Conditions, generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: ReasonObserveFailed, Message: err.Error()})
 }
 
 // finalize runs obj's deletion policy and drops its finalizer. A WaitError

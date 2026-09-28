@@ -77,7 +77,7 @@ func TestEvacuationEnvtest(t *testing.T) {
 		{Name: "audit", Subjects: []string{"audit.>"}, Replicas: 3, Placement: &jetstream.Placement{Cluster: "prod-east"}},
 		{Name: "events", Subjects: []string{"events.>"}, Replicas: 1},
 	} {
-		require.Eventually(t, func() bool { _, err := jsA.CreateStream(ctx, cfg); return err == nil }, 30*time.Second, 200*time.Millisecond, "create %s", cfg.Name)
+		createStream(t, ctx, jsA, cfg)
 	}
 	_, err = jsB.CreateKeyValue(ctx, jetstream.KeyValueConfig{Bucket: "sessions", Replicas: 3, Placement: &jetstream.Placement{Cluster: "prod-east"}, Metadata: owned(sessions.UID)})
 	require.NoError(t, err)

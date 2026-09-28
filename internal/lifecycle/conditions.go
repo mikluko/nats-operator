@@ -28,6 +28,9 @@ const (
 	// ReasonSyncFailed is Ready's and Synced's reason after a failure a
 	// retry may cure.
 	ReasonSyncFailed = "SyncFailed"
+	// ReasonObserveFailed is Ready's reason when the server object matches
+	// spec but reading what else the server reports of it failed.
+	ReasonObserveFailed = "ObserveFailed"
 
 	// ReasonMatchesSpec is Synced's reason when the server object matches
 	// spec.

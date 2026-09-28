@@ -220,6 +220,11 @@ func testCreateRules(t *testing.T, c client.Client) {
 		{"consumer with stream and streamRef", manifest("NatsConsumer", "k", "{connectionRef: {name: c}, stream: S, streamRef: {name: s}}"), "set exactly one of stream and streamRef"},
 		{"consumer with neither stream nor streamRef", manifest("NatsConsumer", "k", "{connectionRef: {name: c}}"), "set exactly one of stream and streamRef"},
 		{"consumer by stream name without connection", manifest("NatsConsumer", "k", "{stream: S}"), "connectionRef is required unless streamRef is set"},
+
+		{"balancer with a zero interval", manifest("NatsBalancer", "b", "{connectionRef: {name: c}, interval: 0s}"), "interval must be a positive duration"},
+		{"balancer with a negative interval", manifest("NatsBalancer", "b", "{connectionRef: {name: c}, interval: -1m}"), "interval must be a positive duration"},
+		{"system balancer with a zero interval", manifest("NatsSystemBalancer", "b", "{connectionRef: {name: c}, interval: 0s}"), "interval must be a positive duration"},
+		{"system balancer with a negative interval", manifest("NatsSystemBalancer", "b", "{connectionRef: {name: c}, interval: -1m}"), "interval must be a positive duration"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

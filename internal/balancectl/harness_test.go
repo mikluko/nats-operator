@@ -204,6 +204,58 @@ func accountJS(t *testing.T, srv *server.Server, account jwtplane.Keys) jetstrea
 	return j
 }
 
+// until calls try every interval until it returns nil, failing t with its
+// last error once ctx ends or t's deadline is ten seconds away.
+func until(t *testing.T, ctx context.Context, interval time.Duration, try func() error, format string, args ...any) {
+	t.Helper()
+	if dl, ok := t.Deadline(); ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, dl.Add(-10*time.Second))
+		defer cancel()
+	}
+	for {
+		err := try()
+		if err == nil {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			require.NoError(t, err, append([]any{format}, args...)...)
+		case <-time.After(interval):
+		}
+	}
+}
+
+// createStream creates cfg through j, retrying while the meta group cannot
+// place it, and returns once the stream's Raft group has a leader and every
+// replica is current.
+func createStream(t *testing.T, ctx context.Context, j jetstream.JetStream, cfg jetstream.StreamConfig) {
+	t.Helper()
+	until(t, ctx, 200*time.Millisecond, func() error { _, err := j.CreateStream(ctx, cfg); return err }, "create %s", cfg.Name)
+	until(t, ctx, 200*time.Millisecond, func() error { _, err := settledStream(ctx, j, cfg.Name); return err }, "%s did not settle", cfg.Name)
+}
+
+// settledStream returns the leader of stream name, or an error while its Raft
+// group has no leader or a replica that is offline or not current.
+func settledStream(ctx context.Context, j jetstream.JetStream, name string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	s, err := j.Stream(ctx, name)
+	if err != nil {
+		return "", err
+	}
+	c := s.CachedInfo().Cluster
+	if c == nil || c.Leader == "" {
+		return "", fmt.Errorf("stream %s has no leader", name)
+	}
+	for _, r := range c.Replicas {
+		if !r.Current || r.Offline {
+			return "", fmt.Errorf("stream %s replica %s is not current", name, r.Name)
+		}
+	}
+	return c.Leader, nil
+}
+
 // skewedStreams creates n R3 streams named <prefix>_<i> placed in C1 through
 // j, then moves every leader to C1-0 through j's own stepdown API, and
 // returns their names.
@@ -214,25 +266,17 @@ func skewedStreams(t *testing.T, ctx context.Context, j jetstream.JetStream, pre
 	for i := range n {
 		name := fmt.Sprintf("%s_%d", prefix, i)
 		names = append(names, name)
-		cfg := jetstream.StreamConfig{Name: name, Subjects: []string{name + ".>"}, Replicas: 3, Placement: &jetstream.Placement{Cluster: cluster}}
-		require.Eventually(t, func() bool { _, err := j.CreateStream(ctx, cfg); return err == nil }, 30*time.Second, 200*time.Millisecond, "create %s", name)
+		createStream(t, ctx, j, jetstream.StreamConfig{Name: name, Subjects: []string{name + ".>"}, Replicas: 3, Placement: &jetstream.Placement{Cluster: cluster}})
 	}
 	for _, name := range names {
-		require.Eventually(t, func() bool {
-			s, err := j.Stream(ctx, name)
-			if err != nil || s.CachedInfo().Cluster == nil {
-				return false
-			}
-			info := s.CachedInfo().Cluster
-			if info.Leader == leader {
-				return true
-			}
-			if info.Leader == "" {
-				return false
+		until(t, ctx, 300*time.Millisecond, func() error {
+			got, err := settledStream(ctx, j, name)
+			if err != nil || got == leader {
+				return err
 			}
 			_, _ = j.Conn().Request("$JS.API.STREAM.LEADER.STEPDOWN."+name, fmt.Appendf(nil, `{"placement":{"preferred":%q}}`, leader), 5*time.Second)
-			return false
-		}, time.Minute, 300*time.Millisecond, "%s did not move to %s", name, leader)
+			return fmt.Errorf("stream %s led by %s", name, got)
+		}, "%s did not move to %s", name, leader)
 	}
 	return names
 }

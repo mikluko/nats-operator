@@ -39,7 +39,7 @@ func TestBalancerEnvtest(t *testing.T) {
 	jsA := accountJS(t, sc["C1"][1], p.a)
 	for _, name := range []string{"REQ_07", "DEF_0"} {
 		cfg := jetstream.StreamConfig{Name: name, Subjects: []string{name + ".>"}, Replicas: 3, Placement: &jetstream.Placement{Cluster: "C1"}}
-		require.Eventually(t, func() bool { _, err := jsA.CreateStream(t.Context(), cfg); return err == nil }, 30*time.Second, 200*time.Millisecond, "create %s", name)
+		createStream(t, t.Context(), jsA, cfg)
 	}
 
 	env := &envtest.Environment{CRDDirectoryPaths: []string{"../../config/crd"}, ErrorIfCRDPathMissing: true}

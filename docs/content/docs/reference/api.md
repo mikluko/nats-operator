@@ -943,7 +943,7 @@ Appears on: [NatsBalancer](#NatsBalancer).
 | `connectionRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | ConnectionRef names the NatsConnection whose credentials decide the account. |
 | `pools` | [{{< type "[]Pool" >}}](#Pool) | No | Pools are judged apart; a stream matching several belongs to the first. With none declared the account is one pool. |
 | `moves` | [{{< type "Moves" >}}](#Moves) | No | Moves selects the kinds of move made. Default: `{}`. |
-| `interval` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No | Interval is the least time between two moves, 1m when omitted. |
+| `interval` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No | Interval is the least time between two moves, positive, 1m when omitted. |
 
 ### NatsBalancerStatus {#NatsBalancerStatus}
 NatsBalancerStatus is the observed state of an account balancer.\
@@ -1231,7 +1231,7 @@ Appears on: [NatsSystemBalancer](#NatsSystemBalancer).
 | :---- | :--- | :------: | :---------- |
 | `connectionRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | ConnectionRef names a NatsConnection with system credentials. |
 | `moves` | [{{< type "Moves" >}}](#Moves) | No | Moves selects the kinds of move made. Default: `{}`. |
-| `interval` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No | Interval is the least time between two moves, 1m when omitted. |
+| `interval` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No | Interval is the least time between two moves, positive, 1m when omitted. |
 
 ### NatsSystemBalancerStatus {#NatsSystemBalancerStatus}
 NatsSystemBalancerStatus is the observed state of a system balancer.\
