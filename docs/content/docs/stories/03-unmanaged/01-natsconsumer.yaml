@@ -26,8 +26,7 @@ spec:
   streamRef:
     name: payments
   adoptionPolicy: AdoptOrCreate
-  # deletionPolicy omitted: Delete is the default for consumers, since
-  # deleting one discards delivery state, not data.
+  # deletionPolicy omitted: Delete is the default for consumers.
   name: settlement
   deliverPolicy: All
   ackPolicy: Explicit

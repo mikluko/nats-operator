@@ -311,8 +311,11 @@ func TestGoToolchainOnce(t *testing.T) {
 // TestHelmVersionOnce holds every job that installs Helm to the one release
 // ci tests the chart with.
 func TestHelmVersionOnce(t *testing.T) {
+	files, err := filepath.Glob("../.github/workflows/*.yml")
+	require.NoError(t, err)
 	versions := map[string]bool{}
-	for _, name := range []string{"ci.yml", "release.yml"} {
+	for _, f := range files {
+		name := filepath.Base(f)
 		for job, j := range readWorkflow(t, name).Jobs {
 			for _, s := range j.Steps {
 				if strings.HasPrefix(s.Uses, "azure/setup-helm@") {

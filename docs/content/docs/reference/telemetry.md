@@ -83,8 +83,8 @@ The gauges are read off the resources' status at each export. Every point carrie
 | `nats_operator.balancer.leader_skew` | `nats_operator_balancer_leader_skew` | gauge | `{leader}` | jetstream-controller | `kind`, `namespace`, `name`, `pool` | NatsBalancer status.pools[].leaderSkew, NatsSystemBalancer status.skew.leaders | The most leaders one server carries less the fewest another does: per pool for a NatsBalancer, over the NATS cluster for a NatsSystemBalancer. |
 | `nats_operator.balancer.pending_moves` | `nats_operator_balancer_pending_moves` | gauge | `{move}` | jetstream-controller | `kind`, `namespace`, `name`, `move_kind` | NatsSystemBalancer status.pending | Moves the NatsSystemBalancer requested that are not yet complete, by kind of move. |
 | `nats_operator.balancer.held_passes` | `nats_operator_balancer_held_passes_total` | counter | `{pass}` | jetstream-controller | `kind`, `namespace`, `name`, `reason` | NatsBalancer and NatsSystemBalancer status.conditions[Holding], after each pass | Balancer passes that ended with Holding True, by its reason. |
-| `nats_operator.evacuation.remaining` | `nats_operator_evacuation_remaining` | gauge | `{stream}` | jetstream-controller | `kind`, `namespace`, `name` | NatsClusterEvacuation status.remaining | Streams still to leave the evacuation's source cluster. |
-| `nats_operator.evacuation.stale_placements` | `nats_operator_evacuation_stale_placements` | gauge | `{stream}` | jetstream-controller | `kind`, `namespace`, `name` | NatsClusterEvacuation status.stalePlacement | Moved streams no resource owns whose config still names the source cluster. |
+| `nats_operator.evacuation.remaining` | `nats_operator_evacuation_remaining` | gauge | `{stream}` | jetstream-controller | `kind`, `namespace`, `name` | NatsClusterEvacuation status.remaining | Streams still to leave the evacuation's source NATS cluster. |
+| `nats_operator.evacuation.stale_placements` | `nats_operator_evacuation_stale_placements` | gauge | `{stream}` | jetstream-controller | `kind`, `namespace`, `name` | NatsClusterEvacuation status.stalePlacement | Moved streams no resource owns whose config still names the source NATS cluster. |
 
 ### Account JWT expiry
 
@@ -114,7 +114,7 @@ The controllers record these through the `events.k8s.io` API, regarding the reso
 | `MoveDone` | Normal | jetstream-controller | `NatsSystemBalancer`, `NatsClusterEvacuation` | A move the system balancer or the evacuation requested is seen complete. |
 | `MoveCancelled` | Normal | jetstream-controller | `NatsClusterEvacuation` | Deleting an evacuation cancels a move still in flight. |
 | `MoveRefused` | Warning | jetstream-controller | `NatsClusterEvacuation` | The server refuses a move the evacuation requests. |
-| `EvacuationRefused` | Warning | jetstream-controller | `NatsClusterEvacuation` | The evacuation refuses to start because a server of its source cluster carries the target tags. |
+| `EvacuationRefused` | Warning | jetstream-controller | `NatsClusterEvacuation` | The evacuation refuses to start because a server of its source NATS cluster carries the target tags. |
 | `RolloutStep` | Normal | cluster-controller | `NatsCluster` | A rollout restarts a server, or starts removing or replacing one. |
 | `GateBlocked` | Warning | cluster-controller | `NatsCluster` | A rollout's gate has been closed long enough for Progressing to read GateBlocked. |
 | `ReconcileFailed` | Warning | cluster-controller | `NatsCluster` | A reconcile fails on anything but a write conflict; Progressing reads ReconcileFailed with the same message. |

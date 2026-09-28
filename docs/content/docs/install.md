@@ -8,7 +8,7 @@ The Helm chart `nats-operator` installs the CRDs of all four API groups and any 
 
 ## Prerequisites
 
-- **Kubernetes 1.29 or later.** The chart declares `kubeVersion: ">=1.29.0-0"`; Helm refuses to install it on an older cluster.
+- **Kubernetes 1.29 or later.** The chart declares `kubeVersion: ">=1.29.0-0"`; Helm refuses to install it on an older Kubernetes cluster.
 - **Helm**, to install from an OCI registry.
 - **nats-server 2.15.0 or later.** The API server refuses a `NatsCluster` whose `spec.version` is below 2.15.0.
 - **cert-manager, optional.** Only the cluster controller uses it, and only for a `NatsCluster` that names `certManager` under `tls`, `routes.tls`, `gateway.tls` or `leafnodes.tls`. Without cert-manager, such a `NatsCluster` reports `Progressing` with the message `cert-manager Certificate is not a known kind: cert-manager is not installed`, and its servers wait for the certificate. Route TLS with no certificate named is self-signed and needs no cert-manager.
@@ -154,7 +154,7 @@ Port `8080` serves controller-runtime's metrics only. The controllers' own instr
 
 ## RBAC
 
-Each controller's ClusterRole is named `<release>-<controller>`, for example `nats-operator-cluster-controller`, and is bound to the ServiceAccount of the same name in the release namespace. No controller can write another controller's API group. While `leaderElection.enabled` is on, each also gets the Role `<release>-<controller>-leader-election` in the release namespace: every verb on `coordination.k8s.io` `leases`, and `create` and `patch` on `""` `events`.
+Each controller's ClusterRole is named `<release>-<controller>`, for example `nats-operator-cluster-controller`, and is bound to the ServiceAccount of the same name in the release namespace. No controller can write another controller's API group. While `leaderElection.enabled` is on, each also gets the Role `<release>-<controller>-leader-election` in the release namespace: `get`, `list`, `watch`, `create`, `update`, `patch` and `delete` on `coordination.k8s.io` `leases`, and `create` and `patch` on `""` `events`.
 
 While `watchNamespaces` is set, each controller's ClusterRole holds only `create` on `authentication.k8s.io` `tokenreviews` and `authorization.k8s.io` `subjectaccessreviews`, which its metrics endpoint needs, and every other rule in the tables below goes to a Role `<release>-<controller>`, with a RoleBinding of the same name, in each namespace `watchNamespaces` names.
 

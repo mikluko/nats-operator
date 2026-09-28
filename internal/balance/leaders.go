@@ -13,8 +13,8 @@ type LeaderMove struct {
 
 // PlanLeaders returns, in order, the leader moves of groups movable admits
 // that even out who leads every group with a leader, each onto a member
-// [Member.Takes] admits. The plan ends: even wherever every server is a
-// member of every group, otherwise possibly one exchange short of even.
+// [Member.Takes] admits. The plan leaves leadership even where every server
+// is a member of every group, and otherwise possibly one exchange short.
 func PlanLeaders(groups []Group, movable func(Group) bool) []LeaderMove {
 	leads := map[string]int{}
 	var led []Group

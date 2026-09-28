@@ -68,8 +68,9 @@ const (
 type BalancerReconciler struct {
 	Client client.Client
 	Dialer *natsconn.Dialer
-	// PendingPoll is how soon a balancer yielding to a system balancer is
-	// reconciled again; zero is DefaultPendingPoll.
+	// PendingPoll is how soon a balancer is reconciled again while it yields
+	// to a system balancer, another holds its lease, or a move is in flight;
+	// zero is DefaultPendingPoll.
 	PendingPoll time.Duration
 	// Recorder records moves started; nil records none.
 	Recorder events.EventRecorder

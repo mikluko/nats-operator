@@ -348,9 +348,9 @@ func playNamespaceController(ctx context.Context, c client.Client, ns string) {
 
 // TestEnvtest_TwoClusters pins, against two API servers, that a placed story
 // applies each file only to its own Kubernetes cluster and reads each status
-// from there, that it is skipped when the run reaches fewer clusters than it
-// places files in, and that PublishHosts carries one cluster's LoadBalancer
-// hostnames to both.
+// from there, that it is skipped when the run reaches fewer Kubernetes
+// clusters than it places files in, and that PublishHosts carries one's
+// LoadBalancer hostnames to both.
 func TestEnvtest_TwoClusters(t *testing.T) {
 	east, west := startAPIServer(t), startAPIServer(t)
 	root := writeBundle(t, map[string]string{

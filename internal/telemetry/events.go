@@ -42,7 +42,7 @@ var (
 	EvacuationRefused = Event{
 		Reason: "EvacuationRefused", Type: corev1.EventTypeWarning, Action: "Evacuate", Controller: JetStreamController,
 		Regarding: []string{"NatsClusterEvacuation"},
-		When:      "The evacuation refuses to start because a server of its source cluster carries the target tags.",
+		When:      "The evacuation refuses to start because a server of its source NATS cluster carries the target tags.",
 	}
 	RolloutStep = Event{
 		Reason: "RolloutStep", Type: corev1.EventTypeNormal, Action: "Rollout", Controller: ClusterController,

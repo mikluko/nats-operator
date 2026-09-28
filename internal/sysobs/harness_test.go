@@ -79,8 +79,8 @@ system_account: SYS
 	return b.String()
 }
 
-// startSupercluster starts every server of every cluster, each gatewayed to
-// all the clusters when there is more than one.
+// startSupercluster starts every server of every NATS cluster, each
+// gatewayed to all the others when there is more than one.
 func startSupercluster(t *testing.T, clusters ...*testCluster) map[string]*testServer {
 	t.Helper()
 	var peers []*testCluster

@@ -1,5 +1,3 @@
-# Adoption follows ACK's adoption-policy (adopt, adopt-or-create), as typed
-# fields.
 apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata:

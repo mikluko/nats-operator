@@ -39,7 +39,7 @@ type testNATS struct {
 	// opts are each server's options, for restart.
 	opts []*server.Options
 	urls []string
-	// ca and creds are set on a secure cluster: client TLS signed by ca,
+	// ca and creds are set on a secure NATS cluster: client TLS signed by ca,
 	// and a NATS operator with one JetStream account, creds being its user's.
 	ca    []byte
 	creds []byte

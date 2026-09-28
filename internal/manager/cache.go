@@ -42,7 +42,7 @@ func cacheOptions(owned Owned) (cache.Options, error) {
 }
 
 // ClientOptions makes a manager's client read Secrets from the API server,
-// so no reconciler starts an informer on whole Secrets.
+// since a cached Get would start an informer over whole Secrets.
 func ClientOptions() client.Options {
 	return client.Options{Cache: &client.CacheOptions{DisableFor: []client.Object{&corev1.Secret{}}}}
 }

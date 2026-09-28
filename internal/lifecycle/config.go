@@ -103,7 +103,7 @@ func Overlay(server, desired Config, m Marker) Config {
 
 // Drift returns, sorted, the keys server and want differ in. A key want
 // lacks or maps to nil matches when server's value is absent or zero;
-// metadata matches when both carry the same keys outside the reserved ones;
+// metadata matches when both carry the same entries outside the reserved keys;
 // any other value matches when server's holds it, a JSON object holding
 // every key of want's and an absent value holding a zero one.
 func Drift(server, want Config) []string {

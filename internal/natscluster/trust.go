@@ -27,10 +27,10 @@ type Trust struct {
 // ErrInvalidTrust wraps every reason ParseTrust refuses a pair of JWTs.
 var ErrInvalidTrust = errors.New("invalid trust roots")
 
-// ParseTrust checks that operatorJWT is a NATS operator JWT and that
-// systemAccountJWT is an account JWT it signed, with its identity key or one
-// of its signing keys, and that the NATS operator names as its system account
-// when it names one.
+// ParseTrust checks that operatorJWT is a NATS operator JWT, that
+// systemAccountJWT is an account JWT signed by its identity key or one of its
+// signing keys, and, where the NATS operator names a system account, that it
+// names this one.
 func ParseTrust(operatorJWT, systemAccountJWT string) (*Trust, error) {
 	op, err := jwt.DecodeOperatorClaims(operatorJWT)
 	if err != nil {

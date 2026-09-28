@@ -758,7 +758,7 @@ Package v1beta1 is the jetstream.nats.mikluko.io API group, owned by the JetStre
 | Kind | Description |
 | :--- | :---------- |
 | [NatsBalancer](#NatsBalancer) | NatsBalancer is an account balancer: it evens leaders and copies within the pools of one account, yielding to the system balancer. |
-| [NatsClusterEvacuation](#NatsClusterEvacuation) | NatsClusterEvacuation moves every stream, key-value bucket and object store in every account off one NATS cluster, save those whose resource's placement.cluster names it, which it reports as pinned. |
+| [NatsClusterEvacuation](#NatsClusterEvacuation) | NatsClusterEvacuation moves every stream, key-value bucket and object store in every account off one NATS cluster, save those whose resource sets placement.cluster: those naming it are reported as pinned, the rest left to their owners. |
 | [NatsConsumer](#NatsConsumer) | NatsConsumer is a JetStream consumer. |
 | [NatsKeyValue](#NatsKeyValue) | NatsKeyValue is a JetStream key-value bucket. |
 | [NatsObjectStore](#NatsObjectStore) | NatsObjectStore is a JetStream object store. |
@@ -795,7 +795,7 @@ Appears on: [NatsSystemBalancerStatus](#NatsSystemBalancerStatus).
 | `leaderReason` | {{< type "string" >}} | No | LeaderReason explains a leader capability short of Full. |
 
 ### ConsumerConfig {#ConsumerConfig}
-ConsumerConfig is nats-server's ConsumerConfig: a push consumer when DeliverSubject is set, a pull consumer otherwise. An omitted field takes the server's value.\
+ConsumerConfig is nats.go's jetstream.ConsumerConfig: a push consumer when DeliverSubject is set, a pull consumer otherwise. An omitted field takes the server's value.\
 Appears on: [NatsConsumerSpec](#NatsConsumerSpec).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
@@ -986,7 +986,7 @@ Appears on: [NatsBalancer](#NatsBalancer).
 | `lastMove` | [{{< type "Move" >}}](#Move) | No | LastMove is the last move made; the next waits for spec.interval after its time. |
 
 ### NatsClusterEvacuation {#NatsClusterEvacuation}
-NatsClusterEvacuation moves every stream, key-value bucket and object store in every account off one NATS cluster, save those whose resource's placement.cluster names it, which it reports as pinned.
+NatsClusterEvacuation moves every stream, key-value bucket and object store in every account off one NATS cluster, save those whose resource sets placement.cluster: those naming it are reported as pinned, the rest left to their owners.
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `apiVersion` | {{< type "string" >}} | Yes | `jetstream.nats.mikluko.io/v1beta1` |
@@ -1461,7 +1461,7 @@ Appears on: [NatsStreamSpec](#NatsStreamSpec), [StreamConfig](#StreamConfig).
 | `S2` |  |
 
 ### StreamConfig {#StreamConfig}
-StreamConfig is nats-server's StreamConfig. An omitted field takes the server's value, and the immutability rules compare a field only where both the old and the new spec set it.\
+StreamConfig is nats.go's jetstream.StreamConfig. An omitted field takes the server's value, and the immutability rules compare a field only where both the old and the new spec set it.\
 Appears on: [NatsStreamSpec](#NatsStreamSpec).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |

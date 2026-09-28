@@ -19,7 +19,7 @@ spec:
         resources:
           requests:
             storage: 100Gi
-  # Tags are free: this cluster's placement tag is not its name, so streams
+  # Tags are free: this NATS cluster's placement tag is not its name, so streams
   # placed by `cluster:west` tag keep working across a rename.
   serverTags:
     cluster: west

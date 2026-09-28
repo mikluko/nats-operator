@@ -35,8 +35,8 @@ spec:
     # the same one, kept alike by GitOps (a shared component). Explicit
     # renders each entry as a gateway remote with reject_unknown on; Gossip
     # renders them as seeds with reject_unknown off. Either way a change
-    # restarts servers: gateway config is not reloadable. A cluster's
-    # own entry is allowed and skipped.
+    # restarts servers: gateway config is not reloadable. A NATS
+    # cluster's own entry is allowed and skipped.
     discovery: Explicit
     remotes:
       - name: east
@@ -50,8 +50,9 @@ spec:
         issuerRef:
           kind: ClusterIssuer
           name: nats-gateway-ca
-    # The external Service is rendered from this template; its hostname is
-    # what the server advertises and what the other members' remotes name.
+    # The external Service is rendered from this template. The servers
+    # advertise `advertise` below, the Service's hostname, which the other
+    # members' remotes name too.
     service:
       type: LoadBalancer
       annotations:

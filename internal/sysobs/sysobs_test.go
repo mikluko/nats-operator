@@ -36,7 +36,7 @@ func findGroup(t *testing.T, s *Snapshot, kind Kind, stream, consumer string) Gr
 	return s.Groups[i]
 }
 
-// settledSnapshot polls until the cluster is Settled with want groups.
+// settledSnapshot polls until the NATS cluster is Settled with want groups.
 func settledSnapshot(t *testing.T, o *SystemClient, want int) *Snapshot {
 	t.Helper()
 	var snap *Snapshot
@@ -196,8 +196,8 @@ func TestReload(t *testing.T) {
 
 // TestObserve_Gateways pins what each server reports of its gateway
 // connections: an outbound connection to every other NATS cluster, and one
-// inbound connection per server of the other cluster, spread over the
-// observed cluster's servers.
+// inbound connection per server of the other NATS cluster, spread over the
+// observed one's servers.
 func TestObserve_Gateways(t *testing.T) {
 	c1 := newTestCluster(t, "C1", 3)
 	c2 := newTestCluster(t, "C2", 2)

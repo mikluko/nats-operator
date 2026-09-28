@@ -71,7 +71,7 @@ spec:
     name: prod-east-sys   # system credentials
   from:
     cluster: prod-east
-  # Must match servers of the target cluster only; refused before any move
+  # Must match servers of the target NATS cluster only; refused before any move
   # if a server of `from` carries them too.
   to:
     serverTags: ["cluster:prod-east-2"]

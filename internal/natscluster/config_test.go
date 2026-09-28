@@ -234,7 +234,7 @@ func startRenderedWith(t *testing.T, nc *clusterv1beta1.NatsCluster, in Inputs, 
 // TestRenderedConfigRunsCluster pins that story 1's rendered config is one
 // nats-server 2.15.0 accepts: the servers route to each other over
 // self-signed TLS, JetStream takes the derived limits, each reports its
-// config revision, and the cluster is observed Settled without an auth
+// config revision, and the NATS cluster is observed Settled without an auth
 // plane.
 func TestRenderedConfigRunsCluster(t *testing.T) {
 	nc := storyCluster(t)

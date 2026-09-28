@@ -3,7 +3,7 @@
 # at runtime declared as resources, without recreating them.
 #
 # Identical in shape to stories 1 and 2: the JetStream controller cannot tell
-# a managed NATS cluster from this one, and does not need to.
+# a managed NATS cluster from this one.
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:

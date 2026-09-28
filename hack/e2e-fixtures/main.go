@@ -5,7 +5,8 @@
 //	go run ./hack/e2e-fixtures <story number> docs/content/docs/stories/<story>/e2e
 //
 // Where the story's substitutions take generated values, it prints them as
-// a substitution's patch.
+// a substitution's patch. nsc cannot stand in: it writes keys and JWTs to its
+// own store, not the Secret manifests a story applies.
 package main
 
 import (

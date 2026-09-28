@@ -46,9 +46,9 @@ Both empty, it returns nothing.
 {{- end }}
 
 {{/*
-nats-operator.env takes a list of env lists and returns, as YAML, each list's
-entries that no later list names, followed by the later list's. All empty, it
-returns nothing.
+nats-operator.env merges a list of env lists into one, as YAML, in which an
+entry replaces every earlier list's entry of the same name; it renders nothing
+when every list is empty.
 */}}
 {{- define "nats-operator.env" -}}
 {{- $out := list -}}

@@ -344,7 +344,7 @@ type authCluster struct {
 	snap  *sysobs.Snapshot
 }
 
-// startAuthCluster boots the cluster and waits until the system user read
+// startAuthCluster boots the NATS cluster and waits until the system user read
 // from auth.systemCredentials observes it Settled over $SYS, every server
 // reporting revision r1.
 func startAuthCluster(t *testing.T) *authCluster {

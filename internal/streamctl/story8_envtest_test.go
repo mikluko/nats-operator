@@ -63,7 +63,7 @@ func testStory8(t *testing.T, c client.Client, sc map[string]*testNATS) {
 		assertStreamStatus(ct, s, "08-stream-transfer/02-status-natsstream-transferring.yaml")
 		synced := meta.FindStatusCondition(s.Status.Conditions, "Synced")
 		if assert.NotNil(ct, synced) {
-			assert.Regexp(ct, regexp.MustCompile(`^moving to cluster west; [0-2] of 3 new replicas current$`), synced.Message)
+			assert.Regexp(ct, regexp.MustCompile(`^moving to NATS cluster west; [0-2] of 3 new replicas current$`), synced.Message)
 		}
 		if assert.NotNil(ct, s.Status.Server) {
 			assert.Regexp(ct, "^east-", s.Status.Server.Leader)

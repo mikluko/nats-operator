@@ -3,7 +3,9 @@
 // +kubebuilder:rbac markers of its command and every internal/ package it
 // imports, and splits its rules into cluster-scoped.yaml, a ClusterRole of
 // the cluster-scoped resources in clusterScoped, and namespaced.yaml, a Role
-// of every other.
+// of every other. controller-gen alone reads markers only in the packages it
+// is given and writes one ClusterRole, so it can neither follow a command's
+// imports nor split a role by scope.
 package main
 
 import (

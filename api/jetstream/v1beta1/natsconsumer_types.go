@@ -53,7 +53,7 @@ const (
 	PriorityPrioritized  PriorityPolicy = "Prioritized"
 )
 
-// ConsumerConfig is nats-server's ConsumerConfig: a push consumer when
+// ConsumerConfig is nats.go's jetstream.ConsumerConfig: a push consumer when
 // DeliverSubject is set, a pull consumer otherwise. An omitted field takes
 // the server's value.
 type ConsumerConfig struct {

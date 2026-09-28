@@ -26,11 +26,10 @@ const (
 	machineTree = "/var/lib/nats-operator-e2e/src"
 	// machineBinary is this command built for Linux, relative to the tree.
 	machineBinary = "bin/e2e/e2e-linux"
-	// machineLock is held by the run in the machine for as long as it runs.
-	// A run whose host side is killed goes on in the machine; the lock keeps
-	// the next from shipping over it and driving the same clusters. flock
-	// holds it itself, -o: the podman daemons a run starts outlive it and
-	// would inherit it.
+	// machineLock is held for as long as a run in the machine lasts, one
+	// whose host side was killed included, so the next run does not ship
+	// over it. flock -o keeps it from the podman daemons a run starts, which
+	// outlive the run.
 	machineLock = "/var/lib/nats-operator-e2e/run.lock"
 )
 

@@ -148,7 +148,7 @@ var (
 	EvacuationRemaining = Instrument{
 		Name:        "nats_operator.evacuation.remaining",
 		Unit:        "{stream}",
-		Description: "Streams still to leave the evacuation's source cluster.",
+		Description: "Streams still to leave the evacuation's source NATS cluster.",
 		Type:        Gauge,
 		Controllers: []string{JetStreamController},
 		Attributes:  resourceAttrs,
@@ -157,7 +157,7 @@ var (
 	EvacuationStalePlacements = Instrument{
 		Name:        "nats_operator.evacuation.stale_placements",
 		Unit:        "{stream}",
-		Description: "Moved streams no resource owns whose config still names the source cluster.",
+		Description: "Moved streams no resource owns whose config still names the source NATS cluster.",
 		Type:        Gauge,
 		Controllers: []string{JetStreamController},
 		Attributes:  resourceAttrs,

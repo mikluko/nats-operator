@@ -58,9 +58,8 @@ spec:
     trustRef:
       name: acme
     # resolver is omitted: a leaf that preloads accounts runs Full, on the
-    # JetStream volume, so that syncing with the hub replaces a stale
-    # preload and a restart keeps what it synced. A leaf that preloads
-    # nothing runs Cache. Memory cannot fetch, so it is not offered.
+    # JetStream volume; one that preloads nothing runs Cache. Memory is not
+    # offered.
   leafRemotes:
     - connectionRef:
         name: hub-system

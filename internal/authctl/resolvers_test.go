@@ -22,7 +22,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
 
-// fullCluster is a routed cluster of servers trusting a plane's NATS operator,
+// fullCluster is a routed NATS cluster trusting a plane's NATS operator,
 // each with a full resolver on a directory of its own that deletes are
 // allowed on and that outlives a restart. The resolvers sync once an hour,
 // so only pushes and deletes move JWTs between them.

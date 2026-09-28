@@ -1,6 +1,6 @@
 # Owned by the payments team: evenness within pools of its own streams, which
 # the system balancer cannot know about. It yields to the system balancer:
-# no move on a stream the system balancer has pending or just moved, and none
+# no move on a stream the system balancer has pending, and none
 # while the NATS cluster is not Settled.
 apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsBalancer

@@ -1,5 +1,5 @@
 // Package managertest reads what a controller's setup registers with a
-// controller-runtime manager, without an API server.
+// controller-runtime manager, and runs it under its Roles on envtest.
 package managertest
 
 import (

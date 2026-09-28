@@ -17,8 +17,8 @@ spec:
     limits:
       memory: 4Gi
   # GOMEMLIMIT and jetstream.max_memory_store derive from limits.memory;
-  # max_file_store derives from the PVC size. Shown in status, overridable
-  # under jetstream.limits.
+  # max_file_store derives from the PVC size. The store limits are shown in
+  # status and overridable under jetstream.limits.
 
   jetstream:
     volumeClaimTemplate:

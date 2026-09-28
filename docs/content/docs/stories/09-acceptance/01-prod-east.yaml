@@ -1,5 +1,5 @@
-# One NatsCluster per Kubernetes cluster, each in its own cluster's GitOps
-# tree. Only what differs between them is commented.
+# One NatsCluster per Kubernetes cluster, each in its own GitOps tree.
+# Only what differs between them is commented.
 apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:

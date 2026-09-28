@@ -27,8 +27,7 @@ spec:
     limits:
       memory: 1Gi
   jetstream:
-    # Required with leafRemotes: without its own domain the leaf's JetStream
-    # would try to join the hub's meta group.
+    # Required with leafRemotes.
     domain: edge-site-1
     volumeClaimTemplate:
       spec:

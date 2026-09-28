@@ -18,8 +18,7 @@ metadata:
 spec:
   operatorRef:
     name: demo
-  # The account JWT expires after this and is re-signed at half of it, so an
-  # account deleted while a server was away cannot outlive one TTL there.
+  # The account JWT expires after this and is re-signed at half of it.
   # 48h is the default; the system account's JWT never expires.
   jwtTTL: 48h
   limits:

@@ -7,7 +7,7 @@ status:
     - type: Synced
       status: "False"
       reason: Moving
-      message: !any moving to cluster west; 2 of 3 new replicas current
+      message: !any moving to NATS cluster west; 2 of 3 new replicas current
   transfer:
     from: east
     to: west

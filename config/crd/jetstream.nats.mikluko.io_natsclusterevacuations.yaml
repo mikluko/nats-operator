@@ -32,8 +32,9 @@ spec:
       openAPIV3Schema:
         description: |-
           NatsClusterEvacuation moves every stream, key-value bucket and object
-          store in every account off one NATS cluster, save those whose resource's
-          placement.cluster names it, which it reports as pinned.
+          store in every account off one NATS cluster, save those whose resource sets
+          placement.cluster: those naming it are reported as pinned, the rest left to
+          their owners.
         properties:
           apiVersion:
             description: |-

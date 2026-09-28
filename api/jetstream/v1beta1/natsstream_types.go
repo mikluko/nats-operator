@@ -48,7 +48,7 @@ const (
 	PersistAsync   PersistMode = "Async"
 )
 
-// StreamConfig is nats-server's StreamConfig. An omitted field takes the
+// StreamConfig is nats.go's jetstream.StreamConfig. An omitted field takes the
 // server's value, and the immutability rules compare a field only where
 // both the old and the new spec set it.
 type StreamConfig struct {

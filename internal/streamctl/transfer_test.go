@@ -117,7 +117,7 @@ func TestDecodeConsumerPage(t *testing.T) {
 // supercluster and follows the move the server makes, held in flight by
 // stopping two of its three new replicas: the transfer block and Synced False with
 // ReasonMoving while it is, rechecked on MovingRecheck, then neither once
-// the stream serves from the new cluster.
+// the stream serves from the new NATS cluster.
 func TestStreamMove(t *testing.T) {
 	sc := startSupercluster(t, "east", "west")
 	f := newFixtureOn(t, sc["east"])
@@ -179,7 +179,7 @@ func TestStreamMove(t *testing.T) {
 	require.EqualValues(t, 2, tr.Consumers.Total)
 	require.LessOrEqual(t, tr.Consumers.Moved, tr.Consumers.Total)
 	synced := condition(t, seen.Status.Conditions, lifecycle.ConditionSynced, metav1.ConditionFalse, ReasonMoving)
-	require.Equal(t, fmt.Sprintf("moving to cluster west; %d of 3 new replicas current", currentReplicas(tr)), synced.Message)
+	require.Equal(t, fmt.Sprintf("moving to NATS cluster west; %d of 3 new replicas current", currentReplicas(tr)), synced.Message)
 	condition(t, seen.Status.Conditions, lifecycle.ConditionReady, metav1.ConditionTrue, lifecycle.ReasonSynced)
 	require.True(t, strings.HasPrefix(seen.Status.Server.Leader, "east-"), "the east copies lead until the move ends")
 	require.EqualValues(t, 2, seen.Status.ObservedGeneration)

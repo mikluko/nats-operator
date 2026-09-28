@@ -89,7 +89,7 @@ Changing which servers hold a stream's copies; stream data is copied between ser
 _Avoid_: migration, rebalance
 
 **Evacuation**:
-Placement moves of every stream off one NATS cluster to another of the same supercluster, ahead of retiring the first.
+Placement moves of every stream off one NATS cluster to another of the same supercluster, save one whose resource sets a placement cluster, ahead of retiring the first.
 _Avoid_: eviction, drain, migration
 
 **System balancer**:

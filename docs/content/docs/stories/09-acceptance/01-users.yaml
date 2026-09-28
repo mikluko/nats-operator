@@ -133,7 +133,7 @@ spec:
     secretKeyRef:
       name: collector-prod-readonly-creds
 ---
-# The remote clusters' controllers, two per remote (story 6).
+# The controllers of the remote Kubernetes clusters, two per remote (story 6).
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:

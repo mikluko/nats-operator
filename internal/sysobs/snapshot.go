@@ -64,8 +64,9 @@ type Group struct {
 	Consumer    string
 	RaftGroup   string
 
-	// Leader is the server that reports itself the group's leader, or ""
-	// when none of the servers that answered does.
+	// Leader is the server that reports itself the group's leader, on a
+	// FromFollowers meta group the one every server that answered names, or
+	// "" when there is neither.
 	Leader string
 
 	// Members come from the leader's view and are sorted by server. A

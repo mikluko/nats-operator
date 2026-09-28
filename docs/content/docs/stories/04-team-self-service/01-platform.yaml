@@ -17,7 +17,6 @@ spec:
 ---
 # The platform team's consent: NatsUsers in the payments namespace may
 # reference the payments account here, and nothing else in nats-system.
-# nats.mikluko.io is the one group all three controllers read.
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsReferenceGrant
 metadata:

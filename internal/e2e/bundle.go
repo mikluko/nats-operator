@@ -271,8 +271,8 @@ func loadBundle(dir string) (*Bundle, error) {
 	return b, checkPlacement(dir, files, b.Clusters)
 }
 
-// checkWaits fails where a wait names no step of b, lacks a reason or a
-// positive wait, or names a step another wait names.
+// checkWaits fails where a wait names no step of b or lacks a reason or a
+// positive wait.
 func (b *Bundle) checkWaits(dir string) error {
 	for n, w := range b.Waits {
 		if w.Reason == "" || w.Wait <= 0 {

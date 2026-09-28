@@ -117,7 +117,7 @@ func observeTransfer(ctx context.Context, o lifecycle.Object, s *js.NatsStream, 
 		}
 		conditions.Set(&s.Status.Conditions, s.Generation, metav1.Condition{
 			Type: lifecycle.ConditionSynced, Status: metav1.ConditionFalse, Reason: ReasonMoving,
-			Message: fmt.Sprintf("moving to cluster %s; %d of %d new replicas current", t.To, current, len(t.Replicas)),
+			Message: fmt.Sprintf("moving to NATS cluster %s; %d of %d new replicas current", t.To, current, len(t.Replicas)),
 		})
 	}
 	so, ok := o.(*streamObject)

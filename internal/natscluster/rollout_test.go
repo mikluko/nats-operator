@@ -67,8 +67,8 @@ func (f *fakeCluster) decide() rolloutDecision {
 	return d
 }
 
-// recover brings server back on the target revision with the cluster
-// settled.
+// recover brings server back on the target revision with the NATS
+// cluster settled.
 func (f *fakeCluster) recover(server string) {
 	s := f.server(server)
 	s.Ready, s.Revision = true, f.target
