@@ -7,12 +7,20 @@ on:
         description: Comma-separated story numbers; empty runs every single-cluster story.
         type: string
         default: ""
+      watch-namespaces:
+        description: Install the chart scoped to the stories' namespaces.
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       stories:
         description: Comma-separated story numbers.
         type: string
         required: true
+      watch-namespaces:
+        description: Install the chart scoped to the stories' namespaces.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -47,4 +55,5 @@ jobs:
         env:
           E2E_CLUSTERS: "1"
           E2E_STORIES: ${{ inputs.stories }}
-        run: sudo --preserve-env=E2E_CLUSTERS,E2E_STORIES,HOME,GOPATH,GOMODCACHE,GOCACHE env "PATH=$PATH" just e2e
+          E2E_WATCH_NAMESPACES: ${{ inputs.watch-namespaces }}
+        run: sudo --preserve-env=E2E_CLUSTERS,E2E_STORIES,E2E_WATCH_NAMESPACES,HOME,GOPATH,GOMODCACHE,GOCACHE env "PATH=$PATH" just e2e

@@ -58,7 +58,9 @@ type NatsClusterSpec struct {
 
 	// PodTemplate is merged into every server's pod, over its security
 	// context and automountServiceAccountToken too: whoever may write a
-	// NatsCluster runs pods with any privilege its namespace admits.
+	// NatsCluster runs pods with any privilege its namespace admits. Its
+	// affinity, when set, replaces the rendered one, a preferred
+	// anti-affinity spreading the servers across nodes.
 	// +optional
 	PodTemplate *PodTemplate `json:"podTemplate,omitempty"`
 
@@ -380,6 +382,11 @@ type Exporter struct {
 	// +optional
 	// +listType=atomic
 	From []networkingv1.NetworkPolicyPeer `json:"from,omitempty"`
+
+	// Resources replaces the sidecar's default requests, 10m CPU and 32Mi
+	// memory, and limits, 100m CPU and 128Mi memory.
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 // Image names the nats-server image of a NATS cluster's servers.
@@ -401,7 +408,8 @@ type ExporterImage struct {
 	// +optional
 	Repository string `json:"repository,omitempty"`
 
-	// Tag is the image tag; empty, it is 0.17.3.
+	// Tag is the image tag; empty, it is the tag the cluster controller
+	// pins, with that tag's digest unless repository or digest is set.
 	// +optional
 	Tag string `json:"tag,omitempty"`
 

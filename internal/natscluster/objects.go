@@ -14,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
@@ -23,12 +24,24 @@ import (
 )
 
 // The images the pods run where spec.image and spec.exporter.image name
-// none.
+// none; ExporterDigest is ExporterTag's.
 const (
 	DefaultImage       = "nats"
 	ExporterRepository = "natsio/prometheus-nats-exporter"
 	ExporterTag        = "0.17.3"
+	ExporterDigest     = "sha256:26c826662ac8424597cc9bdf89ea5b606eb66e3c11db9b1215c27d2076bbb01b"
 )
+
+var exporterResources = corev1.ResourceRequirements{
+	Requests: corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("10m"),
+		corev1.ResourceMemory: resource.MustParse("32Mi"),
+	},
+	Limits: corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("100m"),
+		corev1.ResourceMemory: resource.MustParse("128Mi"),
+	},
+}
 
 // terminationGracePeriod, in seconds, must outlast lameDuckDuration, over
 // which a server in lame-duck mode hands off its leaderships and disconnects
@@ -175,6 +188,9 @@ func exporterImage(nc *clusterv1beta1.NatsCluster) string {
 	if nc.Spec.Exporter != nil && nc.Spec.Exporter.Image != nil {
 		img = *nc.Spec.Exporter.Image
 	}
+	if img.Repository == "" && img.Tag == "" && img.Digest == "" {
+		return reference(ExporterRepository, ExporterTag, ExporterDigest)
+	}
 	return reference(cmp.Or(img.Repository, ExporterRepository), cmp.Or(img.Tag, ExporterTag), img.Digest)
 }
 
@@ -227,6 +243,7 @@ func podTemplate(nc *clusterv1beta1.NatsCluster, server string, limits Limits) (
 			TerminationGracePeriodSeconds: ptr.To[int64](terminationGracePeriod),
 			AutomountServiceAccountToken:  ptr.To(false),
 			SecurityContext:               podSecurityContext(),
+			Affinity:                      spreadAffinity(nc),
 			Containers:                    []corev1.Container{natsContainer(nc, limits)},
 			Volumes:                       volumes(nc, server),
 		},
@@ -238,6 +255,9 @@ func podTemplate(nc *clusterv1beta1.NatsCluster, server string, limits Limits) (
 	if pt == nil {
 		return t, nil
 	}
+	if pt.Spec != nil && pt.Spec.Affinity != nil {
+		t.Spec.Affinity = nil
+	}
 	t.Labels = merged(pt.Metadata.Labels, t.Labels)
 	t.Annotations = merged(pt.Metadata.Annotations, nil)
 	if pt.Spec != nil {
@@ -248,6 +268,19 @@ func podTemplate(nc *clusterv1beta1.NatsCluster, server string, limits Limits) (
 		t.Spec = spec
 	}
 	return t, nil
+}
+
+// spreadAffinity prefers that no two of nc's servers share a node.
+func spreadAffinity(nc *clusterv1beta1.NatsCluster) *corev1.Affinity {
+	return &corev1.Affinity{PodAntiAffinity: &corev1.PodAntiAffinity{
+		PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{{
+			Weight: 100,
+			PodAffinityTerm: corev1.PodAffinityTerm{
+				LabelSelector: &metav1.LabelSelector{MatchLabels: clusterSelector(nc)},
+				TopologyKey:   corev1.LabelHostname,
+			},
+		}},
+	}}
 }
 
 // podSecurityContext and containerSecurityContext meet the restricted Pod
@@ -401,8 +434,16 @@ func exporterContainer(nc *clusterv1beta1.NatsCluster) corev1.Container {
 			fmt.Sprintf("http://localhost:%d", PortMonitor),
 		},
 		Ports:           []corev1.ContainerPort{{Name: "metrics", ContainerPort: PortMetrics}},
+		Resources:       *exporterResourcesOf(nc).DeepCopy(),
 		SecurityContext: containerSecurityContext(),
 	}
+}
+
+func exporterResourcesOf(nc *clusterv1beta1.NatsCluster) *corev1.ResourceRequirements {
+	if e := nc.Spec.Exporter; e != nil && e.Resources != nil {
+		return e.Resources
+	}
+	return &exporterResources
 }
 
 func volumes(nc *clusterv1beta1.NatsCluster, server string) []corev1.Volume {

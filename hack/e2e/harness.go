@@ -9,8 +9,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"strings"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -59,6 +64,15 @@ func harness(ctx context.Context, cfg config, root, imagesFile string, down bool
 		return err
 	}
 
+	stories, err := selectBundles(root, cfg.stories)
+	if err != nil {
+		return err
+	}
+	var watch []string
+	if cfg.watchNamespaces {
+		watch = watchedNamespaces(stories, cfg.controllers)
+	}
+
 	logf("kind clusters %v", names)
 	kc, err := kind.Up(names)
 	if err != nil {
@@ -81,18 +95,59 @@ func harness(ctx context.Context, cfg config, root, imagesFile string, down bool
 			return err
 		}
 	}
-	for i, n := range names {
-		enabled := cfg.controllers
+	enabled := func(i int) []string {
 		if i > 0 {
-			enabled = cfg.peerControllers
+			return cfg.peerControllers
 		}
-		logf("chart %s into %s/%s: %v", release, n, releaseNS, enabled)
-		if err := installChart(ctx, clients[i], root, kubeconfig, n, enabled, images); err != nil {
+		return cfg.controllers
+	}
+	for i, n := range names {
+		if len(watch) > 0 {
+			logf("namespaces %v in %s", watch, n)
+			if err := createNamespaces(ctx, clients[i], watch); err != nil {
+				return fmt.Errorf("%s: %w", n, err)
+			}
+		}
+		logf("chart %s into %s/%s: %v", release, n, releaseNS, enabled(i))
+		if err := installChart(ctx, clients[i], root, kubeconfig, n, enabled(i), images, watch); err != nil {
 			return err
 		}
 	}
+	var fresh func(context.Context, int) error
+	if len(watch) > 0 {
+		fresh = func(ctx context.Context, i int) error {
+			logf("chart %s into %s/%s again, for its Roles", release, names[i], releaseNS)
+			return upgradeChart(ctx, root, kubeconfig, names[i], enabled(i), images, watch)
+		}
+	}
 	logf("stories %s", orAll(cfg.stories))
-	return runStories(ctx, root, clients, cfg.stories, cfg.wait)
+	return runStories(ctx, clients, stories, cfg.wait, fresh)
+}
+
+// watchedNamespaces are the namespaces the chart watches under
+// E2E_WATCH_NAMESPACES: those stories declare objects in, and, where
+// controllers has the auth controller, its system connection's.
+func watchedNamespaces(stories []*e2e.Bundle, controllers []string) []string {
+	var ns []string
+	for _, b := range stories {
+		ns = append(ns, b.Namespaces()...)
+	}
+	if slices.Contains(controllers, "auth") {
+		ns = append(ns, strings.SplitN(authConnection, "/", 2)[0])
+	}
+	slices.Sort(ns)
+	return slices.Compact(ns)
+}
+
+// createNamespaces creates each of names that c does not already hold.
+func createNamespaces(ctx context.Context, c client.Client, names []string) error {
+	for _, n := range names {
+		err := c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: n}})
+		if err != nil && !apierrors.IsAlreadyExists(err) {
+			return fmt.Errorf("create namespace %s: %w", n, err)
+		}
+	}
+	return nil
 }
 
 func orAll(s string) string {
@@ -146,10 +201,9 @@ func addons(ctx context.Context, clients []client.Client, names []string) error 
 }
 
 // installChart installs the chart from root in context name of kubeconfig
-// through c, with the controllers in enabled switched on and deployed from
-// images, and runs its `helm test`. CRDs are applied first because helm
-// installs a chart's crds/ only on first install.
-func installChart(ctx context.Context, c client.Client, root, kubeconfig, name string, enabled []string, images []image) error {
+// through c, as upgradeChart does, and runs its `helm test`. CRDs are
+// applied first because helm installs a chart's crds/ only on first install.
+func installChart(ctx context.Context, c client.Client, root, kubeconfig, name string, enabled []string, images []image, watch []string) error {
 	chart := filepath.Join(root, "charts", "nats-operator")
 	crds, err := filepath.Glob(filepath.Join(chart, "crds", "*.yaml"))
 	if err != nil {
@@ -168,12 +222,8 @@ func installChart(ctx context.Context, c client.Client, root, kubeconfig, name s
 			return fmt.Errorf("%s: %w", name, err)
 		}
 	}
-	args := []string{"upgrade", "--install", release, chart,
-		"--kubeconfig", kubeconfig, "--kube-context", name,
-		"--namespace", releaseNS, "--create-namespace", "--wait", "--timeout", "3m"}
-	args = append(args, chartSets(enabled, images)...)
-	if err := quietly(exec.CommandContext(ctx, "helm", args...)); err != nil {
-		return fmt.Errorf("%s: %w", name, err)
+	if err := upgradeChart(ctx, root, kubeconfig, name, enabled, images, watch); err != nil {
+		return err
 	}
 	if err := quietly(exec.CommandContext(ctx, "helm", "test", release, "--kubeconfig", kubeconfig,
 		"--kube-context", name, "--namespace", releaseNS, "--logs", "--timeout", "3m")); err != nil {
@@ -182,9 +232,25 @@ func installChart(ctx context.Context, c client.Client, root, kubeconfig, name s
 	return nil
 }
 
+// upgradeChart installs or upgrades the chart from root in context name of
+// kubeconfig, with the controllers in enabled switched on and deployed from
+// images, watching the namespaces in watch or, with none, every namespace;
+// helm makes again any object of the release that has been deleted.
+func upgradeChart(ctx context.Context, root, kubeconfig, name string, enabled []string, images []image, watch []string) error {
+	args := []string{"upgrade", "--install", release, filepath.Join(root, "charts", "nats-operator"),
+		"--kubeconfig", kubeconfig, "--kube-context", name,
+		"--namespace", releaseNS, "--create-namespace", "--wait", "--timeout", "3m"}
+	args = append(args, chartSets(enabled, images, watch)...)
+	if err := quietly(exec.CommandContext(ctx, "helm", args...)); err != nil {
+		return fmt.Errorf("%s: %w", name, err)
+	}
+	return nil
+}
+
 // chartSets are the --set flags that switch on the controllers in enabled,
-// and no other, and deploy each controller from its image without pulling.
-func chartSets(enabled []string, images []image) []string {
+// and no other, deploy each controller from its image without pulling, and
+// scope them to watch where it is not empty.
+func chartSets(enabled []string, images []image, watch []string) []string {
 	sets := []string{"--set", "cluster.enabled=false", "--set", "auth.enabled=false", "--set", "jetstream.enabled=false",
 		"--set", "auth.systemConnection=" + authConnection}
 	for _, img := range images {
@@ -195,6 +261,9 @@ func chartSets(enabled []string, images []image) []string {
 	}
 	for _, k := range enabled {
 		sets = append(sets, "--set", k+".enabled=true")
+	}
+	if len(watch) > 0 {
+		sets = append(sets, "--set", "watchNamespaces={"+strings.Join(watch, ",")+"}")
 	}
 	return sets
 }

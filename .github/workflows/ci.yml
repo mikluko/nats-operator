@@ -72,9 +72,14 @@ jobs:
           annotations: true
 
   e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        watch-namespaces: [false, true]
     uses: ./.github/workflows/e2e.yml
     with:
       stories: "1"
+      watch-namespaces: ${{ matrix.watch-namespaces }}
 
   chart-testing:
     runs-on: ubuntu-latest

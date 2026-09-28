@@ -212,7 +212,7 @@ type Inputs struct {
 	// Certs are the TLS Secrets the servers mount.
 	Certs Certs
 	// MonitorNamespace is the namespace the NetworkPolicy admits to the
-	// monitoring port.
+	// monitoring and metrics ports.
 	MonitorNamespace string
 }
 

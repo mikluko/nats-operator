@@ -64,6 +64,10 @@ type Runner struct {
 	// Publish, where set, runs with Clients at the start of every round of
 	// a step's wait; its error fails the round as an API error does.
 	Publish func(ctx context.Context, clients []client.Client) error
+	// Fresh, where set, runs for each Kubernetes cluster, by its index in
+	// Clients, once the story's namespaces there are fresh and before its
+	// first step; its error fails the story.
+	Fresh func(ctx context.Context, cluster int) error
 }
 
 const fieldOwner = "nats-operator-e2e"
@@ -116,6 +120,11 @@ func (r *Runner) Run(ctx context.Context, b *Bundle) Result {
 			r.logf("%s: fresh namespace %s%s", b.Name, ns, pl.wheres[i])
 			if err := r.freshNamespace(ctx, r.Clients[i], ns); err != nil {
 				return res(Fail, err.Error())
+			}
+		}
+		if r.Fresh != nil {
+			if err := r.Fresh(ctx, i); err != nil {
+				return res(Fail, fmt.Sprintf("%s: fresh%s: %v", b.Name, pl.wheres[i], err))
 			}
 		}
 	}

@@ -3,6 +3,7 @@ package e2e
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -57,6 +58,36 @@ spec: {servers: ["nats://demo:4222"]}
 		res := r.Run(t.Context(), bundles[0])
 		require.Equal(t, Fail, res.Outcome)
 		require.Contains(t, res.Detail, "no status read before the deadline")
+	})
+
+	t.Run("Fresh runs once the namespaces are made, before the first step", func(t *testing.T) {
+		bundle := func(ns string) *Bundle {
+			bundles, err := LoadBundles(writeBundle(t, map[string]string{
+				"01-conn.yaml": "apiVersion: nats.mikluko.io/v1beta1\nkind: NatsConnection\nmetadata: {name: demo, namespace: " + ns + "}\nspec: {servers: [\"nats://demo:4222\"]}\n",
+			}))
+			require.NoError(t, err)
+			return bundles[0]
+		}
+		var calls []int
+		r := &Runner{Clients: []client.Client{c}, Timeout: 20 * time.Second, Interval: 100 * time.Millisecond,
+			Fresh: func(ctx context.Context, cluster int) error {
+				calls = append(calls, cluster)
+				require.NoError(t, c.Get(ctx, client.ObjectKey{Name: "freshened"}, &corev1.Namespace{}))
+				u := &unstructured.Unstructured{}
+				u.SetAPIVersion("nats.mikluko.io/v1beta1")
+				u.SetKind("NatsConnection")
+				err := c.Get(ctx, client.ObjectKey{Namespace: "freshened", Name: "demo"}, u)
+				require.True(t, apierrors.IsNotFound(err), "Fresh ran after the first step: %v", err)
+				return nil
+			}}
+		res := r.Run(t.Context(), bundle("freshened"))
+		require.Equal(t, Pass, res.Outcome, res.Detail)
+		require.Equal(t, []int{0}, calls)
+
+		r.Fresh = func(context.Context, int) error { return errors.New("no roles") }
+		res = r.Run(t.Context(), bundle("unfreshened"))
+		require.Equal(t, Fail, res.Outcome)
+		require.Contains(t, res.Detail, "fresh: no roles")
 	})
 
 	t.Run("Skipped story applies nothing", func(t *testing.T) {

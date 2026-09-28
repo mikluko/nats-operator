@@ -102,6 +102,14 @@
     },
     {
       "customType": "regex",
+      "description": "The exporter sidecar's default image, its tag and digest together",
+      "managerFilePatterns": ["/^internal/natscluster/objects\\.go$/"],
+      "matchStrings": ["ExporterTag\\s+= \"(?<currentValue>[^\"]+)\"\\s+ExporterDigest\\s+= \"(?<currentDigest>sha256:[0-9a-f]{64})\""],
+      "depNameTemplate": "natsio/prometheus-nats-exporter",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
       "description": "The controller images' base, a digest of its latest tag",
       "managerFilePatterns": ["/^\\.ko\\.yaml$/"],
       "matchStrings": ["defaultBaseImage: (?<depName>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]{64})"],

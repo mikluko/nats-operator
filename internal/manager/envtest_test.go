@@ -18,6 +18,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -275,4 +276,38 @@ func TestEnvtestReadyUnelected(t *testing.T) {
 		require.FailNow(t, "elected against another replica's lease")
 	default:
 	}
+}
+
+// TestEnvtestReleasesLease pins that an elected replica gives up its lease
+// as Start returns.
+func TestEnvtestReleasesLease(t *testing.T) {
+	cfg := startEnvtest(t).Config
+	scheme, err := NewScheme()
+	require.NoError(t, err)
+	admin, err := client.New(cfg, client.Options{Scheme: scheme})
+	require.NoError(t, err)
+
+	const ns, id = "default", "release.nats.mikluko.io"
+	opts, err := managerOptions(&Options{MetricsAddr: "0", ProbeAddr: "0", LeaderElection: true, LeaderElectionID: id}, scheme, Owned{})
+	require.NoError(t, err)
+	opts.LeaderElectionNamespace = ns
+	mgr, err := newManager(cfg, opts)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- mgr.Start(ctx) }()
+	select {
+	case <-mgr.Elected():
+	case <-time.After(60 * time.Second):
+		require.FailNow(t, "not elected")
+	}
+	var lease coordinationv1.Lease
+	require.NoError(t, admin.Get(t.Context(), client.ObjectKey{Namespace: ns, Name: id}, &lease))
+	require.NotEmpty(t, ptr.Deref(lease.Spec.HolderIdentity, ""))
+
+	cancel()
+	require.NoError(t, <-done)
+	require.NoError(t, admin.Get(t.Context(), client.ObjectKey{Namespace: ns, Name: id}, &lease))
+	require.Empty(t, ptr.Deref(lease.Spec.HolderIdentity, ""), "the lease is still held")
 }

@@ -32,4 +32,6 @@ What a story assumes already exists, such as a NATS cluster nobody here deployed
 
 Before a story runs, its namespaces are deleted and made again, one at a time. Their NatsClusters get the `cluster.nats.mikluko.io/force-delete` annotation and their JetStream resources `deletionPolicy: Retain` first, so neither waits on a server. A namespace that has had no Pod for a minute and still holds a finalizer the controllers add loses it, users first and NatsClusters last, and the log names each one released.
 
+With `E2E_WATCH_NAMESPACES=true` the chart is installed with `watchNamespaces` listing the namespaces the stories run in, and the auth controller's system connection's where it runs, so the controllers reconcile under their Roles alone; each story's fresh namespaces get their Roles back from a `helm upgrade` before its first step.
+
 The clusters stay for the next run; `just e2e-down` deletes them. `hack/e2e` lists the `E2E_*` variables it reads, such as `E2E_STORIES`, the story numbers to run.

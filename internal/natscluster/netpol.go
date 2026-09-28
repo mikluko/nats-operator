@@ -40,9 +40,7 @@ func networkPolicyEnabled(spec *clusterv1beta1.NatsClusterSpec) bool {
 // pods, the monitoring port only from monitorNamespace, the metrics port
 // from monitorNamespace and exporter.from, and every other port the servers
 // listen on from anywhere; with neither monitorNamespace nor exporter.from,
-// the monitoring and metrics ports are admitted from nowhere. The exporter
-// sidecar reaches the monitoring port over the pod's loopback, which no
-// NetworkPolicy governs.
+// the monitoring and metrics ports are admitted from nowhere.
 func networkPolicy(nc *clusterv1beta1.NatsCluster, monitorNamespace string) *networkingv1.NetworkPolicy {
 	if !networkPolicyEnabled(&nc.Spec) {
 		return nil

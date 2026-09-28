@@ -40,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chart value `tests.image.digest` defaults to the digest of `busybox:1.37.0`.
 - Each release's chart sets `cluster.image.digest`, `auth.image.digest` and `jetstream.image.digest` to the digests of the images released with it.
 - `NatsCluster` `spec.image` takes `repository` and `digest`, and `spec.exporter.image` takes `repository`, `tag` and `digest`; a digest is rendered after the tag.
+- A `NatsCluster`'s servers prefer distinct nodes, unless `spec.podTemplate` sets `affinity`.
+- The exporter sidecar requests 10m CPU and 32Mi memory and is limited to 100m CPU and 128Mi memory; `NatsCluster` `spec.exporter.resources` replaces both.
+- The exporter sidecar's default image is pinned by digest.
+- A controller releases its leader-election lease as it shuts down.
 - Each release publishes the three controller images for linux/amd64 and linux/arm64, the chart as an OCI artifact, and a GitHub release carrying the version's changelog entry.
 - Documentation site at <https://mikluko.github.io/nats-operator/>, of the latest release: the stories, the design and the ADRs.
 - Documentation page `/docs/install/`: installing the chart, its values, the controllers' flags and RBAC, upgrade and uninstall.

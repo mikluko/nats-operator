@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
@@ -53,7 +55,7 @@ func TestRender_Story1(t *testing.T) {
 		require.Equal(t, nc.Spec.Resources, nats.Resources)
 		require.Equal(t, intstr.FromString("monitor"), nats.ReadinessProbe.HTTPGet.Port)
 		exporter := container(t, sts, "exporter")
-		require.Equal(t, "natsio/prometheus-nats-exporter:0.17.3", exporter.Image)
+		require.Equal(t, "natsio/prometheus-nats-exporter:0.17.3@"+ExporterDigest, exporter.Image)
 
 		require.Len(t, sts.Spec.VolumeClaimTemplates, 1)
 		pvc := sts.Spec.VolumeClaimTemplates[0]
@@ -118,6 +120,67 @@ func TestRender_Exporter(t *testing.T) {
 	}
 }
 
+func TestRender_Affinity(t *testing.T) {
+	spread := &corev1.Affinity{PodAntiAffinity: &corev1.PodAntiAffinity{
+		PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{{
+			Weight: 100,
+			PodAffinityTerm: corev1.PodAffinityTerm{
+				LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{LabelCluster: "demo"}},
+				TopologyKey:   "kubernetes.io/hostname",
+			},
+		}},
+	}}
+	zones := &corev1.Affinity{NodeAffinity: &corev1.NodeAffinity{
+		RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{NodeSelectorTerms: []corev1.NodeSelectorTerm{{
+			MatchExpressions: []corev1.NodeSelectorRequirement{{Key: "topology.kubernetes.io/zone", Operator: corev1.NodeSelectorOpIn, Values: []string{"a"}}},
+		}}},
+	}}
+	for _, tt := range []struct {
+		name        string
+		podTemplate *clusterv1beta1.PodTemplate
+		want        *corev1.Affinity
+	}{
+		{"default", nil, spread},
+		{"template without affinity", &clusterv1beta1.PodTemplate{Spec: &corev1.PodSpec{PriorityClassName: "high"}}, spread},
+		{"template affinity replaces it", &clusterv1beta1.PodTemplate{Spec: &corev1.PodSpec{Affinity: zones}}, zones},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			nc := storyCluster(t)
+			nc.Spec.PodTemplate = tt.podTemplate
+			p, err := Render(nc, Inputs{})
+			require.NoError(t, err)
+			for _, s := range p.Servers {
+				require.Equal(t, tt.want, s.StatefulSet.Spec.Template.Spec.Affinity)
+			}
+		})
+	}
+}
+
+func TestRender_ExporterResources(t *testing.T) {
+	own := &corev1.ResourceRequirements{Limits: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("1Gi")}}
+	for _, tt := range []struct {
+		name     string
+		exporter *clusterv1beta1.Exporter
+		want     corev1.ResourceRequirements
+	}{
+		{"default", nil, corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("10m"), corev1.ResourceMemory: resource.MustParse("32Mi")},
+			Limits:   corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("100m"), corev1.ResourceMemory: resource.MustParse("128Mi")},
+		}},
+		{"overridden", &clusterv1beta1.Exporter{Resources: own}, *own},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			nc := storyCluster(t)
+			nc.Spec.Exporter = tt.exporter
+			p, err := Render(nc, Inputs{})
+			require.NoError(t, err)
+			for _, s := range p.Servers {
+				require.Equal(t, tt.want, container(t, s.StatefulSet, "exporter").Resources)
+			}
+		})
+	}
+}
+
 func TestRender_Images(t *testing.T) {
 	const digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	for _, tt := range []struct {
@@ -130,7 +193,13 @@ func TestRender_Images(t *testing.T) {
 		{
 			name:         "defaults",
 			wantNATS:     "nats:2.15.0",
-			wantExporter: "natsio/prometheus-nats-exporter:0.17.3",
+			wantExporter: "natsio/prometheus-nats-exporter:0.17.3@" + ExporterDigest,
+		},
+		{
+			name:         "exporter repository",
+			exporter:     &clusterv1beta1.ExporterImage{Repository: "registry.example/exporter"},
+			wantNATS:     "nats:2.15.0",
+			wantExporter: "registry.example/exporter:0.17.3",
 		},
 		{
 			name:         "repositories",

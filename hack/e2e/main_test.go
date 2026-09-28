@@ -39,6 +39,13 @@ func TestLoadConfig(t *testing.T) {
 	require.Equal(t, []string{"t", "t-2", "t-3"}, c.clusterNames())
 	require.Equal(t, "1,6", c.stories)
 	require.Equal(t, 4*time.Minute, c.wait)
+	require.False(t, c.watchNamespaces)
+
+	c, err = loadConfig(env(map[string]string{"E2E_WATCH_NAMESPACES": "true"}))
+	require.NoError(t, err)
+	require.True(t, c.watchNamespaces)
+	_, err = loadConfig(env(map[string]string{"E2E_WATCH_NAMESPACES": "some"}))
+	require.ErrorContains(t, err, `E2E_WATCH_NAMESPACES "some" is not a boolean`)
 
 	_, err = loadConfig(env(map[string]string{"E2E_CLUSTERS": "0"}))
 	require.ErrorContains(t, err, `E2E_CLUSTERS "0" is not a positive number`)
@@ -71,7 +78,24 @@ func TestChartSets(t *testing.T) {
 		"--set", "cluster.image.tag=abc",
 		"--set", "cluster.image.pullPolicy=Never",
 		"--set", "cluster.enabled=true",
-	}, chartSets([]string{"cluster"}, images))
+	}, chartSets([]string{"cluster"}, images, nil))
+	require.Equal(t, []string{"--set", "watchNamespaces={a,nats-system}"},
+		chartSets(nil, nil, []string{"a", "nats-system"})[8:])
+}
+
+// TestWatchedNamespaces pins that namespace-scoped runs watch story 1's
+// namespace, and the auth controller's system connection's where it runs.
+func TestWatchedNamespaces(t *testing.T) {
+	stories, err := selectBundles("../..", "1")
+	require.NoError(t, err)
+	require.Len(t, stories, 1)
+	require.Equal(t, []string{"nats-system"}, watchedNamespaces(stories, []string{"cluster", "auth", "jetstream"}))
+	require.Equal(t, []string{"nats-system"}, watchedNamespaces(stories, []string{"cluster"}))
+	require.Equal(t, []string{"nats-system"}, watchedNamespaces(nil, []string{"auth"}))
+	require.Empty(t, watchedNamespaces(nil, []string{"cluster"}))
+
+	_, err = selectBundles("../..", "99")
+	require.ErrorContains(t, err, `matches "99"`)
 }
 
 // TestE2EEnv pins that the E2E_* variables reach the machine's shell whole,

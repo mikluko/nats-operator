@@ -42,8 +42,7 @@ func cacheOptions(owned Owned) (cache.Options, error) {
 }
 
 // ClientOptions makes a manager's client read Secrets from the API server,
-// which a reconciler watching Secrets metadata-only needs: a cached read can
-// trail the event that triggered it.
+// so no reconciler starts an informer on whole Secrets.
 func ClientOptions() client.Options {
 	return client.Options{Cache: &client.CacheOptions{DisableFor: []client.Object{&corev1.Secret{}}}}
 }

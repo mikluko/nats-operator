@@ -462,6 +462,7 @@ Appears on: [NatsClusterSpec](#NatsClusterSpec).
 | `enabled` | {{< type "bool" >}} | No | Enabled turns the sidecar off when false. Default: `true`. |
 | `image` | [{{< type "ExporterImage" >}}](#ExporterImage) | No | Image is the sidecar's image. |
 | `from` | [{{< type "[]NetworkPolicyPeer" >}}](https://pkg.go.dev/k8s.io/api/networking/v1#NetworkPolicyPeer) | No | From admits the metrics port from these peers besides the cluster controller's namespace, under monitor.networkPolicy. |
+| `resources` | [{{< type "ResourceRequirements" >}}](https://pkg.go.dev/k8s.io/api/core/v1#ResourceRequirements) | No | Resources replaces the sidecar's default requests, 10m CPU and 32Mi memory, and limits, 100m CPU and 128Mi memory. |
 
 ### ExporterImage {#ExporterImage}
 ExporterImage names the prometheus-nats-exporter sidecar's image.\
@@ -469,7 +470,7 @@ Appears on: [Exporter](#Exporter).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `repository` | {{< type "string" >}} | No | Repository is the image repository; empty, it is natsio/prometheus-nats-exporter. |
-| `tag` | {{< type "string" >}} | No | Tag is the image tag; empty, it is 0.17.3. |
+| `tag` | {{< type "string" >}} | No | Tag is the image tag; empty, it is the tag the cluster controller pins, with that tag's digest unless repository or digest is set. |
 | `digest` | {{< type "string" >}} | No | Digest pins the image to one manifest, rendered after the tag. |
 
 ### Gateway {#Gateway}
@@ -616,7 +617,7 @@ Appears on: [NatsCluster](#NatsCluster).
 | `resources` | [{{< type "ResourceRequirements" >}}](https://pkg.go.dev/k8s.io/api/core/v1#ResourceRequirements) | No | Resources of the nats-server container. GOMEMLIMIT and the JetStream memory store derive from limits.memory. |
 | `jetstream` | [{{< type "JetStream" >}}](#JetStream) | No | JetStream enables JetStream on every server. |
 | `serverTags` | {{< type "map[string]string" >}} | No | ServerTags are rendered as key:value server tags. |
-| `podTemplate` | [{{< type "PodTemplate" >}}](#PodTemplate) | No | PodTemplate is merged into every server's pod, over its security context and automountServiceAccountToken too: whoever may write a NatsCluster runs pods with any privilege its namespace admits. |
+| `podTemplate` | [{{< type "PodTemplate" >}}](#PodTemplate) | No | PodTemplate is merged into every server's pod, over its security context and automountServiceAccountToken too: whoever may write a NatsCluster runs pods with any privilege its namespace admits. Its affinity, when set, replaces the rendered one, a preferred anti-affinity spreading the servers across nodes. |
 | `exporter` | [{{< type "Exporter" >}}](#Exporter) | No | Exporter configures the prometheus-nats-exporter sidecar; absent, it runs. |
 | `monitor` | [{{< type "Monitor" >}}](#Monitor) | No | Monitor configures access to the monitoring port, 8222, which has no authentication. |
 | `tls` | [{{< type "ListenerTLS" >}}](#ListenerTLS) | No | TLS on the client listener; absent, clients connect in the clear. The cluster controller verifies it against the Secret's ca.crt, or the system roots without one. |

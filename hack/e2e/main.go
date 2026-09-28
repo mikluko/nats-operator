@@ -14,6 +14,8 @@
 //	E2E_PEER_CONTROLLERS  controllers the others' chart enables     cluster jetstream
 //	E2E_STORIES           comma-separated story numbers             all
 //	E2E_WAIT              a step's wait, where its story sets none  90s
+//	E2E_WATCH_NAMESPACES  true installs the chart with               false
+//	                      watchNamespaces, the stories' namespaces
 package main
 
 import (
@@ -38,6 +40,7 @@ type config struct {
 	peerControllers []string
 	stories         string
 	wait            time.Duration
+	watchNamespaces bool
 }
 
 // loadConfig reads config from getenv, each unset or empty variable taking
@@ -63,6 +66,9 @@ func loadConfig(getenv func(string) string) (config, error) {
 	}
 	if c.wait, err = time.ParseDuration(get("E2E_WAIT", "90s")); err != nil || c.wait <= 0 {
 		return c, fmt.Errorf("E2E_WAIT %q is not a positive duration", getenv("E2E_WAIT"))
+	}
+	if c.watchNamespaces, err = strconv.ParseBool(get("E2E_WATCH_NAMESPACES", "false")); err != nil {
+		return c, fmt.Errorf("E2E_WATCH_NAMESPACES %q is not a boolean", getenv("E2E_WATCH_NAMESPACES"))
 	}
 	return c, nil
 }

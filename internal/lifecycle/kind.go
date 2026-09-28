@@ -46,8 +46,8 @@ type Kind[P interface {
 	// status.
 	Record func(obj P, info *Info)
 	// Observe, where set, runs after Record and records on obj what else the
-	// server reports; its error fails the reconcile, with no requeue, after
-	// status is written, and turns a True Ready False with ReasonObserveFailed.
+	// server reports; its error fails the reconcile after status is written,
+	// and turns a True Ready False with ReasonObserveFailed.
 	Observe func(ctx context.Context, o Object, obj P, info *Info) error
 	// Conns is the NatsConnection references obj makes, nil being
 	// Connection's, and Refs every reference a grant must admit, nil being

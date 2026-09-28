@@ -274,8 +274,71 @@ spec:
                           natsio/prometheus-nats-exporter.
                         type: string
                       tag:
-                        description: Tag is the image tag; empty, it is 0.17.3.
+                        description: |-
+                          Tag is the image tag; empty, it is the tag the cluster controller
+                          pins, with that tag's digest unless repository or digest is set.
                         type: string
+                    type: object
+                  resources:
+                    description: |-
+                      Resources replaces the sidecar's default requests, 10m CPU and 32Mi
+                      memory, and limits, 100m CPU and 128Mi memory.
+                    properties:
+                      claims:
+                        description: |-
+                          Claims lists the names of resources, defined in spec.resourceClaims,
+                          that are used by this container.
+
+                          This field depends on the
+                          DynamicResourceAllocation feature gate.
+
+                          This field is immutable. It can only be set for containers.
+                        items:
+                          description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                          properties:
+                            name:
+                              description: |-
+                                Name must match the name of one entry in pod.spec.resourceClaims of
+                                the Pod where this field is used. It makes that resource available
+                                inside a container.
+                              type: string
+                            request:
+                              description: |-
+                                Request is the name chosen for a request in the referenced claim.
+                                If empty, everything from the claim is made available, otherwise
+                                only the result of this request.
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
+                      limits:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: |-
+                          Limits describes the maximum amount of compute resources allowed.
+                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                        type: object
+                      requests:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: |-
+                          Requests describes the minimum amount of compute resources required.
+                          If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                          otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                        type: object
                     type: object
                 type: object
               gateway:
@@ -790,7 +853,9 @@ spec:
                 description: |-
                   PodTemplate is merged into every server's pod, over its security
                   context and automountServiceAccountToken too: whoever may write a
-                  NatsCluster runs pods with any privilege its namespace admits.
+                  NatsCluster runs pods with any privilege its namespace admits. Its
+                  affinity, when set, replaces the rendered one, a preferred
+                  anti-affinity spreading the servers across nodes.
                 properties:
                   metadata:
                     description: EmbeddedObjectMetadata is the metadata a template

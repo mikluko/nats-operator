@@ -452,6 +452,7 @@ func TestRenovate_WatchesToolPins(t *testing.T) {
 		"gohugoio/hugo",
 		"lycheeverse/lychee",
 		"cgr.dev/chainguard/static",
+		"natsio/prometheus-nats-exporter",
 		"golang.org/x/vuln",
 		"github.com/rhysd/actionlint",
 	} {
