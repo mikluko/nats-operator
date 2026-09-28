@@ -1,0 +1,39 @@
+{{- $policy := .Values.networkPolicy }}
+{{- if $policy.enabled }}
+{{- range $name, $values := dict "cluster-controller" .Values.cluster "auth-controller" .Values.auth "jetstream-controller" .Values.jetstream }}
+{{- if $values.enabled }}
+{{- $ctx := dict "root" $ "name" $name }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nats-operator.fullname" $ctx }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "nats-operator.labels" $ctx | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "nats-operator.selectorLabels" $ctx | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    {{- with $policy.from }}
+    - from:
+        {{- toYaml . | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 9464
+    {{- end }}
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "nats-operator.selectorLabels" $ctx | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 8081
+{{- end }}
+{{- end }}
+{{- end }}

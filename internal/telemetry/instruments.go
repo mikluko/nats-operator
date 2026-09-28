@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/nats-io/jwt/v2"
+	"github.com/prometheus/otlptranslator"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -66,6 +67,17 @@ type Instrument struct {
 	Reads       string
 }
 
+// PrometheusName is in's name as the OpenTelemetry Prometheus exporter
+// serves it under its default translation strategy.
+func (in Instrument) PrometheusName() (string, error) {
+	var typ otlptranslator.MetricType = otlptranslator.MetricTypeGauge
+	if in.Type == Counter {
+		typ = otlptranslator.MetricTypeMonotonicCounter
+	}
+	namer := otlptranslator.NewMetricNamer("", otlptranslator.UnderscoreEscapingWithSuffixes)
+	return namer.Build(otlptranslator.Metric{Name: in.Name, Unit: in.Unit, Type: typ})
+}
+
 var resourceAttrs = []string{AttrKind, AttrNamespace, AttrName}
 
 // The instruments, as Instruments lists them.
@@ -82,7 +94,7 @@ var (
 	AccountJWTExpiry = Instrument{
 		Name:        "nats_operator.account.jwt_expiry",
 		Unit:        "s",
-		Description: "When the NatsAccount's current JWT expires, in seconds since the Unix epoch; a JWT that never expires has no point. Every account JWT expires once the auth controller has been down its jwtTTL, so the minimum over every account is the deadline for bringing it back.",
+		Description: "When the NatsAccount's current JWT expires, in seconds since the Unix epoch; a JWT that never expires has no point.",
 		Type:        Gauge,
 		Controllers: []string{AuthController},
 		Attributes:  resourceAttrs,

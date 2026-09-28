@@ -41,6 +41,9 @@ tests:
       metrics.serviceMonitor.enabled: true
       metrics.serviceMonitor.labels: {release: prometheus}
       metrics.serviceMonitor.interval: 1m30s
+      metrics.serviceMonitor.bearerTokenSecret: {name: prometheus-token, key: token}
+      networkPolicy.enabled: true
+      networkPolicy.from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}}]
     asserts:
       - notFailedTemplate: {}
   - it: refuses a misspelled top-level key
@@ -121,3 +124,21 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "at '/podAnnotations/replicas': got number, want string"
+  - it: refuses a bearerTokenSecret without its key
+    set:
+      metrics.serviceMonitor.bearerTokenSecret: {name: prometheus-token}
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/metrics/serviceMonitor/bearerTokenSecret'"
+  - it: refuses a misspelled key under networkPolicy
+    set:
+      networkPolicy.enabeld: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/networkPolicy': additional properties 'enabeld' not allowed"
+  - it: refuses a networkPolicy.from entry that is not a NetworkPolicy peer
+    set:
+      networkPolicy.from: [{namespace: monitoring}]
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/networkPolicy/from/0'"

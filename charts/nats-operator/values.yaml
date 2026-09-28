@@ -120,12 +120,8 @@ metrics:
   # metrics port, which serves HTTPS under a self-signed certificate.
   service:
     enabled: false
-  # Each controller's OpenTelemetry metrics served for scraping, over plain
-  # HTTP and without authentication, on the pod IP's port 9464, named
-  # otel-metrics on the container, the metrics Service, which it requires, and
-  # the ServiceMonitor; it sets OTEL_METRICS_EXPORTER=prometheus and
-  # OTEL_EXPORTER_PROMETHEUS_HOST=0.0.0.0, which an env entry of the same name
-  # replaces.
+  # Each controller's OpenTelemetry metrics, plain HTTP and unauthenticated,
+  # on port 9464 (otel-metrics); requires metrics.service.enabled.
   prometheus:
     enabled: false
   # A prometheus-operator ServiceMonitor per enabled controller over that
@@ -138,6 +134,18 @@ metrics:
     labels: {}
     # Empty, Prometheus's own scrape interval.
     interval: ""
+    # A Secret key, {name, key}, in the release namespace holding the token
+    # the metrics endpoint is scraped with, in place of the Prometheus pod's
+    # own; empty, the pod's own.
+    bearerTokenSecret: {}
+
+# A NetworkPolicy over each enabled controller's pods admitting ports 8080
+# and 9464 from the peers in from alone, and port 8081 from the controller's
+# own pods and its `helm test` pod; nothing else inbound.
+networkPolicy:
+  enabled: false
+  # NetworkPolicy peers. Empty, ports 8080 and 9464 admit no one.
+  from: []
 
 # The image of the `helm test` pods, which need sh and wget.
 tests:

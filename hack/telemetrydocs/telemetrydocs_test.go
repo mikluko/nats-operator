@@ -12,5 +12,7 @@ import (
 func TestPageCurrent(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join("../..", page))
 	require.NoError(t, err)
-	require.Equal(t, render(), string(got), "%s is stale: run just telemetry-docs", page)
+	want, err := render()
+	require.NoError(t, err)
+	require.Equal(t, want, string(got), "%s is stale: run just telemetry-docs", page)
 }

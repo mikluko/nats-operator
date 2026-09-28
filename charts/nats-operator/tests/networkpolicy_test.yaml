@@ -1,0 +1,58 @@
+suite: networkpolicy
+templates:
+  - templates/networkpolicy.yaml
+release:
+  name: rel
+  namespace: nats
+tests:
+  - it: renders nothing by default
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: renders a NetworkPolicy per enabled controller
+    set:
+      networkPolicy.enabled: true
+      auth.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 2
+      - containsDocument: {kind: NetworkPolicy, apiVersion: networking.k8s.io/v1, name: rel-cluster-controller, namespace: nats, any: true}
+      - containsDocument: {kind: NetworkPolicy, apiVersion: networking.k8s.io/v1, name: rel-jetstream-controller, namespace: nats, any: true}
+  - it: admits the metrics ports from the peers networkPolicy.from names, and the probes port from the pods carrying the controller's selector labels, its helm test pod among them
+    set:
+      networkPolicy.enabled: true
+      networkPolicy.from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}}]
+      cluster.enabled: false
+      jetstream.enabled: false
+    asserts:
+      - equal:
+          path: spec
+          value:
+            podSelector:
+              matchLabels:
+                app.kubernetes.io/name: nats-operator
+                app.kubernetes.io/instance: rel
+                app.kubernetes.io/component: auth-controller
+            policyTypes: [Ingress]
+            ingress:
+              - from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}}]
+                ports: [{protocol: TCP, port: 8080}, {protocol: TCP, port: 9464}]
+              - from:
+                  - podSelector:
+                      matchLabels:
+                        app.kubernetes.io/name: nats-operator
+                        app.kubernetes.io/instance: rel
+                        app.kubernetes.io/component: auth-controller
+                ports: [{protocol: TCP, port: 8081}]
+  - it: admits no one to the metrics ports while networkPolicy.from is empty
+    set:
+      networkPolicy.enabled: true
+      cluster.enabled: false
+      jetstream.enabled: false
+    asserts:
+      - lengthEqual:
+          path: spec.ingress
+          count: 1
+      - equal:
+          path: spec.ingress[0].ports
+          value: [{protocol: TCP, port: 8081}]

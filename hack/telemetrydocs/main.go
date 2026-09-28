@@ -22,16 +22,26 @@ var environment string
 //go:embed operator.md
 var operator string
 
+// jwtExpiry is the account JWT expiry alert, a format taking the gauge's
+// Prometheus name.
+//
+//go:embed jwtexpiry.md
+var jwtExpiry string
+
 func main() {
 	out := flag.String("o", page, "file to write")
 	flag.Parse()
-	if err := os.WriteFile(*out, []byte(render()), 0o644); err != nil {
+	text, err := render()
+	if err == nil {
+		err = os.WriteFile(*out, []byte(text), 0o644)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "telemetrydocs:", err)
 		os.Exit(1)
 	}
 }
 
-func render() string {
+func render() (string, error) {
 	var b strings.Builder
 	b.WriteString(`---
 title: Telemetry
@@ -47,12 +57,21 @@ Each controller exports metrics and traces through the OpenTelemetry Go SDK, con
 	b.WriteString(environment)
 	b.WriteString(operator)
 
-	b.WriteString("\n## Metrics\n\nThe gauges are read off the resources' status at each export. Every point carries `kind`, `namespace` and `name` of the resource it describes.\n\n")
-	b.WriteString("| Instrument | Type | Unit | Controllers | Attributes | Reads | Value |\n|---|---|---|---|---|---|---|\n")
+	b.WriteString("\n## Metrics\n\nThe gauges are read off the resources' status at each export. Every point carries `kind`, `namespace` and `name` of the resource it describes. The Prometheus column is each instrument's name as `OTEL_METRICS_EXPORTER=prometheus` serves it on port 9464, which `metrics.prometheus.enabled` sets.\n\n")
+	b.WriteString("| Instrument | Prometheus | Type | Unit | Controllers | Attributes | Reads | Value |\n|---|---|---|---|---|---|---|---|\n")
 	for _, in := range telemetry.Instruments {
-		fmt.Fprintf(&b, "| `%s` | %s | `%s` | %s | %s | %s | %s |\n",
-			in.Name, in.Type, in.Unit, strings.Join(in.Controllers, ", "), code(in.Attributes, ", "), in.Reads, in.Description)
+		prom, err := in.PrometheusName()
+		if err != nil {
+			return "", fmt.Errorf("instrument %s: %w", in.Name, err)
+		}
+		fmt.Fprintf(&b, "| `%s` | `%s` | %s | `%s` | %s | %s | %s | %s |\n",
+			in.Name, prom, in.Type, in.Unit, strings.Join(in.Controllers, ", "), code(in.Attributes, ", "), in.Reads, in.Description)
 	}
+	expiry, err := telemetry.AccountJWTExpiry.PrometheusName()
+	if err != nil {
+		return "", fmt.Errorf("instrument %s: %w", telemetry.AccountJWTExpiry.Name, err)
+	}
+	fmt.Fprintf(&b, jwtExpiry, expiry)
 
 	b.WriteString("\n## Traces\n\nEach reconcile runs in a span named `Reconcile <kind>`, such as `Reconcile NatsCluster`, carrying `kind`, `namespace` and `name`. A reconcile that returns an error marks its span failed with it.\n")
 
@@ -61,7 +80,7 @@ Each controller exports metrics and traces through the OpenTelemetry Go SDK, con
 	for _, e := range telemetry.Events {
 		fmt.Fprintf(&b, "| `%s` | %s | %s | %s | %s |\n", e.Reason, e.Type, e.Controller, code(e.Regarding, ", "), e.When)
 	}
-	return b.String()
+	return b.String(), nil
 }
 
 func code(list []string, sep string) string {

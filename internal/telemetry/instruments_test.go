@@ -122,15 +122,12 @@ type collected map[string]struct {
 	points map[string]int64
 }
 
-func collect(t *testing.T, register func(metric.Meter) error, after func()) collected {
+func collect(t *testing.T, controller string, r client.Reader) collected {
 	t.Helper()
 	reader := sdkmetric.NewManualReader()
 	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
 	t.Cleanup(func() { require.NoError(t, mp.Shutdown(context.Background())) })
-	require.NoError(t, register(mp.Meter("test")))
-	if after != nil {
-		after()
-	}
+	record(t, controller, mp.Meter("test"), r)
 	var rm metricdata.ResourceMetrics
 	require.NoError(t, reader.Collect(t.Context(), &rm))
 	out := collected{}
@@ -172,27 +169,41 @@ func key(attrs []attribute.KeyValue) string {
 	return strings.Join(pairs, ",")
 }
 
-// registered collects what each controller registers over the fixtures,
-// with two held passes and one settled pass of the NatsBalancer recorded.
+// record registers controller's instruments on m over r, and for the
+// JetStream controller records two held passes and one settled pass of the
+// NatsBalancer.
+func record(t *testing.T, controller string, m metric.Meter, r client.Reader) {
+	t.Helper()
+	switch controller {
+	case ClusterController:
+		require.NoError(t, RegisterCluster(m, r))
+	case AuthController:
+		require.NoError(t, RegisterAuth(m, r))
+	case JetStreamController:
+		j, err := RegisterJetStream(m, r)
+		require.NoError(t, err)
+		b := &js.NatsBalancer{ObjectMeta: om("orders")}
+		holding := []metav1.Condition{cond("Holding", metav1.ConditionTrue, "YieldingToSystemBalancer")}
+		j.BalancerPass(t.Context(), "NatsBalancer", b, holding)
+		j.BalancerPass(t.Context(), "NatsBalancer", b, holding)
+		j.BalancerPass(t.Context(), "NatsBalancer", b, []metav1.Condition{cond("Holding", metav1.ConditionFalse, "Settled")})
+	default:
+		t.Fatalf("no controller %s", controller)
+	}
+}
+
+// controllers are the three controllers, as Instrument.Controllers names them.
+var controllers = []string{ClusterController, AuthController, JetStreamController}
+
+// registered collects what each controller records over the fixtures.
 func registered(t *testing.T) map[string]collected {
 	t.Helper()
 	r := fakeReader(t)
-	var j *JetStreamInstruments
-	return map[string]collected{
-		ClusterController: collect(t, func(m metric.Meter) error { return RegisterCluster(m, r) }, nil),
-		AuthController:    collect(t, func(m metric.Meter) error { return RegisterAuth(m, r) }, nil),
-		JetStreamController: collect(t, func(m metric.Meter) error {
-			var err error
-			j, err = RegisterJetStream(m, r)
-			return err
-		}, func() {
-			b := &js.NatsBalancer{ObjectMeta: om("orders")}
-			holding := []metav1.Condition{cond("Holding", metav1.ConditionTrue, "YieldingToSystemBalancer")}
-			j.BalancerPass(t.Context(), "NatsBalancer", b, holding)
-			j.BalancerPass(t.Context(), "NatsBalancer", b, holding)
-			j.BalancerPass(t.Context(), "NatsBalancer", b, []metav1.Condition{cond("Holding", metav1.ConditionFalse, "Settled")})
-		}),
+	out := map[string]collected{}
+	for _, c := range controllers {
+		out[c] = collect(t, c, r)
 	}
+	return out
 }
 
 // TestInstruments pins each instrument's value, read from the fixtures'
@@ -243,7 +254,7 @@ func TestInstruments(t *testing.T) {
 // no attribute an instrument's entry does not name.
 func TestInstrumentsListed(t *testing.T) {
 	got := registered(t)
-	for _, controller := range []string{ClusterController, AuthController, JetStreamController} {
+	for _, controller := range controllers {
 		var want []string
 		for _, in := range Instruments {
 			if !slices.Contains(in.Controllers, controller) {

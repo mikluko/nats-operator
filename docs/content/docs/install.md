@@ -44,7 +44,7 @@ helm test nats-operator --namespace nats-operator --logs
 
 For each enabled controller this starts the Pod `<release>-<controller>-test`, which GETs the controller's `/readyz` on port `8081` through the Service `<release>-<controller>-test`, with 30 tries, two seconds apart.
 
-The auth controller has to stay up for the accounts it signs to keep working. Each account JWT expires its `jwtTTL` after it was signed, 48h by default, and is re-signed at half that, so an auth controller down for half a `jwtTTL` may let an account's JWT expire, and one down for a whole `jwtTTL` has let every one expire; the servers then close that account's connections. The gauge `nats_operator.account.jwt_expiry`, under [Telemetry]({{< relref "/docs/reference/telemetry#metrics" >}}), says when each current account JWT expires. An account with `jwtTTL: 0s` never expires.
+The auth controller has to stay up for the accounts it signs to keep working; [Telemetry]({{< relref "/docs/reference/telemetry#account-jwt-expiry" >}}) gives the alert for it. Each account JWT expires its `jwtTTL` after it was signed, 48h by default, and is re-signed at half that, so an auth controller down for half a `jwtTTL` may let an account's JWT expire, and one down for a whole `jwtTTL` has let every one expire; the servers then close that account's connections.
 
 Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NATS cluster with JetStream.
 
@@ -119,6 +119,9 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `metrics.serviceMonitor.enabled` | `false` | A prometheus-operator `ServiceMonitor` `<release>-<controller>-metrics` per enabled controller, over that Service; requires `metrics.service.enabled` and the `monitoring.coreos.com/v1` CRDs. See [Metrics](#metrics). |
 | `metrics.serviceMonitor.labels` | `{}` | Labels of each ServiceMonitor, for a Prometheus that selects them by label. |
 | `metrics.serviceMonitor.interval` | `""` | Scrape interval of each ServiceMonitor; empty, Prometheus's own. |
+| `metrics.serviceMonitor.bearerTokenSecret` | `{}` | A Secret key, `{name, key}`, in the release namespace whose token each ServiceMonitor scrapes port `metrics` with, as `bearerTokenSecret` in place of `bearerTokenFile`. See [Metrics](#metrics). |
+| `networkPolicy.enabled` | `false` | A NetworkPolicy `<release>-<controller>` per enabled controller over its pods, admitting ports `8080` and `9464` from `networkPolicy.from` alone, port `8081` from the pods carrying the controller's selector labels, its `helm test` pod among them, and nothing else inbound. |
+| `networkPolicy.from` | `[]` | NetworkPolicy peers admitted to ports `8080` and `9464`; empty, no one. |
 | `tests.image.repository` | `busybox` | Image of the `helm test` pods. |
 | `tests.image.tag` | `"1.37.0"` | Its image tag. |
 | `tests.image.digest` | `"sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e"` | `sha256:<hex>` appended to its image reference as `@<digest>`. |
@@ -143,9 +146,9 @@ The flags below are the binaries' own. Of those not named above, the chart sets 
 
 ## Metrics
 
-Each controller serves its metrics over HTTPS on port `8080` under a self-signed certificate it generates at start, so a scraper cannot verify it and must skip verification; what authenticates the scrape is the bearer token, which must be that of a ServiceAccount allowed `get` on `/metrics`, such as `metrics.scraper.serviceAccount`. With `metrics.serviceMonitor.enabled`, each ServiceMonitor scrapes with `scheme: https`, `tlsConfig.insecureSkipVerify: true` and the Prometheus pod's own ServiceAccount token, read from `/var/run/secrets/kubernetes.io/serviceaccount/token`; set `metrics.scraper.serviceAccount` to that ServiceAccount.
+Each controller serves its metrics over HTTPS on port `8080` under a self-signed certificate it generates at start, so a scraper cannot verify it and must skip verification; what authenticates the scrape is the bearer token, which must be that of a ServiceAccount allowed `get` on `/metrics`, such as `metrics.scraper.serviceAccount`. With `metrics.serviceMonitor.enabled`, each ServiceMonitor scrapes with `scheme: https`, `tlsConfig.insecureSkipVerify: true` and the Prometheus pod's own ServiceAccount token, read from `/var/run/secrets/kubernetes.io/serviceaccount/token`; set `metrics.scraper.serviceAccount` to that ServiceAccount. A Prometheus that denies file access through ServiceMonitors (`arbitraryFSAccessThroughSMs.deny: true`) refuses `bearerTokenFile`; for it, set `metrics.serviceMonitor.bearerTokenSecret` to a key of a Secret in the release namespace holding that ServiceAccount's token.
 
-Port `8080` serves controller-runtime's metrics only. The controllers' own instruments, `nats_operator.account.jwt_expiry` among them, are OpenTelemetry metrics under [Telemetry]({{< relref "/docs/reference/telemetry#metrics" >}}); with `metrics.prometheus.enabled`, each controller serves them at `/metrics` on port `9464` over plain HTTP to any client that reaches the pod, and each ServiceMonitor scrapes that port with `scheme: http` and no token.
+Port `8080` serves controller-runtime's metrics only. The controllers' own instruments, `nats_operator.account.jwt_expiry` among them, are OpenTelemetry metrics under [Telemetry]({{< relref "/docs/reference/telemetry#metrics" >}}); with `metrics.prometheus.enabled`, each controller serves them at `/metrics` on port `9464` over plain HTTP to any client that reaches the pod, and each ServiceMonitor scrapes that port with `scheme: http` and no token. That page names the kind, namespace and name of every resource the controller reconciles in every namespace it watches, with the type and reason of each of its conditions; `networkPolicy.enabled` admits ports `8080` and `9464` from the peers `networkPolicy.from` names alone.
 
 ## RBAC
 

@@ -171,7 +171,36 @@
           "properties": {
             "enabled": {"type": "boolean"},
             "labels": {"$ref": "#/definitions/strings"},
-            "interval": {"type": "string", "pattern": "^([0-9]+(ms|s|m|h))*$"}
+            "interval": {"type": "string", "pattern": "^([0-9]+(ms|s|m|h))*$"},
+            "bearerTokenSecret": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "name": {"type": "string", "minLength": 1},
+                "key": {"type": "string", "minLength": 1}
+              },
+              "anyOf": [{"maxProperties": 0}, {"required": ["name", "key"]}]
+            }
+          }
+        }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "from": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "namespaceSelector": {"type": "object"},
+              "podSelector": {"type": "object"},
+              "ipBlock": {"type": "object"}
+            }
           }
         }
       }

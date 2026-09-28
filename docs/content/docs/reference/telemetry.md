@@ -72,19 +72,33 @@ Both annotations are read off the pod: on the Deployment, under the chart's `ann
 
 ## Metrics
 
-The gauges are read off the resources' status at each export. Every point carries `kind`, `namespace` and `name` of the resource it describes.
+The gauges are read off the resources' status at each export. Every point carries `kind`, `namespace` and `name` of the resource it describes. The Prometheus column is each instrument's name as `OTEL_METRICS_EXPORTER=prometheus` serves it on port 9464, which `metrics.prometheus.enabled` sets.
 
-| Instrument | Type | Unit | Controllers | Attributes | Reads | Value |
-|---|---|---|---|---|---|---|
-| `nats_operator.condition` | gauge | `1` | cluster-controller, auth-controller, jetstream-controller | `kind`, `namespace`, `name`, `type`, `reason` | status.conditions of every kind the controller reconciles | 1 while the condition is True, 0 while it is False or Unknown. |
-| `nats_operator.account.jwt_expiry` | gauge | `s` | auth-controller | `kind`, `namespace`, `name` | NatsAccount status.jwt | When the NatsAccount's current JWT expires, in seconds since the Unix epoch; a JWT that never expires has no point. Every account JWT expires once the auth controller has been down its jwtTTL, so the minimum over every account is the deadline for bringing it back. |
-| `nats_operator.rollout.pending_servers` | gauge | `{server}` | cluster-controller | `kind`, `namespace`, `name` | NatsCluster status.rollout.pending | Servers still to update in the NatsCluster's rollout. |
-| `nats_operator.rollout.gate` | gauge | `1` | cluster-controller | `kind`, `namespace`, `name`, `waiting_for` | NatsCluster status.rollout.gate.waitingFor | 1 while the rollout's gate is closed, by what it waits for. |
-| `nats_operator.balancer.leader_skew` | gauge | `{leader}` | jetstream-controller | `kind`, `namespace`, `name`, `pool` | NatsBalancer status.pools[].leaderSkew, NatsSystemBalancer status.skew.leaders | The most leaders one server carries less the fewest another does: per pool for a NatsBalancer, over the NATS cluster for a NatsSystemBalancer. |
-| `nats_operator.balancer.pending_moves` | gauge | `{move}` | jetstream-controller | `kind`, `namespace`, `name`, `move_kind` | NatsSystemBalancer status.pending | Moves the NatsSystemBalancer requested that are not yet complete, by kind of move. |
-| `nats_operator.balancer.held_passes` | counter | `{pass}` | jetstream-controller | `kind`, `namespace`, `name`, `reason` | NatsBalancer and NatsSystemBalancer status.conditions[Holding], after each pass | Balancer passes that ended with Holding True, by its reason. |
-| `nats_operator.evacuation.remaining` | gauge | `{stream}` | jetstream-controller | `kind`, `namespace`, `name` | NatsClusterEvacuation status.remaining | Streams still to leave the evacuation's source cluster. |
-| `nats_operator.evacuation.stale_placements` | gauge | `{stream}` | jetstream-controller | `kind`, `namespace`, `name` | NatsClusterEvacuation status.stalePlacement | Moved streams no resource owns whose config still names the source cluster. |
+| Instrument | Prometheus | Type | Unit | Controllers | Attributes | Reads | Value |
+|---|---|---|---|---|---|---|---|
+| `nats_operator.condition` | `nats_operator_condition_ratio` | gauge | `1` | cluster-controller, auth-controller, jetstream-controller | `kind`, `namespace`, `name`, `type`, `reason` | status.conditions of every kind the controller reconciles | 1 while the condition is True, 0 while it is False or Unknown. |
+| `nats_operator.account.jwt_expiry` | `nats_operator_account_jwt_expiry_seconds` | gauge | `s` | auth-controller | `kind`, `namespace`, `name` | NatsAccount status.jwt | When the NatsAccount's current JWT expires, in seconds since the Unix epoch; a JWT that never expires has no point. |
+| `nats_operator.rollout.pending_servers` | `nats_operator_rollout_pending_servers` | gauge | `{server}` | cluster-controller | `kind`, `namespace`, `name` | NatsCluster status.rollout.pending | Servers still to update in the NatsCluster's rollout. |
+| `nats_operator.rollout.gate` | `nats_operator_rollout_gate_ratio` | gauge | `1` | cluster-controller | `kind`, `namespace`, `name`, `waiting_for` | NatsCluster status.rollout.gate.waitingFor | 1 while the rollout's gate is closed, by what it waits for. |
+| `nats_operator.balancer.leader_skew` | `nats_operator_balancer_leader_skew` | gauge | `{leader}` | jetstream-controller | `kind`, `namespace`, `name`, `pool` | NatsBalancer status.pools[].leaderSkew, NatsSystemBalancer status.skew.leaders | The most leaders one server carries less the fewest another does: per pool for a NatsBalancer, over the NATS cluster for a NatsSystemBalancer. |
+| `nats_operator.balancer.pending_moves` | `nats_operator_balancer_pending_moves` | gauge | `{move}` | jetstream-controller | `kind`, `namespace`, `name`, `move_kind` | NatsSystemBalancer status.pending | Moves the NatsSystemBalancer requested that are not yet complete, by kind of move. |
+| `nats_operator.balancer.held_passes` | `nats_operator_balancer_held_passes_total` | counter | `{pass}` | jetstream-controller | `kind`, `namespace`, `name`, `reason` | NatsBalancer and NatsSystemBalancer status.conditions[Holding], after each pass | Balancer passes that ended with Holding True, by its reason. |
+| `nats_operator.evacuation.remaining` | `nats_operator_evacuation_remaining` | gauge | `{stream}` | jetstream-controller | `kind`, `namespace`, `name` | NatsClusterEvacuation status.remaining | Streams still to leave the evacuation's source cluster. |
+| `nats_operator.evacuation.stale_placements` | `nats_operator_evacuation_stale_placements` | gauge | `{stream}` | jetstream-controller | `kind`, `namespace`, `name` | NatsClusterEvacuation status.stalePlacement | Moved streams no resource owns whose config still names the source cluster. |
+
+### Account JWT expiry
+
+The auth controller re-signs each account JWT at half its `jwtTTL`, so while it runs, no account JWT expires sooner than half the shortest `jwtTTL` from now: 24h under the default 48h. Scraped through the chart's ServiceMonitor, this fires once one does:
+
+```promql
+min(nats_operator_account_jwt_expiry_seconds) - time() < 24 * 3600
+```
+
+The gauge is exported by the auth controller itself and goes stale once its scrape fails, so that expression returns nothing while the auth controller is down. This fires then, from the ServiceMonitor's endpoint `otel-metrics`:
+
+```promql
+absent(up{job=~".+-auth-controller-metrics", endpoint="otel-metrics"} == 1)
+```
 
 ## Traces
 
