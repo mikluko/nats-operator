@@ -66,6 +66,9 @@ const (
 	// ReasonMovePending is Holding's reason while a placement move the
 	// balancer made has not left its server.
 	ReasonMovePending = "MovePending"
+	// ReasonMoveLeaseHeld is Holding's reason while another balancer holds
+	// the move lease of the NATS cluster.
+	ReasonMoveLeaseHeld = "MoveLeaseHeld"
 )
 
 const (
@@ -94,6 +97,9 @@ type SystemBalancerReconciler struct {
 	Recorder events.EventRecorder
 	// Telemetry counts held passes; nil counts none.
 	Telemetry *telemetry.JetStreamInstruments
+	// Leases is shared with every other balancer reconciler that moves on
+	// the same NATS clusters; nil is the process's own.
+	Leases *MoveLeases
 
 	balancers balancerSet
 }
@@ -104,6 +110,7 @@ func (r *SystemBalancerReconciler) Reconcile(ctx context.Context, req reconcile.
 	if err := r.Client.Get(ctx, req.NamespacedName, &b); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.balancers.forget(req.NamespacedName)
+			leasesOr(r.Leases).drop(holderName(SystemBalancerKind, req.NamespacedName))
 		}
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
@@ -127,7 +134,7 @@ func (r *SystemBalancerReconciler) balance(ctx context.Context, b *js.NatsSystem
 
 	nc, err := lifecycle.Resolve(ctx, r.Dialer, referrer(b.Namespace), b.Spec.ConnectionRef, &st.Conditions, b.Generation)
 	if nc == nil {
-		return after, err
+		return retry(after, err)
 	}
 	cluster := nc.ConnectedClusterName()
 	if cluster == "" {
@@ -138,12 +145,12 @@ func (r *SystemBalancerReconciler) balance(ctx context.Context, b *js.NatsSystem
 		if other != "" {
 			r.setReady(b, false, ReasonDuplicate, fmt.Sprintf("NatsSystemBalancer %s balances NATS cluster %s", other, cluster))
 		}
-		return after, err
+		return retry(after, err)
 	}
 	obs := &SystemObserver{Sys: sysobs.New(nc, cluster), Cluster: cluster}
 	ev, err := evacueesOf(ctx, r.Client, r.Dialer, nc, obs)
 	if err != nil {
-		return after, err
+		return retry(after, err)
 	}
 
 	now := time.Now()
@@ -159,6 +166,12 @@ func (r *SystemBalancerReconciler) balance(ctx context.Context, b *js.NatsSystem
 	}
 	due := st.LastMove == nil || st.LastMove.Time == nil || !now.Before(st.LastMove.Time.Add(interval))
 	k.DryRun = !due || placementPending(st.Pending)
+	leases, holder := leasesOr(r.Leases), holderName(SystemBalancerKind, client.ObjectKeyFromObject(b))
+	var leasedTo string
+	if !k.DryRun {
+		leasedTo = leases.take(cluster, holder, now)
+		k.DryRun = leasedTo != ""
+	}
 
 	passed, passErr := k.Pass(ctx)
 	if last := obs.Last(); last != nil {
@@ -171,18 +184,24 @@ func (r *SystemBalancerReconciler) balance(ctx context.Context, b *js.NatsSystem
 		}
 		st.Capabilities = capabilities(ctx, *last, reach)
 	}
-	if passErr == nil && reach.err != nil {
-		passErr = reach.err
+	if passErr == nil {
+		record(st, passed, now)
+	}
+	if len(st.Pending) > 0 {
+		leases.take(cluster, holder, now)
+	} else {
+		leases.release(cluster, holder)
 	}
 	if passErr != nil {
 		r.setReady(b, false, ReasonPassFailed, passErr.Error())
 		return after, nil
 	}
-	record(st, passed, now)
 	if m := moveOf(passed, now); m != nil {
 		telemetry.Emit(r.Recorder, b, telemetry.MoveStarted, "%s", describeMove(*m))
 	}
 	switch {
+	case leasedTo != "":
+		r.setHolding(b, true, ReasonMoveLeaseHeld, leaseMessage(leasedTo, cluster))
 	case passed.Held != "":
 		r.setHolding(b, true, ReasonUnsettled, passed.Held)
 	case placementPending(st.Pending):
@@ -190,12 +209,21 @@ func (r *SystemBalancerReconciler) balance(ctx context.Context, b *js.NatsSystem
 	default:
 		r.setHolding(b, false, ReasonSettled, "")
 	}
-	r.setReady(b, true, ReasonBalancing, "")
+	if reach.err != nil {
+		r.setReady(b, false, ReasonPassFailed, reach.err.Error())
+	} else {
+		r.setReady(b, true, ReasonBalancing, "")
+	}
 
-	if len(st.Pending) > 0 {
+	if len(st.Pending) > 0 || leasedTo != "" {
 		return reconcile.Result{RequeueAfter: r.pendingPoll()}, nil
 	}
 	return after, nil
+}
+
+// leaseMessage is Holding's message while holder holds cluster's move lease.
+func leaseMessage(holder, cluster string) string {
+	return fmt.Sprintf("%s holds the move lease of NATS cluster %s", holder, cluster)
 }
 
 // duplicateOf names the NatsSystemBalancer that balances cluster ahead of b:
@@ -368,6 +396,15 @@ func (r *SystemBalancerReconciler) pendingPoll() time.Duration {
 
 func referrer(namespace string) grant.Referrer {
 	return grant.Referrer{Group: js.GroupVersion.Group, Kind: SystemBalancerKind, Namespace: namespace}
+}
+
+// retry is res where err is nil, and no result beside err otherwise:
+// controller-runtime ignores a result returned with an error.
+func retry(res reconcile.Result, err error) (reconcile.Result, error) {
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	return res, nil
 }
 
 // SetupWithManager registers the reconciler with mgr.

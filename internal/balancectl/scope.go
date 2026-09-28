@@ -2,8 +2,11 @@ package balancectl
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/nats-io/nats.go"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -14,6 +17,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/balance"
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 	"github.com/mikluko/nats-operator/internal/natsconn"
+	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
 // jszSubject asks the server whose ID fills it for its JetStream state, which
@@ -34,6 +38,86 @@ func answers(ctx context.Context, sys *nats.Conn, id string) (bool, error) {
 		return false, nil
 	}
 	return false, fmt.Errorf("ask server %s for its JetStream state: %w", id, err)
+}
+
+// pingJszSubject asks every server a filter selects for its JetStream state.
+const pingJszSubject = "$SYS.REQ.SERVER.PING.JSZ"
+
+// serversDown says why snap, of NATS cluster cluster, may be missing streams,
+// and is "" where it is not: a server of cluster did not answer, the meta
+// group has no leader, or its leader reports a peer offline. A server that is
+// down is in no roster, so only the meta leader still names it, and it names
+// no cluster for it.
+func serversDown(ctx context.Context, sys *nats.Conn, snap *sysobs.Snapshot, cluster string) (string, error) {
+	if len(snap.Silent) > 0 {
+		return fmt.Sprintf("%s of %s %s", servers(snap.Silent), cluster, plural(len(snap.Silent), "does not answer", "do not answer")), nil
+	}
+	i := slices.IndexFunc(snap.Groups, func(g sysobs.Group) bool { return g.Kind == sysobs.KindMeta })
+	if i < 0 || snap.Groups[i].Leader == "" {
+		return "the meta group has no leader", nil
+	}
+	offline, err := offlinePeers(ctx, sys, snap.Groups[i].Leader)
+	if err != nil || len(offline) == 0 {
+		return "", err
+	}
+	return fmt.Sprintf("%s %s offline", servers(offline), plural(len(offline), "is", "are")), nil
+}
+
+// offlinePeers names, sorted, the meta group's peers that leader, the meta
+// leader, reports offline.
+func offlinePeers(ctx context.Context, sys *nats.Conn, leader string) ([]string, error) {
+	req, err := json.Marshal(map[string]any{"server_name": leader, "exact_match": true})
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+	msg, err := sys.RequestWithContext(ctx, pingJszSubject, req)
+	if err != nil {
+		return nil, fmt.Errorf("ask meta leader %s for its peers: %w", leader, err)
+	}
+	var resp struct {
+		Data *struct {
+			Meta *struct {
+				Replicas []struct {
+					Name    string `json:"name"`
+					Offline bool   `json:"offline"`
+				} `json:"replicas"`
+			} `json:"meta_cluster"`
+		} `json:"data"`
+		Error *struct {
+			Description string `json:"description"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(msg.Data, &resp); err != nil {
+		return nil, fmt.Errorf("ask meta leader %s for its peers: %w", leader, err)
+	}
+	if resp.Error != nil {
+		return nil, fmt.Errorf("ask meta leader %s for its peers: %s", leader, resp.Error.Description)
+	}
+	var out []string
+	if resp.Data != nil && resp.Data.Meta != nil {
+		for _, p := range resp.Data.Meta.Replicas {
+			if p.Offline {
+				out = append(out, p.Name)
+			}
+		}
+	}
+	slices.Sort(out)
+	return out, nil
+}
+
+// servers is names after "server" or "servers".
+func servers(names []string) string {
+	return plural(len(names), "server", "servers") + " " + strings.Join(names, ", ")
+}
+
+// plural is one where n is 1, and many otherwise.
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }
 
 // evacuationOf names a NatsClusterEvacuation, not yet Ready, that empties the

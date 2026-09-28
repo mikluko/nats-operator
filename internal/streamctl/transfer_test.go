@@ -78,13 +78,44 @@ func TestConsumersMoved(t *testing.T) {
 		{"name":"west","desired":{"name":"west"}},
 		{"name":"east","desired":{"name":"west"}},
 		{"name":"east"}]`), &consumers))
-	require.Equal(t, &js.TransferConsumers{Moved: 1, Total: 4}, consumersMoved(consumers, "west"))
-	require.Equal(t, &js.TransferConsumers{}, consumersMoved(nil, "west"))
+	require.Equal(t, &js.TransferConsumers{Moved: 1, Total: 4}, consumersMoved(consumers, 4, "west"))
+	require.Equal(t, &js.TransferConsumers{Moved: 1, Total: 6}, consumersMoved(consumers, 6, "west"), "a consumer the server could not ask counts as not moved")
+	require.Equal(t, &js.TransferConsumers{}, consumersMoved(nil, 0, "west"))
+}
+
+func TestDecodeConsumerPage(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  string
+		want consumerPage
+	}{
+		{
+			name: "every consumer answered",
+			raw:  `{"total":2,"offset":0,"consumers":[{"name":"a","cluster":{"name":"west"}},{"name":"b"}]}`,
+			want: consumerPage{clusters: []clusterWire{{Name: "west"}, {}}, covered: 2, total: 2},
+		},
+		{
+			name: "consumers the server timed out on are missing",
+			raw:  `{"total":3,"offset":0,"consumers":[{"name":"a","cluster":{"name":"west"}}],"missing":["b","c"]}`,
+			want: consumerPage{clusters: []clusterWire{{Name: "west"}}, covered: 3, total: 3},
+		},
+		{
+			name: "an offline consumer is listed and missing",
+			raw:  `{"total":2,"offset":0,"consumers":[{"name":"a","cluster":{"name":"east"}}],"missing":["a","b"]}`,
+			want: consumerPage{clusters: []clusterWire{{Name: "east"}}, covered: 2, total: 2},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := decodeConsumerPage([]byte(tc.raw))
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
 }
 
 // TestStreamMove edits a NatsStream's placement.cluster on a two-cluster
 // supercluster and follows the move the server makes, held in flight by
-// stopping one new replica: the transfer block and Synced False with
+// stopping two of its three new replicas: the transfer block and Synced False with
 // ReasonMoving while it is, rechecked on MovingRecheck, then neither once
 // the stream serves from the new cluster.
 func TestStreamMove(t *testing.T) {
@@ -133,28 +164,22 @@ func TestStreamMove(t *testing.T) {
 			return false
 		}
 		s := f.stream("orders")
-		if s.Status.Transfer == nil || s.Status.Transfer.Consumers == nil {
+		if s.Status.Transfer == nil || s.Status.Transfer.Consumers == nil || currentReplicas(s.Status.Transfer) > 1 {
 			return false
 		}
 		seen, recheck = s, res.RequeueAfter
 		return true
-	}, 30*time.Second, 50*time.Millisecond, "no transfer was reported")
+	}, 30*time.Second, 50*time.Millisecond, "no transfer was reported with the stopped replicas not current")
 	require.Equal(t, lifecycle.MovingRecheck, recheck)
 	tr := seen.Status.Transfer
 	require.Equal(t, "east", tr.From)
 	require.Equal(t, "west", tr.To)
 	require.NotNil(t, tr.Started)
 	require.Equal(t, []string{"west-0", "west-1", "west-2"}, []string{tr.Replicas[0].Name, tr.Replicas[1].Name, tr.Replicas[2].Name})
-	require.Equal(t, &js.TransferConsumers{Moved: 0, Total: 2}, tr.Consumers)
-	current := 0
-	for _, r := range tr.Replicas {
-		if r.Current {
-			current++
-		}
-	}
-	require.Less(t, current, 3, "a stopped replica is never current")
+	require.EqualValues(t, 2, tr.Consumers.Total)
+	require.LessOrEqual(t, tr.Consumers.Moved, tr.Consumers.Total)
 	synced := condition(t, seen.Status.Conditions, lifecycle.ConditionSynced, metav1.ConditionFalse, ReasonMoving)
-	require.Equal(t, fmt.Sprintf("moving to cluster west; %d of 3 new replicas current", current), synced.Message)
+	require.Equal(t, fmt.Sprintf("moving to cluster west; %d of 3 new replicas current", currentReplicas(tr)), synced.Message)
 	condition(t, seen.Status.Conditions, lifecycle.ConditionReady, metav1.ConditionTrue, lifecycle.ReasonSynced)
 	require.True(t, strings.HasPrefix(seen.Status.Server.Leader, "east-"), "the east copies lead until the move ends")
 	require.EqualValues(t, 2, seen.Status.ObservedGeneration)
@@ -180,12 +205,24 @@ func TestStreamMove(t *testing.T) {
 	}
 }
 
-// stallMove waits until stream is moving to NATS cluster to, then stops one
-// of its new replicas in n so the move cannot finish, and returns what
-// starts that server again.
+// currentReplicas counts the new replicas t reports current.
+func currentReplicas(t *js.StreamTransfer) int {
+	n := 0
+	for _, r := range t.Replicas {
+		if r.Current {
+			n++
+		}
+	}
+	return n
+}
+
+// stallMove waits until stream is moving to NATS cluster to, then stops all
+// but one of its new replicas in n, and returns what starts them again. The
+// server completes a move once a quorum of the new replicas has caught up, so
+// with one of three left it cannot.
 func stallMove(t *testing.T, j jetstream.JetStream, n *testNATS, stream, to string) (restart func()) {
 	t.Helper()
-	var victim string
+	var victims []string
 	require.Eventually(t, func() bool {
 		msg, err := j.Conn().Request("$JS.API.STREAM.INFO."+stream, nil, 5*time.Second)
 		if err != nil {
@@ -206,10 +243,18 @@ func stallMove(t *testing.T, j jetstream.JetStream, n *testNATS, stream, to stri
 			names = append(names, r.Name)
 		}
 		slices.Sort(names)
-		victim = names[len(names)-1]
+		victims = names[1:]
 		return true
 	}, 30*time.Second, 5*time.Millisecond, "%s never began moving to %s", stream, to)
-	return n.stop(t, victim)
+	var restarts []func()
+	for _, v := range victims {
+		restarts = append(restarts, n.stop(t, v))
+	}
+	return func() {
+		for _, r := range restarts {
+			r()
+		}
+	}
 }
 
 func requestFor(name string) reconcile.Request {

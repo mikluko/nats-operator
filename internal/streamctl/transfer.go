@@ -81,9 +81,9 @@ func streamTransfer(c *clusterWire) *js.StreamTransfer {
 }
 
 // consumersMoved counts, of consumers, those in cluster to and at their
-// placement.
-func consumersMoved(consumers []clusterWire, to string) *js.TransferConsumers {
-	out := &js.TransferConsumers{Total: int32(len(consumers))} //nolint:gosec // consumer counts fit.
+// placement, out of total.
+func consumersMoved(consumers []clusterWire, total int, to string) *js.TransferConsumers {
+	out := &js.TransferConsumers{Total: int32(total)} //nolint:gosec // consumer counts fit.
 	for _, c := range consumers {
 		if c.Desired == nil && c.Name == to {
 			out.Moved++
@@ -124,40 +124,75 @@ func observeTransfer(ctx context.Context, o lifecycle.Object, s *js.NatsStream, 
 	if !ok {
 		return nil
 	}
-	consumers, err := so.consumerClusters(ctx)
+	consumers, total, err := so.consumerClusters(ctx)
 	if err != nil {
 		return err
 	}
-	t.Consumers = consumersMoved(consumers, t.To)
+	t.Consumers = consumersMoved(consumers, total, t.To)
 	return nil
 }
 
-// consumerClusters returns the cluster of every consumer on the stream.
-func (o *streamObject) consumerClusters(ctx context.Context) ([]clusterWire, error) {
+// consumerListTimeout bounds one CONSUMER.LIST request above the four
+// seconds nats-server waits on the consumers' leaders before it answers.
+const consumerListTimeout = 10 * time.Second
+
+// consumerClusters returns the cluster of every consumer on the stream that
+// answered, and how many consumers the stream has.
+func (o *streamObject) consumerClusters(ctx context.Context) ([]clusterWire, int, error) {
 	subject := "$JS.API.CONSUMER.LIST." + streamName(o.obj)
 	var out []clusterWire
-	for {
-		raw, err := jsapi.Request(ctx, o.api.Conn, subject, map[string]int{"offset": len(out)})
+	for offset := 0; ; {
+		ctx, cancel := context.WithTimeout(ctx, consumerListTimeout)
+		raw, err := jsapi.Request(ctx, o.api.Conn, subject, map[string]int{"offset": offset})
+		cancel()
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
-		var page struct {
-			Total     int `json:"total"`
-			Consumers []struct {
-				Cluster *clusterWire `json:"cluster"`
-			} `json:"consumers"`
+		page, err := decodeConsumerPage(raw)
+		if err != nil {
+			return nil, 0, fmt.Errorf("decode %s reply: %w", subject, err)
 		}
-		if err := json.Unmarshal(raw, &page); err != nil {
-			return nil, fmt.Errorf("decode %s reply: %w", subject, err)
-		}
-		for _, c := range page.Consumers {
-			if c.Cluster == nil {
-				c.Cluster = &clusterWire{}
-			}
-			out = append(out, *c.Cluster)
-		}
-		if len(page.Consumers) == 0 || len(out) >= page.Total {
-			return out, nil
+		out = append(out, page.clusters...)
+		offset += page.covered
+		if page.covered == 0 || offset >= page.total {
+			return out, page.total, nil
 		}
 	}
+}
+
+// consumerPage is one CONSUMER.LIST reply: the clusters of the consumers it
+// carries, how many consumers it covers, counting those listed as missing,
+// and how many the stream has.
+type consumerPage struct {
+	clusters []clusterWire
+	covered  int
+	total    int
+}
+
+func decodeConsumerPage(raw []byte) (consumerPage, error) {
+	var reply struct {
+		Total     int `json:"total"`
+		Consumers []struct {
+			Name    string       `json:"name"`
+			Cluster *clusterWire `json:"cluster"`
+		} `json:"consumers"`
+		Missing []string `json:"missing"`
+	}
+	if err := json.Unmarshal(raw, &reply); err != nil {
+		return consumerPage{}, err
+	}
+	p := consumerPage{total: reply.Total}
+	names := map[string]bool{}
+	for _, c := range reply.Consumers {
+		names[c.Name] = true
+		if c.Cluster == nil {
+			c.Cluster = &clusterWire{}
+		}
+		p.clusters = append(p.clusters, *c.Cluster)
+	}
+	for _, n := range reply.Missing {
+		names[n] = true
+	}
+	p.covered = len(names)
+	return p, nil
 }

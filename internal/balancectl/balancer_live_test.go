@@ -105,7 +105,7 @@ func TestBalancer_Pools(t *testing.T) {
 	conns := natsconn.NewPool()
 	t.Cleanup(conns.Close)
 	rec := events.NewFakeRecorder(1000)
-	r := &BalancerReconciler{Client: c, Dialer: &natsconn.Dialer{Reader: c, Pool: conns}, PendingPoll: time.Millisecond, Recorder: rec}
+	r := &BalancerReconciler{Client: c, Dialer: &natsconn.Dialer{Reader: c, Pool: conns}, PendingPoll: time.Millisecond, Recorder: rec, Leases: &MoveLeases{}}
 
 	even := []js.PoolStatus{
 		{Name: "requests", Streams: 3},
@@ -149,7 +149,7 @@ func TestBalancer_Pools(t *testing.T) {
 		require.NoError(t, c.Status().Update(ctx, &b))
 
 		for range 5 {
-			fresh := &BalancerReconciler{Client: c, Dialer: r.Dialer, PendingPoll: time.Millisecond}
+			fresh := &BalancerReconciler{Client: c, Dialer: r.Dialer, PendingPoll: time.Millisecond, Leases: &MoveLeases{}}
 			_, err := fresh.Reconcile(ctx, reconcile.Request{NamespacedName: key})
 			require.NoError(t, err)
 		}
@@ -161,7 +161,7 @@ func TestBalancer_Pools(t *testing.T) {
 		due := metav1.NewTime(time.Now().Add(-2 * time.Hour))
 		b.Status.LastMove.Time = &due
 		require.NoError(t, c.Status().Update(ctx, &b))
-		got := reconciledAccount(t, ctx, &BalancerReconciler{Client: c, Dialer: r.Dialer, PendingPoll: time.Millisecond}, func(ct *assert.CollectT, b *js.NatsBalancer) {
+		got := reconciledAccount(t, ctx, &BalancerReconciler{Client: c, Dialer: r.Dialer, PendingPoll: time.Millisecond, Leases: &MoveLeases{}}, func(ct *assert.CollectT, b *js.NatsBalancer) {
 			assert.True(ct, b.Status.LastMove.Time.After(due.Time), "no move once the interval had passed")
 		}, "the balancer did not move once its last move was an interval old")
 		require.Equal(t, p.aPub, got.Status.LastMove.Account)
@@ -249,4 +249,72 @@ func stepToFirst(t *testing.T, ctx context.Context, j jetstream.JetStream, strea
 		_, _ = j.Conn().Request("$JS.API.STREAM.LEADER.STEPDOWN."+stream, fmt.Appendf(nil, `{"placement":{"preferred":%q}}`, server), 5*time.Second)
 		return false
 	}, time.Minute, 300*time.Millisecond, "%s did not move to %s", stream, server)
+}
+
+// TestBalancers_OneMoveAtATime runs a NatsSystemBalancer, which can move
+// only account A's leaders, beside a NatsBalancer of account B, on one NATS
+// cluster whose every leader starts on C1-0: each moves only while the
+// other has no move in flight.
+func TestBalancers_OneMoveAtATime(t *testing.T) {
+	t.Parallel()
+	p := newPlane(t)
+	sc := startSupercluster(t, p, "C1")
+	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Minute)
+	defer cancel()
+	skewedStreams(t, ctx, accountJS(t, sc["C1"][1], p.a), "A", 3)
+	jsB := accountJS(t, sc["C1"][2], p.b)
+	bStreams := skewedStreams(t, ctx, jsB, "B", 3)
+
+	objs := append(connection("sys", sc["C1"][0].ClientURL(), p.sysCreds), connection("b", sc["C1"][1].ClientURL(), creds(t, jwtplane.User{}, p.b))...)
+	objs = append(objs, balancer("demo", "sys", time.Now()), accountBalancer("logs", "b"))
+	c := fake.NewClientBuilder().WithScheme(testScheme(t)).
+		WithStatusSubresource(&js.NatsSystemBalancer{}, &js.NatsBalancer{}).
+		WithObjects(objs...).
+		Build()
+	conns := natsconn.NewPool()
+	t.Cleanup(conns.Close)
+	dialer := &natsconn.Dialer{Reader: c, Pool: conns}
+	leases := &MoveLeases{}
+	sr := &SystemBalancerReconciler{Client: c, Dialer: dialer, PendingPoll: time.Millisecond, Leases: leases}
+	ar := &BalancerReconciler{Client: c, Dialer: dialer, PendingPoll: time.Millisecond, Leases: leases}
+	sysKey, accKey := client.ObjectKey{Namespace: ns, Name: "demo"}, client.ObjectKey{Namespace: ns, Name: "logs"}
+	passSystem := func() *js.NatsSystemBalancer {
+		t.Helper()
+		_, err := sr.Reconcile(ctx, reconcile.Request{NamespacedName: sysKey})
+		require.NoError(t, err)
+		var b js.NatsSystemBalancer
+		require.NoError(t, c.Get(ctx, sysKey, &b))
+		return &b
+	}
+	passAccount := func() *js.NatsBalancer {
+		t.Helper()
+		_, err := ar.Reconcile(ctx, reconcile.Request{NamespacedName: accKey})
+		require.NoError(t, err)
+		var b js.NatsBalancer
+		require.NoError(t, c.Get(ctx, accKey, &b))
+		return &b
+	}
+	holdingFor := func(conds []metav1.Condition) string {
+		h := meta.FindStatusCondition(conds, ConditionHolding)
+		if h == nil || h.Status != metav1.ConditionTrue || h.Reason != ReasonMoveLeaseHeld {
+			return ""
+		}
+		return h.Message
+	}
+
+	var sys *js.NatsSystemBalancer
+	require.Eventually(t, func() bool { sys = passSystem(); return len(sys.Status.Pending) > 0 }, time.Minute, 20*time.Millisecond, "the system balancer made no move")
+	acc := passAccount()
+	require.Nil(t, acc.Status.LastMove, "the account balancer moved while the system balancer's move was in flight")
+	require.Equal(t, "NatsSystemBalancer nats-system/demo holds the move lease of NATS cluster C1", holdingFor(acc.Status.Conditions))
+	for _, name := range bStreams {
+		require.Equal(t, "C1-0", streamLeader(t, ctx, jsB, name))
+	}
+
+	require.Eventually(t, func() bool { sys = passSystem(); return len(sys.Status.Pending) == 0 }, time.Minute, 20*time.Millisecond, "the system balancer's move never completed")
+	last := sys.Status.LastMove
+	require.Eventually(t, func() bool { acc = passAccount(); return acc.Status.LastMove != nil }, time.Minute, 20*time.Millisecond, "the account balancer did not move once the lease was free")
+	sys = passSystem()
+	require.Equal(t, last, sys.Status.LastMove, "the system balancer moved while the account balancer's move was in flight")
+	require.Equal(t, "NatsBalancer nats-system/logs holds the move lease of NATS cluster C1", holdingFor(sys.Status.Conditions))
 }

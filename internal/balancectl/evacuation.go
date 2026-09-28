@@ -66,6 +66,11 @@ const (
 	// ReasonMoveRefused is Ready's reason after a pass in which the server
 	// refused a move.
 	ReasonMoveRefused = "MoveRefused"
+	// ReasonServersDown is Ready's and Progressing's reason while a server
+	// of the source does not answer, or the meta group reports a server of
+	// the NATS system offline, since the source may hold streams no snapshot
+	// shows; no move is made and none is counted done.
+	ReasonServersDown = "ServersDown"
 )
 
 // DefaultMaxInFlight is EvacuationReconciler.MaxInFlight's default.
@@ -140,6 +145,16 @@ func (r *EvacuationReconciler) evacuate(ctx context.Context, e *js.NatsClusterEv
 	if err != nil {
 		setEvacuation(e, ConditionReady, false, ReasonPassFailed, err.Error())
 		return after, nil
+	}
+	down, err := serversDown(ctx, nc, snap, from)
+	if err != nil {
+		setEvacuation(e, ConditionReady, false, ReasonPassFailed, err.Error())
+		return after, nil
+	}
+	if down != "" {
+		setEvacuation(e, ConditionReady, false, ReasonServersDown, down)
+		setEvacuation(e, ConditionProgressing, false, ReasonServersDown, down)
+		return reconcile.Result{RequeueAfter: r.pendingPoll()}, nil
 	}
 	st.Pinned = pinnedIn(snap, owners, from)
 	pinned := st.Pinned

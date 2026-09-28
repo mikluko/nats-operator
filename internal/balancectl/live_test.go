@@ -2,11 +2,13 @@ package balancectl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,10 +21,12 @@ import (
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
@@ -109,7 +113,7 @@ func TestSystemBalancer_Supercluster(t *testing.T) {
 	pool := natsconn.NewPool()
 	t.Cleanup(pool.Close)
 	rec := events.NewFakeRecorder(1000)
-	r := &SystemBalancerReconciler{Client: c, Dialer: &natsconn.Dialer{Reader: c, Pool: pool}, PendingPoll: time.Millisecond, Recorder: rec}
+	r := &SystemBalancerReconciler{Client: c, Dialer: &natsconn.Dialer{Reader: c, Pool: pool}, PendingPoll: time.Millisecond, Recorder: rec, Leases: &MoveLeases{}}
 
 	t.Run("EvensLeadersItCanMove", func(t *testing.T) {
 		b := reconciled(t, ctx, r, "demo", func(ct *assert.CollectT, b *js.NatsSystemBalancer) {
@@ -215,10 +219,123 @@ func TestSystemBalancer_Supercluster(t *testing.T) {
 	})
 }
 
+// TestSystemBalancer_ProbeFailsAfterMove moves a leader of account A in a
+// pass whose stepdown probe of account B times out, and finds the move
+// recorded beside the failure.
+func TestSystemBalancer_ProbeFailsAfterMove(t *testing.T) {
+	t.Parallel()
+	p := newPlane(t)
+	sc := startSupercluster(t, p, "C1")
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
+	defer cancel()
+	jsA := accountJS(t, sc["C1"][1], p.a)
+	aStreams := skewedStreams(t, ctx, jsA, "A", 3)
+	skewedStreams(t, ctx, accountJS(t, sc["C1"][2], p.b), "B", 1)
+
+	token, seed := newUser(t, jwtplane.User{}, p.sys)
+	sink, err := nats.Connect(sc["C1"][0].ClientURL(), nats.UserJWTAndSeed(token, string(seed)))
+	require.NoError(t, err)
+	t.Cleanup(sink.Close)
+	_, err = sink.Subscribe(jwtplane.StepdownPrefix(p.bPub)+">", func(*nats.Msg) {})
+	require.NoError(t, err)
+	probe := jwtplane.StreamStepdownSubject(p.bPub, probeStream)
+	require.Eventually(t, func() bool {
+		_, err := sink.Request(probe, nil, 100*time.Millisecond)
+		return errors.Is(err, nats.ErrTimeout)
+	}, 10*time.Second, 50*time.Millisecond, "B's stepdown probe still finds no responders")
+
+	objs := append(connection("c1", sc["C1"][1].ClientURL(), p.sysCreds), balancer("demo", "c1", time.Now()))
+	c := fake.NewClientBuilder().WithScheme(testScheme(t)).WithStatusSubresource(&js.NatsSystemBalancer{}).WithObjects(objs...).Build()
+	pool := natsconn.NewPool()
+	t.Cleanup(pool.Close)
+	r := &SystemBalancerReconciler{Client: c, Dialer: &natsconn.Dialer{Reader: c, Pool: pool}, PendingPoll: time.Millisecond, Leases: &MoveLeases{}}
+	key := client.ObjectKey{Namespace: ns, Name: "demo"}
+	// A stream that does not answer, or answers with no leader, is electing
+	// one after a stepdown, which only the balancer requests here.
+	moved := func() bool {
+		for _, name := range aStreams {
+			ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			s, err := jsA.Stream(ctx, name)
+			cancel()
+			if err != nil || s.CachedInfo().Cluster == nil || s.CachedInfo().Cluster.Leader != "C1-0" {
+				return true
+			}
+		}
+		return false
+	}
+	require.Eventually(t, func() bool {
+		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
+		require.NoError(t, err)
+		return moved()
+	}, time.Minute, 50*time.Millisecond, "no leader of A moved")
+
+	var b js.NatsSystemBalancer
+	require.NoError(t, c.Get(ctx, key, &b))
+	ready := meta.FindStatusCondition(b.Status.Conditions, ConditionReady)
+	require.NotNil(t, ready)
+	require.Equal(t, ReasonPassFailed, ready.Reason, ready.Message)
+	require.Contains(t, ready.Message, probe)
+	require.NotNil(t, b.Status.LastMove, "the pass moved a leader and recorded no move")
+	require.Equal(t, p.aPub, b.Status.LastMove.Account)
+	require.Equal(t, "C1-0", b.Status.LastMove.From)
+	require.Equal(t, []js.Move{*b.Status.LastMove}, b.Status.Pending)
+}
+
 // streamLeader is the leader of stream name as j sees it.
 func streamLeader(t *testing.T, ctx context.Context, j jetstream.JetStream, name string) string {
 	t.Helper()
 	s, err := j.Stream(ctx, name)
 	require.NoError(t, err)
 	return s.CachedInfo().Cluster.Leader
+}
+
+// TestReconcile_APIErrorNoRequeue fails a list each balancer reconciler makes
+// once connected, and finds the error returned with no RequeueAfter, which
+// controller-runtime would ignore beside it.
+func TestReconcile_APIErrorNoRequeue(t *testing.T) {
+	t.Parallel()
+	p := newPlane(t)
+	sc := startSupercluster(t, p, "C1")
+	down := errors.New("the API server is down")
+	build := func(t *testing.T, failing client.ObjectList, objs ...client.Object) client.Client {
+		t.Helper()
+		return fake.NewClientBuilder().WithScheme(testScheme(t)).
+			WithStatusSubresource(&js.NatsSystemBalancer{}, &js.NatsBalancer{}).
+			WithObjects(objs...).
+			WithInterceptorFuncs(interceptor.Funcs{List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+				if fmt.Sprintf("%T", list) == fmt.Sprintf("%T", failing) {
+					return down
+				}
+				return c.List(ctx, list, opts...)
+			}}).
+			Build()
+	}
+	dialer := func(t *testing.T, c client.Client) *natsconn.Dialer {
+		pool := natsconn.NewPool()
+		t.Cleanup(pool.Close)
+		return &natsconn.Dialer{Reader: c, Pool: pool}
+	}
+	url := sc["C1"][0].ClientURL()
+	tests := []struct {
+		name      string
+		reconcile func(*testing.T) (reconcile.Result, error)
+	}{
+		{"NatsSystemBalancer", func(t *testing.T) (reconcile.Result, error) {
+			c := build(t, &js.NatsSystemBalancerList{}, append(connection("sys", url, p.sysCreds), balancer("demo", "sys", time.Now()))...)
+			r := &SystemBalancerReconciler{Client: c, Dialer: dialer(t, c), Leases: &MoveLeases{}}
+			return r.Reconcile(t.Context(), reconcile.Request{NamespacedName: client.ObjectKey{Namespace: ns, Name: "demo"}})
+		}},
+		{"NatsBalancer", func(t *testing.T) (reconcile.Result, error) {
+			c := build(t, &js.NatsStreamList{}, append(connection("a", url, creds(t, jwtplane.User{}, p.a)), accountBalancer("payments", "a"))...)
+			r := &BalancerReconciler{Client: c, Dialer: dialer(t, c), Leases: &MoveLeases{}}
+			return r.Reconcile(t.Context(), reconcile.Request{NamespacedName: client.ObjectKey{Namespace: ns, Name: "payments"}})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := tt.reconcile(t)
+			require.ErrorIs(t, err, down)
+			require.Zero(t, res)
+		})
+	}
 }

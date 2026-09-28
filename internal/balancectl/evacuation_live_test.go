@@ -208,8 +208,9 @@ func TestEvacuation_Supercluster(t *testing.T) {
 	dialer := &natsconn.Dialer{Reader: c, Pool: pool}
 	rec := events.NewFakeRecorder(1000)
 	r := &EvacuationReconciler{Client: c, Dialer: dialer, MaxInFlight: 2, PendingPoll: time.Millisecond, Recorder: rec}
-	br := &SystemBalancerReconciler{Client: c, Dialer: dialer, PendingPoll: time.Millisecond}
-	ar := &BalancerReconciler{Client: c, Dialer: dialer, PendingPoll: time.Millisecond}
+	leases := &MoveLeases{}
+	br := &SystemBalancerReconciler{Client: c, Dialer: dialer, PendingPoll: time.Millisecond, Leases: leases}
+	ar := &BalancerReconciler{Client: c, Dialer: dialer, PendingPoll: time.Millisecond, Leases: leases}
 
 	t.Run("RefusesTargetTagsInSource", func(t *testing.T) {
 		require.NoError(t, c.Create(ctx, evacuation("wrong", "c2", "old")))
@@ -280,6 +281,7 @@ func TestEvacuation_Supercluster(t *testing.T) {
 		}
 		reconciled(t, ctx, br, "demo", func(ct *assert.CollectT, b *js.NatsSystemBalancer) {
 			condition(ct, b, ConditionHolding, metav1.ConditionFalse, ReasonSettled)
+			assert.Empty(ct, b.Status.Pending)
 			if assert.NotNil(ct, b.Status.Skew) {
 				assert.Zero(ct, b.Status.Skew.Leaders, "leaders %v", b.Status.Servers)
 			}
@@ -380,4 +382,53 @@ func requestedStreams(list []js.RequestedMove) []string {
 		out = append(out, m.Stream)
 	}
 	return out
+}
+
+// TestEvacuation_ServerDown evacuates C1 while the server holding an R1
+// stream of it is stopped: the stream is in no snapshot of C1, and the
+// evacuation holds rather than reading C1 as empty.
+func TestEvacuation_ServerDown(t *testing.T) {
+	t.Parallel()
+	p := newPlane(t)
+	sc := startTaggedSupercluster(t, p, map[string][]string{"C1": {"old"}, "C2": {"new"}}, "C1", "C2")
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
+	defer cancel()
+	jsB := accountJS(t, sc["C1"][0], p.b)
+	require.Eventually(t, func() bool {
+		_, err := jsB.CreateStream(ctx, jetstream.StreamConfig{Name: "LOG", Subjects: []string{"log.>"}, Replicas: 1})
+		return err == nil
+	}, 30*time.Second, 200*time.Millisecond, "create LOG")
+	require.Eventually(t, func() bool { return placedIn(ctx, jsB, "LOG") == "C1" }, time.Minute, 100*time.Millisecond, "LOG did not settle in C1")
+	host := streamLeader(t, ctx, jsB, "LOG")
+	for _, srv := range sc["C1"] {
+		if srv.Name() == host {
+			srv.Shutdown()
+		}
+	}
+
+	objs := append(connection("sys", sc["C2"][0].ClientURL(), p.sysCreds), evacuation("retire-c1", "sys", "new"))
+	c := fake.NewClientBuilder().WithScheme(testScheme(t)).WithStatusSubresource(&js.NatsClusterEvacuation{}).WithObjects(objs...).Build()
+	pool := natsconn.NewPool()
+	t.Cleanup(pool.Close)
+	r := &EvacuationReconciler{Client: c, Dialer: &natsconn.Dialer{Reader: c, Pool: pool}, PendingPoll: time.Millisecond}
+	key := client.ObjectKey{Namespace: ns, Name: "retire-c1"}
+	var e js.NatsClusterEvacuation
+	pass := func() {
+		t.Helper()
+		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
+		require.NoError(t, err)
+		require.NoError(t, c.Get(ctx, key, &e))
+		require.False(t, meta.IsStatusConditionTrue(e.Status.Conditions, ConditionReady), "C1 read as evacuated with %s down", host)
+	}
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
+		pass()
+		evacCondition(ct, &e, ConditionReady, metav1.ConditionFalse, ReasonServersDown)
+		evacCondition(ct, &e, ConditionProgressing, metav1.ConditionFalse, ReasonServersDown)
+	}, 30*time.Second, 100*time.Millisecond, "the evacuation did not hold for %s", host)
+	require.Equal(t, fmt.Sprintf("server %s is offline", host), meta.FindStatusCondition(e.Status.Conditions, ConditionReady).Message)
+	for range 5 {
+		pass()
+	}
+	require.Zero(t, e.Status.Moved)
+	require.Empty(t, e.Status.Requested)
 }

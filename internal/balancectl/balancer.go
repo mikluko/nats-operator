@@ -75,6 +75,9 @@ type BalancerReconciler struct {
 	Recorder events.EventRecorder
 	// Telemetry counts held passes; nil counts none.
 	Telemetry *telemetry.JetStreamInstruments
+	// Leases is shared with every other balancer reconciler that moves on
+	// the same NATS clusters; nil is the process's own.
+	Leases *MoveLeases
 
 	balancers balancerSet
 }
@@ -85,6 +88,7 @@ func (r *BalancerReconciler) Reconcile(ctx context.Context, req reconcile.Reques
 	if err := r.Client.Get(ctx, req.NamespacedName, &b); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.balancers.forget(req.NamespacedName)
+			leasesOr(r.Leases).drop(holderName(BalancerKind, req.NamespacedName))
 		}
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
@@ -108,7 +112,7 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 
 	nc, err := lifecycle.Resolve(ctx, r.Dialer, balancerReferrer(b.Namespace), b.Spec.ConnectionRef, &st.Conditions, b.Generation)
 	if nc == nil {
-		return after, err
+		return retry(after, err)
 	}
 	cluster := nc.ConnectedClusterName()
 	if cluster == "" {
@@ -124,7 +128,7 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 
 	ms, err := members(ctx, r.Client, b.Namespace, b.Spec.ConnectionRef)
 	if err != nil {
-		return after, err
+		return retry(after, err)
 	}
 	declared, overlaps, err := assign(account, b.Spec.Pools, ms)
 	if err != nil {
@@ -139,7 +143,7 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 
 	yield, err := systemPending(ctx, r.Client, account)
 	if err != nil {
-		return after, err
+		return retry(after, err)
 	}
 
 	j, err := jetstream.New(nc)
@@ -149,7 +153,7 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 	}
 	ev, err := evacueesOf(ctx, r.Client, r.Dialer, nc, balance.AccountObserver{JS: j, Account: account, Cluster: cluster, Expect: expected(ms, cluster)})
 	if err != nil {
-		return after, err
+		return retry(after, err)
 	}
 	k := r.balancers.balancer(b)
 	k.Observer, k.Yield = ev, ev.Yield
@@ -164,8 +168,21 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 	now := time.Now()
 	due := st.LastMove == nil || st.LastMove.Time == nil || !now.Before(st.LastMove.Time.Add(interval))
 	k.DryRun = !due || yield != ""
+	leases, holder := leasesOr(r.Leases), holderName(BalancerKind, client.ObjectKeyFromObject(b))
+	var leasedTo string
+	if !k.DryRun {
+		leasedTo = leases.take(cluster, holder, now)
+		k.DryRun = leasedTo != ""
+	}
 
 	passed, err := k.Pass(ctx)
+	m := moveOf(passed, now)
+	inFlight := err == nil && (m != nil || passed.Held != "" && leases.holds(cluster, holder, now))
+	if inFlight {
+		leases.take(cluster, holder, now)
+	} else {
+		leases.release(cluster, holder)
+	}
 	if err != nil {
 		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionReady, Status: conditions.Status(false), Reason: ReasonPassFailed, Message: err.Error()})
 		return after, nil
@@ -173,20 +190,22 @@ func (r *BalancerReconciler) balance(ctx context.Context, b *js.NatsBalancer) (r
 	if passed.Held == "" {
 		st.Pools = poolStatus(b.Spec.Pools, passed.Pools)
 	}
-	if m := moveOf(passed, now); m != nil {
+	if m != nil {
 		st.LastMove = m
 		telemetry.Emit(r.Recorder, b, telemetry.MoveStarted, "%s", describeMove(*m))
 	}
 	switch {
 	case yield != "":
 		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionHolding, Status: conditions.Status(true), Reason: ReasonYielding, Message: yield})
+	case leasedTo != "":
+		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionHolding, Status: conditions.Status(true), Reason: ReasonMoveLeaseHeld, Message: leaseMessage(leasedTo, cluster)})
 	case passed.Held != "":
 		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionHolding, Status: conditions.Status(true), Reason: ReasonUnsettled, Message: passed.Held})
 	default:
 		conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionHolding, Status: conditions.Status(false), Reason: ReasonSettled})
 	}
 	conditions.Set(&b.Status.Conditions, b.Generation, metav1.Condition{Type: ConditionReady, Status: conditions.Status(true), Reason: ReasonBalancing})
-	if yield != "" {
+	if yield != "" || leasedTo != "" || inFlight {
 		return reconcile.Result{RequeueAfter: r.pendingPoll()}, nil
 	}
 	return after, nil

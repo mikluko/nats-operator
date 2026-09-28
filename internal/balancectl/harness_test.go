@@ -27,6 +27,7 @@ import (
 type plane struct {
 	operator *jwt.OperatorClaims
 	sysPub   string
+	sys      jwtplane.Keys
 	a, b     jwtplane.Keys
 	aPub     string
 	bPub     string
@@ -39,7 +40,7 @@ func newPlane(t *testing.T) *plane {
 	now := time.Now()
 	op := newKeys(t, nkeys.PrefixByteOperator)
 	sys := newKeys(t, nkeys.PrefixByteAccount)
-	p := &plane{a: newKeys(t, nkeys.PrefixByteAccount), b: newKeys(t, nkeys.PrefixByteAccount), jwts: map[string]string{}}
+	p := &plane{sys: sys, a: newKeys(t, nkeys.PrefixByteAccount), b: newKeys(t, nkeys.PrefixByteAccount), jwts: map[string]string{}}
 	p.sysPub, p.aPub, p.bPub = pubOf(t, sys), pubOf(t, p.a), pubOf(t, p.b)
 
 	opJWT, err := jwtplane.SignOperator(jwtplane.Operator{Name: "op", Keys: op, SystemAccount: p.sysPub})

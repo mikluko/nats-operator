@@ -130,8 +130,10 @@ func (k Kind[P]) finalize(ctx context.Context, c client.Client, d *natsconn.Dial
 		var wait *WaitError
 		switch {
 		case o == nil && !gone:
-			return reconcile.Result{RequeueAfter: natsconn.DefaultRetryAfter},
-				PatchStatus(ctx, c, base, obj, k.Fields(base).Status, k.Fields(obj).Status)
+			if err := PatchStatus(ctx, c, base, obj, k.Fields(base).Status, k.Fields(obj).Status); err != nil {
+				return reconcile.Result{}, err
+			}
+			return reconcile.Result{RequeueAfter: natsconn.DefaultRetryAfter}, nil
 		case o == nil:
 		default:
 			if err := Finalize(ctx, obj.GetUID(), f.Deletion, o); err != nil && !errors.As(err, &wait) {

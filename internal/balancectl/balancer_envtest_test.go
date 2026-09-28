@@ -50,7 +50,7 @@ func TestBalancerEnvtest(t *testing.T) {
 	require.NoError(t, err)
 	conns := natsconn.NewPool()
 	require.NoError(t, mgr.Add(conns))
-	r := &BalancerReconciler{Client: mgr.GetClient(), Dialer: &natsconn.Dialer{Reader: mgr.GetClient(), Pool: conns}, PendingPoll: 200 * time.Millisecond}
+	r := &BalancerReconciler{Client: mgr.GetClient(), Dialer: &natsconn.Dialer{Reader: mgr.GetClient(), Pool: conns}, PendingPoll: 200 * time.Millisecond, Leases: &MoveLeases{}}
 	require.NoError(t, r.SetupWithManager(t.Context(), mgr))
 	go func() { _ = mgr.Start(t.Context()) }()
 

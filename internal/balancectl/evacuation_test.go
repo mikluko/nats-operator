@@ -204,3 +204,24 @@ func TestEvacuees(t *testing.T) {
 type fixedObserver struct{ obs balance.Observation }
 
 func (f fixedObserver) Observe(context.Context) (balance.Observation, error) { return f.obs, nil }
+
+func TestServersDown(t *testing.T) {
+	meta := sysobs.Group{Kind: sysobs.KindMeta}
+	tests := []struct {
+		name string
+		snap sysobs.Snapshot
+		want string
+	}{
+		{"one silent", sysobs.Snapshot{Silent: []string{"C1-2"}}, "server C1-2 of C1 does not answer"},
+		{"two silent", sysobs.Snapshot{Silent: []string{"C1-1", "C1-2"}}, "servers C1-1, C1-2 of C1 do not answer"},
+		{"no meta group", sysobs.Snapshot{}, "the meta group has no leader"},
+		{"no meta leader", sysobs.Snapshot{Groups: []sysobs.Group{meta}}, "the meta group has no leader"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := serversDown(t.Context(), nil, &tt.snap, "C1")
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
