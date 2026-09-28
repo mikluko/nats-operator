@@ -176,6 +176,15 @@ func referenceAdmitted(conds *[]metav1.Condition, gen int64, cond *metav1.Condit
 	return true
 }
 
+// result is res where err is nil, and err alone otherwise: controller-runtime
+// ignores a requeue returned beside an error and retries with backoff.
+func result(res reconcile.Result, err error) (reconcile.Result, error) {
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	return res, nil
+}
+
 // updateStatus writes obj's status where it differs from before, joining
 // any failure to err.
 func updateStatus(ctx context.Context, c client.Client, obj client.Object, before, after any, err error) error {

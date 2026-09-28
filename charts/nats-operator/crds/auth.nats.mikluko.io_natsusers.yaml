@@ -261,6 +261,29 @@ spec:
               publicKey:
                 description: PublicKey is the user's public key.
                 type: string
+              replacedKeys:
+                description: |-
+                  ReplacedKeys are keys the user held before PublicKey, each revoked in
+                  its account from when it was replaced; one leaves the list once the
+                  account JWT revokes it.
+                items:
+                  description: ReplacedKey is a user key replaced by another.
+                  properties:
+                    at:
+                      description: At is when it was replaced.
+                      format: date-time
+                      type: string
+                    publicKey:
+                      description: PublicKey is the replaced key.
+                      type: string
+                  required:
+                  - at
+                  - publicKey
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - publicKey
+                x-kubernetes-list-type: map
             type: object
         required:
         - spec

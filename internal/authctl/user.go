@@ -72,7 +72,7 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req reconcile.Request) (
 	before := u.Status.DeepCopy()
 	res, err := r.reconcile(ctx, &u)
 	u.Status.ObservedGeneration = u.Generation
-	return res, updateStatus(ctx, r.Client, &u, before, &u.Status, err)
+	return result(res, updateStatus(ctx, r.Client, &u, before, &u.Status, err))
 }
 
 // reconcile signs u. A JWT signed within the second its key was revoked is
@@ -101,11 +101,23 @@ func (r *UserReconciler) reconcile(ctx context.Context, u *authv1beta1.NatsUser)
 			notReady(ReasonInvalidKeys, fmt.Sprintf("publicKey %q is not a user public key", u.Spec.PublicKey))
 			return reconcile.Result{}, nil
 		}
+		holder, err := userKeyHolder(ctx, r.Client, u, u.Spec.PublicKey)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		if holder != "" {
+			if st.PublicKey == u.Spec.PublicKey {
+				st.PublicKey, st.JWT = "", ""
+			}
+			notReady(ReasonPublicKeyInUse, fmt.Sprintf("public key %s is held by %s in %s %s", u.Spec.PublicKey, holder, u.Spec.AccountRef.Kind, acc.key))
+			return reconcile.Result{}, nil
+		}
 		token, err = r.sign(u, u.Spec.PublicKey, keys, acc.jwt, st.JWT)
 		if err != nil {
 			notReady(ReasonInvalidJWT, err.Error())
 			return reconcile.Result{}, nil
 		}
+		st.ReplacedKeys = replaceKey(st.ReplacedKeys, st.PublicKey, u.Spec.PublicKey, acc.jwt, time.Now())
 		st.PublicKey, st.JWT = u.Spec.PublicKey, token
 	} else {
 		var pub string
@@ -120,6 +132,7 @@ func (r *UserReconciler) reconcile(ctx context.Context, u *authv1beta1.NatsUser)
 		case err != nil:
 			return reconcile.Result{}, err
 		}
+		st.ReplacedKeys = replaceKey(st.ReplacedKeys, st.PublicKey, pub, acc.jwt, time.Now())
 		st.PublicKey, st.JWT = pub, ""
 	}
 	conditions.Set(&st.Conditions, u.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionTrue, Reason: ReasonSigned})
@@ -369,7 +382,7 @@ func (r *UserReconciler) finalize(ctx context.Context, u *authv1beta1.NatsUser) 
 	before := u.Status.DeepCopy()
 	done, res, err := r.drain(ctx, u)
 	if !done || err != nil {
-		return res, updateStatus(ctx, r.Client, u, before, &u.Status, err)
+		return result(res, updateStatus(ctx, r.Client, u, before, &u.Status, err))
 	}
 	if err := r.deleteCreds(ctx, u); err != nil {
 		return reconcile.Result{}, err
@@ -377,8 +390,8 @@ func (r *UserReconciler) finalize(ctx context.Context, u *authv1beta1.NatsUser) 
 	return reconcile.Result{}, patchFinalizer(ctx, r.Client, u, UserFinalizer, false)
 }
 
-// drain reports whether a deleted user is revoked everywhere and has no
-// connection left, with Ready set to the step it waits on otherwise. A user
+// drain reports whether a deleted user and the keys it replaced are revoked
+// everywhere and it has no connection left, with Ready set to the step it waits on otherwise. A user
 // never signed, or whose account is gone or unsigned, has nothing to drain.
 func (r *UserReconciler) drain(ctx context.Context, u *authv1beta1.NatsUser) (bool, reconcile.Result, error) {
 	pub := u.Status.PublicKey
@@ -398,6 +411,12 @@ func (r *UserReconciler) drain(ctx context.Context, u *authv1beta1.NatsUser) (bo
 	if !revokedSince(acc.jwt, pub, u.DeletionTimestamp.Time) {
 		waiting(ReasonRevoking, fmt.Sprintf("waiting for %s %s to revoke %s", u.Spec.AccountRef.Kind, acc.key, pub))
 		return false, reconcile.Result{}, nil
+	}
+	for _, k := range u.Status.ReplacedKeys {
+		if !revokedSince(acc.jwt, k.PublicKey, k.At.Time) {
+			waiting(ReasonRevoking, fmt.Sprintf("waiting for %s %s to revoke %s", u.Spec.AccountRef.Kind, acc.key, k.PublicKey))
+			return false, reconcile.Result{}, nil
+		}
 	}
 	if r.Sessions == nil {
 		return true, reconcile.Result{}, nil
@@ -443,6 +462,9 @@ func (r *UserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Named("natsuser").
 		For(&authv1beta1.NatsUser{}).
 		Owns(&corev1.Secret{}).
+		Watches(&authv1beta1.NatsUser{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+			return sameKeyUsers(ctx, c, obj)
+		})).
 		Watches(&authv1beta1.NatsAccount{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			return listIndexed(ctx, c, &authv1beta1.NatsUserList{}, userAccountField, accountValue(authv1beta1.AccountKindAccount, client.ObjectKeyFromObject(obj)))
 		})).

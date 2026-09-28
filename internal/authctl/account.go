@@ -73,10 +73,7 @@ func (r *AccountReconciler) Reconcile(ctx context.Context, req reconcile.Request
 	before := acc.Status.DeepCopy()
 	res, err := r.reconcile(ctx, &acc)
 	acc.Status.ObservedGeneration = acc.Generation
-	if err := updateStatus(ctx, r.Client, &acc, before, &acc.Status, err); err != nil {
-		return reconcile.Result{}, err
-	}
-	return res, nil
+	return result(res, updateStatus(ctx, r.Client, &acc, before, &acc.Status, err))
 }
 
 func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.NatsAccount) (reconcile.Result, error) {
@@ -92,9 +89,20 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 	if err != nil {
 		return reconcile.Result{}, err
 	}
+	opKey := refKey(acc.Spec.OperatorRef, acc.Namespace)
+	holder, err := accountKeyHolder(ctx, r.Client, acc, opKey, pub)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if holder != "" {
+		if st.PublicKey == pub {
+			st.PublicKey, st.JWT, st.JWTHash = "", "", ""
+		}
+		notReady(ReasonPublicKeyInUse, fmt.Sprintf("public key %s is held by %s under NatsOperator %s", pub, holder, opKey))
+		return reconcile.Result{}, nil
+	}
 	st.PublicKey = pub
 
-	opKey := refKey(acc.Spec.OperatorRef, acc.Namespace)
 	opKeys, ok, err := r.operatorKeys(ctx, acc, opKey, notReady)
 	if !ok || err != nil {
 		return reconcile.Result{}, err
@@ -124,7 +132,7 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 	if err != nil {
 		recordHeld(r.Recorder, acc, st.Conditions, err)
 		again, err := recoveryFailed(err, notReady)
-		return reconcile.Result{RequeueAfter: again}, err
+		return result(reconcile.Result{RequeueAfter: again}, err)
 	}
 	recordRecovery(&st.Conditions, acc.Generation, sd)
 	st.Revocations = sd.revocations
@@ -190,7 +198,7 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 	recordDistribution(&st.Conditions, acc.Generation, cond)
 	res := requeueAtRenewal(st.JWT, now)
 	res.RequeueAfter = soonest(res.RequeueAfter, again)
-	return res, err
+	return result(res, err)
 }
 
 // finalize removes AccountFinalizer once acc's NatsOperator records its
@@ -523,6 +531,9 @@ func (r *AccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&corev1.Secret{}, enqueueIndexed(c, &authv1beta1.NatsAccountList{}, seedSecretField)).
 		Watches(&authv1beta1.NatsOperator{}, enqueueIndexed(c, &authv1beta1.NatsAccountList{}, operatorField)).
 		Watches(&authv1beta1.NatsAccount{}, enqueueIndexed(c, &authv1beta1.NatsAccountList{}, exporterField)).
+		Watches(&authv1beta1.NatsAccount{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+			return sameKeyAccounts(ctx, c, obj)
+		})).
 		Watches(&authv1beta1.NatsUser{}, handler.EnqueueRequestsFromMapFunc(func(_ context.Context, obj client.Object) []reconcile.Request {
 			ref := obj.(*authv1beta1.NatsUser).Spec.AccountRef
 			if ref.Kind != authv1beta1.AccountKindAccount {

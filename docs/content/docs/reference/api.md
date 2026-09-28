@@ -297,6 +297,7 @@ Appears on: [NatsUser](#NatsUser).
 | `conditions` | [{{< type "[]Condition" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Condition) | No | Conditions describe the user's state. |
 | `publicKey` | {{< type "string" >}} | No | PublicKey is the user's public key. |
 | `jwt` | {{< type "string" >}} | No | JWT is the user JWT, published for a user that brings its own key. |
+| `replacedKeys` | [{{< type "[]ReplacedKey" >}}](#ReplacedKey) | No | ReplacedKeys are keys the user held before PublicKey, each revoked in its account from when it was replaced; one leaves the list once the account JWT revokes it. |
 
 ### Permissions {#Permissions}
 Permissions are a user's publish and subscribe permissions.\
@@ -305,6 +306,14 @@ Appears on: [NatsUserSpec](#NatsUserSpec).
 | :---- | :--- | :------: | :---------- |
 | `publish` | [{{< type "SubjectPermissions" >}}](#SubjectPermissions) | No | Publish are the subjects the user may publish to. |
 | `subscribe` | [{{< type "SubjectPermissions" >}}](#SubjectPermissions) | No | Subscribe are the subjects the user may subscribe to. |
+
+### ReplacedKey {#ReplacedKey}
+ReplacedKey is a user key replaced by another.\
+Appears on: [NatsUserStatus](#NatsUserStatus).
+| Field | Type | Required | Description |
+| :---- | :--- | :------: | :---------- |
+| `publicKey` | {{< type "string" >}} | Yes | PublicKey is the replaced key. |
+| `at` | [{{< type "Time" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Time) | Yes | At is when it was replaced. |
 
 ### ResponseType {#ResponseType}
 ResponseType is how a service export responds.\

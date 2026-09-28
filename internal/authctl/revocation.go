@@ -23,8 +23,8 @@ import (
 )
 
 // accountRevocations merges the revocations recorded, those prev carries for
-// pub, and those of users revoked in the account, less any none of whose
-// issuers is in signing.
+// pub, and those of users revoked in the account and of the keys they
+// replaced, less any none of whose issuers is in signing.
 func accountRevocations(recorded []authv1beta1.Revocation, prev, pub string, signing []string, users []authv1beta1.NatsUser) []authv1beta1.Revocation {
 	byKey := map[string]*authv1beta1.Revocation{}
 	revoke := func(key string, at time.Time, issuers []string) {
@@ -55,6 +55,9 @@ func accountRevocations(recorded []authv1beta1.Revocation, prev, pub string, sig
 		if t, ok := userRevokedAt(&users[i]); ok {
 			revoke(users[i].Status.PublicKey, t, signing)
 		}
+		for _, k := range users[i].Status.ReplacedKeys {
+			revoke(k.PublicKey, k.At.Time, signing)
+		}
 	}
 	out := make([]authv1beta1.Revocation, 0, len(byKey))
 	for _, r := range byKey {
@@ -74,14 +77,14 @@ type recoveredRevocations struct {
 	revocations []authv1beta1.Revocation
 	// asked is set when the servers answered.
 	asked bool
-	// unasked is why no server could be asked for an account signed
+	// unasked is why not every server could be asked for an account signed
 	// regardless; it wraps ErrUnreachable.
 	unasked error
 }
 
 // recoverRevocations returns accountRevocations merged with those of the
 // newest JWT d holds for pub wherever the status may have lost some.
-// Where no server can be asked, the error wraps ErrUnreachable for a
+// Where not every server can be asked, the error wraps ErrUnreachable for a
 // distributed account, which is not to be signed.
 func recoverRevocations(ctx context.Context, d Distributor, operator types.NamespacedName, recorded []authv1beta1.Revocation, prev, pub string, signing []string, users []authv1beta1.NatsUser, unrecovered, distributed bool) (recoveredRevocations, error) {
 	revs := accountRevocations(recorded, prev, pub, signing, users)
@@ -105,7 +108,7 @@ func recordRecovery(conds *[]metav1.Condition, gen int64, s recoveredRevocations
 	switch {
 	case s.unasked != nil:
 		conditions.Set(conds, gen, metav1.Condition{Type: ConditionRevocationsUnrecovered, Status: metav1.ConditionTrue, Reason: ReasonUnreachable,
-			Message: "status held neither a JWT nor revocations and no server could be asked for the JWT to recover them from; " +
+			Message: "status held neither a JWT nor revocations and not every server could be asked for the JWT to recover them from; " +
 				"signed with the revocations its users give, and asked again once a server answers: " + s.unasked.Error()})
 	case s.asked:
 		meta.RemoveStatusCondition(conds, ConditionRevocationsUnrecovered)
@@ -193,4 +196,21 @@ func userRevoked(accountJWT, userJWT string) bool {
 		return false
 	}
 	return ac.IsClaimRevoked(uc)
+}
+
+// replaceKey returns replaced with prev, replaced at now, added where it is
+// set and not pub, and with pub and every key accountJWT revokes since it
+// was replaced removed.
+func replaceKey(replaced []authv1beta1.ReplacedKey, prev, pub, accountJWT string, now time.Time) []authv1beta1.ReplacedKey {
+	if prev != "" && prev != pub && !slices.ContainsFunc(replaced, func(k authv1beta1.ReplacedKey) bool { return k.PublicKey == prev }) {
+		replaced = append(replaced, authv1beta1.ReplacedKey{PublicKey: prev, At: metav1.Time{Time: now}})
+	}
+	var out []authv1beta1.ReplacedKey
+	for _, k := range replaced {
+		if k.PublicKey == pub || revokedSince(accountJWT, k.PublicKey, k.At.Time) {
+			continue
+		}
+		out = append(out, k)
+	}
+	return out
 }

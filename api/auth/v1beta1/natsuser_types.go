@@ -114,6 +114,25 @@ type NatsUserStatus struct {
 	// JWT is the user JWT, published for a user that brings its own key.
 	// +optional
 	JWT string `json:"jwt,omitempty"`
+
+	// ReplacedKeys are keys the user held before PublicKey, each revoked in
+	// its account from when it was replaced; one leaves the list once the
+	// account JWT revokes it.
+	// +optional
+	// +listType=map
+	// +listMapKey=publicKey
+	ReplacedKeys []ReplacedKey `json:"replacedKeys,omitempty"`
+}
+
+// ReplacedKey is a user key replaced by another.
+type ReplacedKey struct {
+	// PublicKey is the replaced key.
+	// +required
+	PublicKey string `json:"publicKey"`
+
+	// At is when it was replaced.
+	// +required
+	At metav1.Time `json:"at"`
 }
 
 // +kubebuilder:object:root=true

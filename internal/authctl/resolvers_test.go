@@ -221,7 +221,8 @@ func TestResolvers_Current(t *testing.T) {
 
 // TestResolvers_Lookup pins the answer revocations are recovered from:
 // "" only when every server says it holds no JWT, the newest JWT where
-// servers disagree, and ErrUnreachable where no server can be asked.
+// servers disagree, and ErrUnreachable where any server of the roster
+// cannot be asked.
 func TestResolvers_Lookup(t *testing.T) {
 	p := newPlane(t)
 	c := startFullCluster(t, p, 3)
@@ -241,6 +242,11 @@ func TestResolvers_Lookup(t *testing.T) {
 	got, err = r.Lookup(t.Context(), testOperator, pub)
 	require.NoError(t, err)
 	require.Equal(t, v2, got, "the newest of the JWTs the servers hold")
+
+	c.stop(1)
+	_, err = r.Lookup(t.Context(), testOperator, pub)
+	require.ErrorIs(t, err, authctl.ErrUnreachable, "server 1 is in the roster and silent; it may hold a newer JWT")
+	c.start(1)
 
 	down := &authctl.Resolvers{
 		Conn: func(context.Context, types.NamespacedName) (*nats.Conn, error) {
@@ -323,4 +329,28 @@ func userCreds(t *testing.T, keys jwtplane.Keys) nats.Option {
 	token, err := jwtplane.SignUser(jwtplane.User{Name: "u", PublicKey: pub}, keys)
 	require.NoError(t, err)
 	return nats.UserJWTAndSeed(token, string(seed))
+}
+
+// TestResolvers_SystemAccountKeyPushed pins what nats-server does with an
+// account JWT for the system account's key that the operator signed with
+// signing keys of someone else's: it takes it in place of the system
+// account's own, closes the connections of the system account's users,
+// the pushing one among them before its reply, and that someone's users
+// then hold the system account.
+func TestResolvers_SystemAccountKeyPushed(t *testing.T) {
+	p := newPlane(t)
+	c := startFullCluster(t, p, 1)
+	own, _ := dial(t, c.srvs[0].ClientURL(), jwtplane.User{Name: "own", SystemAccount: true}, p.sys)
+	r := resolversOn(t, c, testOperator)
+	thief, _ := newAccount(t)
+	stolen := jwtplane.Keys{PublicKey: p.sysPub, Signing: thief.Signing}
+	token, err := jwtplane.SignAccount(jwtplane.Account{Name: "not-sys", Keys: stolen}, p.op, time.Now())
+	require.NoError(t, err)
+
+	_ = r.Push(t.Context(), testOperator, token)
+	require.Eventually(t, func() bool { return c.held(0, p.sysPub) == token }, 5*time.Second, 50*time.Millisecond)
+	require.Eventually(t, own.IsClosed, 5*time.Second, 50*time.Millisecond, "the system account's own users are cut off")
+	nc, _ := dial(t, c.srvs[0].ClientURL(), jwtplane.User{Name: "thief", SystemAccount: true}, stolen)
+	_, err = nc.Request("$SYS.REQ.SERVER.PING.STATSZ", nil, 2*time.Second)
+	require.NoError(t, err, "a user signed by the thief's key is a system user")
 }

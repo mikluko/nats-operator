@@ -179,7 +179,7 @@ func TestEnvtest(t *testing.T) {
 	c, err := client.New(cfg, client.Options{Scheme: s})
 	require.NoError(t, err)
 	e.c = c
-	for _, ns := range []string{"nats-system", "team-a", "rot", "offline", "flip", "payments", "orders", "foreign"} {
+	for _, ns := range []string{"nats-system", "team-a", "rot", "offline", "flip", "payments", "orders", "foreign", "lost", "tenancy", "thief"} {
 		require.NoError(t, c.Create(t.Context(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}))
 	}
 	for _, f := range []string{
@@ -207,6 +207,10 @@ func TestEnvtest(t *testing.T) {
 	t.Run("Story4", e.testStory4)
 	t.Run("UserDeletion", e.testDeletion)
 	t.Run("RevocationRecord", e.testRevocationRecord)
+	t.Run("LostSeed", e.testLostSeed)
+	t.Run("AccountKeyHeld", e.testAccountKeyHeld)
+	t.Run("UserKeyHeld", e.testUserKeyHeld)
+	t.Run("ReplacedUserKey", e.testReplacedUserKey)
 }
 
 var demo = types.NamespacedName{Namespace: "nats-system", Name: "demo"}
@@ -235,7 +239,7 @@ func (e *env) testStory2(t *testing.T) {
 
 	require.EqualValues(t, 1, orders.Generation, "adding the finalizer leaves spec, jwtTTL: 48h among it, as applied")
 	require.Equal(t, &authv1beta1.SeedSecrets{Identity: "demo-operator-identity", Signing: []string{"demo-operator-signing-1"}}, op.Status.SeedSecrets)
-	for _, name := range []string{"demo-operator-identity", "demo-operator-signing-1", "sys-system-account-identity", "orders-account-signing-1"} {
+	for _, name := range []string{"demo-operator-identity", "demo-operator-signing-1", "sys-systemaccount-identity", "orders-account-signing-1"} {
 		var sec corev1.Secret
 		require.NoError(t, e.c.Get(t.Context(), key("nats-system", name), &sec))
 		require.Contains(t, sec.Data, authctl.SeedKey)
@@ -773,7 +777,7 @@ spec:
 			names = append(names, s.Name)
 		}
 	}
-	require.ElementsMatch(t, []string{"stray-sys-system-account-identity", "stray-sys-system-account-signing-1"}, names,
+	require.ElementsMatch(t, []string{"stray-sys-systemaccount-identity", "stray-sys-systemaccount-signing-1"}, names,
 		"nothing is generated for identities held offline")
 }
 

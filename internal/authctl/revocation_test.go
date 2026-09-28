@@ -144,6 +144,14 @@ func TestAccountRevocations(t *testing.T) {
 			want:     []authv1beta1.Revocation{rev(deleting, t0.Add(time.Hour), keyA)},
 		},
 		{
+			name:    "a replaced key is revoked by every signing key from when it was replaced",
+			signing: []string{keyA, keyB},
+			users: []authv1beta1.NatsUser{user(admitted, func(u *authv1beta1.NatsUser) {
+				u.Status.ReplacedKeys = []authv1beta1.ReplacedKey{{PublicKey: carried, At: metav1.Time{Time: t0}}}
+			})},
+			want: []authv1beta1.Revocation{rev(carried, t0, keyA, keyB)},
+		},
+		{
 			name:    "a deleted user whose finalizer is gone is not revoked afresh",
 			signing: []string{keyA},
 			users:   []authv1beta1.NatsUser{user(admitted, deleted(t0, false))},
@@ -399,4 +407,39 @@ func TestUserClaims(t *testing.T) {
 	sys.Spec.AccountRef.Kind = authv1beta1.AccountKindSystemAccount
 	sys.Spec.Preset = authv1beta1.UserPresetAuthController
 	require.Equal(t, jwtplane.User{Name: "ctl", PublicKey: pub, SystemAccount: true, Preset: jwtplane.PresetAuthController}, userClaims(sys, pub))
+}
+
+func TestReplaceKey(t *testing.T) {
+	op := testKeys(t, nkeys.PrefixByteOperator, false)
+	acc := testKeys(t, nkeys.PrefixByteAccount, false)
+	t0 := time.Unix(1_800_000_000, 0)
+	k1, k2, k3 := userKey(t), userKey(t), userKey(t)
+	revoking := func(revs ...jwtplane.Revocation) string {
+		token, err := jwtplane.SignAccount(jwtplane.Account{Name: "a", Keys: acc, Revocations: revs}, op, t0)
+		require.NoError(t, err)
+		return token
+	}
+	at := func(key string, t time.Time) authv1beta1.ReplacedKey {
+		return authv1beta1.ReplacedKey{PublicKey: key, At: metav1.Time{Time: t}}
+	}
+	later := t0.Add(time.Hour)
+	for _, tc := range []struct {
+		name     string
+		replaced []authv1beta1.ReplacedKey
+		prev     string
+		accJWT   string
+		want     []authv1beta1.ReplacedKey
+	}{
+		{"first key", nil, "", revoking(), nil},
+		{"unchanged", nil, k2, revoking(), nil},
+		{"changed", nil, k1, revoking(), []authv1beta1.ReplacedKey{at(k1, later)}},
+		{"kept until revoked", []authv1beta1.ReplacedKey{at(k1, t0)}, k2, revoking(), []authv1beta1.ReplacedKey{at(k1, t0)}},
+		{"dropped once revoked", []authv1beta1.ReplacedKey{at(k1, t0)}, k2, revoking(jwtplane.Revocation{PublicKey: k1, At: t0}), nil},
+		{"a revocation before the replacement does not count", []authv1beta1.ReplacedKey{at(k1, later)}, k2, revoking(jwtplane.Revocation{PublicKey: k1, At: t0}), []authv1beta1.ReplacedKey{at(k1, later)}},
+		{"switched back", []authv1beta1.ReplacedKey{at(k2, t0), at(k3, t0)}, k1, revoking(), []authv1beta1.ReplacedKey{at(k3, t0), at(k1, later)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, replaceKey(tc.replaced, tc.prev, k2, tc.accJWT, later))
+		})
+	}
 }

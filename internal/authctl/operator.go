@@ -57,7 +57,7 @@ func (r *OperatorReconciler) Reconcile(ctx context.Context, req reconcile.Reques
 	before := op.Status.DeepCopy()
 	again, err := r.reconcile(ctx, &op)
 	op.Status.ObservedGeneration = op.Generation
-	return reconcile.Result{RequeueAfter: again}, updateStatus(ctx, r.Client, &op, before, &op.Status, err)
+	return result(reconcile.Result{RequeueAfter: again}, updateStatus(ctx, r.Client, &op, before, &op.Status, err))
 }
 
 // reconcile returns how soon to look at op again.
@@ -200,14 +200,22 @@ func (r *OperatorReconciler) deletes(ctx context.Context, op *authv1beta1.NatsOp
 }
 
 // keysFailed reports a key that cannot be read: a missing seed is waited
-// for, a malformed one is a spec error, and anything else is retried.
+// for, a malformed one or a generated one its owner does not control is a
+// spec error, a lost identity seed is left for a human, and anything else is
+// retried.
 func keysFailed(err error, notReady func(reason, msg string)) error {
 	switch {
+	case errors.Is(err, errSeedLost):
+		notReady(ReasonSeedLost, err.Error())
+		return nil
 	case errors.Is(err, errKeysPending):
 		notReady(ReasonKeysPending, err.Error())
 		return nil
 	case errors.Is(err, errInvalidSeed):
 		notReady(ReasonInvalidKeys, err.Error())
+		return nil
+	case errors.Is(err, errSeedNotOwned):
+		notReady(ReasonSecretConflict, err.Error())
 		return nil
 	}
 	return err

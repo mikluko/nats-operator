@@ -225,7 +225,9 @@ func (r *Resolvers) Current(ctx context.Context, operator types.NamespacedName, 
 
 // Lookup implements Distributor. A server whose resolver holds no JWT for
 // account answers with an empty reply; one failing to read it does not
-// answer, and neither is taken for one holding none.
+// answer. Unless every server of the roster answers with nothing or a JWT
+// of account, the error wraps ErrUnreachable: a server not heard from may
+// hold a newer JWT than any reply.
 func (r *Resolvers) Lookup(ctx context.Context, operator types.NamespacedName, account string) (string, error) {
 	st := r.state(operator)
 	nc, err := r.conn(ctx, operator)
@@ -242,23 +244,24 @@ func (r *Resolvers) Lookup(ctx context.Context, operator types.NamespacedName, a
 	}
 	var newest string
 	var issued int64
-	var none int
+	var answered int
 	for _, token := range held {
 		if token == "" {
-			none++
+			answered++
 			continue
 		}
 		c, err := jwt.DecodeAccountClaims(token)
 		if err != nil || c.Subject != account {
 			continue
 		}
+		answered++
 		if newest == "" || c.IssuedAt > issued {
 			newest, issued = token, c.IssuedAt
 		}
 	}
-	if newest == "" && none < len(roster) {
-		return "", fmt.Errorf("%w: %d of %d servers answered CLAIMS.LOOKUP for account %s, none with its JWT",
-			ErrUnreachable, none, len(roster), account)
+	if answered < len(roster) {
+		return "", fmt.Errorf("%w: %d of %d servers answered CLAIMS.LOOKUP for account %s",
+			ErrUnreachable, answered, len(roster), account)
 	}
 	return newest, nil
 }

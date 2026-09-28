@@ -35,7 +35,8 @@ type Distributor interface {
 
 	// Lookup returns the newest JWT for account that a server trusting
 	// operator holds, or "" when every one of them answers that it holds
-	// none. The error wraps ErrUnreachable when that cannot be told.
+	// none. The error wraps ErrUnreachable unless every one of them
+	// answered.
 	Lookup(ctx context.Context, operator types.NamespacedName, account string) (string, error)
 
 	// Delete makes request, from jwtplane.SignDelete, the delete that every

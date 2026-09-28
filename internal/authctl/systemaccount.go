@@ -55,7 +55,7 @@ func (r *SystemAccountReconciler) Reconcile(ctx context.Context, req reconcile.R
 	before := sys.Status.DeepCopy()
 	again, err := r.reconcile(ctx, &sys)
 	sys.Status.ObservedGeneration = sys.Generation
-	return reconcile.Result{RequeueAfter: again}, updateStatus(ctx, r.Client, &sys, before, &sys.Status, err)
+	return result(reconcile.Result{RequeueAfter: again}, updateStatus(ctx, r.Client, &sys, before, &sys.Status, err))
 }
 
 // reconcile returns how soon to look at sys again.

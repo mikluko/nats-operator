@@ -12,7 +12,7 @@ const (
 	ConditionDistributed = "Distributed"
 	// ConditionRevocationsUnrecovered is True on an account, or on a
 	// NatsOperator for its system account, signed after its status lost
-	// its JWT and revocations while no server could be asked for them.
+	// its JWT and revocations while not every server could be asked for them.
 	ConditionRevocationsUnrecovered = "RevocationsUnrecovered"
 )
 
@@ -45,4 +45,11 @@ const (
 	// its JWT and its revocations but records it distributed, while no
 	// server can be asked for the JWT they are recovered from.
 	ReasonRecovering = "RecoveringRevocations"
+	// ReasonSeedLost is Ready's reason on an object whose status holds a
+	// public key while the Secret its identity seed was generated into is
+	// gone; no identity is generated in its place.
+	ReasonSeedLost = "SeedLost"
+	// ReasonPublicKeyInUse is Ready's reason on an account or user whose
+	// public key another holds under the same NatsOperator or account.
+	ReasonPublicKeyInUse = "PublicKeyInUse"
 )
