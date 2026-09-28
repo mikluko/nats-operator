@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chart values `nodeSelector`, `annotations`, `podAnnotations` and `affinity`, globally and per controller.
 - Chart value `auth.systemConnection`, passed to the auth controller as `--system-connection`.
 - Each release publishes the three controller images for linux/amd64 and linux/arm64, the chart as an OCI artifact, and a GitHub release carrying the version's changelog entry.
-- Documentation site at <https://mikluko.github.io/nats-operator/>: the stories, the design and the ADRs.
+- Documentation site at <https://mikluko.github.io/nats-operator/>, of the latest release: the stories, the design and the ADRs.
 - Documentation page `/docs/install/`: installing the chart, its values, the controllers' flags and RBAC, upgrade and uninstall.
 - Documentation page `/docs/reference/api/`: every kind, field and enum value of the four API groups.
 - Documentation page `/docs/reference/nats-permissions/`: the nats-server subjects each controller requests and the presets that grant them.

@@ -2,19 +2,15 @@ name: release
 
 # The changelog decides the version: a push to main that passes ci, whose
 # newest CHANGELOG.md entry names a version no tag carries, publishes it at
-# the commit ci tested, and nothing else does. One workflow, because a tag
+# the commit ci tested, and nothing else does: a manual run builds and
+# packages without pushing, tagging or releasing. One workflow, because a tag
 # pushed with GITHUB_TOKEN triggers no other.
-on:
+on: # zizmor: ignore[dangerous-triggers] plan runs only after a push to main in this repository
   workflow_run:
     workflows: [ci]
     types: [completed]
     branches: [main]
   workflow_dispatch:
-    inputs:
-      dry-run:
-        description: Build and package without pushing, tagging or releasing.
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -34,7 +30,8 @@ jobs:
   plan:
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     outputs:
       due: ${{ steps.changelog.outputs.version != '' && steps.changelog.outputs['already-tagged'] == 'false' }}
@@ -46,13 +43,14 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          persist-credentials: false
           ref: ${{ env.SHA }}
           fetch-depth: 0
       - id: changelog
         uses: mikluko/action-changelog@6dc550835d89afd4e826611ec06b9e054a362cb0 # v1.3.1
       - id: publish
         env:
-          PUBLISH: ${{ github.event_name == 'workflow_run' || (github.ref == 'refs/heads/main' && !inputs.dry-run) }}
+          PUBLISH: ${{ github.event_name == 'workflow_run' }}
         run: echo "publish=$PUBLISH" >>"$GITHUB_OUTPUT"
 
   images:
@@ -68,8 +66,9 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          persist-credentials: false
           ref: ${{ env.SHA }}
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
       - uses: ko-build/setup-ko@d006021bd0c28d1ce33a07e7943d48b079944c8d # v0.9
@@ -138,7 +137,7 @@ jobs:
           push-to-registry: true
 
   chart:
-    needs: plan
+    needs: [plan, images]
     if: needs.plan.outputs.due == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -149,6 +148,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          persist-credentials: false
           ref: ${{ env.SHA }}
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
@@ -194,9 +194,6 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          ref: ${{ env.SHA }}
       - name: Notes
         env:
           TAG: ${{ needs.plan.outputs.tag }}
@@ -209,12 +206,22 @@ jobs:
         if: needs.plan.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.plan.outputs.tag }}
           PRERELEASE: ${{ needs.plan.outputs.prerelease }}
         run: |
-          git tag "$TAG" "$SHA"
-          git push origin "refs/tags/$TAG"
           flags=
           if [ "$PRERELEASE" = true ]; then flags=--prerelease; fi
-          gh release create "$TAG" --title "$TAG" --verify-tag \
+          gh release create "$TAG" --title "$TAG" --target "$SHA" \
             --notes-file "$RUNNER_TEMP/notes.md" $flags
+
+  docs:
+    needs: [plan, release]
+    if: needs.plan.outputs.publish == 'true'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/docs.yml
+    with:
+      ref: ${{ github.event.workflow_run.head_sha }}

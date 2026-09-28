@@ -4,4 +4,4 @@ The Hugo site published at <https://mikluko.github.io/nats-operator/>, on the [H
 
 Build locally from this directory with `hugo server`, or `hugo` into `public/`. `go test ./hack -run TestSite` from the repository root builds the site and fails on a broken internal link or a page with more than one `h1`.
 
-`.github/workflows/docs.yml` builds the site on every pull request and deploys it on every push to `main`. The deployment needs one repository setting, made once: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+`.github/workflows/docs.yml` builds the site on every pull request; the release workflow calls it to deploy the site at the commit each release tags. Run by hand, it keeps the build as the run's `github-pages` artifact and deploys nothing. The deployment needs one repository setting, made once: **Settings → Pages → Build and deployment → Source: GitHub Actions**.

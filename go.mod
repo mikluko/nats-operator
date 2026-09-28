@@ -2,6 +2,8 @@ module github.com/mikluko/nats-operator
 
 go 1.27
 
+toolchain go1.27.1
+
 tool (
 	github.com/elastic/crd-ref-docs
 	sigs.k8s.io/controller-runtime/tools/setup-envtest

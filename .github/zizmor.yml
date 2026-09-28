@@ -1,0 +1,8 @@
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        "*": hash-pin
+  # actionlint v1.7.12 rejects the "$/" form this audit asks for.
+  self-repository:
+    disable: true

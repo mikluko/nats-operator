@@ -1,0 +1,107 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "enabledManagers": ["custom.regex", "dockerfile"],
+  "minimumReleaseAge": "7 days",
+  "dockerfile": {
+    "managerFilePatterns": ["/(^|/)machine\\.Containerfile$/"]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Helm, wherever setup-helm installs it",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/"],
+      "matchStrings": ["uses: azure/setup-helm@\\S+ # \\S+\\s+with:\\s+version: (?<currentValue>v\\S+)"],
+      "depNameTemplate": "helm/helm",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Helm in the e2e machine",
+      "managerFilePatterns": ["/^hack/e2e/machine\\.sh$/"],
+      "matchStrings": ["helm_version=(?<currentValue>v\\S+)"],
+      "depNameTemplate": "helm/helm",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "kind in the e2e machine",
+      "managerFilePatterns": ["/^hack/e2e/machine\\.sh$/"],
+      "matchStrings": ["kind_version=(?<currentValue>v\\S+)"],
+      "depNameTemplate": "kubernetes-sigs/kind",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "helm-unittest",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/"],
+      "matchStrings": ["helm plugin install https://github\\.com/(?<depName>helm-unittest/helm-unittest) --version (?<currentValue>v\\S+)"],
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "golangci-lint, wherever golangci-lint-action runs it",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/"],
+      "matchStrings": ["uses: golangci/golangci-lint-action@\\S+ # \\S+\\s+with:\\s+version: (?<currentValue>v\\S+)"],
+      "depNameTemplate": "golangci/golangci-lint",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "ko, wherever setup-ko installs it",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/"],
+      "matchStrings": ["uses: ko-build/setup-ko@\\S+ # \\S+\\s+with:\\s+version: (?<currentValue>v\\S+)"],
+      "depNameTemplate": "ko-build/ko",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "just, wherever setup-just installs it",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/"],
+      "matchStrings": ["uses: extractions/setup-just@\\S+ # \\S+\\s+with:\\s+just-version: (?<currentValue>\\S+)"],
+      "depNameTemplate": "casey/just",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "zizmor, wherever zizmor-action runs it",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/"],
+      "matchStrings": ["uses: zizmorcore/zizmor-action@\\S+ # \\S+\\s+with:\\s+version: (?<currentValue>\\S+)"],
+      "depNameTemplate": "zizmorcore/zizmor",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Go commands a workflow runs at a version",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/"],
+      "matchStrings": ["go run (?<depName>[^@\\s]+?)/cmd/[^@\\s]+@(?<currentValue>v\\S+)"],
+      "datasourceTemplate": "go"
+    },
+    {
+      "customType": "regex",
+      "description": "Hugo; the PR fails ci until HUGO_SHA256 is the new release's",
+      "managerFilePatterns": ["/^\\.github/actions/setup-hugo/action\\.yml$/"],
+      "matchStrings": ["HUGO_VERSION: (?<currentValue>\\S+)"],
+      "depNameTemplate": "gohugoio/hugo",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "lychee; the PR fails until the Justfile's checksums are the new release's",
+      "managerFilePatterns": ["/^Justfile$/"],
+      "matchStrings": ["lychee_version := \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "lycheeverse/lychee",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^lychee-v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "The controller images' base, a digest of its latest tag",
+      "managerFilePatterns": ["/^\\.ko\\.yaml$/"],
+      "matchStrings": ["defaultBaseImage: (?<depName>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]{64})"],
+      "currentValueTemplate": "latest",
+      "datasourceTemplate": "docker"
+    }
+  ]
+}
