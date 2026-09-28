@@ -24,14 +24,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/grant"
+	"github.com/mikluko/nats-operator/internal/refindex"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
@@ -144,7 +143,7 @@ func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) err
 	}
 	return r.watchLeafRefs(ctrl.NewControllerManagedBy(mgr)).
 		For(&clusterv1beta1.NatsCluster{}, builder.WithPredicates(specChanged)).
-		Watches(&natsv1beta1.NatsOperatorTrust{}, handler.EnqueueRequestsFromMapFunc(r.clustersTrusting)).
+		Watches(&natsv1beta1.NatsOperatorTrust{}, refindex.EnqueueByField(r.Client, &clusterv1beta1.NatsClusterList{}, TrustField)).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(mgr.GetClient(),
 			schema.GroupKind{Group: clusterv1beta1.GroupVersion.Group, Kind: "NatsCluster"}, &clusterv1beta1.NatsClusterList{})).
 		Owns(&appsv1.StatefulSet{}).
@@ -177,12 +176,6 @@ func trustKey(nc *clusterv1beta1.NatsCluster) string {
 		ns = nc.Namespace
 	}
 	return ns + "/" + nc.Spec.Auth.TrustRef.Name
-}
-
-// clustersTrusting maps a NatsOperatorTrust to the NatsClusters that read
-// it.
-func (r *Reconciler) clustersTrusting(ctx context.Context, t client.Object) []reconcile.Request {
-	return r.clustersByField(ctx, TrustField, t.GetNamespace()+"/"+t.GetName())
 }
 
 // Reconcile creates what a NatsCluster renders and reports its status.

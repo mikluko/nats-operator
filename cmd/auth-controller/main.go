@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	crmanager "sigs.k8s.io/controller-runtime/pkg/manager"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
@@ -57,9 +58,7 @@ func setup(ctx context.Context, mgr ctrl.Manager, systemConnection string) error
 		pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetAuthController))
 		conn := &authctl.SystemConnection{Reader: mgr.GetClient(), Pool: pool, Name: name}
 		resolvers := &authctl.Resolvers{Conn: conn.Conn, Log: ctrl.Log.WithName("resolvers")}
-		for _, r := range []interface {
-			Start(ctx context.Context) error
-		}{pool, resolvers} {
+		for _, r := range []crmanager.Runnable{pool, resolvers} {
 			if err := mgr.Add(r); err != nil {
 				return fmt.Errorf("add runnable: %w", err)
 			}

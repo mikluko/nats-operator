@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -36,7 +37,7 @@ func ReconciledKinds(t *testing.T, scheme *runtime.Scheme, setup func(context.Co
 		Scheme:                 scheme,
 		Metrics:                metricsserver.Options{BindAddress: "0"},
 		HealthProbeBindAddress: "0",
-		Controller:             config.Controller{SkipNameValidation: new(true)},
+		Controller:             config.Controller{SkipNameValidation: ptr.To(true)},
 	})
 	require.NoError(t, err)
 	rec := &recording{Manager: mgr, client: fake.NewClientBuilder().WithScheme(scheme).Build()}

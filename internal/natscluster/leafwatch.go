@@ -9,12 +9,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/natsconn"
+	"github.com/mikluko/nats-operator/internal/refindex"
 )
 
 // Field indexes on NatsClusters: the namespace/name of every NatsConnection
@@ -88,35 +88,11 @@ func indexLeafRefs(ctx context.Context, idx client.FieldIndexer) error {
 // NatsAccountTrust its leafRemotes name changes, or a Secret such a
 // NatsConnection reads.
 func (r *Reconciler) watchLeafRefs(b *builder.Builder) *builder.Builder {
+	clusters := &clusterv1beta1.NatsClusterList{}
 	return b.
-		Watches(&natsv1beta1.NatsConnection{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []reconcile.Request {
-			return r.clustersByField(ctx, LeafConnectionField, o.GetNamespace()+"/"+o.GetName())
-		})).
-		Watches(&natsv1beta1.NatsAccountTrust{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []reconcile.Request {
-			return r.clustersByField(ctx, LeafAccountTrustField, o.GetNamespace()+"/"+o.GetName())
-		})).
-		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.clustersReadingSecret),
-			builder.WithPredicates(predicate.NewPredicateFuncs(r.readByConnection)))
-}
-
-// clustersByField maps key to the NatsClusters whose field index field
-// holds it.
-func (r *Reconciler) clustersByField(ctx context.Context, field, key string) []reconcile.Request {
-	var list clusterv1beta1.NatsClusterList
-	if err := r.Client.List(ctx, &list, client.MatchingFields{field: key}); err != nil {
-		ctrl.LoggerFrom(ctx).Error(err, "list NatsClusters by field index", "field", field, "key", key)
-		return nil
-	}
-	out := make([]reconcile.Request, 0, len(list.Items))
-	for i := range list.Items {
-		out = append(out, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&list.Items[i])})
-	}
-	return out
-}
-
-// readByConnection reports whether a NatsConnection reads Secret s.
-func (r *Reconciler) readByConnection(s client.Object) bool {
-	return len(r.connectionsReading(context.Background(), s)) > 0
+		Watches(&natsv1beta1.NatsConnection{}, refindex.EnqueueByField(r.Client, clusters, LeafConnectionField)).
+		Watches(&natsv1beta1.NatsAccountTrust{}, refindex.EnqueueByField(r.Client, clusters, LeafAccountTrustField)).
+		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.clustersReadingSecret))
 }
 
 // connectionsReading are the NatsConnections that read Secret s.
@@ -135,7 +111,8 @@ func (r *Reconciler) connectionsReading(ctx context.Context, s client.Object) []
 func (r *Reconciler) clustersReadingSecret(ctx context.Context, s client.Object) []reconcile.Request {
 	var out []reconcile.Request
 	for _, conn := range r.connectionsReading(ctx, s) {
-		out = append(out, r.clustersByField(ctx, LeafConnectionField, conn.Namespace+"/"+conn.Name)...)
+		out = append(out, refindex.Requests(ctx, r.Client, &clusterv1beta1.NatsClusterList{},
+			client.MatchingFields{LeafConnectionField: client.ObjectKeyFromObject(&conn).String()})...)
 	}
 	return out
 }

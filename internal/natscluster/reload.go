@@ -3,9 +3,9 @@ package natscluster
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
+	distref "github.com/distribution/reference"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -145,14 +145,21 @@ func changeRestartReason(nc *clusterv1beta1.NatsCluster, cur *appsv1.StatefulSet
 	return restartReason(nc.Spec.Version, []byte(cm.Data[configFile]), []byte(s.ConfigMap.Data[configFile]))
 }
 
-// runningVersion is the image tag of sts's nats container, or "".
+// runningVersion is the image tag of sts's nats container, or "" for an
+// image without a tag.
 func runningVersion(sts *appsv1.StatefulSet) string {
 	for _, c := range sts.Spec.Template.Spec.Containers {
-		if c.Name == "nats" {
-			if i := strings.LastIndex(c.Image, ":"); i >= 0 {
-				return c.Image[i+1:]
-			}
+		if c.Name != "nats" {
+			continue
 		}
+		ref, err := distref.Parse(c.Image)
+		if err != nil {
+			return ""
+		}
+		if t, ok := ref.(distref.Tagged); ok {
+			return t.Tag()
+		}
+		return ""
 	}
 	return ""
 }

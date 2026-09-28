@@ -5,11 +5,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
@@ -201,4 +203,26 @@ func TestSecretNames(t *testing.T) {
 			require.Equal(t, tt.want, SecretNames(&tt.spec))
 		})
 	}
+}
+
+// TestConnectionsReading pins the Secret watch mapping: a Secret enqueues
+// the NatsConnections in its own namespace that read it.
+func TestConnectionsReading(t *testing.T) {
+	c := fake.NewClientBuilder().WithScheme(testScheme(t)).
+		WithIndex(&natsv1beta1.NatsConnection{}, SecretField, func(o client.Object) []string {
+			return SecretNames(&o.(*natsv1beta1.NatsConnection).Spec)
+		}).
+		WithObjects(connection("payments", "demo"), connection("payments", "other"), connection("orders", "demo")).
+		Build()
+	r := &Reconciler{Client: c}
+	names := func(s *corev1.Secret) []string {
+		var out []string
+		for _, q := range r.connectionsReading(t.Context(), s) {
+			out = append(out, q.String())
+		}
+		return out
+	}
+	require.ElementsMatch(t, []string{"payments/demo", "payments/other"}, names(secret("payments", "creds", nil)))
+	require.Empty(t, names(secret("payments", "unrelated", nil)))
+	require.Empty(t, names(secret("elsewhere", "creds", nil)))
 }

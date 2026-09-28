@@ -21,6 +21,7 @@ import (
 
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/conditions"
+	"github.com/mikluko/nats-operator/internal/refindex"
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
 
@@ -182,16 +183,8 @@ func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) err
 // connectionsReading maps a Secret to the NatsConnections in its namespace
 // that read it.
 func (r *Reconciler) connectionsReading(ctx context.Context, s client.Object) []reconcile.Request {
-	var list natsv1beta1.NatsConnectionList
-	if err := r.Client.List(ctx, &list, client.InNamespace(s.GetNamespace()), client.MatchingFields{SecretField: s.GetName()}); err != nil {
-		ctrl.LoggerFrom(ctx).Error(err, "list NatsConnections reading secret", "secret", client.ObjectKeyFromObject(s))
-		return nil
-	}
-	out := make([]reconcile.Request, 0, len(list.Items))
-	for i := range list.Items {
-		out = append(out, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&list.Items[i])})
-	}
-	return out
+	return refindex.Requests(ctx, r.Client, &natsv1beta1.NatsConnectionList{},
+		client.InNamespace(s.GetNamespace()), client.MatchingFields{SecretField: s.GetName()})
 }
 
 // SecretNames returns the names of the Secrets spec reads, without

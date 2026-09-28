@@ -14,8 +14,10 @@ import (
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 
+	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
@@ -173,4 +175,39 @@ func servedSerial(t *testing.T, addr, dir string) string {
 	serial := c.ConnectionState().PeerCertificates[0].SerialNumber.String()
 	require.NoError(t, c.Close())
 	return serial
+}
+
+// TestRunningVersion pins the tag read off each form the nats image takes.
+func TestRunningVersion(t *testing.T) {
+	const digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	for _, tc := range []struct {
+		name, image, want string
+	}{
+		{"tag", "nats:2.15.0", "2.15.0"},
+		{"tag and digest", "nats:2.15.0@" + digest, "2.15.0"},
+		{"registry port, tag and digest", "registry.example:5000/nats:2.14.1@" + digest, "2.14.1"},
+		{"digest only", "nats@" + digest, ""},
+		{"registry port, no tag", "registry.example:5000/nats", ""},
+		{"unparseable", "NATS:", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sts := &appsv1.StatefulSet{}
+			sts.Spec.Template.Spec.Containers = []corev1.Container{{Name: "exporter", Image: "x:9"}, {Name: "nats", Image: tc.image}}
+			require.Equal(t, tc.want, runningVersion(sts))
+		})
+	}
+}
+
+// TestChangeRestartReasonDigest pins the version pair named when a
+// digest-pinned server's version changes.
+func TestChangeRestartReasonDigest(t *testing.T) {
+	nc := &clusterv1beta1.NatsCluster{}
+	nc.Spec.Version = "2.15.0"
+	nc.Spec.Image = &clusterv1beta1.Image{Digest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}
+	cur := &appsv1.StatefulSet{}
+	cur.Annotations = map[string]string{AnnotationSpecDigest: "old"}
+	cur.Spec.Template.Spec.Containers = []corev1.Container{{Name: "nats", Image: "nats:2.14.1@" + nc.Spec.Image.Digest}}
+	s := Server{StatefulSet: &appsv1.StatefulSet{}}
+	s.StatefulSet.Annotations = map[string]string{AnnotationSpecDigest: "new"}
+	require.Equal(t, "version 2.14.1 -> 2.15.0 is restart-only", changeRestartReason(nc, cur, &corev1.ConfigMap{}, s))
 }

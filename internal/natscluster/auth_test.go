@@ -27,6 +27,7 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/natsconn"
+	"github.com/mikluko/nats-operator/internal/refindex"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
@@ -514,12 +515,8 @@ func TestClustersTrusting(t *testing.T) {
 		}).
 		WithObjects(cluster("a", "same", ""), cluster("b", "cross", "a"), cluster("a", "noauth", "-"), cluster("b", "own", "")).
 		Build()
-	r := &Reconciler{Client: c}
 	trust := &natsv1beta1.NatsOperatorTrust{ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "demo"}}
-	var got []string
-	for _, req := range r.clustersTrusting(context.Background(), trust) {
-		got = append(got, req.String())
-	}
+	got := enqueued(t, refindex.EnqueueByField(c, &clusterv1beta1.NatsClusterList{}, TrustField), trust)
 	require.ElementsMatch(t, []string{"a/same", "b/cross"}, got)
 }
 

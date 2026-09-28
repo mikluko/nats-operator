@@ -6,7 +6,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 )
@@ -39,4 +43,20 @@ func TestSpecChanged(t *testing.T) {
 			require.Equal(t, tt.want, specChanged.Update(event.UpdateEvent{ObjectOld: base, ObjectNew: next}))
 		})
 	}
+}
+
+// enqueued returns the "namespace/name" of each request h enqueues for a
+// create event on o.
+func enqueued(t *testing.T, h handler.EventHandler, o client.Object) []string {
+	t.Helper()
+	q := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]())
+	defer q.ShutDown()
+	h.Create(t.Context(), event.CreateEvent{Object: o}, q)
+	var out []string
+	for q.Len() > 0 {
+		r, _ := q.Get()
+		out = append(out, r.String())
+		q.Done(r)
+	}
+	return out
 }

@@ -2,14 +2,12 @@
 # Provisions a Debian root filesystem for hack/e2e, idempotently, so it both
 # builds the image and updates a running machine. On a booted system it
 # points the resolver at M_DNS when that is set. Given the argument versions,
-# it prints the helm and kind versions it installs and does nothing else.
+# it prints the helm version it installs and does nothing else.
 set -eu
 
 helm_version=v4.3.0
-kind_version=v0.33.0
 if [ "${1:-}" = versions ]; then
 	echo "helm $helm_version"
-	echo "kind $kind_version"
 	exit 0
 fi
 case $(uname -m) in
@@ -53,14 +51,6 @@ if ! helm version --short 2>/dev/null | grep -q "^$helm_version+"; then
 	tar -xzf "$tmp/$tarball" -C "$tmp" "linux-$arch/helm"
 	install -m 0755 "$tmp/linux-$arch/helm" /usr/local/bin/helm
 	rm -rf "$tmp"
-fi
-
-if ! kind version 2>/dev/null | grep -q "^kind $kind_version "; then
-	if ! out=$(GOBIN=/usr/local/bin GOTOOLCHAIN=auto GOPATH=/var/tmp/go GOCACHE=/var/tmp/go/cache \
-		go install "sigs.k8s.io/kind@$kind_version" 2>&1); then
-		printf '%s\n' "$out" >&2
-		exit 1
-	fi
 fi
 
 printf 'fs.inotify.max_user_instances = 1024\nfs.inotify.max_user_watches = 524288\n' \

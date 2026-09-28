@@ -24,14 +24,6 @@
     },
     {
       "customType": "regex",
-      "description": "kind in the e2e machine",
-      "managerFilePatterns": ["/^hack/e2e/machine\\.sh$/"],
-      "matchStrings": ["kind_version=(?<currentValue>v\\S+)"],
-      "depNameTemplate": "kubernetes-sigs/kind",
-      "datasourceTemplate": "github-releases"
-    },
-    {
-      "customType": "regex",
       "description": "helm-unittest",
       "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/"],
       "matchStrings": ["helm plugin install https://github\\.com/(?<depName>helm-unittest/helm-unittest) --version (?<currentValue>v\\S+)"],

@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime/debug"
 	"strings"
 	"testing"
 	"time"
@@ -157,9 +156,8 @@ func TestShipTree(t *testing.T) {
 	require.Equal(t, int64(0o644), modes["go.mod"])
 }
 
-// TestMachineVersions pins the helm and kind CLI versions machine.sh
-// installs to the helm CI runs the chart with and the kind module the
-// harness is built against.
+// TestMachineVersions pins the helm version machine.sh installs to the helm
+// CI runs the chart with.
 func TestMachineVersions(t *testing.T) {
 	out, err := exec.Command("sh", "machine.sh", "versions").Output()
 	require.NoError(t, err)
@@ -169,17 +167,6 @@ func TestMachineVersions(t *testing.T) {
 		require.True(t, ok, "%q", line)
 		got[tool] = version
 	}
-
-	info, ok := debug.ReadBuildInfo()
-	require.True(t, ok)
-	var kind string
-	for _, m := range info.Deps {
-		if m.Path == "sigs.k8s.io/kind" {
-			kind = m.Version
-		}
-	}
-	require.NotEmpty(t, kind, "the harness is built against sigs.k8s.io/kind")
-	require.Equal(t, kind, got["kind"])
 
 	b, err := os.ReadFile("../../.github/workflows/ci.yml")
 	require.NoError(t, err)

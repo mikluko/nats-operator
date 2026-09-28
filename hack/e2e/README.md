@@ -28,7 +28,7 @@ What a story assumes already exists, such as a NATS cluster nobody here deployed
 `just e2e` runs them on kind clusters over rootful podman, each Kubernetes cluster one kind node, all of them on kind's podman network with MetalLB handing out LoadBalancer addresses on it:
 
 - On Linux it runs in place, as root, with podman answering on `/run/podman/podman.sock` (`systemctl enable --now podman.socket`), and `helm` and `ko` on the path.
-- On darwin only the builds run on the host: `ko` builds the controller images and `go` builds the harness for Linux, and both ship with the working tree into the Apple `container` machine `nats-operator-e2e`, where the harness runs. A machine that does not exist is created from `hack/machine.Containerfile`; `hack/e2e/machine.sh` installs podman, helm and kind in it on every run.
+- On darwin only the builds run on the host: `ko` builds the controller images and `go` builds the harness for Linux, and both ship with the working tree into the Apple `container` machine `nats-operator-e2e`, where the harness runs. A machine that does not exist is created from `hack/machine.Containerfile`; `hack/e2e/machine.sh` installs podman and helm in it on every run.
 
 Before a story runs, its namespaces are deleted and made again, one at a time. Their NatsClusters get the `cluster.nats.mikluko.io/force-delete` annotation and their JetStream resources `deletionPolicy: Retain` first, so neither waits on a server. A namespace that has had no Pod for a minute and still holds a finalizer the controllers add loses it, users first and NatsClusters last, and the log names each one released.
 

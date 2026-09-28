@@ -21,6 +21,7 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/conditions"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"github.com/mikluko/nats-operator/internal/refindex"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
@@ -505,13 +506,12 @@ func TestLeafWatches(t *testing.T) {
 		return out
 	}
 	ctx := context.Background()
-	require.ElementsMatch(t, []string{"a/same", "b/cross"}, names(r.clustersByField(ctx, LeafConnectionField, "a/hub")))
-	require.ElementsMatch(t, []string{"b/cross"}, names(r.clustersByField(ctx, LeafAccountTrustField, "a/telemetry")))
+	clusters := &clusterv1beta1.NatsClusterList{}
+	hubConn := &natsv1beta1.NatsConnection{ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "hub"}}
+	require.ElementsMatch(t, []string{"a/same", "b/cross"}, enqueued(t, refindex.EnqueueByField(c, clusters, LeafConnectionField), hubConn))
+	telemetry := &natsv1beta1.NatsAccountTrust{ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "telemetry"}}
+	require.ElementsMatch(t, []string{"b/cross"}, enqueued(t, refindex.EnqueueByField(c, clusters, LeafAccountTrustField), telemetry))
 	require.ElementsMatch(t, []string{"a/same", "b/cross"}, names(r.clustersReadingSecret(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "hub-creds"}})))
 	require.Empty(t, r.clustersReadingSecret(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "b", Name: "hub-creds"}}))
-
-	require.True(t, r.readByConnection(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "hub-creds"}}))
-	require.False(t, r.readByConnection(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "b", Name: "hub-creds"}}))
-	require.False(t, r.readByConnection(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "unrelated"}}),
-		"a Secret no NatsConnection reads passes the watch")
+	require.Empty(t, r.clustersReadingSecret(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "unrelated"}}))
 }

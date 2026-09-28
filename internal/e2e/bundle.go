@@ -1,5 +1,7 @@
 // Package e2e runs the story bundles under docs/content/docs/stories against
-// live Kubernetes clusters.
+// live Kubernetes clusters. It is not Kyverno Chainsaw because Chainsaw
+// cannot fail a step on a terminal signal, a CrashLoopBackOff or a Terminal
+// condition, before the step's timeout.
 package e2e
 
 import (

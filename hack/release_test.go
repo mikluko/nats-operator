@@ -402,7 +402,6 @@ func TestRenovate_WatchesToolPins(t *testing.T) {
 		"gohugoio/hugo",
 		"lycheeverse/lychee",
 		"cgr.dev/chainguard/static",
-		"kubernetes-sigs/kind",
 		"golang.org/x/vuln",
 		"github.com/rhysd/actionlint",
 	} {
