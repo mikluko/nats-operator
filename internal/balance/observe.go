@@ -80,11 +80,8 @@ type Member struct {
 	Lag uint64
 }
 
-// SettledLag is how far behind a peer may be and still take leadership.
-const SettledLag = 4096
-
 // Takes reports whether leadership may move to m.
-func (m Member) Takes() bool { return !m.Offline && (m.Current || m.Lag <= SettledLag) }
+func (m Member) Takes() bool { return !m.Offline && m.Current }
 
 // ID is the stream the group belongs to.
 func (g Group) ID() StreamID { return StreamID{Account: g.Account, Stream: g.Stream} }
@@ -113,8 +110,8 @@ func (g Group) Holders() []string {
 func (g Group) holds(server string) bool { return slices.Contains(g.Holders(), server) }
 
 // Unsettled names the first group that is offline, has no leader or has a
-// member offline, and is empty when there is none; a member merely behind
-// does not count.
+// member offline or not current, and is empty when there is none. No lag is
+// tolerated: a member one entry behind is not current.
 func Unsettled(groups []Group) string {
 	for _, g := range groups {
 		if g.Offline {
@@ -124,8 +121,14 @@ func Unsettled(groups []Group) string {
 			return fmt.Sprintf("%s has no leader", g)
 		}
 		for _, m := range g.Members {
-			if m.Offline {
+			switch {
+			case m.Offline:
 				return fmt.Sprintf("%s is offline for %s", m.Name, g)
+			case m.Current:
+			case m.Lag > 0:
+				return fmt.Sprintf("%s is %d behind for %s", m.Name, m.Lag, g)
+			default:
+				return fmt.Sprintf("%s is not current for %s", m.Name, g)
 			}
 		}
 	}

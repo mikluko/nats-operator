@@ -119,7 +119,7 @@ func TestUnsettled(t *testing.T) {
 	}{
 		{"settled", []Group{group("a", "n0", three...), consumer}, ""},
 		{"leaderless", []Group{{Account: "a", Stream: "b", Members: []Member{{Name: "n1"}}}}, "a/b has no leader"},
-		{"a member behind is still settled", []Group{behind}, ""},
+		{"a member behind", []Group{behind}, "n2 is 1048576 behind for a/c"},
 		{"a member offline", []Group{down}, "n1 is offline for a/d"},
 		{"an offline stream ahead of its missing leader", []Group{{Account: "a", Stream: "lone", Offline: true}}, "a/lone is offline"},
 		{"a consumer names its stream", []Group{{Account: "a", Stream: "s", Consumer: "c"}}, "a/s > c has no leader"},
@@ -134,8 +134,8 @@ func TestMember_Takes(t *testing.T) {
 		want bool
 	}{
 		{Member{Current: true}, true},
-		{Member{Lag: SettledLag}, true},
-		{Member{Lag: SettledLag + 1}, false},
+		{Member{Lag: 1}, false},
+		{Member{}, false},
 		{Member{Current: true, Offline: true}, false},
 	} {
 		require.Equal(t, tc.want, tc.m.Takes(), "%+v", tc.m)

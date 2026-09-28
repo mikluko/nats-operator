@@ -193,6 +193,36 @@ func TestBalancer_HoldsWhileAServerIsDown(t *testing.T) {
 	}, 5*time.Second, 200*time.Millisecond, "two of three servers read as Settled")
 }
 
+func TestBalancer_HoldsWhileAMemberIsBehind(t *testing.T) {
+	t.Parallel()
+	servers := startCluster(t, nil)
+	js := jetStream(t, connect(t, servers[0], nil))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	_, err := js.CreateStream(ctx, jetstream.StreamConfig{Name: "ticks", Subjects: []string{"ticks.>"}, Replicas: 3})
+	require.NoError(t, err)
+	o := settled(t, ctx, accountObserver(js, globalAccount, "ticks"), func(o Observation) bool { _, ok := find(o, "$G/ticks"); return ok }, "settle")
+	ticks, _ := find(o, "$G/ticks")
+	behind := ticks.Members[0].Name
+	i := slices.IndexFunc(servers, func(s *server.Server) bool { return s.Name() == behind })
+
+	require.NoError(t, servers[i].DisableJetStream(), "the server stays up, its replica stops taking entries")
+	for range 20 {
+		_, err := js.Publish(ctx, "ticks.x", []byte("x"))
+		require.NoError(t, err)
+	}
+	k := &Balancer{Observer: accountObserver(jetStream(t, connect(t, servers[(i+1)%len(servers)], nil)), globalAccount, "ticks"), DryRun: true}
+	want := fmt.Sprintf("%s is 20 behind for $G/ticks", behind)
+	require.Eventually(t, func() bool {
+		got, err := k.Pass(ctx)
+		return err == nil && got.Held == want
+	}, 30*time.Second, 200*time.Millisecond, "a replica 20 entries behind left the balancer free to move")
+	require.Never(t, func() bool {
+		got, err := k.Pass(ctx)
+		return err == nil && got.Held == ""
+	}, 5*time.Second, 200*time.Millisecond, "a replica behind read as Settled")
+}
+
 func TestAccountObserver_HoldsRatherThanFailsOnAnOfflineStream(t *testing.T) {
 	t.Parallel()
 	servers := startCluster(t, nil)

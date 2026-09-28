@@ -25,8 +25,8 @@ func TestObservation(t *testing.T) {
 		wantUnsettled string
 	}{
 		{"settled", sysobs.Snapshot{Servers: servers, Groups: []sysobs.Group{meta, stream(sysobs.Member{Server: "s2", Current: true})}}, ""},
-		{"behind within reach", sysobs.Snapshot{Servers: servers, Groups: []sysobs.Group{meta, stream(sysobs.Member{Server: "s2", Lag: balance.SettledLag})}}, ""},
-		{"behind out of reach", sysobs.Snapshot{Servers: servers, Groups: []sysobs.Group{meta, stream(sysobs.Member{Server: "s2", Lag: balance.SettledLag + 1})}}, "s2 is 4097 behind for A/S"},
+		{"behind by one", sysobs.Snapshot{Servers: servers, Groups: []sysobs.Group{meta, stream(sysobs.Member{Server: "s2", Lag: 1})}}, "s2 is 1 behind for A/S"},
+		{"not current with no lag", sysobs.Snapshot{Servers: servers, Groups: []sysobs.Group{meta, stream(sysobs.Member{Server: "s2"})}}, "s2 is not current for A/S"},
 		{"offline", sysobs.Snapshot{Servers: servers, Groups: []sysobs.Group{meta, stream(sysobs.Member{Server: "s2", Offline: true})}}, "s2 is offline for A/S"},
 		{"silent", sysobs.Snapshot{Servers: servers, Silent: []string{"s2"}, Groups: []sysobs.Group{meta, stream(sysobs.Member{Server: "s2", Current: true})}}, "s2 did not answer"},
 		{"meta leaderless", sysobs.Snapshot{Servers: servers, Groups: []sysobs.Group{{Kind: sysobs.KindMeta}, stream(sysobs.Member{Server: "s2", Current: true})}}, "the meta group has no leader"},

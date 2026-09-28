@@ -2,7 +2,6 @@ package balancectl
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/mikluko/nats-operator/internal/balance"
@@ -53,8 +52,7 @@ func (o *SystemObserver) Last() *balance.Observation { return o.last }
 // placement names another NATS cluster is never moved.
 func (o *SystemObserver) Pinned(id balance.StreamID) string { return o.pinned[id] }
 
-// observation is snap as a balancer reads it, unsettled while a member lags
-// too far to take leadership.
+// observation is snap as a balancer reads it.
 func observation(cluster string, snap *sysobs.Snapshot) balance.Observation {
 	obs := balance.Observation{Cluster: cluster}
 	for _, s := range snap.Servers {
@@ -76,9 +74,6 @@ func observation(cluster string, snap *sysobs.Snapshot) balance.Observation {
 	default:
 		obs.Unsettled = balance.Unsettled(obs.Groups)
 	}
-	if obs.Unsettled == "" {
-		obs.Unsettled = lagging(obs.Groups)
-	}
 	return obs
 }
 
@@ -94,17 +89,4 @@ func group(g sysobs.Group) balance.Group {
 		out.Members = append(out.Members, balance.Member{Name: m.Server, Current: m.Current, Offline: m.Offline, Lag: m.Lag})
 	}
 	return out
-}
-
-// lagging names the first member too far behind to take leadership, and is
-// empty when there is none.
-func lagging(groups []balance.Group) string {
-	for _, g := range groups {
-		for _, m := range g.Members {
-			if !m.Takes() {
-				return fmt.Sprintf("%s is %d behind for %s", m.Name, m.Lag, g)
-			}
-		}
-	}
-	return ""
 }

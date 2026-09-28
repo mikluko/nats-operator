@@ -102,6 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An auth object whose reconcile fails reads `Ready` False, reason `ReconcileError`, and keeps `status.observedGeneration` at the generation last reconciled in full.
 - `NatsClusterEvacuation` makes no move while any server of its NATS system is down or the meta group has no leader, reporting `Ready` and `Progressing` False with reason `ServersDown`.
 - The `NatsSystemBalancer` and the `NatsBalancer`s of one NATS cluster move one at a time; while one's move is in flight the others read `Holding`, reason `MoveLeaseHeld`.
+- A `NatsSystemBalancer` or `NatsBalancer` makes no move while any member of any group in its scope is not current, however little it lags.
 
 ### Security
 
