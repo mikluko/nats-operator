@@ -34,8 +34,8 @@ const PortLeafnodes = 7422
 
 const leafnodesTLSDir = "/etc/nats-leafnodes-tls"
 
-// globalAccount is the account a leaf without an auth plane binds its
-// remotes to, as nats-server names it.
+// globalAccount is the account a leaf remote binds with neither
+// localAccountTrustRef nor localSystemAccount, as nats-server names it.
 const globalAccount = "$G"
 
 // Condition type and reasons of a leaf's remotes.

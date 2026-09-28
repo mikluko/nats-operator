@@ -83,8 +83,8 @@ func TestAdmit(t *testing.T) {
 	}
 }
 
-// TestAdmitMessage pins the message story 4's status-natsuser-denied.yaml
-// shows.
+// TestAdmitMessage pins the message story 4's
+// 01-status-natsuser-payments-reader.yaml shows.
 func TestAdmitMessage(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme(t)).WithObjects(paymentsGrant("payments")).Build()
 	cond, err := grant.Admit(t.Context(), c,

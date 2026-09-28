@@ -25,7 +25,8 @@ type NatsAccountSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	PublicKey string `json:"publicKey,omitempty"`
 
-	// JWTTTL is the account JWT's lifetime; it is re-signed at half of it.
+	// JWTTTL is the account JWT's lifetime, re-signed at half of it; 0 signs
+	// a JWT that never expires.
 	// +optional
 	// +kubebuilder:default="48h"
 	JWTTTL *metav1.Duration `json:"jwtTTL,omitempty"`
@@ -221,7 +222,8 @@ type NatsAccountStatus struct {
 
 // ImportStatus is a resolved import.
 type ImportStatus struct {
-	// Export is the export taken, as account/export.
+	// Export is the export taken, as account/export, or
+	// namespace/account/export from another namespace.
 	// +optional
 	Export string `json:"export,omitempty"`
 

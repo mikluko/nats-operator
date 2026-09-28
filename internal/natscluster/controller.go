@@ -45,8 +45,7 @@ type Observer interface {
 
 // PodMonitor is the Observer of a NatsCluster through the HTTP monitoring
 // port of each pod spec.replicas names, addressed under the headless
-// Service. It is how a NATS cluster without an auth plane is observed: its
-// system account has no user to connect as.
+// Service. It is how a NATS cluster that names no system user is observed.
 type PodMonitor struct {
 	Monitor *sysobs.MonitorObserver
 }

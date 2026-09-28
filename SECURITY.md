@@ -8,6 +8,15 @@ Report a vulnerability privately through [GitHub's private vulnerability reporti
 
 Only the latest release is supported; a security fix ships as a new release.
 
+## Trust boundaries
+
+Every kind is namespaced, and a reference crosses into another namespace only where a `NatsReferenceGrant` there admits it, as [design section 7](docs/design/v1.md#7-tenancy) states.
+
+- A namespace granted `NatsAccount`s to a `NatsOperator` has accounts signed under it with the limits it declares, and can take any account key no `NatsAccount` records yet.
+- A namespace granted `NatsUser`s to a `NatsAccount` can claim and revoke any user key of that account, keys issued outside the auth controller included.
+- Whoever may write a `NatsCluster` runs pods in its namespace with any privilege that namespace admits: `spec.podTemplate` is merged over the rendered pod.
+- The chart's `watchNamespaces` confines every controller, and its RBAC, to the namespaces it names; it is the install for a Kubernetes cluster shared between tenants.
+
 ## Verifying a release
 
 Each release's controller images and chart are signed keylessly with cosign by the release workflow. With `<version>` a release's version without the `v`, such as `0.1.0`:

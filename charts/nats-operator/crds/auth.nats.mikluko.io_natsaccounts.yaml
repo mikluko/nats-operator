@@ -175,8 +175,9 @@ spec:
                 type: array
               jwtTTL:
                 default: 48h
-                description: JWTTTL is the account JWT's lifetime; it is re-signed
-                  at half of it.
+                description: |-
+                  JWTTTL is the account JWT's lifetime, re-signed at half of it; 0 signs
+                  a JWT that never expires.
                 type: string
               keys:
                 description: Keys adopts existing seeds.
@@ -411,7 +412,9 @@ spec:
                       - Signed
                       type: string
                     export:
-                      description: Export is the export taken, as account/export.
+                      description: |-
+                        Export is the export taken, as account/export, or
+                        namespace/account/export from another namespace.
                       type: string
                     localSubject:
                       description: LocalSubject is where the import appears in this

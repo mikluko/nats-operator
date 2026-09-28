@@ -27,8 +27,8 @@ const readyWait = time.Second
 
 // Controller is one controller binary, as Run starts it.
 type Controller struct {
-	// Name names the controller's logger, telemetry service and event
-	// source, one of the telemetry package's controller names.
+	// Name names the controller's logger and telemetry service, one of the
+	// telemetry package's controller names.
 	Name string
 	// Group is the API group the controller owns, the default of
 	// --leader-election-id.

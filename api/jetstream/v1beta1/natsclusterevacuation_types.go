@@ -131,7 +131,8 @@ type RequestedMove struct {
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // NatsClusterEvacuation moves every stream, key-value bucket and object
-// store in every account off one NATS cluster.
+// store in every account off one NATS cluster, save those whose resource's
+// placement.cluster names it, which it reports as pinned.
 type NatsClusterEvacuation struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

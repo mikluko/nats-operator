@@ -66,9 +66,10 @@ type KeyValueConfig struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
-// NatsKeyValueSpec is the desired state of a key-value bucket. A field with
-// no description is the like-named field of nats.go's
-// jetstream.KeyValueConfig, documented at https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#KeyValueConfig.
+// NatsKeyValueSpec is the desired state of a key-value bucket. The fields of
+// the inlined KeyValueConfig mirror nats.go's jetstream.KeyValueConfig, the
+// config as clients see it, and mean what their like-named fields there
+// mean, described here or not: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#KeyValueConfig.
 type NatsKeyValueSpec struct {
 	// ConnectionRef names the NatsConnection whose credentials decide the
 	// account.

@@ -21,7 +21,7 @@ The orders team's stream lives in `east`, and its producers and consumers are mo
 
 ## During the move
 
-The resource reports progress per new replica and per consumer, with `Synced` false until the move ends. What clients see meanwhile is what nats-server provides for a placement move; the controller adds no guarantee of its own.
+The resource reports progress per new replica and a count of consumers moved, with `Synced` false until the move ends. What clients see meanwhile is what nats-server provides for a placement move; the controller adds no guarantee of its own.
 
 {{< manifest "02-status-natsstream-transferring.yaml" >}}
 

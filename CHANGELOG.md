@@ -10,8 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Licensed under Apache-2.0; the chart carries `artifacthub.io/license: Apache-2.0`.
-- Vulnerabilities are reported through the repository's GitHub private vulnerability reporting, as `SECURITY.md` states.
-- `SECURITY.md` states the supported versions, the acknowledgement time for a report, and how to verify a release's signatures and provenance.
+- `SECURITY.md` states how to report a vulnerability through the repository's GitHub private vulnerability reporting, the acknowledgement time for a report, the supported versions, the trust boundaries between namespaces, and how to verify a release's signatures and provenance.
 - Each release's controller images and chart are signed keylessly with cosign and carry a GitHub build provenance attestation.
 - The cluster controller caches only the StatefulSets, ConfigMaps, Services, PersistentVolumeClaims, PodDisruptionBudgets and NetworkPolicies labelled `cluster.nats.mikluko.io/cluster`; every controller reads Secrets from the API server rather than its cache.
 - A controller's `/readyz` passes once its cache is synced.
@@ -105,10 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An auth object whose reconcile fails reads `Ready` False, reason `ReconcileError`, and keeps `status.observedGeneration` at the generation last reconciled in full.
 - `NatsClusterEvacuation` makes no move while any server of its NATS system is down or the meta group has no leader, reporting `Ready` and `Progressing` False with reason `ServersDown`.
 - The `NatsSystemBalancer` and the `NatsBalancer`s of one NATS cluster move one at a time; while one's move is in flight the others read `Holding`, reason `MoveLeaseHeld`.
-- A `NatsSystemBalancer` or `NatsBalancer` makes no move while any member of any group in its scope is not current, however little it lags.
-
-### Security
-
+- A `NatsSystemBalancer` or `NatsBalancer` makes no move while any member of any group in its scope is not current.
 - The `cluster-controller`, `jetstream-controller` and `auth-controller` presets subscribe only to their own inbox, `_INBOX.<preset>.>`; a JetStream controller account user whose `permissions` restrict subscriptions must allow `_INBOX.jetstream-controller.>`.
 - The `readonly` preset subscribes only to its own inbox, `_INBOX.readonly.>`, which its client dials with.
 

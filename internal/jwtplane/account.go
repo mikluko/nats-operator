@@ -97,7 +97,7 @@ type Revocation struct {
 }
 
 // SignAccount returns the account JWT, signed by the NATS operator's active
-// signing key and expiring TTL after now.
+// signing key and expiring TTL after now unless NoExpiry is set.
 func SignAccount(a Account, operator Keys, now time.Time) (string, error) {
 	c, err := accountClaims(a.Name, a.Keys, a.Revocations)
 	if err != nil {

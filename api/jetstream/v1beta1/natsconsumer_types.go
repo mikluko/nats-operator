@@ -164,10 +164,11 @@ type ConsumerConfig struct {
 }
 
 // NatsConsumerSpec is the desired state of a consumer. deliverPolicy,
-// ackPolicy, replayPolicy, optStartSeq, optStartTime, heartbeat,
-// flowControl and maxWaiting are immutable unless recreateOnImmutableChange
-// is set. A field with no description is the like-named field of nats.go's
-// jetstream.ConsumerConfig, documented at https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#ConsumerConfig.
+// ackPolicy, replayPolicy, optStartSeq, optStartTime, heartbeat, flowControl
+// and maxWaiting are immutable unless recreateOnImmutableChange is set. The
+// fields of the inlined ConsumerConfig mirror nats.go's
+// jetstream.ConsumerConfig, the config as clients see it, and mean what
+// their like-named fields there mean, described here or not: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#ConsumerConfig.
 // +kubebuilder:validation:XValidation:rule="has(self.stream) != has(self.streamRef)",message="set exactly one of stream and streamRef"
 // +kubebuilder:validation:XValidation:rule="has(self.connectionRef) || has(self.streamRef)",message="connectionRef is required unless streamRef is set"
 // +kubebuilder:validation:XValidation:rule="(has(self.recreateOnImmutableChange) && self.recreateOnImmutableChange) || !has(self.deliverPolicy) || !has(oldSelf.deliverPolicy) || self.deliverPolicy == oldSelf.deliverPolicy",message="deliverPolicy is immutable unless recreateOnImmutableChange is set"

@@ -31,7 +31,7 @@ status:
       waitingFor: Settled
       since: !any "2026-09-25T16:02:11Z"
       # A gate that stays shut holds here with no timeout; after ten
-      # minutes Progressing reads GateBlocked, naming the lagging groups.
+      # minutes Progressing reads GateBlocked, naming the unsettled groups.
   jetstream:
     metaLeader: !any demo-0
   servers:

@@ -41,7 +41,7 @@ The JetStream controller reaches the cluster only through a connection, the same
 
 {{< manifest "03-natsstream.yaml" >}}
 
-The stream's status is re-read on a resync period, so drift made outside Kubernetes shows up as `Synced=False`.
+The stream's status is re-read on a resync period, so drift made outside Kubernetes is reapplied from spec and reported, for one resync, as `Synced=False`, reason `DriftCorrected`.
 
 {{< manifest "03-status-natsstream.yaml" >}}
 

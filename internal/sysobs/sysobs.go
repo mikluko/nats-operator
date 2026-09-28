@@ -57,7 +57,8 @@ func WithGateways() Option {
 
 // New returns a SystemClient of the NATS cluster named cluster, over nc, which
 // must be authenticated as a user of the system account. Only servers whose
-// cluster name equals cluster exactly answer its requests.
+// cluster name equals cluster exactly answer its requests, save those to the
+// meta leader, which is answered wherever it runs.
 func New(nc *nats.Conn, cluster string, opts ...Option) *SystemClient {
 	o := &SystemClient{nc: nc, cluster: cluster, wait: 2 * time.Second}
 	for _, opt := range opts {

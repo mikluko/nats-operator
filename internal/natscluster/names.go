@@ -45,7 +45,8 @@ const (
 	MetadataConfigRevision = "config_revision"
 )
 
-// Ports every server listens on.
+// Ports a server listens on: the gateway port only with spec.gateway, the
+// metrics port only while the exporter runs.
 const (
 	PortClient  = 4222
 	PortRoute   = 6222

@@ -30,7 +30,8 @@ const DefaultResync = 10 * time.Minute
 
 // SettlingRecheck is how soon a synced object is read again, when sooner
 // than the resync period, while its Raft group has no leader or a member
-// that is not current, so its status follows the group as it settles.
+// that is offline or not current, so its status follows the group as it
+// settles.
 const SettlingRecheck = 15 * time.Second
 
 // MovingRecheck is how soon a synced object is read again, when sooner than
