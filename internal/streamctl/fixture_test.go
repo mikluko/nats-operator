@@ -42,7 +42,12 @@ type fixture struct {
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	n := startNATS(t, 1, false)
+	return newFixtureOn(t, startNATS(t, 1, false))
+}
+
+// newFixtureOn is newFixture with demo reaching n.
+func newFixtureOn(t *testing.T, n *testNATS) *fixture {
+	t.Helper()
 	b := fake.NewClientBuilder().
 		WithScheme(testScheme(t)).
 		WithStatusSubresource(&js.NatsStream{}, &js.NatsConsumer{}, &js.NatsKeyValue{}, &js.NatsObjectStore{}, &natsv1beta1.NatsConnection{}).

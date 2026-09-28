@@ -47,7 +47,8 @@ var streamKind = lifecycle.Kind[*js.NatsStream]{
 	Bind: func(api *lifecycle.API, c client.Client, s *js.NatsStream) lifecycle.Object {
 		return &streamObject{api: api, client: c, obj: s}
 	},
-	Record: func(s *js.NatsStream, info *lifecycle.Info) { s.Status.Server = streamServerStatus(info) },
+	Record:  func(s *js.NatsStream, info *lifecycle.Info) { s.Status.Server = streamServerStatus(info) },
+	Observe: observeTransfer,
 }
 
 // Reconcile implements reconcile.Reconciler.

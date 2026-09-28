@@ -3,7 +3,10 @@ title: Moving a stream to another NATS cluster
 weight: 8
 params:
   e2e:
-    skip: runs in the story 6 supercluster, which spans Kubernetes clusters
+    after: 6
+    waits:
+      - {step: 1, wait: 3m, reason: the fixture Job loads 300MB into ORDERS before the move}
+      - {step: 3, wait: 5m, reason: west copies 300MB three times over the gateways before the east copies go}
 ---
 
 The orders team's stream lives in `east`, and its producers and consumers are moving to `west`. In the supercluster from the previous stories, moving the stream is one field.
@@ -18,6 +21,10 @@ The orders team's stream lives in `east`, and its producers and consumers are mo
 
 ## During the move
 
-The resource reports progress per replica and per consumer, and `Synced` turns true once the east copies are gone. What clients see during the move is not yet verified.
+The resource reports progress per new replica and per consumer, with `Synced` false until the move ends. What clients see meanwhile is what nats-server provides for a placement move; the controller adds no guarantee of its own.
 
 {{< manifest "02-status-natsstream-transferring.yaml" >}}
+
+`Synced` turns true once the east copies are gone, and the transfer block with them.
+
+{{< manifest "03-status-natsstream-in-west.yaml" >}}

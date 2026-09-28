@@ -1,0 +1,15 @@
+status:
+  observedGeneration: 1
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Balancing
+    - type: Holding
+      status: "False"
+      reason: Settled
+  # monitoring-prod, the one account with streams in prod-east, carries no
+  # jetstream-stepdown export: no leader is moved.
+  capabilities:
+    placement: true
+    leader: None
+    leaderReason: 1 of 1 accounts carry no jetstream-stepdown export; their leaders are not moved

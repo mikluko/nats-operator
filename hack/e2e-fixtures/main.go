@@ -24,6 +24,7 @@ import (
 var generators = map[string]func(dir string) error{
 	"3":  unmanaged,
 	"6":  supercluster,
+	"9":  acceptance,
 	"10": leafnodes,
 	"11": evacuation,
 }

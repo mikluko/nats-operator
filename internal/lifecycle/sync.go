@@ -33,6 +33,11 @@ const DefaultResync = 10 * time.Minute
 // that is not current, so its status follows the group as it settles.
 const SettlingRecheck = 15 * time.Second
 
+// MovingRecheck is how soon a synced object is read again, when sooner than
+// the resync period, while its Raft group is moving to a placement it has
+// not reached, so its status follows the move.
+const MovingRecheck = 5 * time.Second
+
 // Object is one resource's server object, bound to the resource's spec and
 // connection.
 type Object interface {
@@ -128,6 +133,9 @@ func (s Syncer) Sync(ctx context.Context, r Resource, o Object) (reconcile.Resul
 
 // recheck returns when a synced object with info is read again.
 func (s Syncer) recheck(info *Info) time.Duration {
+	if info != nil && info.Moving && MovingRecheck < s.resync() {
+		return MovingRecheck
+	}
 	if settling(info) && SettlingRecheck < s.resync() {
 		return SettlingRecheck
 	}

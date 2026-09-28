@@ -1,0 +1,17 @@
+status:
+  observedGeneration: 2
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Synced
+    - type: Adopted
+      status: "True"
+      reason: FoundUnowned
+      message: adopted existing stream REQUESTS; spec written from the server
+    - type: Synced
+      status: "True"
+      reason: MatchesSpec
+  ownership:
+    origin: Adopted
+  server:
+    leader: !any prod-east-2

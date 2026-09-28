@@ -64,6 +64,7 @@ Connects through the `NatsConnection` a `NatsStream`, `NatsConsumer`, `NatsKeyVa
 | `$JS.API.CONSUMER.INFO.*.*` | Reads a consumer. | `internal/lifecycle` |
 | `$JS.API.CONSUMER.CREATE.*.*` | Creates or updates a `NatsConsumer`'s consumer. | `internal/lifecycle` |
 | `$JS.API.CONSUMER.DELETE.*.*` | Deletes it. | `internal/lifecycle` |
+| `$JS.API.CONSUMER.LIST.*` | Lists a `NatsStream`'s consumers while its stream moves to another NATS cluster. | `internal/streamctl` |
 | `$JS.API.INFO` | Reads the account's JetStream limits before a key-value bucket is created or updated. | nats.go `jetstream` |
 | `$JS.API.STREAM.CREATE.*` | Creates the stream behind a `NatsKeyValue` or `NatsObjectStore`. | nats.go `jetstream` |
 | `$JS.API.STREAM.UPDATE.*` | Updates it. | nats.go `jetstream` |

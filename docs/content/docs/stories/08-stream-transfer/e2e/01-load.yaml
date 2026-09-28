@@ -1,0 +1,33 @@
+# What the orders services do once ORDERS exists: two durable consumers and
+# 300MB of orders, so the move to west takes long enough to watch.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: orders-load
+  namespace: orders
+spec:
+  backoffLimit: 20
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: nats
+          image: natsio/nats-box:0.20.0
+          env:
+            - {name: NATS_URL, value: "nats://east.nats-system.svc:4222"}
+            - {name: NATS_CREDS, value: /creds/user.creds}
+          command:
+            - sh
+            - -ec
+            - |
+              until nats stream info ORDERS >/dev/null 2>&1; do sleep 2; done
+              for c in audit billing; do
+                nats consumer info ORDERS "$c" >/dev/null 2>&1 ||
+                  nats consumer add ORDERS "$c" --pull --deliver all --ack explicit --defaults
+              done
+              nats bench js pub async orders.load --stream ORDERS --msgs 75000 --size 4KB --no-progress
+          volumeMounts:
+            - {name: creds, mountPath: /creds}
+      volumes:
+        - name: creds
+          secret: {secretName: acme-orders-creds}

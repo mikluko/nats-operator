@@ -83,6 +83,7 @@ var identities = []identity{
 			{"$JS.API.CONSUMER.INFO.*.*", "Reads a consumer.", []string{"internal/lifecycle"}},
 			{"$JS.API.CONSUMER.CREATE.*.*", "Creates or updates a `NatsConsumer`'s consumer.", []string{"internal/lifecycle"}},
 			{"$JS.API.CONSUMER.DELETE.*.*", "Deletes it.", []string{"internal/lifecycle"}},
+			{"$JS.API.CONSUMER.LIST.*", "Lists a `NatsStream`'s consumers while its stream moves to another NATS cluster.", []string{"internal/streamctl"}},
 			{"$JS.API.INFO", "Reads the account's JetStream limits before a key-value bucket is created or updated.", []string{natsGo}},
 			{"$JS.API.STREAM.CREATE.*", "Creates the stream behind a `NatsKeyValue` or `NatsObjectStore`.", []string{natsGo}},
 			{"$JS.API.STREAM.UPDATE.*", "Updates it.", []string{natsGo}},

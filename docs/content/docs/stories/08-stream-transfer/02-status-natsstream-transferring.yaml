@@ -3,12 +3,11 @@ status:
   conditions:
     - type: Ready
       status: "True"
-      reason: Serving
-      message: the east copies serve until west has caught up (unverified, Q2073)
+      reason: Synced
     - type: Synced
       status: "False"
-      reason: Migrating
-      message: moving to cluster west; 2 of 3 new replicas current
+      reason: Moving
+      message: !any moving to cluster west; 2 of 3 new replicas current
   transfer:
     from: east
     to: west
@@ -22,7 +21,7 @@ status:
         current: !any false
         lag: !any 18231
     consumers:
-      moved: !any 3
-      total: !any 4
+      moved: !any 1
+      total: 2
   server:
     leader: !any east-1

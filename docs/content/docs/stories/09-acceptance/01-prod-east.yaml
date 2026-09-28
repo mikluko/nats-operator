@@ -1,0 +1,57 @@
+# One NatsCluster per Kubernetes cluster, each in its own cluster's GitOps
+# tree. Only what differs between them is commented.
+apiVersion: cluster.nats.mikluko.io/v1beta1
+kind: NatsCluster
+metadata:
+  name: prod-east   # home cluster
+  namespace: nats-system
+spec:
+  # 2.15.0 is the minimum supported nats-server version.
+  version: 2.15.1
+  replicas: 5
+  resources:
+    requests:
+      cpu: "6"
+      memory: 29Gi
+    limits:
+      memory: 29Gi
+  jetstream:
+    # Overrides the memory store derived from limits.memory.
+    limits:
+      maxMemoryStore: 10Gi
+    volumeClaimTemplate:
+      spec:
+        storageClassName: gp3
+        resources:
+          requests:
+            storage: 500Gi
+  serverTags:
+    cluster: prod-east
+    region: us-east-2
+  auth:
+    trustRef:
+      name: acme
+    systemCredentials:
+      secretKeyRef:
+        name: cluster-controller-creds
+  gateway:
+    discovery: Explicit
+    remotes:
+      - name: prod-east
+        url: tls://nats.prod-east.acme.example:7222
+      - name: dev-east
+        url: tls://nats.dev-east.acme.example:7222
+      - name: prod-west
+        url: tls://nats.prod-west.acme.example:7222
+    tls:
+      certManager:
+        issuerRef:
+          kind: ClusterIssuer
+          name: letsencrypt
+    service:
+      type: LoadBalancer
+      annotations:
+        service.beta.kubernetes.io/aws-load-balancer-type: external
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+        external-dns.alpha.kubernetes.io/hostname: nats.prod-east.acme.example
+    advertise: nats.prod-east.acme.example:7222

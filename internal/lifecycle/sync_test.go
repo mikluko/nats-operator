@@ -28,8 +28,9 @@ func (o fetchOnly) Delete(context.Context) error                         { retur
 func (o fetchOnly) WriteSpec(context.Context, Config, bool) error        { return nil }
 
 // TestSync_SettlingRecheck pins that a synced object whose Raft group is
-// not settled is read again after SettlingRecheck, and a settled one, or one
-// with no group, after the resync period.
+// moving is read again after MovingRecheck, one whose group is not settled
+// after SettlingRecheck, and a settled one, or one with no group, after the
+// resync period.
 func TestSync_SettlingRecheck(t *testing.T) {
 	const owner = types.UID("5b1e0c4a")
 	const resync = time.Hour
@@ -39,6 +40,7 @@ func TestSync_SettlingRecheck(t *testing.T) {
 	tests := []struct {
 		name    string
 		cluster *jetstream.ClusterInfo
+		moving  bool
 		want    time.Duration
 	}{
 		{name: "no group", want: resync},
@@ -47,6 +49,8 @@ func TestSync_SettlingRecheck(t *testing.T) {
 		{name: "no leader", cluster: &jetstream.ClusterInfo{Replicas: []*jetstream.PeerInfo{peer("b", true, false)}}, want: SettlingRecheck},
 		{name: "member not current", cluster: &jetstream.ClusterInfo{Leader: "a", Replicas: []*jetstream.PeerInfo{peer("b", true, false), peer("c", false, false)}}, want: SettlingRecheck},
 		{name: "member offline", cluster: &jetstream.ClusterInfo{Leader: "a", Replicas: []*jetstream.PeerInfo{peer("b", true, true)}}, want: SettlingRecheck},
+		{name: "moving", cluster: &jetstream.ClusterInfo{Leader: "a", Replicas: []*jetstream.PeerInfo{peer("b", false, false)}}, moving: true, want: MovingRecheck},
+		{name: "moving, every member current", cluster: &jetstream.ClusterInfo{Leader: "a", Replicas: []*jetstream.PeerInfo{peer("b", true, false)}}, moving: true, want: MovingRecheck},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -54,7 +58,7 @@ func TestSync_SettlingRecheck(t *testing.T) {
 			obj := &metav1.ObjectMeta{UID: owner, Generation: 1}
 			st := &jetstreamv1beta1.SyncStatus{}
 			res, _, err := Syncer{Resync: resync}.Sync(t.Context(), Resource{Object: obj, Status: st},
-				fetchOnly{info: &Info{Config: cfg, Cluster: tt.cluster}})
+				fetchOnly{info: &Info{Config: cfg, Cluster: tt.cluster, Moving: tt.moving}})
 			require.NoError(t, err)
 			require.Equal(t, tt.want, res.RequeueAfter)
 		})

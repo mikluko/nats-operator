@@ -1,0 +1,56 @@
+apiVersion: cluster.nats.mikluko.io/v1beta1
+kind: NatsCluster
+metadata:
+  name: dev-east
+  namespace: nats-system
+spec:
+  version: 2.15.0
+  replicas: 3
+  resources:
+    requests:
+      cpu: "1500m"
+      memory: 3Gi
+    limits:
+      memory: 3Gi
+  jetstream:
+    volumeClaimTemplate:
+      spec:
+        storageClassName: gp3
+        resources:
+          requests:
+            storage: 100Gi
+  serverTags:
+    cluster: dev-east
+    region: us-east-2
+  # Scheduling passes through: dev pins every server to one zone.
+  podTemplate:
+    spec:
+      nodeSelector:
+        topology.kubernetes.io/zone: us-east-2a
+  auth:
+    trustRef:
+      name: acme
+    systemCredentials:
+      secretKeyRef:
+        name: dev-east-cluster-controller-creds
+  gateway:
+    discovery: Explicit
+    remotes:
+      - name: prod-east
+        url: tls://nats.prod-east.acme.example:7222
+      - name: dev-east
+        url: tls://nats.dev-east.acme.example:7222
+      - name: prod-west
+        url: tls://nats.prod-west.acme.example:7222
+    tls:
+      certManager:
+        issuerRef:
+          kind: ClusterIssuer
+          name: letsencrypt
+    service:
+      type: LoadBalancer
+      annotations:
+        service.beta.kubernetes.io/aws-load-balancer-type: external
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+        external-dns.alpha.kubernetes.io/hostname: nats.dev-east.acme.example
+    advertise: nats.dev-east.acme.example:7222

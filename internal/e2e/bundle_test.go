@@ -13,8 +13,7 @@ import (
 const storiesDir = "../../docs/content/docs/stories"
 
 // TestLoadBundles_Stories pins the story bundles to the harness: every
-// expectation names an object its bundle declares, and every story either
-// runs or states why not.
+// expectation names an object its bundle declares, and no story is skipped.
 func TestLoadBundles_Stories(t *testing.T) {
 	bundles, err := LoadBundles(storiesDir)
 	require.NoError(t, err)
@@ -33,10 +32,7 @@ func TestLoadBundles_Stories(t *testing.T) {
 			skipped[b.Name] = r
 		}
 	}
-	require.Equal(t, map[string]string{
-		"08-stream-transfer": "runs in the story 6 supercluster, which spans Kubernetes clusters",
-		"09-acceptance":      "needs more than one Kubernetes cluster",
-	}, skipped)
+	require.Empty(t, skipped)
 
 	chains := map[string][]string{}
 	for _, b := range bundles {
@@ -47,6 +43,7 @@ func TestLoadBundles_Stories(t *testing.T) {
 	require.Equal(t, []string{"02-auth-plane", "04-team-self-service"}, chains["04-team-self-service"])
 	require.Equal(t, []string{"02-auth-plane", "05-account-wiring"}, chains["05-account-wiring"])
 	require.Equal(t, []string{"02-auth-plane", "04-team-self-service", "07-balancing"}, chains["07-balancing"])
+	require.Equal(t, []string{"06-supercluster", "08-stream-transfer"}, chains["08-stream-transfer"])
 	require.Equal(t, []string{"nats-system", "orders", "payments"}, bundles[3].Namespaces())
 
 	quickstart := bundles[0]

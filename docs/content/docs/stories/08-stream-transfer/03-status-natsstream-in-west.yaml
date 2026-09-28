@@ -1,0 +1,11 @@
+status:
+  observedGeneration: 2
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Synced
+    - type: Synced
+      status: "True"
+      reason: MatchesSpec
+  server:
+    leader: !any west-0

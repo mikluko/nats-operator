@@ -1,0 +1,13 @@
+status:
+  observedGeneration: 1
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Distributed
+    - type: Distributed
+      status: "True"
+      reason: AllServersCurrent
+      message: 11 of 11 servers hold this JWT
+  distribution:
+    servers: 11
+    current: 11

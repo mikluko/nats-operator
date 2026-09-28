@@ -24,6 +24,9 @@ type Info struct {
 	Config  Config
 	Created time.Time
 	Cluster *jetstream.ClusterInfo
+	// Moving reports that the server holds a placement for the object's
+	// Raft group that the group has not reached yet.
+	Moving bool
 	// Raw is the whole reply, for the kind-specific parts.
 	Raw []byte
 }
@@ -88,9 +91,12 @@ func (a API) request(ctx context.Context, subject string, body any) (*Info, erro
 		return nil, err
 	}
 	var reply struct {
-		Config  json.RawMessage        `json:"config"`
-		Created time.Time              `json:"created"`
-		Cluster *jetstream.ClusterInfo `json:"cluster"`
+		Config  json.RawMessage `json:"config"`
+		Created time.Time       `json:"created"`
+		Cluster *struct {
+			jetstream.ClusterInfo
+			Desired json.RawMessage `json:"desired"`
+		} `json:"cluster"`
 	}
 	if err := json.Unmarshal(raw, &reply); err != nil {
 		return nil, fmt.Errorf("decode %s reply: %w", subject, err)
@@ -99,5 +105,10 @@ func (a API) request(ctx context.Context, subject string, body any) (*Info, erro
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", subject, err)
 	}
-	return &Info{Config: cfg, Created: reply.Created, Cluster: reply.Cluster, Raw: raw}, nil
+	info := &Info{Config: cfg, Created: reply.Created, Raw: raw}
+	if c := reply.Cluster; c != nil {
+		info.Cluster = &c.ClusterInfo
+		info.Moving = len(c.Desired) > 0 && string(c.Desired) != "null"
+	}
+	return info, nil
 }

@@ -42,14 +42,17 @@ const envResync = 2 * time.Second
 // against a real API server over the manifests of story 1 (a stream on a
 // NATS cluster without an auth plane) and story 3 (adoption, a Terminal
 // stream under Retry, consumers, a key-value bucket and an object store on a
-// NATS cluster requiring TLS and credentials), each against a three-server in-process NATS cluster. Only
-// the NatsConnections' servers are rewritten to reach them.
+// NATS cluster requiring TLS and credentials), each against a three-server
+// in-process NATS cluster, and story 8 (a stream moved between the NATS
+// clusters of a supercluster) against two of them gatewayed. Only the
+// NatsConnections' servers are rewritten to reach them.
 func TestEnvtest(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")
 	}
 	quickstart := startNATS(t, 3, false)
 	unmanaged := startNATS(t, 3, true)
+	supercluster := startSupercluster(t, "east", "west")
 
 	env := &envtest.Environment{CRDDirectoryPaths: []string{"../../config/crd"}, ErrorIfCRDPathMissing: true}
 	cfg, err := env.Start()
@@ -64,6 +67,7 @@ func TestEnvtest(t *testing.T) {
 
 	t.Run("Story1", func(t *testing.T) { testStory1(t, c, quickstart) })
 	t.Run("Story3", func(t *testing.T) { testStory3(t, c, unmanaged) })
+	t.Run("Story8", func(t *testing.T) { testStory8(t, c, supercluster) })
 	t.Run("ConnectionGone", func(t *testing.T) { testConnectionGone(t, c, quickstart) })
 }
 

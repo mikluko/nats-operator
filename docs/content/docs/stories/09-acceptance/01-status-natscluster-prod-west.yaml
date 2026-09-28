@@ -1,0 +1,25 @@
+status:
+  observedGeneration: 1
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: AllServersReady
+    - type: Settled
+      status: "True"
+      reason: AllGroupsCurrent
+    - type: GatewaysConnected
+      status: "True"
+      reason: AllMembersReachable
+      message: 2 of 2 remote members connected
+  gateways:
+    - name: dev-east
+      connected: true
+      inbound: 3
+      outbound: 3
+    - name: prod-east
+      connected: true
+      inbound: 5
+      outbound: 3
+  endpoints:
+    client: nats://prod-west.nats-system.svc:4222
+    gateway: nats.prod-west.acme.example:7222
