@@ -185,7 +185,7 @@ func TestGatewayCertificate(t *testing.T) {
 			"ipAddresses": ["10.0.0.7"],
 			"usages": ["server auth", "client auth"],
 			"privateKey": {"algorithm": "ECDSA", "size": 256},
-			"issuerRef": {"name": "letsencrypt", "kind": "ClusterIssuer", "group": "cert-manager.io"}
+			"issuerRef": {"name": "nats-gateway-ca", "kind": "ClusterIssuer", "group": "cert-manager.io"}
 		}
 	}`, string(b))
 

@@ -1345,7 +1345,7 @@ Pool is a declared group of streams balanced apart from the account's others.\
 Appears on: [NatsBalancerSpec](#NatsBalancerSpec).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `name` | {{< type "string" >}} | Yes |  |
+| `name` | {{< type "string" >}} | Yes | Name is unique among the balancer's pools and appears in status.pools. |
 | `selector` | [{{< type "LabelSelector" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#LabelSelector) | Yes | Selector matches NatsStream, NatsKeyValue and NatsObjectStore resources in the balancer's namespace by label. |
 
 ### PoolStatus {#PoolStatus}

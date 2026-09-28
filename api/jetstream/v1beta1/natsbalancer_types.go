@@ -22,6 +22,7 @@ type Moves struct {
 // Pool is a declared group of streams balanced apart from the account's
 // others.
 type Pool struct {
+	// Name is unique among the balancer's pools and appears in status.pools.
 	// +required
 	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
 	// +kubebuilder:validation:MaxLength=63

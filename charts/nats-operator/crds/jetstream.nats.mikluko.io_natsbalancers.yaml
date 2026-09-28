@@ -98,6 +98,8 @@ spec:
                     others.
                   properties:
                     name:
+                      description: Name is unique among the balancer's pools and appears
+                        in status.pools.
                       maxLength: 63
                       pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                       type: string
