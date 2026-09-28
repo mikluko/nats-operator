@@ -39,13 +39,9 @@ const storiesDir = "../../docs/content/docs/stories"
 const envResync = 2 * time.Second
 
 // TestEnvtest runs the jetstream-controller's reconcilers in a manager
-// against a real API server over the manifests of story 1 (a stream on a
-// NATS cluster without an auth plane) and story 3 (adoption, a Terminal
-// stream under Retry, consumers, a key-value bucket and an object store on a
-// NATS cluster requiring TLS and credentials), each against a three-server
-// in-process NATS cluster, and story 8 (a stream moved between the NATS
-// clusters of a supercluster) against two of them gatewayed. Only the
-// NatsConnections' servers are rewritten to reach them.
+// against a real API server over the manifests of stories 1, 3 and 8, each
+// against in-process NATS clusters. Only the NatsConnections' servers are
+// rewritten to reach them.
 func TestEnvtest(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")

@@ -6,7 +6,6 @@ metadata:
   name: prod-east   # home cluster
   namespace: nats-system
 spec:
-  # 2.15.0 is the minimum supported nats-server version.
   version: 2.15.1
   replicas: 5
   resources:

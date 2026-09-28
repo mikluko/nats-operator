@@ -53,8 +53,7 @@ type peerWire struct {
 }
 
 // streamTransfer returns the move to another NATS cluster c reports, with
-// no consumer counts, or nil when there is none. The cluster moved from is
-// the one the origin placement names, else the group leader's.
+// no consumer counts, or nil when there is none.
 func streamTransfer(c *clusterWire) *js.StreamTransfer {
 	if c == nil || c.Desired == nil || c.Desired.Name == "" {
 		return nil
@@ -94,8 +93,8 @@ func consumersMoved(consumers []clusterWire, to string) *js.TransferConsumers {
 }
 
 // observeTransfer records on s the move to another NATS cluster info
-// reports, with its consumers counted through o, and while there is one
-// turns a Synced that matches spec False with ReasonMoving.
+// reports and, while there is one, turns a Synced that matches spec False
+// with ReasonMoving.
 func observeTransfer(ctx context.Context, o lifecycle.Object, s *js.NatsStream, info *lifecycle.Info) error {
 	var reply struct {
 		Cluster *clusterWire `json:"cluster"`

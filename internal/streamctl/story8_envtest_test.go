@@ -21,10 +21,9 @@ import (
 	"github.com/mikluko/nats-operator/internal/e2e"
 )
 
-// testStory8 runs story 8 on a two-cluster supercluster: ORDERS created in
-// east from the story's manifest, then its placement.cluster edited to
-// west, held in flight by stopping one new replica so the transferring
-// status can be read, then let finish. Only the NatsConnection the story's
+// testStory8 runs story 8 on a two-cluster supercluster, holding the move
+// from east to west in flight by stopping one new replica so the
+// transferring status can be read. Only the NatsConnection the story's
 // fixture declares is created here, reaching east without credentials.
 func testStory8(t *testing.T, c client.Client, sc map[string]*testNATS) {
 	const ns = "orders"

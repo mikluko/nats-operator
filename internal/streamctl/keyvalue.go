@@ -28,9 +28,8 @@ const ReasonNotABucket = "NotABucket"
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
 
 // KeyValueReconciler keeps NatsKeyValues' buckets at their specs through
-// nats.go's key-value manager, under their lifecycle policies. The marker
-// is in the bucket's stream, KV_<bucket>, and drift is judged on the
-// fields KeyValueConfig carries.
+// nats.go's key-value manager, under their lifecycle policies. Drift is
+// judged on the fields KeyValueConfig carries.
 type KeyValueReconciler struct {
 	Client client.Client
 	Dialer *natsconn.Dialer
@@ -56,8 +55,7 @@ func (r *KeyValueReconciler) Reconcile(ctx context.Context, req reconcile.Reques
 	return keyValueKind.Reconcile(ctx, r.Client, r.Dialer, r.Syncer, req)
 }
 
-// SetupWithManager registers the field indexes the reconciler reads and
-// builds its controller.
+// SetupWithManager registers the reconciler with mgr.
 func (r *KeyValueReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	return keyValueKind.SetupWithManager(ctx, mgr, r)
 }

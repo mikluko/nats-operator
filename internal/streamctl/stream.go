@@ -27,9 +27,7 @@ const StreamKind = "NatsStream"
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
 
 // StreamReconciler keeps NatsStreams' streams at their specs through their
-// connections, under their lifecycle policies. Deleting a NatsStream whose
-// deletionPolicy is Delete waits until its connection can delete the stream,
-// unless lifecycle.NoConn.Released lets it go.
+// connections, under their lifecycle policies.
 type StreamReconciler struct {
 	Client client.Client
 	Dialer *natsconn.Dialer
@@ -56,9 +54,7 @@ func (r *StreamReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 	return streamKind.Reconcile(ctx, r.Client, r.Dialer, r.Syncer, req)
 }
 
-// SetupWithManager registers the field indexes the reconciler reads and
-// builds its controller, watching NatsStreams, the NatsConnections they
-// name and the NatsReferenceGrants that admit them.
+// SetupWithManager registers the reconciler with mgr.
 func (r *StreamReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	return streamKind.SetupWithManager(ctx, mgr, r)
 }

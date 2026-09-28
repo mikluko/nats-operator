@@ -34,8 +34,7 @@ const DefaultResync = 10 * time.Minute
 const SettlingRecheck = 15 * time.Second
 
 // MovingRecheck is how soon a synced object is read again, when sooner than
-// the resync period, while its Raft group is moving to a placement it has
-// not reached, so its status follows the move.
+// the resync period, while its Raft group is moving to a new placement.
 const MovingRecheck = 5 * time.Second
 
 // Object is one resource's server object, bound to the resource's spec and

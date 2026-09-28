@@ -18,17 +18,8 @@ type accept struct {
 	RuntimeCreds                          []string
 }
 
-// acceptance writes story 9's fixtures: in e2e/00-home.yaml, for prod-east,
-// the keys the story's NATS operator acme, system account sys and account
-// monitoring-prod adopt, the system users prod-east's cluster controller,
-// the auth controller and the JetStream controller run as, and in namespace
-// monitoring the creds of a monitoring-prod user signed by the account's
-// signing key, which the application creating its streams at runtime runs
-// as; in e2e/00-dev-east.yaml and e2e/00-prod-west.yaml, the creds each
-// remote cluster's cluster controller runs as, signed by the system
-// account's signing key, as External Secrets would carry them there. It
-// prints the literal operator and system account JWTs the story's
-// NatsOperatorTrust takes, as the patch of a substitution.
+// acceptance writes story 9's fixtures into dir and prints the operator and system account JWTs its
+// NatsOperatorTrust takes as a substitution's patch.
 func acceptance(dir string) error {
 	var a accept
 	var op, sys, monitoring jwtplane.Keys

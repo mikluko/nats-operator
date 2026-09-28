@@ -24,8 +24,7 @@ const ObjectStoreKind = "NatsObjectStore"
 
 // ObjectStoreReconciler keeps NatsObjectStores' object stores at their
 // specs through nats.go's object store manager, under their lifecycle
-// policies. The marker is in the store's stream, OBJ_<bucket>, and drift is
-// judged on the fields ObjectStoreConfig carries.
+// policies. Drift is judged on the fields ObjectStoreConfig carries.
 type ObjectStoreReconciler struct {
 	Client client.Client
 	Dialer *natsconn.Dialer
@@ -51,8 +50,7 @@ func (r *ObjectStoreReconciler) Reconcile(ctx context.Context, req reconcile.Req
 	return objectStoreKind.Reconcile(ctx, r.Client, r.Dialer, r.Syncer, req)
 }
 
-// SetupWithManager registers the field indexes the reconciler reads and
-// builds its controller.
+// SetupWithManager registers the reconciler with mgr.
 func (r *ObjectStoreReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	return objectStoreKind.SetupWithManager(ctx, mgr, r)
 }

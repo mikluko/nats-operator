@@ -46,8 +46,7 @@ type Kind[P interface {
 	// Record writes info, the server object as Sync read it, into obj's
 	// status.
 	Record func(obj P, info *Info)
-	// Observe, where set, runs after Record with the same info and o, the
-	// server object Sync read it through, and records on obj what else the
+	// Observe, where set, runs after Record and records on obj what else the
 	// server reports; its error fails the reconcile after status is written.
 	Observe func(ctx context.Context, o Object, obj P, info *Info) error
 	// Conns is the NatsConnection references obj makes, nil being

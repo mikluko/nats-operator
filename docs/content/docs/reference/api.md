@@ -1387,8 +1387,8 @@ TransferConsumers counts the consumers moved with a stream.\
 Appears on: [StreamTransfer](#StreamTransfer).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `moved` | {{< type "int32" >}} | No | Moved is the number moved. |
-| `total` | {{< type "int32" >}} | No | Total is the number to move. |
+| `moved` | {{< type "int32" >}} | No | Moved counts the stream's consumers led from the target NATS cluster with no move left in flight. |
+| `total` | {{< type "int32" >}} | No | Total counts every consumer of the stream. |
 ## nats.mikluko.io/v1beta1
 Package v1beta1 is the nats.mikluko.io API group: the kinds every controller reads and none owns.
 | Kind | Description |

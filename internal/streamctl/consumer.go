@@ -62,11 +62,7 @@ var immutableConsumerKeys = []string{
 
 // ConsumerReconciler keeps NatsConsumers' consumers at their specs under
 // their lifecycle policies. A consumer with streamRef waits for that
-// NatsStream to be Ready and, without connectionRef, uses its connection.
-// Deleting a NatsConsumer whose deletionPolicy is Delete waits until its
-// connection can delete the consumer, except where its streamRef names a
-// NatsStream that no longer exists or no grant admits, or
-// lifecycle.NoConn.Released lets it go: those leave the server alone.
+// NatsStream to be Ready.
 type ConsumerReconciler struct {
 	Client client.Client
 	Dialer *natsconn.Dialer
@@ -119,11 +115,9 @@ func (r *ConsumerReconciler) Reconcile(ctx context.Context, req reconcile.Reques
 	return consumerKind.Reconcile(ctx, r.Client, r.Dialer, r.Syncer, req)
 }
 
-// object resolves c's stream and connection, waiting for a referenced
-// NatsStream to be Ready where ready is set. Where they cannot be resolved
-// it records why on c's status and returns nil, with gone reporting that
-// nothing will reach the consumer: the NatsStream streamRef names does not
-// exist, or the NatsConnection does not, or no grant admits a reference.
+// object resolves c's stream and connection, or returns nil after recording
+// why on c's status, with gone reporting that nothing will reach the
+// consumer.
 func object(ctx context.Context, cl client.Client, d *natsconn.Dialer, c *js.NatsConsumer, ready bool) (o *consumerObject, gone bool, err error) {
 	st, gen := &c.Status.SyncStatus, c.Generation
 	from := consumerReferrer(c.Namespace)
@@ -188,9 +182,7 @@ func streamRef(ctx context.Context, cl client.Client, c *js.NatsConsumer, ref na
 	return &got, false, nil
 }
 
-// SetupWithManager registers the field indexes the reconciler reads and
-// builds its controller, watching NatsConsumers, the NatsStreams and
-// NatsConnections they name and the NatsReferenceGrants that admit them.
+// SetupWithManager registers the reconciler with mgr.
 func (r *ConsumerReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	return consumerKind.SetupWithManager(ctx, mgr, r)
 }

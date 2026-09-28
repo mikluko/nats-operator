@@ -259,11 +259,12 @@ type StreamTransfer struct {
 
 // TransferConsumers counts the consumers moved with a stream.
 type TransferConsumers struct {
-	// Moved is the number moved.
+	// Moved counts the stream's consumers led from the target NATS cluster
+	// with no move left in flight.
 	// +optional
 	Moved int32 `json:"moved,omitempty"`
 
-	// Total is the number to move.
+	// Total counts every consumer of the stream.
 	// +optional
 	Total int32 `json:"total,omitempty"`
 }

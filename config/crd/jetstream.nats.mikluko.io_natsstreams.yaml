@@ -573,11 +573,13 @@ spec:
                       moved.
                     properties:
                       moved:
-                        description: Moved is the number moved.
+                        description: |-
+                          Moved counts the stream's consumers led from the target NATS cluster
+                          with no move left in flight.
                         format: int32
                         type: integer
                       total:
-                        description: Total is the number to move.
+                        description: Total counts every consumer of the stream.
                         format: int32
                         type: integer
                     type: object

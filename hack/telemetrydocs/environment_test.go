@@ -19,10 +19,18 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/mikluko/nats-operator/internal/telemetry"
 )
+
+// init makes the OTLP gRPC exporter resolve localhost without grpc-go's DNS
+// resolver, whose _grpc_config TXT lookup outlives the export's deadline
+// where the network's DNS server is slow to answer NXDOMAIN.
+func init() {
+	resolver.SetDefaultScheme("passthrough")
+}
 
 // clearEnvironment unsets every variable the environment table names until
 // t ends.
