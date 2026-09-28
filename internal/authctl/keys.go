@@ -107,11 +107,37 @@ func generatedSecretName(owner, role, key string) string {
 // errKeysPending. A generated identity seed missing while src records an
 // identity wraps errSeedLost and is never created.
 func resolveKeys(ctx context.Context, c client.Client, src keySource, generate bool) (resolvedKeys, error) {
-	var out resolvedKeys
+	out, err := resolveIdentity(ctx, c, src, generate)
+	if err != nil {
+		return out, err
+	}
 	ns := src.owner.GetNamespace()
+	if src.keys != nil && len(src.keys.Signing) > 0 {
+		for _, sk := range src.keys.Signing {
+			kp, err := readSeed(ctx, c, ns, sk.SecretKeyRef.Name, sk.SecretKeyRef.Key, src.prefix)
+			if err != nil {
+				return out, fmt.Errorf("signing key %q: %w", sk.Name, err)
+			}
+			out.Signing = append(out.Signing, jwtplane.SigningKey{Name: sk.Name, Pair: kp, Retiring: sk.Retiring})
+		}
+		return out, nil
+	}
+	name := generatedSecretName(src.owner.GetName(), src.role, "signing-1")
+	kp, err := generatedSeed(ctx, c, src.owner, src.role, name, src.prefix, generate)
+	if err != nil {
+		return out, fmt.Errorf("signing key: %w", err)
+	}
+	out.Signing = []jwtplane.SigningKey{{Name: generatedSigningKeyName, Pair: kp}}
+	out.Generated.Signing = []string{name}
+	return out, nil
+}
+
+// resolveIdentity is resolveKeys for the identity alone.
+func resolveIdentity(ctx context.Context, c client.Client, src keySource, generate bool) (resolvedKeys, error) {
+	var out resolvedKeys
 	switch {
 	case src.keys != nil && src.keys.Identity != nil:
-		kp, err := readSeed(ctx, c, ns, src.keys.Identity.SecretKeyRef.Name, src.keys.Identity.SecretKeyRef.Key, src.prefix)
+		kp, err := readSeed(ctx, c, src.owner.GetNamespace(), src.keys.Identity.SecretKeyRef.Name, src.keys.Identity.SecretKeyRef.Key, src.prefix)
 		if err != nil {
 			return out, fmt.Errorf("identity key: %w", err)
 		}
@@ -131,23 +157,6 @@ func resolveKeys(ctx context.Context, c client.Client, src keySource, generate b
 		out.Identity = kp
 		out.Generated.Identity = name
 	}
-	if src.keys != nil && len(src.keys.Signing) > 0 {
-		for _, sk := range src.keys.Signing {
-			kp, err := readSeed(ctx, c, ns, sk.SecretKeyRef.Name, sk.SecretKeyRef.Key, src.prefix)
-			if err != nil {
-				return out, fmt.Errorf("signing key %q: %w", sk.Name, err)
-			}
-			out.Signing = append(out.Signing, jwtplane.SigningKey{Name: sk.Name, Pair: kp, Retiring: sk.Retiring})
-		}
-		return out, nil
-	}
-	name := generatedSecretName(src.owner.GetName(), src.role, "signing-1")
-	kp, err := generatedSeed(ctx, c, src.owner, src.role, name, src.prefix, generate)
-	if err != nil {
-		return out, fmt.Errorf("signing key: %w", err)
-	}
-	out.Signing = []jwtplane.SigningKey{{Name: generatedSigningKeyName, Pair: kp}}
-	out.Generated.Signing = []string{name}
 	return out, nil
 }
 

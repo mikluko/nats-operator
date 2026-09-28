@@ -284,6 +284,101 @@ spec:
 	}
 }
 
+// testSystemKeyUnrecorded has a granted namespace declare NatsAccounts with
+// the identity of a NatsSystemAccount whose status records no key yet:
+// one declared after it is refused and nothing it signs is pushed, and one
+// declared before it is refused once the NatsSystemAccount's identity
+// Secret changes to that key.
+func (e *env) testSystemKeyUnrecorded(t *testing.T) {
+	first := e.seedSecret(t, "adopt", "sys-first", nkeys.PrefixByteAccount)
+	adopted := e.seedSecret(t, "adopt", "sys-adopted", nkeys.PrefixByteAccount)
+	lateSigning := e.seedSecret(t, "claim", "late-signing", nkeys.PrefixByteAccount)
+	e.seedSecret(t, "claim", "early-signing", nkeys.PrefixByteAccount)
+	e.apply(t, `
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsOperator
+metadata: {name: adopt, namespace: adopt}
+spec:
+  systemAccountRef: {name: sys}
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsSystemAccount
+metadata: {name: sys, namespace: adopt}
+spec:
+  operatorRef: {name: adopt}
+  keys:
+    identity: {secretKeyRef: {name: sys-first, key: seed}}
+    signing: [{name: s, secretKeyRef: {name: sys-signing, key: seed}}]
+---
+apiVersion: nats.mikluko.io/v1beta1
+kind: NatsReferenceGrant
+metadata: {name: claim, namespace: adopt}
+spec:
+  from: [{group: auth.nats.mikluko.io, kind: NatsAccount, namespace: claim}]
+  to: [{group: auth.nats.mikluko.io, kind: NatsOperator, name: adopt}]
+`)
+	claimer := func(name, pub string) string {
+		return fmt.Sprintf(`
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsAccount
+metadata: {name: %s, namespace: claim}
+spec:
+  operatorRef: {name: adopt, namespace: adopt}
+  publicKey: %s
+  keys:
+    signing: [{name: s, secretKeyRef: {name: %s-signing, key: seed}}]
+`, name, pub, name)
+	}
+	refused := func(t *testing.T, name string) {
+		t.Helper()
+		acc := &authv1beta1.NatsAccount{}
+		e.eventually(t, func(ct *assert.CollectT) {
+			e.get(ct, key("claim", name), acc)
+			notReady(ct, acc.Status.Conditions, authctl.ReasonPublicKeyInUse)
+			if cond := meta.FindStatusCondition(acc.Status.Conditions, authctl.ConditionReady); cond != nil {
+				assert.Contains(ct, cond.Message, "NatsSystemAccount adopt/sys")
+			}
+			assert.Empty(ct, acc.Status.PublicKey)
+			assert.Empty(ct, acc.Status.JWT)
+		})
+	}
+	unrecorded := func(t *testing.T) {
+		t.Helper()
+		sys := &authv1beta1.NatsSystemAccount{}
+		require.NoError(t, e.c.Get(t.Context(), key("adopt", "sys"), sys))
+		require.Empty(t, sys.Status.PublicKey)
+	}
+
+	t.Run("declared after", func(t *testing.T) {
+		e.apply(t, claimer("late", first))
+		refused(t, "late")
+		unrecorded(t)
+		e.d.mu.Lock()
+		pushes := slices.Clone(e.d.pushes[key("adopt", "adopt")])
+		e.d.mu.Unlock()
+		for _, token := range pushes {
+			c, err := jwt.DecodeAccountClaims(token)
+			require.NoError(t, err)
+			require.False(t, c.SigningKeys.Contains(lateSigning), "a JWT claiming the system account's key was pushed")
+		}
+	})
+
+	t.Run("declared before", func(t *testing.T) {
+		e.apply(t, claimer("early", adopted))
+		early := &authv1beta1.NatsAccount{}
+		e.eventually(t, func(ct *assert.CollectT) {
+			e.get(ct, key("claim", "early"), early)
+			ready(ct, early.Status.Conditions, early.Generation, authctl.ReasonSigned)
+		})
+		sys := &authv1beta1.NatsSystemAccount{}
+		e.update(t, key("adopt", "sys"), sys, func(o client.Object) {
+			o.(*authv1beta1.NatsSystemAccount).Spec.Keys.Identity.SecretKeyRef.Name = "sys-adopted"
+		})
+		refused(t, "early")
+		unrecorded(t)
+	})
+}
+
 func accountPub(t *testing.T) string {
 	t.Helper()
 	kp, err := nkeys.CreateAccount()

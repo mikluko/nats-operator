@@ -30,8 +30,8 @@ import (
 // RevocationsUnrecovered is True.
 type SystemAccountReconciler struct {
 	client.Client
-	// Distributor pushes the JWT again to servers without it; nil pushes
-	// nothing.
+	// Distributor receives every newly signed JWT, and again where servers
+	// lack it; nil pushes nothing.
 	Distributor Distributor
 	// RosterChanges receives a NatsOperator whose servers changed; the
 	// system accounts naming it are reconciled. Nil receives nothing.
@@ -111,12 +111,20 @@ func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta
 		return 0, err
 	}
 	st.Revocations = accountRevocations(st.Revocations, signed.JWT, pub, signing, users)
+	held := unrecovered(op.Status.Conditions)
 	if hash := JWTHash(signed.JWT); hash != st.JWTHash {
+		var err error
+		if !held {
+			err = push(ctx, r.Distributor, key, signed.JWT)
+			if err := ignoreUnreachable(err); err != nil {
+				return 0, fmt.Errorf("push system account JWT: %w", err)
+			}
+		}
 		st.JWTHash = hash
-		st.Distribution = pushed(st.Distribution, time.Now(), r.Distributor != nil)
+		st.Distribution = pushed(st.Distribution, time.Now(), !held && r.Distributor != nil && err == nil)
 	}
 	conditions.Set(&st.Conditions, sys.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionTrue, Reason: ReasonSigned})
-	if unrecovered(op.Status.Conditions) {
+	if held {
 		return 0, nil
 	}
 	dist, distributed, again, err := distribute(ctx, r.Distributor, key, signed.JWT, st.Distribution)

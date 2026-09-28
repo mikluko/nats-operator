@@ -98,6 +98,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `NatsStream` whose stream matches spec but whose transfer or consumers cannot be read reads `Ready` False, reason `ObserveFailed`, and is retried with backoff.
 - The API server refuses a `NatsBalancer` or `NatsSystemBalancer` `interval` that is not positive.
 - A `NatsAccount` or `NatsUser` whose `publicKey` another account or user under the same `NatsOperator` holds reads `Ready` False, reason `PublicKeyInUse`.
+- A `NatsAccount` whose key is the identity of the `NatsSystemAccount` its `NatsOperator` references, as that account's status, `publicKey` or identity seed Secret gives it, reads `Ready` False, reason `PublicKeyInUse`.
+- `NatsAccount` and `NatsSystemAccount` `status.distribution.lastPushTime` is set only by a push a server acknowledged.
 - Generated seed Secrets are named `<name>-<operator|systemaccount|account>-<identity|signing-1>` and annotated `auth.nats.mikluko.io/generated-for`; one not annotated for the object reads `Ready` False, reason `SecretConflict`.
 - Generated seed Secrets carry no owner reference: they stay when their object is deleted, and an object of the same kind and name applied again takes the same keys.
 - A generated identity Secret lost after `status.publicKey` recorded its key reads `Ready` False, reason `SeedLost`, and no new identity is minted.

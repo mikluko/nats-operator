@@ -2,6 +2,7 @@ package authctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -12,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
+	"github.com/mikluko/nats-operator/internal/refindex"
 )
 
 // keyClaim is an object's claim to a public key: the key its status
@@ -54,9 +56,9 @@ func precedes(a, b keyClaim) bool {
 
 // accountKeyHolder returns who holds pub against acc under the NatsOperator
 // at operator: the NatsSystemAccount it references, where that names it
-// back and its spec or status carries pub, or another NatsAccount per
+// back and pub is its identity per isSystemKey, or another NatsAccount per
 // keyHolder.
-func accountKeyHolder(ctx context.Context, c client.Reader, acc *authv1beta1.NatsAccount, operator types.NamespacedName, pub string) (string, error) {
+func accountKeyHolder(ctx context.Context, c client.Client, acc *authv1beta1.NatsAccount, operator types.NamespacedName, pub string) (string, error) {
 	var op authv1beta1.NatsOperator
 	switch err := c.Get(ctx, operator, &op); {
 	case apierrors.IsNotFound(err):
@@ -68,8 +70,14 @@ func accountKeyHolder(ctx context.Context, c client.Reader, acc *authv1beta1.Nat
 		if client.IgnoreNotFound(err) != nil {
 			return "", fmt.Errorf("get NatsSystemAccount: %w", err)
 		}
-		if err == nil && refKey(sys.Spec.OperatorRef, sys.Namespace) == operator && (sys.Status.PublicKey == pub || sys.Spec.PublicKey == pub) {
-			return claimOf("NatsSystemAccount", &sys, pub).String(), nil
+		if err == nil && refKey(sys.Spec.OperatorRef, sys.Namespace) == operator {
+			held, err := isSystemKey(ctx, c, &sys, pub)
+			if err != nil {
+				return "", err
+			}
+			if held {
+				return claimOf("NatsSystemAccount", &sys, pub).String(), nil
+			}
 		}
 	}
 	var accounts authv1beta1.NatsAccountList
@@ -84,6 +92,37 @@ func accountKeyHolder(ctx context.Context, c client.Reader, acc *authv1beta1.Nat
 		return h.String(), nil
 	}
 	return "", nil
+}
+
+// isSystemKey reports whether pub is sys's identity: the key its status
+// records, or the one its spec or identity seed Secret resolves to. A seed
+// that is absent or does not parse resolves to none.
+func isSystemKey(ctx context.Context, c client.Client, sys *authv1beta1.NatsSystemAccount, pub string) (bool, error) {
+	if sys.Status.PublicKey == pub {
+		return true, nil
+	}
+	keys, err := resolveIdentity(ctx, c, systemAccountKeySource(sys), false)
+	switch {
+	case errors.Is(err, errKeysPending), errors.Is(err, errInvalidSeed), errors.Is(err, errSeedNotOwned):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("NatsSystemAccount %s: %w", client.ObjectKeyFromObject(sys), err)
+	}
+	sysPub, err := keys.identityPublicKey()
+	if err != nil {
+		return false, err
+	}
+	return sysPub == pub, nil
+}
+
+// systemAccountAccounts returns a request for every NatsAccount under the
+// NatsOperator obj, a NatsSystemAccount, names.
+func systemAccountAccounts(ctx context.Context, c client.Reader, obj client.Object) []reconcile.Request {
+	sys, ok := obj.(*authv1beta1.NatsSystemAccount)
+	if !ok {
+		return nil
+	}
+	return refindex.Requests(ctx, c, &authv1beta1.NatsAccountList{}, client.MatchingFields{operatorField: keyValue(refKey(sys.Spec.OperatorRef, sys.Namespace))})
 }
 
 // sameKeyAccounts returns a request for every other NatsAccount under the

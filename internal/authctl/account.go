@@ -56,6 +56,7 @@ const AccountFinalizer = "auth.nats.mikluko.io/delete"
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts,verbs=get;list;watch;patch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts/status,verbs=update
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
+// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natssystemaccounts,verbs=get;list;watch
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create
@@ -527,6 +528,9 @@ func (r *AccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&authv1beta1.NatsAccount{}).
 		WatchesMetadata(&corev1.Secret{}, refindex.EnqueueByField(c, &authv1beta1.NatsAccountList{}, seedSecretField)).
 		Watches(&authv1beta1.NatsOperator{}, refindex.EnqueueByField(c, &authv1beta1.NatsAccountList{}, operatorField)).
+		Watches(&authv1beta1.NatsSystemAccount{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+			return systemAccountAccounts(ctx, c, obj)
+		})).
 		Watches(&authv1beta1.NatsAccount{}, refindex.EnqueueByField(c, &authv1beta1.NatsAccountList{}, exporterField)).
 		Watches(&authv1beta1.NatsAccount{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			return sameKeyAccounts(ctx, c, obj)
