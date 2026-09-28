@@ -13,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	jetstreamv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
@@ -26,36 +25,15 @@ import (
 )
 
 func main() {
-	opts := manager.Flags(flag.CommandLine, jetstreamv1beta1.GroupVersion.Group)
 	resync := flag.Duration("resync-period", lifecycle.DefaultResync, "how often a JetStream resource is compared to its server object")
-	zapOpts := zap.Options{}
-	zapOpts.BindFlags(flag.CommandLine)
-	flag.Parse()
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
-	log := ctrl.Log.WithName("jetstream-controller")
-
-	scheme, err := newScheme()
-	if err != nil {
-		log.Error(err, "build scheme")
-		os.Exit(1)
-	}
-
-	mgr, err := manager.New(ctrl.GetConfigOrDie(), opts, scheme)
-	if err != nil {
-		log.Error(err, "start")
-		os.Exit(1)
-	}
-	ctx := ctrl.SetupSignalHandler()
-	if err := telemetry.Install(ctx, mgr, telemetry.JetStreamController); err != nil {
-		log.Error(err, "set up telemetry")
-		os.Exit(1)
-	}
-	if err := setup(ctx, mgr, *resync); err != nil {
-		log.Error(err, "set up controllers")
-		os.Exit(1)
-	}
-	if err := mgr.Start(ctx); err != nil {
-		log.Error(err, "run")
+	if err := manager.Run(manager.Controller{
+		Name:      telemetry.JetStreamController,
+		Group:     jetstreamv1beta1.GroupVersion.Group,
+		NewScheme: newScheme,
+		Setup: func(ctx context.Context, mgr ctrl.Manager) error {
+			return setup(ctx, mgr, *resync)
+		},
+	}); err != nil {
 		os.Exit(1)
 	}
 }
@@ -76,6 +54,8 @@ func newScheme() (*runtime.Scheme, error) {
 }
 
 // +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
+// +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections,verbs=get;list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections/status,verbs=patch

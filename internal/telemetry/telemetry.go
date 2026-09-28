@@ -133,11 +133,17 @@ func signalOn(signal string) bool {
 }
 
 // newResource is the SDK's own attributes and those of OTEL_RESOURCE_ATTRIBUTES
-// and OTEL_SERVICE_NAME, over service as service.name. An attribute the
-// environment malforms is reported to the SDK's error handler and left out.
+// and OTEL_SERVICE_NAME, over service as service.name and the host name,
+// which in Kubernetes is the pod's name, as service.instance.id. An
+// attribute the environment malforms is reported to the SDK's error handler
+// and left out.
 func newResource(ctx context.Context, service string) (*resource.Resource, error) {
+	host, err := os.Hostname()
+	if err != nil {
+		return nil, fmt.Errorf("resource: host name: %w", err)
+	}
 	res, err := resource.New(ctx,
-		resource.WithAttributes(attribute.String("service.name", service)),
+		resource.WithAttributes(attribute.String("service.name", service), attribute.String("service.instance.id", host)),
 		resource.WithTelemetrySDK(),
 		resource.WithFromEnv(),
 	)

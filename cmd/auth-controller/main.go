@@ -13,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
@@ -24,38 +23,17 @@ import (
 )
 
 func main() {
-	opts := manager.Flags(flag.CommandLine, authv1beta1.GroupVersion.Group)
 	systemConnection := flag.String("system-connection", "",
 		"namespace/name of the NatsConnection the auth controller reaches NATS through, whose creds are a user of a NatsOperator's "+
 			"system account holding the auth-controller preset; unset, JWTs are signed but neither pushed nor deleted, and no connection is kicked")
-	zapOpts := zap.Options{}
-	zapOpts.BindFlags(flag.CommandLine)
-	flag.Parse()
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
-	log := ctrl.Log.WithName("auth-controller")
-
-	scheme, err := newScheme()
-	if err != nil {
-		log.Error(err, "build scheme")
-		os.Exit(1)
-	}
-
-	mgr, err := manager.New(ctrl.GetConfigOrDie(), opts, scheme)
-	if err != nil {
-		log.Error(err, "start")
-		os.Exit(1)
-	}
-	ctx := ctrl.SetupSignalHandler()
-	if err := telemetry.Install(ctx, mgr, telemetry.AuthController); err != nil {
-		log.Error(err, "set up telemetry")
-		os.Exit(1)
-	}
-	if err := setup(ctx, mgr, *systemConnection); err != nil {
-		log.Error(err, "set up controllers")
-		os.Exit(1)
-	}
-	if err := mgr.Start(ctx); err != nil {
-		log.Error(err, "run")
+	if err := manager.Run(manager.Controller{
+		Name:      telemetry.AuthController,
+		Group:     authv1beta1.GroupVersion.Group,
+		NewScheme: newScheme,
+		Setup: func(ctx context.Context, mgr ctrl.Manager) error {
+			return setup(ctx, mgr, *systemConnection)
+		},
+	}); err != nil {
 		os.Exit(1)
 	}
 }
@@ -75,6 +53,8 @@ func newScheme() (*runtime.Scheme, error) {
 }
 
 // +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
+// +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 // setup registers the auth controller's instruments and adds its

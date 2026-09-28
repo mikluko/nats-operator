@@ -99,6 +99,10 @@ The flags below are the binaries' own. The chart sets only `--system-connection`
 
 | Flag | Controller | Default | What it does |
 |---|---|---|---|
+| `--metrics-bind-address` | all | `:8080` | Address controller-runtime's Prometheus metrics are served on over HTTPS, with a self-signed certificate, at `/metrics`. A request needs a bearer token the API server authenticates, of a user allowed `get` on the non-resource URL `/metrics`; every request costs a `TokenReview` and a `SubjectAccessReview`. `0` disables it. |
+| `--health-probe-bind-address` | all | `:8081` | Address of `/healthz`, which always passes, and `/readyz`, which passes once the controller's cache is synced. |
+| `--leader-elect` | all | `false` | Leader election, so that one replica reconciles. |
+| `--leader-election-id` | all | the controller's API group | Name of the leader election lease. |
 | `--system-connection` | auth | unset | `namespace/name` of a `NatsConnection` whose creds are a user of a `NatsOperator`'s system account holding the `auth-controller` preset. Through it, account JWTs are pushed to the servers' resolvers and deleted from them, and a deleted user's connections are kicked. Unset, JWTs are signed and written to status, and nothing reaches the servers. |
 | `--resync-period` | JetStream | `10m` | How often a JetStream resource is compared to its server object. |
 | `--zap-log-level`, `--zap-encoder`, `--zap-devel`, `--zap-stacktrace-level`, `--zap-time-encoding` | all | production logging, JSON at `info` | Logging. |
@@ -111,6 +115,8 @@ Each controller's ClusterRole is named `<release>-<controller>`, for example `na
 
 | API group | Resources | Verbs |
 |---|---|---|
+| `authentication.k8s.io` | `tokenreviews` | `create` |
+| `authorization.k8s.io` | `subjectaccessreviews` | `create` |
 | `events.k8s.io` | `events` | `create`, `patch` |
 
 ### Cluster controller

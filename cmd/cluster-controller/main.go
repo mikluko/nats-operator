@@ -4,17 +4,19 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"net/http"
 	"os"
 	"time"
 
 	"go.opentelemetry.io/otel"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
@@ -26,37 +28,28 @@ import (
 )
 
 func main() {
-	opts := manager.Flags(flag.CommandLine, clusterv1beta1.GroupVersion.Group)
-	zapOpts := zap.Options{}
-	zapOpts.BindFlags(flag.CommandLine)
-	flag.Parse()
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
-	log := ctrl.Log.WithName("cluster-controller")
+	if err := manager.Run(manager.Controller{
+		Name:      telemetry.ClusterController,
+		Group:     clusterv1beta1.GroupVersion.Group,
+		NewScheme: newScheme,
+		Owned:     owned,
+		Setup:     setup,
+	}); err != nil {
+		os.Exit(1)
+	}
+}
 
-	scheme, err := newScheme()
-	if err != nil {
-		log.Error(err, "build scheme")
-		os.Exit(1)
-	}
-
-	mgr, err := manager.New(ctrl.GetConfigOrDie(), opts, scheme)
-	if err != nil {
-		log.Error(err, "start")
-		os.Exit(1)
-	}
-	ctx := ctrl.SetupSignalHandler()
-	if err := telemetry.Install(ctx, mgr, telemetry.ClusterController); err != nil {
-		log.Error(err, "set up telemetry")
-		os.Exit(1)
-	}
-	if err := setup(ctx, mgr); err != nil {
-		log.Error(err, "set up controllers")
-		os.Exit(1)
-	}
-	if err := mgr.Start(ctx); err != nil {
-		log.Error(err, "run")
-		os.Exit(1)
-	}
+// owned is what the NatsCluster reconciler renders, the data volume claims
+// its StatefulSets' templates stamp out included.
+var owned = manager.Owned{
+	Label: natscluster.LabelCluster,
+	Kinds: []client.Object{
+		&appsv1.StatefulSet{},
+		&corev1.ConfigMap{},
+		&corev1.Service{},
+		&corev1.PersistentVolumeClaim{},
+		&policyv1.PodDisruptionBudget{},
+	},
 }
 
 // newScheme is the cluster controller's scheme.
@@ -75,6 +68,8 @@ func newScheme() (*runtime.Scheme, error) {
 }
 
 // +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
+// +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 // setup registers the cluster controller's instruments and adds the

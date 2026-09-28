@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Licensed under Apache-2.0; the chart carries `artifacthub.io/license: Apache-2.0`.
 - Vulnerabilities are reported through the repository's GitHub private vulnerability reporting, as `SECURITY.md` states.
+- The cluster controller caches only the StatefulSets, ConfigMaps, Services, PersistentVolumeClaims and PodDisruptionBudgets labelled `cluster.nats.mikluko.io/cluster`; no controller caches a Secret's data or annotations, and each reads Secrets from the API server.
+- A controller's `/readyz` passes once its cache is synced.
+- Every controller's OpenTelemetry resource carries its host name, the pod's name in Kubernetes, as `service.instance.id`, unless `OTEL_RESOURCE_ATTRIBUTES` sets it.
+- Every controller serves its Prometheus metrics over HTTPS, only to a bearer token of a user allowed `get` on the non-resource URL `/metrics`; each controller's ClusterRole holds `create` on `authentication.k8s.io` `tokenreviews` and `authorization.k8s.io` `subjectaccessreviews`.
 - `helm test` on the chart checks every enabled controller's `/healthz` from a pod of chart value `tests.image` (`busybox:1.37.0`).
 - The chart validates its values against `values.schema.json`: `helm install`, `helm upgrade` and `helm lint` refuse a key the chart does not know.
 - The chart requires Kubernetes 1.29 or later.

@@ -1,0 +1,75 @@
+package manager
+
+import (
+	"fmt"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+// Owned is what a controller creates: every object of Kinds it creates
+// carries Label. Secret is never among Kinds, since the controllers watch
+// Secrets they did not create.
+type Owned struct {
+	Label string
+	Kinds []client.Object
+}
+
+// cacheOptions scopes a manager's cache: of each kind in owned.Kinds it holds
+// only the objects carrying owned.Label, whatever its value; of every Secret
+// it holds what secretMetadata keeps.
+func cacheOptions(owned Owned) (cache.Options, error) {
+	by := map[client.Object]cache.ByObject{
+		&corev1.Secret{}: {Transform: secretMetadata},
+	}
+	if len(owned.Kinds) == 0 {
+		return cache.Options{ByObject: by}, nil
+	}
+	req, err := labels.NewRequirement(owned.Label, selection.Exists, nil)
+	if err != nil {
+		return cache.Options{}, fmt.Errorf("owner label: %w", err)
+	}
+	sel := labels.NewSelector().Add(*req)
+	for _, k := range owned.Kinds {
+		by[k] = cache.ByObject{Label: sel}
+	}
+	return cache.Options{ByObject: by}, nil
+}
+
+// clientOptions makes a manager's client read Secrets from the API server,
+// since its cache holds none of their data.
+func clientOptions() client.Options {
+	return client.Options{Cache: &client.CacheOptions{DisableFor: []client.Object{&corev1.Secret{}}}}
+}
+
+// secretMetadata keeps of a Secret what a watch on it maps to requests:
+// its identity, labels, owner references, finalizers and deletion
+// timestamp. Its data and annotations, which kubectl's last-applied
+// configuration copies the data into, are dropped. Anything else passes
+// through.
+func secretMetadata(obj any) (any, error) {
+	s, ok := obj.(*corev1.Secret)
+	if !ok {
+		return obj, nil
+	}
+	return &corev1.Secret{
+		TypeMeta: s.TypeMeta,
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              s.Name,
+			Namespace:         s.Namespace,
+			UID:               s.UID,
+			ResourceVersion:   s.ResourceVersion,
+			Generation:        s.Generation,
+			CreationTimestamp: s.CreationTimestamp,
+			DeletionTimestamp: s.DeletionTimestamp,
+			Labels:            s.Labels,
+			OwnerReferences:   s.OwnerReferences,
+			Finalizers:        s.Finalizers,
+		},
+		Type: s.Type,
+	}, nil
+}

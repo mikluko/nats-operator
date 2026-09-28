@@ -13,8 +13,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
@@ -323,7 +326,7 @@ func (r *OperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&authv1beta1.NatsAccount{}, handler.EnqueueRequestsFromMapFunc(func(_ context.Context, obj client.Object) []reconcile.Request {
 			acc := obj.(*authv1beta1.NatsAccount)
 			return []reconcile.Request{{NamespacedName: refKey(acc.Spec.OperatorRef, acc.Namespace)}}
-		})).
+		}), builder.WithPredicates(accountSignedChange)).
 		Watches(&authv1beta1.NatsUser{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			ref := obj.(*authv1beta1.NatsUser).Spec.AccountRef
 			if ref.Kind != authv1beta1.AccountKindSystemAccount {
@@ -334,6 +337,21 @@ func (r *OperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, schema.GroupKind{Group: authGroup, Kind: "NatsOperator"}, &authv1beta1.NatsOperatorList{})).
 		Complete(telemetry.Traced("NatsOperator", r))
 }
+
+// accountSignedChange passes a NatsAccount update only when what the
+// operator's reconcile reads of it changed: its generation, its deletion,
+// or its public key or JWT in status. Every other event passes.
+var accountSignedChange = predicate.Funcs{UpdateFunc: func(e event.UpdateEvent) bool {
+	o, okOld := e.ObjectOld.(*authv1beta1.NatsAccount)
+	n, okNew := e.ObjectNew.(*authv1beta1.NatsAccount)
+	if !okOld || !okNew {
+		return true
+	}
+	return o.Generation != n.Generation ||
+		!o.DeletionTimestamp.Equal(n.DeletionTimestamp) ||
+		o.Status.PublicKey != n.Status.PublicKey ||
+		o.Status.JWT != n.Status.JWT
+}}
 
 // systemAccountOperators maps requests for NatsSystemAccounts to requests
 // for the operators they name.

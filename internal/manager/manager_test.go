@@ -1,12 +1,16 @@
 package manager
 
 import (
+	"context"
 	"flag"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/rest"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/cache"
 )
 
 func TestFlags(t *testing.T) {
@@ -36,12 +40,39 @@ func TestFlags(t *testing.T) {
 	}
 }
 
-// TestNew pins that New builds its manager against the config it is
-// given, reaching no API server until started.
-func TestNew(t *testing.T) {
-	scheme := runtime.NewScheme()
-	mgr, err := New(&rest.Config{Host: "https://127.0.0.1:1"}, &Options{MetricsAddr: "0", ProbeAddr: "0"}, scheme)
+func TestSecretMetadata(t *testing.T) {
+	now := metav1.Now()
+	meta := metav1.ObjectMeta{
+		Name: "creds", Namespace: "ns", UID: "uid", ResourceVersion: "7", Generation: 2,
+		CreationTimestamp: now, DeletionTimestamp: &now,
+		Labels:          map[string]string{"l": "v"},
+		OwnerReferences: []metav1.OwnerReference{{Name: "owner"}},
+		Finalizers:      []string{"f"},
+	}
+	in := &corev1.Secret{
+		ObjectMeta: *meta.DeepCopy(),
+		Type:       corev1.SecretTypeOpaque,
+		Data:       map[string][]byte{"k": []byte("v")},
+		StringData: map[string]string{"k": "v"},
+	}
+	in.Annotations = map[string]string{"kubectl.kubernetes.io/last-applied-configuration": `{"data":{"k":"dg=="}}`}
+	in.ManagedFields = []metav1.ManagedFieldsEntry{{Manager: "kubectl"}}
+	got, err := secretMetadata(in)
 	require.NoError(t, err)
-	require.Same(t, scheme, mgr.GetScheme())
-	require.Equal(t, "https://127.0.0.1:1", mgr.GetConfig().Host)
+	require.Equal(t, &corev1.Secret{ObjectMeta: meta, Type: corev1.SecretTypeOpaque}, got)
+
+	tombstone := cache.DeletedFinalStateUnknown{Key: "ns/creds"}
+	got, err = secretMetadata(tombstone)
+	require.NoError(t, err)
+	require.Equal(t, tombstone, got)
+}
+
+type stubSyncer bool
+
+func (s stubSyncer) WaitForCacheSync(context.Context) bool { return bool(s) }
+
+func TestCacheSynced(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	require.NoError(t, cacheSynced(stubSyncer(true))(req))
+	require.EqualError(t, cacheSynced(stubSyncer(false))(req), "cache is not synced")
 }

@@ -3,6 +3,7 @@ package telemetry
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 
 	"github.com/go-logr/logr/funcr"
@@ -111,19 +112,21 @@ func TestStart(t *testing.T) {
 }
 
 func TestNewResource(t *testing.T) {
+	host, err := os.Hostname()
+	require.NoError(t, err)
 	tests := []struct {
 		name string
 		env  map[string]string
 		want map[string]string
 	}{
 		{
-			name: "the controller's name",
-			want: map[string]string{"service.name": "auth-controller", "telemetry.sdk.language": "go"},
+			name: "the controller's name and host",
+			want: map[string]string{"service.name": "auth-controller", "service.instance.id": host, "telemetry.sdk.language": "go"},
 		},
 		{
 			name: "overridden",
-			env:  map[string]string{"OTEL_SERVICE_NAME": "auth", "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment=prod"},
-			want: map[string]string{"service.name": "auth", "deployment.environment": "prod"},
+			env:  map[string]string{"OTEL_SERVICE_NAME": "auth", "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment=prod,service.instance.id=auth-0"},
+			want: map[string]string{"service.name": "auth", "deployment.environment": "prod", "service.instance.id": "auth-0"},
 		},
 	}
 	for _, tt := range tests {

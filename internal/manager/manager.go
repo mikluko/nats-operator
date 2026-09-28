@@ -1,18 +1,85 @@
-// Package manager builds the controller-runtime manager the three controllers
-// share: the same flags, probes and leader election, with each controller's
-// own scheme.
+// Package manager builds and runs the controller-runtime manager the three
+// controllers share: the same flags, logging, telemetry, probes and leader
+// election, with each controller's own scheme and reconcilers.
 package manager
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"net/http"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	"github.com/mikluko/nats-operator/internal/telemetry"
 )
+
+// readyWait is how long a readiness probe waits for the cache to sync.
+const readyWait = time.Second
+
+// Controller is one controller binary, as Run starts it.
+type Controller struct {
+	// Name names the controller's logger, telemetry service and event
+	// source, one of the telemetry package's controller names.
+	Name string
+	// Group is the API group the controller owns, the default of
+	// --leader-election-id.
+	Group     string
+	NewScheme func() (*runtime.Scheme, error)
+	Owned     Owned
+	// Setup adds the controller's runnables and reconcilers to mgr.
+	Setup func(ctx context.Context, mgr ctrl.Manager) error
+}
+
+// Run registers the manager's flags and zap's on flag.CommandLine, parses
+// it along with any flag the caller registered there first, and runs c until
+// SIGINT or SIGTERM. An error it returns has already been logged.
+func Run(c Controller) error {
+	opts := Flags(flag.CommandLine, c.Group)
+	zapOpts := zap.Options{}
+	zapOpts.BindFlags(flag.CommandLine)
+	flag.Parse()
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
+	cfg, err := ctrl.GetConfig()
+	if err == nil {
+		err = start(ctrl.SetupSignalHandler(), cfg, opts, c)
+	} else {
+		err = fmt.Errorf("load kubeconfig: %w", err)
+	}
+	if err != nil {
+		ctrl.Log.WithName(c.Name).Error(err, "exit")
+	}
+	return err
+}
+
+// start builds c's manager against cfg, installs its telemetry, sets it up
+// and runs it until ctx ends.
+func start(ctx context.Context, cfg *rest.Config, o *Options, c Controller) error {
+	scheme, err := c.NewScheme()
+	if err != nil {
+		return fmt.Errorf("build scheme: %w", err)
+	}
+	mgr, err := New(cfg, o, scheme, c.Owned)
+	if err != nil {
+		return err
+	}
+	if err := telemetry.Install(ctx, mgr, c.Name); err != nil {
+		return fmt.Errorf("set up telemetry: %w", err)
+	}
+	if err := c.Setup(ctx, mgr); err != nil {
+		return fmt.Errorf("set up controllers: %w", err)
+	}
+	if err := mgr.Start(ctx); err != nil {
+		return fmt.Errorf("run: %w", err)
+	}
+	return nil
+}
 
 // Options is what the command line sets on a manager.
 type Options struct {
@@ -27,7 +94,7 @@ type Options struct {
 // the controller's own API group so that two controllers never contend.
 func Flags(fs *flag.FlagSet, id string) *Options {
 	o := &Options{}
-	fs.StringVar(&o.MetricsAddr, "metrics-bind-address", ":8080", "address the metrics endpoint binds to; 0 disables it")
+	fs.StringVar(&o.MetricsAddr, "metrics-bind-address", ":8080", "address the metrics endpoint serves HTTPS on, to a bearer token allowed to get /metrics; 0 disables it")
 	fs.StringVar(&o.ProbeAddr, "health-probe-bind-address", ":8081", "address the health and readiness probes bind to")
 	fs.BoolVar(&o.LeaderElection, "leader-elect", false, "enable leader election so only one replica reconciles")
 	fs.StringVar(&o.LeaderElectionID, "leader-election-id", id, "lease name used for leader election")
@@ -35,11 +102,20 @@ func Flags(fs *flag.FlagSet, id string) *Options {
 }
 
 // New builds a manager for scheme against the API server cfg reaches, with
-// health and readiness probes registered. The caller starts it.
-func New(cfg *rest.Config, o *Options, scheme *runtime.Scheme) (ctrl.Manager, error) {
+// health and readiness probes registered and its cache scoped as
+// cacheOptions and clientOptions state. Scoping the cache reads the API
+// server's discovery, so New fails while the API server is unreachable. The
+// caller starts the manager.
+func New(cfg *rest.Config, o *Options, scheme *runtime.Scheme, owned Owned) (ctrl.Manager, error) {
+	cacheOpts, err := cacheOptions(owned)
+	if err != nil {
+		return nil, err
+	}
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:                 scheme,
-		Metrics:                metricsserver.Options{BindAddress: o.MetricsAddr},
+		Cache:                  cacheOpts,
+		Client:                 clientOptions(),
+		Metrics:                metricsOptions(o.MetricsAddr),
 		HealthProbeBindAddress: o.ProbeAddr,
 		LeaderElection:         o.LeaderElection,
 		LeaderElectionID:       o.LeaderElectionID,
@@ -50,8 +126,26 @@ func New(cfg *rest.Config, o *Options, scheme *runtime.Scheme) (ctrl.Manager, er
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		return nil, fmt.Errorf("add healthz: %w", err)
 	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+	if err := mgr.AddReadyzCheck("readyz", cacheSynced(mgr.GetCache())); err != nil {
 		return nil, fmt.Errorf("add readyz: %w", err)
 	}
 	return mgr, nil
+}
+
+// syncer is what cacheSynced reads of a cache.
+type syncer interface {
+	WaitForCacheSync(ctx context.Context) bool
+}
+
+// cacheSynced is a readiness check that passes once every informer c has
+// started is synced, waiting for that at most readyWait.
+func cacheSynced(c syncer) healthz.Checker {
+	return func(req *http.Request) error {
+		ctx, cancel := context.WithTimeout(req.Context(), readyWait)
+		defer cancel()
+		if !c.WaitForCacheSync(ctx) {
+			return errors.New("cache is not synced")
+		}
+		return nil
+	}
 }
