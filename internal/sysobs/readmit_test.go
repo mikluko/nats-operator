@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats-server/v2/server"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,7 +48,9 @@ func TestObserve_RemoteMetaLeaderListsItsPeers(t *testing.T) {
 	}, 30*time.Second, 200*time.Millisecond, "C1's meta group not read from the leader in C2")
 
 	x := srvs["C1-2"]
-	require.NoError(t, o.RemovePeer(ctx, "C1-2"))
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
+		assert.NoError(ct, o.RemovePeer(ctx, "C1-2"))
+	}, 30*time.Second, 500*time.Millisecond, "C1-2 not removed from the meta group")
 	x.Shutdown()
 	x.WaitForShutdown()
 	opts, err := server.ProcessConfigFile(x.conf)
