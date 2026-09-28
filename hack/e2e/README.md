@@ -15,7 +15,7 @@ A step waits 90 seconds for its expectations, `E2E_WAIT` to change that for the 
 
 - a container in the story's namespaces or the chart's `nats-operator` namespace, other than a Job's, waits as `CrashLoopBackOff`, `ImagePullBackOff`, `ErrImageNeverPull` or `InvalidImageName`;
 - a Job there has failed;
-- an object the step reads has `Terminal` True, or `Ready` False for a reason the controllers give a spec they will not act on until it is edited, such as `Rejected`, `UnsupportedSpec` or `DuplicateBalancer`; unless the step's own file expects that condition at that status.
+- an object the step reads has `Terminal` True, or `Ready` False for a reason the controllers give a spec they will not act on until it is edited, such as `Rejected`, `UnsupportedSpec`, `GatewayWithoutTLS` or `DuplicateBalancer`; unless the step's own file expects that condition at that status.
 
 A story's front matter may set `params.e2e.after`, the number of the story whose end state it starts from, `params.e2e.skip`, why the harness does not run it, and `params.e2e.waits`, a list of `{step, wait, reason}` giving a slow step a longer wait than the default, `wait` a Go duration such as `4m`. A story spanning Kubernetes clusters places each of its files with `params.e2e.clusters`, a list of `{name, files}`, the home cluster first; its files are applied to, deleted from and read in their own cluster, and the story is skipped when the run has fewer clusters.
 

@@ -32,6 +32,9 @@ env: []
 cluster:
   enabled: true
   replicas: 1
+  # Passes --allow-gateway-without-tls, rendering a NatsCluster gateway
+  # without tls; false, such a NatsCluster is refused.
+  allowGatewayWithoutTLS: false
   image:
     repository: ghcr.io/mikluko/nats-operator/cluster-controller
     # Defaults to the chart's appVersion.

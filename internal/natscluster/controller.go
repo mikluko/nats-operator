@@ -97,6 +97,9 @@ type Reconciler struct {
 	// monitoring port; SetupWithManager fills in the namespace of its own
 	// pod when it is empty.
 	ControllerNamespace string
+	// AllowGatewayWithoutTLS renders a gateway without tls; false, such a
+	// NatsCluster is refused with reason GatewayWithoutTLS.
+	AllowGatewayWithoutTLS bool
 }
 
 // +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters,verbs=get;list;watch;patch
@@ -221,6 +224,9 @@ func (r *Reconciler) reconcile(ctx context.Context, nc *clusterv1beta1.NatsClust
 	}
 	orig := nc.DeepCopy()
 
+	if gatewayWithoutTLS(&nc.Spec, r.AllowGatewayWithoutTLS) {
+		return ctrl.Result{}, r.refuseGatewayWithoutTLS(ctx, orig, nc)
+	}
 	if fields := unsupportedFields(&nc.Spec); len(fields) > 0 {
 		return ctrl.Result{}, r.hold(ctx, orig, nc, unsupportedSpec("not rendered by this cluster controller: "+strings.Join(fields, ", ")))
 	}

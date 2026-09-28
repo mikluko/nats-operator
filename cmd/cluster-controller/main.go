@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -29,12 +30,16 @@ import (
 )
 
 func main() {
+	allowGatewayWithoutTLS := flag.Bool(natscluster.FlagAllowGatewayWithoutTLS, false,
+		"render a NatsCluster gateway without tls, which lets any peer that reaches the gateway port join the supercluster; unset, such a NatsCluster is Ready False, reason GatewayWithoutTLS")
 	if err := manager.Run(manager.Controller{
 		Name:        telemetry.ClusterController,
 		Group:       clusterv1beta1.GroupVersion.Group,
 		AddToScheme: schemes,
 		Owned:       owned,
-		Setup:       setup,
+		Setup: func(ctx context.Context, mgr ctrl.Manager) error {
+			return setupWith(ctx, mgr, *allowGatewayWithoutTLS)
+		},
 	}); err != nil {
 		os.Exit(1)
 	}
@@ -56,7 +61,15 @@ var owned = manager.Owned{
 
 var schemes = []func(*runtime.Scheme) error{natsv1beta1.AddToScheme, clusterv1beta1.AddToScheme}
 
+// setup is setupWith refusing gateways without tls.
 func setup(ctx context.Context, mgr ctrl.Manager) error {
+	return setupWith(ctx, mgr, false)
+}
+
+// setupWith registers the cluster controller's instruments and adds the
+// NatsCluster reconciler to mgr, rendering gateways without tls when
+// allowGatewayWithoutTLS is set.
+func setupWith(ctx context.Context, mgr ctrl.Manager, allowGatewayWithoutTLS bool) error {
 	if err := telemetry.RegisterCluster(otel.Meter(telemetry.ClusterController), mgr.GetClient()); err != nil {
 		return fmt.Errorf("register instruments: %w", err)
 	}
@@ -76,6 +89,8 @@ func setup(ctx context.Context, mgr ctrl.Manager) error {
 		Admin:    sys.Admin,
 		Forget:   sys.Forget,
 		Recorder: mgr.GetEventRecorder(telemetry.ClusterController),
+
+		AllowGatewayWithoutTLS: allowGatewayWithoutTLS,
 	}
 	if err := r.SetupWithManager(ctx, mgr); err != nil {
 		return fmt.Errorf("set up NatsCluster reconciler: %w", err)

@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chart values `tolerations`, `priorityClassName`, `topologySpreadConstraints`, `extraArgs` and `env`, globally and per controller.
 - Chart values `metrics.service.enabled` and `metrics.serviceMonitor.enabled`, off by default, render a metrics Service and a prometheus-operator ServiceMonitor per controller; the ServiceMonitor skips certificate verification.
 - Chart value `auth.systemConnection`, passed to the auth controller as `--system-connection`.
+- A `NatsCluster` with a gateway without `tls` is `Ready` `False`, reason `GatewayWithoutTLS`, and nothing is rendered for it, unless the cluster controller runs with `--allow-gateway-without-tls`.
+- Chart value `cluster.allowGatewayWithoutTLS`, off by default, passes `--allow-gateway-without-tls` to the cluster controller.
 - Every controller's `--watch-namespaces` confines it to the namespaces named; chart value `watchNamespaces` passes it and grants each controller a Role in each of those namespaces, its ClusterRole keeping only `tokenreviews` and `subjectaccessreviews`.
 - Chart values `cluster.image.digest`, `auth.image.digest`, `jetstream.image.digest` and `tests.image.digest` pin an image by digest after its tag.
 - Chart value `tests.image.digest` defaults to the digest of `busybox:1.37.0`.

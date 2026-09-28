@@ -274,9 +274,11 @@ type Gateway struct {
 	// +listMapKey=name
 	Remotes []GatewayRemote `json:"remotes"`
 
-	// TLS on the gateway listener; absent, gateways run in the clear. The
-	// certificate's Secret must hold ca.crt, which peers are verified
-	// against both ways.
+	// TLS on the gateway listener. The certificate's Secret must hold
+	// ca.crt, which peers are verified against both ways. Absent, the
+	// NatsCluster is refused with reason GatewayWithoutTLS unless the
+	// cluster controller runs with --allow-gateway-without-tls, and then
+	// gateways run in the clear.
 	// +optional
 	TLS *ListenerTLS `json:"tls,omitempty"`
 

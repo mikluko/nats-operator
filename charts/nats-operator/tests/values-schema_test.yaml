@@ -15,6 +15,7 @@ tests:
       auth.systemConnection: nats/auth-controller
       metrics.scraper.serviceAccount: monitoring/prometheus
       cluster.image.tag: v9
+      cluster.allowGatewayWithoutTLS: true
       auth.image.digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       tests.image.digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       tests.image.tag: "1.36"
@@ -58,6 +59,18 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "at '/cluster': additional properties 'enabeld' not allowed"
+  - it: refuses a cluster.allowGatewayWithoutTLS that is not a boolean
+    set:
+      cluster.allowGatewayWithoutTLS: "yes"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/cluster/allowGatewayWithoutTLS': got string, want boolean"
+  - it: refuses allowGatewayWithoutTLS on another controller
+    set:
+      jetstream.allowGatewayWithoutTLS: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/jetstream': additional properties 'allowGatewayWithoutTLS' not allowed"
   - it: refuses a misspelled image key
     set:
       auth.image.tga: v9

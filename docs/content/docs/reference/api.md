@@ -479,7 +479,7 @@ Appears on: [NatsClusterSpec](#NatsClusterSpec).
 | :---- | :--- | :------: | :---------- |
 | `discovery` | [{{< type "GatewayDiscovery" >}}](#GatewayDiscovery) | Yes | Discovery is how remotes are rendered: Explicit as gateway remotes with reject_unknown on, Gossip as seeds with reject_unknown off. |
 | `remotes` | [{{< type "[]GatewayRemote" >}}](#GatewayRemote) | Yes | Remotes are every member of the supercluster; this NATS cluster's own entry is skipped. |
-| `tls` | [{{< type "ListenerTLS" >}}](#ListenerTLS) | No | TLS on the gateway listener; absent, gateways run in the clear. The certificate's Secret must hold ca.crt, which peers are verified against both ways. |
+| `tls` | [{{< type "ListenerTLS" >}}](#ListenerTLS) | No | TLS on the gateway listener. The certificate's Secret must hold ca.crt, which peers are verified against both ways. Absent, the NatsCluster is refused with reason GatewayWithoutTLS unless the cluster controller runs with --allow-gateway-without-tls, and then gateways run in the clear. |
 | `service` | [{{< type "ServiceTemplate" >}}](#ServiceTemplate) | No | Service is the template of the external gateway Service. |
 | `advertise` | {{< type "string" >}} | No | Advertise is the host:port the servers advertise for gateways. |
 

@@ -66,6 +66,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `env` | `[]` | Environment of every controller's container. |
 | `cluster.enabled` | `true` | Installs the cluster controller. |
 | `cluster.replicas` | `1` | Replicas of its Deployment. |
+| `cluster.allowGatewayWithoutTLS` | `false` | `--allow-gateway-without-tls` on the cluster controller; false, the flag is not passed and a `NatsCluster` with a gateway without `tls` is refused. |
 | `cluster.image.repository` | `ghcr.io/mikluko/nats-operator/cluster-controller` | Its image. |
 | `cluster.image.tag` | `""` | Its image tag; empty is the chart's `appVersion`. |
 | `cluster.image.digest` | the release's image digest; `""` in the source tree | `sha256:<hex>` appended to its image reference as `@<digest>`, pinning the image. |
@@ -131,10 +132,11 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 
 The chart runs every controller with `--leader-elect` set from `leaderElection.enabled`, `--leader-election-id` set to its own API group, metrics on `:8080` (container port `metrics`) and health probes on `:8081` (`/healthz`, `/readyz`), followed by `extraArgs` and the controller's own `extraArgs`. It creates a Service for the metrics port only while `metrics.service.enabled` is set.
 
-The flags below are the binaries' own. Of those not named above, the chart sets only `--system-connection`, from `auth.systemConnection`, and `--watch-namespaces`, from `watchNamespaces`:
+The flags below are the binaries' own. Of those not named above, the chart sets only `--system-connection`, from `auth.systemConnection`, `--allow-gateway-without-tls`, from `cluster.allowGatewayWithoutTLS`, and `--watch-namespaces`, from `watchNamespaces`:
 
 | Flag | Controller | Default | What it does |
 |---|---|---|---|
+| `--allow-gateway-without-tls` | cluster | `false` | Renders a `NatsCluster` gateway without `tls`, where any peer that reaches the gateway port joins the supercluster. Unset, such a `NatsCluster` is `Ready` `False`, reason `GatewayWithoutTLS`, and nothing is rendered for it. |
 | `--metrics-bind-address` | all | `:8080` | Address controller-runtime's Prometheus metrics are served on over HTTPS, with a self-signed certificate, at `/metrics`. A request needs a bearer token the API server authenticates, of a user allowed `get` on the non-resource URL `/metrics`; a token's identity is cached for a minute, an allow for five and a denial for thirty seconds. `0` disables it. |
 | `--health-probe-bind-address` | all | `:8081` | Address of `/healthz`, which always passes, and `/readyz`, which passes once the controller has listed and watched everything it reconciles from, on every replica, elected or not. |
 | `--leader-elect` | all | `false` | Leader election, so that one replica reconciles. |

@@ -1,3 +1,7 @@
 {{- if .Values.cluster.enabled }}
-{{- include "nats-operator.controller" (dict "root" . "name" "cluster-controller" "group" "cluster.nats.mikluko.io" "values" .Values.cluster) }}
+{{- $args := list }}
+{{- if .Values.cluster.allowGatewayWithoutTLS }}
+{{- $args = append $args "--allow-gateway-without-tls" }}
+{{- end }}
+{{- include "nats-operator.controller" (dict "root" . "name" "cluster-controller" "group" "cluster.nats.mikluko.io" "values" .Values.cluster "args" $args) }}
 {{- end }}

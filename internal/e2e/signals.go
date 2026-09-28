@@ -19,7 +19,7 @@ var stuckWaiting = []string{"CrashLoopBackOff", "ImagePullBackOff", "ErrImageNev
 // they will not act on until it is edited.
 var terminalReasons = []string{
 	"Terminal", "Rejected", "ImmutableField", "ExistsUnowned", "OwnedByOther", "NotABucket",
-	"UnsupportedSpec", "DuplicateBalancer", "InvalidPool", "StreamsInSeveralPools", "TargetTagsInSource",
+	"UnsupportedSpec", "GatewayWithoutTLS", "DuplicateBalancer", "InvalidPool", "StreamsInSeveralPools", "TargetTagsInSource",
 	"InvalidKeys", "InvalidJWT", "TrustInvalid", "LeafRemoteInvalid", "InvalidSecret", "SecretConflict",
 }
 

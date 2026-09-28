@@ -121,7 +121,27 @@
     "topologySpreadConstraints": {"$ref": "#/definitions/topologySpreadConstraints"},
     "extraArgs": {"$ref": "#/definitions/extraArgs"},
     "env": {"$ref": "#/definitions/env"},
-    "cluster": {"$ref": "#/definitions/controller"},
+    "cluster": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "replicas", "image"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "replicas": {"type": "integer", "minimum": 0},
+        "allowGatewayWithoutTLS": {"type": "boolean"},
+        "image": {"$ref": "#/definitions/image"},
+        "resources": {"$ref": "#/definitions/resources"},
+        "nodeSelector": {"$ref": "#/definitions/strings"},
+        "annotations": {"$ref": "#/definitions/strings"},
+        "podAnnotations": {"$ref": "#/definitions/strings"},
+        "affinity": {"$ref": "#/definitions/affinity"},
+        "tolerations": {"$ref": "#/definitions/tolerations"},
+        "priorityClassName": {"type": "string"},
+        "topologySpreadConstraints": {"$ref": "#/definitions/topologySpreadConstraints"},
+        "extraArgs": {"$ref": "#/definitions/extraArgs"},
+        "env": {"$ref": "#/definitions/env"}
+      }
+    },
     "auth": {
       "type": "object",
       "additionalProperties": false,

@@ -154,6 +154,24 @@ tests:
       - lengthEqual:
           path: spec.template.spec.containers[0].args
           count: 4
+  - it: passes no --allow-gateway-without-tls by default
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].args
+          content: --allow-gateway-without-tls
+  - it: passes cluster.allowGatewayWithoutTLS as --allow-gateway-without-tls, before extraArgs
+    set:
+      cluster.allowGatewayWithoutTLS: true
+      cluster.extraArgs: [--zap-devel]
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[4]
+          value: --allow-gateway-without-tls
+      - equal:
+          path: spec.template.spec.containers[0].args[5]
+          value: --zap-devel
   - it: sets no annotations, nodeSelector or affinity by default
     documentSelector: {path: kind, value: Deployment}
     asserts:
