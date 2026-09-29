@@ -50,9 +50,11 @@ spec:
     - port: metrics
       path: /metrics
       scheme: https
-      {{- with $metrics.serviceMonitor.bearerTokenSecret }}
-      bearerTokenSecret:
-        {{- toYaml . | nindent 8 }}
+      {{- with $metrics.serviceMonitor.authorization }}
+      authorization:
+        type: Bearer
+        credentials:
+          {{- toYaml . | nindent 10 }}
       {{- else }}
       bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
       {{- end }}

@@ -192,7 +192,7 @@
             "enabled": {"type": "boolean"},
             "labels": {"$ref": "#/definitions/strings"},
             "interval": {"type": "string", "pattern": "^([0-9]+(ms|s|m|h))*$"},
-            "bearerTokenSecret": {
+            "authorization": {
               "type": "object",
               "additionalProperties": false,
               "properties": {

@@ -141,10 +141,10 @@ metrics:
     labels: {}
     # Empty, Prometheus's own scrape interval.
     interval: ""
-    # A Secret key, {name, key}, in the release namespace holding the token
-    # the metrics endpoint is scraped with, in place of the Prometheus pod's
-    # own; empty, the pod's own.
-    bearerTokenSecret: {}
+    # A Secret key, {name, key}, in the release namespace holding the bearer
+    # token the metrics endpoint is scraped with, in place of the Prometheus
+    # pod's own; empty, the pod's own.
+    authorization: {}
 
 # A NetworkPolicy over each enabled controller's pods admitting ports 8080
 # and 9464 from the peers in from alone, and port 8081 from the controller's

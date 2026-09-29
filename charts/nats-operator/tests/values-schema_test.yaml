@@ -42,7 +42,7 @@ tests:
       metrics.serviceMonitor.enabled: true
       metrics.serviceMonitor.labels: {release: prometheus}
       metrics.serviceMonitor.interval: 1m30s
-      metrics.serviceMonitor.bearerTokenSecret: {name: prometheus-token, key: token}
+      metrics.serviceMonitor.authorization: {name: prometheus-token, key: token}
       networkPolicy.enabled: true
       networkPolicy.from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}}]
     asserts:
@@ -137,12 +137,12 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "at '/podAnnotations/replicas': got number, want string"
-  - it: refuses a bearerTokenSecret without its key
+  - it: refuses an authorization without its key
     set:
-      metrics.serviceMonitor.bearerTokenSecret: {name: prometheus-token}
+      metrics.serviceMonitor.authorization: {name: prometheus-token}
     asserts:
       - failedTemplate:
-          errorPattern: "at '/metrics/serviceMonitor/bearerTokenSecret'"
+          errorPattern: "at '/metrics/serviceMonitor/authorization'"
   - it: refuses a misspelled key under networkPolicy
     set:
       networkPolicy.enabeld: true
