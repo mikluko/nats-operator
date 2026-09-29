@@ -23,6 +23,7 @@ import (
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	jetstreamv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	fixtures "github.com/mikluko/nats-operator/hack/e2e-fixtures"
 	"github.com/mikluko/nats-operator/internal/e2e"
 	"github.com/mikluko/nats-operator/internal/e2e/placeholders"
 )
@@ -100,11 +101,12 @@ func walkStories(t *testing.T, fixtures bool) (manifests, statuses []string) {
 func storyManifests(t *testing.T) []storyDoc {
 	t.Helper()
 	files, _ := storyFiles(t)
-	return manifestDocs(t, files)
+	return manifestDocs(t, storiesDir, files)
 }
 
-// manifestDocs returns every object of files, placeholders stripped.
-func manifestDocs(t *testing.T, files []string) []storyDoc {
+// manifestDocs returns every object of files, which are under root,
+// placeholders stripped.
+func manifestDocs(t *testing.T, root string, files []string) []storyDoc {
 	t.Helper()
 	var docs []storyDoc
 	for _, path := range files {
@@ -126,7 +128,7 @@ func manifestDocs(t *testing.T, files []string) []storyDoc {
 			if len(m) == 0 {
 				continue
 			}
-			rel, err := filepath.Rel(storiesDir, path)
+			rel, err := filepath.Rel(root, path)
 			require.NoError(t, err)
 			obj := &unstructured.Unstructured{Object: m}
 			docs = append(docs, storyDoc{
@@ -144,14 +146,22 @@ func TestStoryManifestsDecodeStrictly(t *testing.T) {
 }
 
 // TestStoryFixturesDecodeStrictly pins every field of every manifest and
-// status in a story's fixture directory to a field of the Go types, of the
-// four groups or of Kubernetes.
+// status in a story's fixture directory, and of every fixture
+// hack/e2e-fixtures generates, to a field of the Go types, of the four groups
+// or of Kubernetes.
 func TestStoryFixturesDecodeStrictly(t *testing.T) {
 	s := apiScheme(t)
 	require.NoError(t, clientgoscheme.AddToScheme(s))
 	manifests, statuses := fixtureFiles(t)
-	decodeDocs(t, s, manifestDocs(t, manifests))
+	decodeDocs(t, s, manifestDocs(t, storiesDir, manifests))
 	decodeStatuses(t, s, statuses)
+
+	gen := t.TempDir()
+	require.NoError(t, fixtures.Generate(gen))
+	generated, err := filepath.Glob(filepath.Join(gen, "*", e2e.FixtureDir, "*.yaml"))
+	require.NoError(t, err)
+	require.NotEmpty(t, generated)
+	decodeDocs(t, s, manifestDocs(t, gen, generated))
 }
 
 // decodeDocs strictly decodes each of docs into its kind's Go type in s.

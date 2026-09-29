@@ -1,8 +1,10 @@
-package main
+package fixtures
 
 import (
-	"bytes"
+	"encoding/json"
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -14,47 +16,39 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 )
 
-// printedKind is the kind whose spec a story's bare printed patch targets,
-// for a generator that prints one patch without naming its object.
-var printedKind = map[string]string{
-	"6": "NatsOperatorTrust",
-	"9": "NatsOperatorTrust",
-}
-
-// TestGenerators pins every generator's output: each document it writes
-// decodes strictly into its type, and each patch it prints decodes strictly
-// into the spec of the kind it targets.
-func TestGenerators(t *testing.T) {
+// TestGenerate pins every story's generated fixtures: each document written
+// decodes strictly into its type, and each patch file, named for the kind it
+// targets, decodes strictly into that kind.
+func TestGenerate(t *testing.T) {
 	scheme := fixtureScheme(t)
-	for story, gen := range generators {
-		t.Run(story, func(t *testing.T) {
-			dir := t.TempDir()
-			var out bytes.Buffer
-			require.NoError(t, gen(dir, &out))
+	kinds := map[string]schema.GroupVersionKind{}
+	for gvk := range scheme.AllKnownTypes() {
+		if gvk.Group == natsv1beta1.GroupVersion.Group {
+			kinds[strings.ToLower(gvk.Kind)] = gvk
+		}
+	}
+	root := t.TempDir()
+	require.NoError(t, Generate(root))
+	stories, err := os.ReadDir(root)
+	require.NoError(t, err)
+	require.Len(t, stories, len(generators))
+	for _, story := range stories {
+		t.Run(story.Name(), func(t *testing.T) {
+			dir := filepath.Join(root, story.Name(), "e2e")
 			decodeDir(t, dir)
-
-			patches := map[string]map[string]any{}
-			if out.Len() > 0 {
-				var printed map[string]any
-				require.NoError(t, yaml.Unmarshal(out.Bytes(), &printed))
-				if kind, ok := printedKind[story]; ok {
-					patches[kind] = printed
-				} else {
-					for target, v := range printed {
-						m, ok := v.(map[string]any)
-						require.True(t, ok, "%s: %v", target, v)
-						patches[target] = m
-					}
-				}
-			}
-			for target, p := range patches {
-				require.Equal(t, []string{"patch"}, slices.Sorted(maps.Keys(p)), target)
-				kind, _, _ := strings.Cut(target, " ")
-				obj, err := scheme.New(schema.GroupVersionKind{Group: natsv1beta1.GroupVersion.Group, Version: natsv1beta1.GroupVersion.Version, Kind: kind})
-				require.NoError(t, err, target)
-				raw, err := yaml.Marshal(p["patch"])
+			patches, err := filepath.Glob(filepath.Join(dir, "*.json"))
+			require.NoError(t, err)
+			for _, path := range patches {
+				gvk, ok := kinds[strings.TrimSuffix(filepath.Base(path), ".json")]
+				require.True(t, ok, "%s names no kind of %s", path, natsv1beta1.GroupVersion.Group)
+				raw, err := os.ReadFile(path)
 				require.NoError(t, err)
-				require.NoError(t, yaml.UnmarshalStrict(raw, obj), target)
+				var patch map[string]any
+				require.NoError(t, json.Unmarshal(raw, &patch))
+				require.Equal(t, []string{"spec"}, slices.Sorted(maps.Keys(patch)), path)
+				obj, err := scheme.New(gvk)
+				require.NoError(t, err)
+				require.NoError(t, yaml.UnmarshalStrict(raw, obj), path)
 			}
 		})
 	}

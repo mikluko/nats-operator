@@ -1,8 +1,6 @@
-package main
+package fixtures
 
 import (
-	"fmt"
-	"io"
 	"text/template"
 
 	"github.com/nats-io/nkeys"
@@ -16,10 +14,10 @@ type seeds struct {
 	WestCredsLines []string
 }
 
-// supercluster writes story 6's fixtures into dir and prints the NATS
-// operator and system account JWTs its NatsOperatorTrust takes as a
-// substitution's patch.
-func supercluster(dir string, out io.Writer) error {
+// supercluster writes story 6's fixtures into dir, with the NATS operator
+// and system account JWTs its NatsOperatorTrust takes as the patch file
+// natsoperatortrust.json.
+func supercluster(dir string) error {
 	var s seeds
 	op, opSeed, err := keys(nkeys.PrefixByteOperator)
 	if err != nil {
@@ -54,8 +52,7 @@ func supercluster(dir string, out io.Writer) error {
 	if err := writeTemplate(dir, "00-west.yaml", west, secret{Name: "west-cluster-controller-creds", Namespace: "nats-system", Lines: s.WestCredsLines}); err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(out, "patch: {spec: {operatorJWT: %s, systemAccountJWT: %s}}\n", operatorJWT, systemJWT)
-	return err
+	return writePatch(dir, "natsoperatortrust.json", map[string]string{"operatorJWT": operatorJWT, "systemAccountJWT": systemJWT})
 }
 
 var home = parseFixture("home", `{{template "keys" (dict "name" "acme-operator" "identity" .OperatorIdentity "signing" .OperatorSigning)}}---

@@ -1,8 +1,7 @@
-package main
+package fixtures
 
 import (
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/nats-io/jwt/v2"
@@ -11,9 +10,10 @@ import (
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
 
-// leafnodes writes story 10's fixtures into dir and prints the JWTs the
-// leaf's NatsOperatorTrust and NatsAccountTrust take as substitution patches.
-func leafnodes(dir string, out io.Writer) error {
+// leafnodes writes story 10's fixtures into dir, with the JWTs the leaf's
+// NatsOperatorTrust and NatsAccountTrust take as the patch files
+// natsoperatortrust.json and natsaccounttrust.json.
+func leafnodes(dir string) error {
 	var h hub
 	op, opSeeds, err := keys(nkeys.PrefixByteOperator)
 	if err != nil {
@@ -78,9 +78,10 @@ func leafnodes(dir string, out io.Writer) error {
 	if err := writeTemplate(dir, "00-edge.yaml", edgeTemplate, edge); err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(out, "NatsOperatorTrust acme:\n  patch: {spec: {operatorJWT: %s, systemAccountJWT: %s}}\nNatsAccountTrust telemetry:\n  patch: {spec: {publicKey: %s, jwt: %s}}\n",
-		operatorJWT, systemJWT, telPub, telemetryJWT)
-	return err
+	if err := writePatch(dir, "natsoperatortrust.json", map[string]string{"operatorJWT": operatorJWT, "systemAccountJWT": systemJWT}); err != nil {
+		return err
+	}
+	return writePatch(dir, "natsaccounttrust.json", map[string]string{"publicKey": telPub, "jwt": telemetryJWT})
 }
 
 // hub is what hubTemplate renders: seeds.

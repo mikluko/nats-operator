@@ -1,8 +1,6 @@
-package main
+package fixtures
 
 import (
-	"fmt"
-	"io"
 	"text/template"
 
 	"github.com/nats-io/nkeys"
@@ -18,10 +16,10 @@ type accept struct {
 	RuntimeCreds                          []string
 }
 
-// acceptance writes story 9's fixtures into dir and prints the NATS operator
-// and system account JWTs its NatsOperatorTrust takes as a substitution's
-// patch.
-func acceptance(dir string, out io.Writer) error {
+// acceptance writes story 9's fixtures into dir, with the NATS operator and
+// system account JWTs its NatsOperatorTrust takes as the patch file
+// natsoperatortrust.json.
+func acceptance(dir string) error {
 	var a accept
 	var op, sys, monitoring jwtplane.Keys
 	for _, k := range []struct {
@@ -69,8 +67,7 @@ func acceptance(dir string, out io.Writer) error {
 	if err := writeTemplate(dir, "01-runtime-streams.yaml", acceptanceRuntime, nil); err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(out, "patch: {spec: {operatorJWT: %s, systemAccountJWT: %s}}\n", operatorJWT, systemJWT)
-	return err
+	return writePatch(dir, "natsoperatortrust.json", map[string]string{"operatorJWT": operatorJWT, "systemAccountJWT": systemJWT})
 }
 
 var acceptanceHome = parseFixture("home", `{{template "keys" (dict "name" "acme" "identity" .OperatorIdentity "signing" .OperatorSigning)}}---

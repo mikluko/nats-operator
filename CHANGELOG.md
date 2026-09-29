@@ -57,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A controller releases its leader-election lease as it shuts down.
 - Each release publishes the three controller images for linux/amd64 and linux/arm64, the chart as an OCI artifact, and a GitHub release carrying the version's changelog entry.
 - Documentation site at <https://mikluko.github.io/nats-operator/>, of the latest release: the stories, the design and the ADRs.
+- The documentation site publishes nothing under a story's `e2e/` directory, and the stories' fixtures that hold keys are not in the repository: `just e2e` generates them afresh on every run.
 - Documentation page `/docs/install/`: installing the chart, its values, the controllers' flags and RBAC, upgrade and uninstall.
 - Documentation page `/docs/reference/api/`: every kind, field and enum value of the four API groups.
 - Documentation page `/docs/reference/nats-permissions/`: the nats-server subjects each controller requests and the presets that grant them.

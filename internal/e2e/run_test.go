@@ -169,7 +169,7 @@ func TestRunner_Plan(t *testing.T) {
 			"01-other.yaml":            cm("a", "other"),
 		},
 	})
-	bundles, err := LoadBundles(root)
+	bundles, err := LoadBundles(root, "")
 	require.NoError(t, err)
 	byNumber := func(n int) *Bundle {
 		i := slices.IndexFunc(bundles, func(b *Bundle) bool { return b.Number == n })

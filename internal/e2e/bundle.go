@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -75,6 +76,9 @@ type Substitution struct {
 	// each file it reaches; a status file's document is its status block
 	// alone, under the status key.
 	Patch map[string]any `json:"patch"`
+	// PatchFile names, by its path from the bundle, a JSON file holding
+	// Patch, for a patch whose values are generated; set it or Patch.
+	PatchFile string `json:"patchFile,omitempty"`
 }
 
 // StepWait is how long one step of a bundle waits for its expectations.
@@ -189,9 +193,12 @@ type Expectation struct {
 	Want map[string]any
 }
 
-// LoadBundles reads every story directory under dir, ordered by story number.
-// A directory whose name does not start with a number is not a story.
-func LoadBundles(dir string) ([]*Bundle, error) {
+// LoadBundles reads every story directory under dir, ordered by story number,
+// with generated, unless empty, laid over dir: a file at
+// generated/<story>/e2e/<name> is read as the story's e2e/<name>, and one
+// in both is an error. A directory whose name does not start with a number
+// is not a story.
+func LoadBundles(dir, generated string) ([]*Bundle, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("read stories: %w", err)
@@ -206,7 +213,11 @@ func LoadBundles(dir string) ([]*Bundle, error) {
 		if err != nil {
 			continue
 		}
-		b, err := loadBundle(filepath.Join(dir, e.Name()))
+		var gen string
+		if generated != "" {
+			gen = filepath.Join(generated, e.Name())
+		}
+		b, err := loadBundle(filepath.Join(dir, e.Name()), gen)
 		if err != nil {
 			return nil, err
 		}
@@ -227,26 +238,26 @@ func LoadBundles(dir string) ([]*Bundle, error) {
 	return bundles, nil
 }
 
-func loadBundle(dir string) (*Bundle, error) {
+// loadBundle reads the story in dir, with the story's directory under the
+// generated root, gen, laid over it where gen is not empty.
+func loadBundle(dir, gen string) (*Bundle, error) {
 	b := &Bundle{}
 	if err := readFrontMatter(filepath.Join(dir, "index.md"), b); err != nil {
 		return nil, err
 	}
-	files, err := filepath.Glob(filepath.Join(dir, "*.yaml"))
+	paths, err := bundlePaths(dir, gen)
 	if err != nil {
 		return nil, err
 	}
-	fixtures, err := filepath.Glob(filepath.Join(dir, FixtureDir, "*.yaml"))
-	if err != nil {
-		return nil, err
-	}
-	files = append(files, fixtures...)
-	slices.Sort(files)
-	for _, path := range files {
-		f := bundleFile{base: filepath.Base(path)}
-		if filepath.Base(filepath.Dir(path)) == FixtureDir {
-			f.base = FixtureDir + "/" + f.base
+	for i := range b.Substitutions {
+		if err := b.Substitutions[i].readPatchFile(dir, gen); err != nil {
+			return nil, err
 		}
+	}
+	files := slices.Sorted(maps.Keys(paths))
+	for _, rel := range files {
+		path := paths[rel]
+		f := bundleFile{base: rel}
 		if f.name, err = ParseFileName(filepath.Base(path)); err != nil {
 			return nil, err
 		}
@@ -268,7 +279,7 @@ func loadBundle(dir string) (*Bundle, error) {
 	if err := b.checkWaits(dir); err != nil {
 		return nil, err
 	}
-	return b, checkPlacement(dir, files, b.Clusters)
+	return b, checkPlacement(dir, paths, b.Clusters)
 }
 
 // checkWaits fails where a wait names no step of b or lacks a reason or a
@@ -322,17 +333,73 @@ func mergePatch(target, patch map[string]any) map[string]any {
 }
 
 // checkSubstitutions fails when a substitution gives no reason, patches
-// nothing, or names a file the bundle lacks.
+// nothing, or names a file the bundle lacks; files are the bundle's, by
+// their path from it.
 func checkSubstitutions(dir string, files []string, subs []Substitution) error {
 	for i, s := range subs {
 		if s.Reason == "" || len(s.Patch) == 0 || len(s.Files) == 0 {
 			return fmt.Errorf("%s: substitution %d needs files, a reason and a patch", dir, i)
 		}
 		for _, f := range s.Files {
-			if !slices.Contains(files, filepath.Join(dir, f)) {
+			if !slices.Contains(files, f) {
 				return fmt.Errorf("%s: substitution %d names %s, which the bundle does not have", dir, i, f)
 			}
 		}
+	}
+	return nil
+}
+
+// bundlePaths returns the YAML files of the bundle in dir, keyed by their
+// path from it, with the fixtures under gen, where gen is not empty, among
+// them; it fails on a fixture in both.
+func bundlePaths(dir, gen string) (map[string]string, error) {
+	paths := map[string]string{}
+	add := func(root, pattern, prefix string) error {
+		found, err := filepath.Glob(filepath.Join(root, pattern))
+		if err != nil {
+			return err
+		}
+		for _, path := range found {
+			rel := prefix + filepath.Base(path)
+			if other, dup := paths[rel]; dup {
+				return fmt.Errorf("%s: generated, and also in the bundle as %s", path, other)
+			}
+			paths[rel] = path
+		}
+		return nil
+	}
+	if err := add(dir, "*.yaml", ""); err != nil {
+		return nil, err
+	}
+	if err := add(filepath.Join(dir, FixtureDir), "*.yaml", FixtureDir+"/"); err != nil {
+		return nil, err
+	}
+	if gen != "" {
+		if err := add(filepath.Join(gen, FixtureDir), "*.yaml", FixtureDir+"/"); err != nil {
+			return nil, err
+		}
+	}
+	return paths, nil
+}
+
+// readPatchFile sets s.Patch from s.PatchFile, where set, found in the
+// bundle in dir or else under gen; it fails where s.Patch is set as well.
+func (s *Substitution) readPatchFile(dir, gen string) error {
+	if s.PatchFile == "" {
+		return nil
+	}
+	if s.Patch != nil {
+		return fmt.Errorf("%s: a substitution sets both patch and patchFile %s", dir, s.PatchFile)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, s.PatchFile))
+	if errors.Is(err, os.ErrNotExist) && gen != "" {
+		raw, err = os.ReadFile(filepath.Join(gen, s.PatchFile))
+	}
+	if err != nil {
+		return fmt.Errorf("%s: patchFile: %w", dir, err)
+	}
+	if err := json.Unmarshal(raw, &s.Patch); err != nil {
+		return fmt.Errorf("%s: patchFile %s: %w", dir, s.PatchFile, err)
 	}
 	return nil
 }
@@ -363,22 +430,23 @@ func addFile(steps []Step, f bundleFile) []Step {
 }
 
 // checkPlacement fails when a placement names a file the bundle lacks, or
-// leaves one of its files in no Kubernetes cluster.
-func checkPlacement(dir string, files []string, clusters []Placement) error {
+// leaves one of its files, paths keyed by their path from the bundle, in no
+// Kubernetes cluster.
+func checkPlacement(dir string, paths map[string]string, clusters []Placement) error {
 	if len(clusters) == 0 {
 		return nil
 	}
 	placed := map[string]bool{}
 	for _, p := range clusters {
 		for _, f := range p.Files {
-			if !slices.Contains(files, filepath.Join(dir, f)) {
+			if _, ok := paths[f]; !ok {
 				return fmt.Errorf("%s: cluster %s places %s, which the bundle does not have", dir, p.Name, f)
 			}
 			placed[f] = true
 		}
 	}
-	for _, path := range files {
-		if rel, _ := filepath.Rel(dir, path); !placed[filepath.ToSlash(rel)] {
+	for _, rel := range slices.Sorted(maps.Keys(paths)) {
+		if path := paths[rel]; !placed[rel] {
 			return fmt.Errorf("%s: in none of the Kubernetes clusters index.md places files in", path)
 		}
 	}

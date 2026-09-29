@@ -12,6 +12,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	fixtures "github.com/mikluko/nats-operator/hack/e2e-fixtures"
 	"github.com/mikluko/nats-operator/internal/e2e"
 )
 
@@ -25,15 +26,26 @@ const (
 	report       = 15 * time.Second
 )
 
-// selectBundles returns the story bundles under root numbered in only, all
-// when it is empty; it fails where none is.
-func selectBundles(root, only string) ([]*e2e.Bundle, error) {
+// generateFixtures writes the stories' generated fixtures afresh under
+// work/fixtures, and returns that directory.
+func generateFixtures(work string) (string, error) {
+	dir := filepath.Join(work, "fixtures")
+	if err := os.RemoveAll(dir); err != nil {
+		return "", err
+	}
+	return dir, fixtures.Generate(dir)
+}
+
+// selectBundles returns the story bundles under root, with the fixtures
+// under generated laid over them, numbered in only, all when it is empty;
+// it fails where none is.
+func selectBundles(root, generated, only string) ([]*e2e.Bundle, error) {
 	selected, err := parseNumbers(only)
 	if err != nil {
 		return nil, err
 	}
 	dir := filepath.Join(root, "docs", "content", "docs", "stories")
-	bundles, err := e2e.LoadBundles(dir)
+	bundles, err := e2e.LoadBundles(dir, generated)
 	if err != nil {
 		return nil, err
 	}

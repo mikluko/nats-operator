@@ -164,6 +164,15 @@ func TestSite(t *testing.T) {
 	doc, err := html.Parse(bytes.NewReader(index))
 	require.NoError(t, err)
 	require.True(t, drawsIcon(doc, "book-open"), "the header's logo icon is not drawn")
+
+	var fixtures []string
+	require.NoError(t, filepath.WalkDir(out, func(p string, d fs.DirEntry, err error) error {
+		if err == nil && d.IsDir() && d.Name() == "e2e" {
+			fixtures = append(fixtures, p)
+		}
+		return err
+	}))
+	require.Empty(t, fixtures, "the site serves a story's e2e/ directory")
 }
 
 // drawsIcon reports whether doc holds the theme's svg for the named icon with

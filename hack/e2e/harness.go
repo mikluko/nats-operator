@@ -64,7 +64,11 @@ func harness(ctx context.Context, cfg config, root, imagesFile string, down bool
 		return err
 	}
 
-	stories, err := selectBundles(root, cfg.stories)
+	generated, err := generateFixtures(work)
+	if err != nil {
+		return err
+	}
+	stories, err := selectBundles(root, generated, cfg.stories)
 	if err != nil {
 		return err
 	}

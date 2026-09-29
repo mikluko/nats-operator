@@ -31,7 +31,7 @@ func TestEnvtest_Runner(t *testing.T) {
 	c := startAPIServer(t)
 
 	t.Run("Quickstart times out with a diff", func(t *testing.T) {
-		bundles, err := LoadBundles(storiesDir)
+		bundles, err := LoadBundles(storiesDir, generated(t))
 		require.NoError(t, err)
 		var log bytes.Buffer
 		r := &Runner{Clients: []client.Client{c}, Timeout: 2 * time.Second, Interval: 200 * time.Millisecond, Log: &log}
@@ -54,7 +54,7 @@ spec: {servers: ["nats://demo:4222"]}
 `,
 			"01-status-natsconnection.yaml": "status:\n  observedGeneration: 1\n",
 		})
-		bundles, err := LoadBundles(root)
+		bundles, err := LoadBundles(root, "")
 		require.NoError(t, err)
 		r := &Runner{Clients: []client.Client{c}, Timeout: time.Nanosecond, Interval: time.Second}
 		res := r.Run(t.Context(), bundles[0])
@@ -66,7 +66,7 @@ spec: {servers: ["nats://demo:4222"]}
 		bundle := func(ns string) *Bundle {
 			bundles, err := LoadBundles(writeBundle(t, map[string]string{
 				"01-conn.yaml": "apiVersion: nats.mikluko.io/v1beta1\nkind: NatsConnection\nmetadata: {name: demo, namespace: " + ns + "}\nspec: {servers: [\"nats://demo:4222\"]}\n",
-			}))
+			}), "")
 			require.NoError(t, err)
 			return bundles[0]
 		}
@@ -108,7 +108,7 @@ spec: {servers: ["nats://demo:4222"]}
 `,
 			"01-status-natsconnection.yaml": "status:\n  observedGeneration: 1\n  conditions:\n  - {type: Ready, status: \"True\", reason: Anything}\n  servers: !any 3\n",
 		})
-		bundles, err := LoadBundles(root)
+		bundles, err := LoadBundles(root, "")
 		require.NoError(t, err)
 		go setReadyWhenPresent(t.Context(), c, "arrives", "demo")
 		r := &Runner{Clients: []client.Client{c}, Timeout: 20 * time.Second, Interval: 100 * time.Millisecond}
@@ -139,7 +139,7 @@ func TestEnvtest_Chained(t *testing.T) {
 			"02-delete-cm.yaml":           cm("chain-base", "base"),
 		},
 	})
-	bundles, err := LoadBundles(root)
+	bundles, err := LoadBundles(root, "")
 	require.NoError(t, err)
 
 	var log bytes.Buffer
@@ -178,7 +178,7 @@ spec: {servers: ["nats://demo:4222"]}
 `,
 		"01-status-natsconnection.yaml": "status:\n  conditions:\n  - {type: Ready, status: \"True\"}\n",
 	})
-	bundles, err := LoadBundles(root)
+	bundles, err := LoadBundles(root, "")
 	require.NoError(t, err)
 	go crashLoopWhenPresent(t.Context(), c, "crashing", "nats-0")
 	var log bytes.Buffer
@@ -358,7 +358,7 @@ spec: {servers: ["nats://west:4222"]}
 `,
 		"01-status-natsconnection.yaml": "status:\n  conditions:\n  - {type: Ready, status: \"True\"}\n",
 	})
-	bundles, err := LoadBundles(root)
+	bundles, err := LoadBundles(root, "")
 	require.NoError(t, err)
 	story := bundles[0]
 

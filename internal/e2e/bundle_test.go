@@ -8,12 +8,22 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	fixtures "github.com/mikluko/nats-operator/hack/e2e-fixtures"
 )
 
 const storiesDir = "../../docs/content/docs/stories"
 
+// generated returns a directory holding the stories' generated fixtures.
+func generated(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	require.NoError(t, fixtures.Generate(dir))
+	return dir
+}
+
 func TestLoadBundles_Stories(t *testing.T) {
-	bundles, err := LoadBundles(storiesDir)
+	bundles, err := LoadBundles(storiesDir, generated(t))
 	require.NoError(t, err)
 	require.Len(t, bundles, 11)
 	skipped := map[string]string{}
@@ -155,7 +165,7 @@ spec: {replicas: 1}
 				"03-delete-old.yaml": "apiVersion: cluster.nats.mikluko.io/v1beta1\nkind: NatsCluster\nmetadata: {name: old, namespace: a}\n",
 				tt.status:            "status:\n  observedGeneration: 1\n",
 			})
-			bundles, err := LoadBundles(root)
+			bundles, err := LoadBundles(root, "")
 			require.NoError(t, err)
 			require.Len(t, bundles, 1)
 			b := bundles[0]
@@ -181,7 +191,7 @@ func TestLoadBundles_StepsInOrder(t *testing.T) {
 		"2-delete-gone.yaml":     "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: gone, namespace: a}\n",
 		"10-live-configmap.yaml": "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x, namespace: a}\ndata: {v: !any after}\n",
 	})
-	bundles, err := LoadBundles(root)
+	bundles, err := LoadBundles(root, "")
 	require.NoError(t, err)
 	b := bundles[0]
 	require.Len(t, b.Steps, 2)
@@ -212,7 +222,7 @@ func TestLoadBundles_Rejects(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := LoadBundles(writeBundle(t, tt.files))
+			_, err := LoadBundles(writeBundle(t, tt.files), "")
 			require.ErrorContains(t, err, tt.err)
 		})
 	}
@@ -227,7 +237,7 @@ func TestSkipReason(t *testing.T) {
 }
 
 func TestLoadBundles_SuperclusterParts(t *testing.T) {
-	bundles, err := LoadBundles(storiesDir)
+	bundles, err := LoadBundles(storiesDir, generated(t))
 	require.NoError(t, err)
 	super := bundles[5]
 	require.Equal(t, "06-supercluster", super.Name)
@@ -271,7 +281,7 @@ func TestLoadBundles_SuperclusterParts(t *testing.T) {
 }
 
 func TestLoadBundles_UnplacedIsOnePart(t *testing.T) {
-	bundles, err := LoadBundles(storiesDir)
+	bundles, err := LoadBundles(storiesDir, generated(t))
 	require.NoError(t, err)
 	parts := bundles[0].Parts()
 	require.Equal(t, []Part{{Steps: bundles[0].Steps}}, parts)
@@ -298,7 +308,7 @@ func TestLoadBundles_PlacementErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := writeBundle(t, map[string]string{"01-a.yaml": cm, "01-b.yaml": cm, "index.md": tt.index})
-			_, err := LoadBundles(root)
+			_, err := LoadBundles(root, "")
 			require.ErrorContains(t, err, tt.err)
 		})
 	}
@@ -328,7 +338,7 @@ params:
 		"01-c.yaml":                "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: c1, namespace: a}\n---\napiVersion: v1\nkind: Secret\nmetadata: {name: c1, namespace: a}\n---\napiVersion: v1\nkind: ConfigMap\nmetadata: {name: c2, namespace: a}\n",
 		"01-status-configmap.yaml": "status: {mem: !any 3Gi}\ndata: {mem: 3Gi}\n",
 	})
-	bundles, err := LoadBundles(root)
+	bundles, err := LoadBundles(root, "")
 	require.NoError(t, err)
 	s := bundles[0].Steps[0]
 	require.Equal(t, map[string]any{"mem": "1Gi", "kept": "z"}, s.Apply[0].Object["data"])
@@ -357,7 +367,7 @@ func TestLoadBundles_SubstitutionErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			index := "---\nparams:\n  e2e:\n    substitutions:\n      - " + tt.sub + "\n---\n"
-			_, err := LoadBundles(writeBundle(t, map[string]string{"01-a.yaml": cm, "index.md": index}))
+			_, err := LoadBundles(writeBundle(t, map[string]string{"01-a.yaml": cm, "index.md": index}), "")
 			require.ErrorContains(t, err, tt.err)
 		})
 	}
@@ -367,7 +377,7 @@ func TestLoadBundles_Waits(t *testing.T) {
 	const cm = "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x, namespace: a}\n"
 	load := func(waits string) (*Bundle, error) {
 		index := "---\nparams:\n  e2e:\n    waits:\n" + waits + "---\n"
-		bs, err := LoadBundles(writeBundle(t, map[string]string{"01-a.yaml": cm, "02-a.yaml": cm, "index.md": index}))
+		bs, err := LoadBundles(writeBundle(t, map[string]string{"01-a.yaml": cm, "02-a.yaml": cm, "index.md": index}), "")
 		if err != nil {
 			return nil, err
 		}
@@ -405,7 +415,7 @@ func TestLoadBundles_Fixtures(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "00-fixture.yaml"),
 		[]byte("apiVersion: batch/v1\nkind: Job\nmetadata: {name: seed, namespace: fixture}\n"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "00-status-job.yaml"), []byte("status: {succeeded: 1}\n"), 0o600))
-	bundles, err := LoadBundles(root)
+	bundles, err := LoadBundles(root, "")
 	require.NoError(t, err)
 	b := bundles[0]
 	require.Len(t, b.Steps, 2)
@@ -413,6 +423,67 @@ func TestLoadBundles_Fixtures(t *testing.T) {
 	require.Equal(t, "seed", b.Steps[0].Apply[0].GetName())
 	require.Equal(t, "00-status-job.yaml", b.Steps[0].Expectations[0].File)
 	require.Equal(t, []string{"fixture", "story"}, b.Namespaces())
+}
+
+// TestLoadBundles_Generated pins the generated root laid over the stories:
+// its fixtures load as the bundle's own e2e/ files and a patchFile resolves
+// there, while a fixture in both places, a patchFile beside a patch, or a
+// patchFile found in neither fails.
+func TestLoadBundles_Generated(t *testing.T) {
+	const (
+		index = "---\nparams:\n  e2e:\n    clusters:\n      - {name: east, files: [01-a.yaml, e2e/00-fixture.yaml]}\n" +
+			"    substitutions:\n      - {files: [01-a.yaml], reason: generated, patchFile: e2e/a.json}\n---\n"
+		cm      = "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: a, namespace: story}\ndata: {key: as-written}\n"
+		fixture = "apiVersion: batch/v1\nkind: Job\nmetadata: {name: seed, namespace: fixture}\n"
+	)
+	write := func(t *testing.T, dir string, files map[string]string) {
+		t.Helper()
+		for name, body := range files {
+			path := filepath.Join(dir, "01-test", name)
+			require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+			require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
+		}
+	}
+	generatedFiles := map[string]string{"e2e/00-fixture.yaml": fixture, "e2e/a.json": `{"data": {"key": "generated"}}`}
+
+	t.Run("laid over", func(t *testing.T) {
+		root := writeBundle(t, map[string]string{"01-a.yaml": cm, "index.md": index})
+		gen := t.TempDir()
+		write(t, gen, generatedFiles)
+		bundles, err := LoadBundles(root, gen)
+		require.NoError(t, err)
+		b := bundles[0]
+		require.Equal(t, "seed", b.Steps[0].Apply[0].GetName())
+		require.Equal(t, map[string]any{"key": "generated"}, b.Steps[1].Apply[0].Object["data"])
+		require.Equal(t, []string{"01-a.yaml", "e2e/00-fixture.yaml"}, []string{b.files[0].base, b.files[1].base})
+	})
+
+	for _, tt := range []struct {
+		name    string
+		index   string
+		inTree  map[string]string
+		gen     map[string]string
+		wantErr string
+	}{
+		{name: "not generated", index: index, gen: map[string]string{}, wantErr: "patchFile: open"},
+		{name: "in both", index: index, inTree: map[string]string{"e2e/00-fixture.yaml": fixture}, gen: generatedFiles,
+			wantErr: "generated, and also in the bundle"},
+		{
+			name:    "patch and patchFile",
+			index:   "---\nparams:\n  e2e:\n    substitutions:\n      - {files: [01-a.yaml], reason: r, patch: {data: {}}, patchFile: e2e/a.json}\n---\n",
+			gen:     generatedFiles,
+			wantErr: "sets both patch and patchFile e2e/a.json",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := writeBundle(t, map[string]string{"01-a.yaml": cm, "index.md": tt.index})
+			write(t, root, tt.inTree)
+			gen := t.TempDir()
+			write(t, gen, tt.gen)
+			_, err := LoadBundles(root, gen)
+			require.ErrorContains(t, err, tt.wantErr)
+		})
+	}
 }
 
 func TestBundle_DropsGatewayTLS(t *testing.T) {

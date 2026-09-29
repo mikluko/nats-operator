@@ -1,7 +1,6 @@
-package main
+package fixtures
 
 import (
-	"io"
 	"text/template"
 
 	"github.com/nats-io/nkeys"
@@ -10,7 +9,7 @@ import (
 )
 
 // evacuation writes story 11's fixtures into dir.
-func evacuation(dir string, _ io.Writer) error {
+func evacuation(dir string) error {
 	var e evac
 	for _, k := range []struct {
 		kind           nkeys.PrefixByte

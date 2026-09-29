@@ -1,4 +1,4 @@
-package main
+package fixtures
 
 import (
 	"bufio"
@@ -102,12 +102,11 @@ func requireCreds(t *testing.T, secret *corev1.Secret, account, signing string) 
 }
 
 // TestAcceptance pins story 9's fixtures: every document decodes strictly
-// into its type, and the printed JWTs and the creds chain to the generated
+// into its type, and the patch file's JWTs and the creds chain to the generated
 // keys.
 func TestAcceptance(t *testing.T) {
 	dir := t.TempDir()
-	var out bytes.Buffer
-	require.NoError(t, acceptance(dir, &out))
+	require.NoError(t, acceptance(dir))
 	secrets := decodeDir(t, dir)
 
 	operator := pub(t, secrets["acme-keys"], "identity", nkeys.PrefixByteOperator)
@@ -118,23 +117,23 @@ func TestAcceptance(t *testing.T) {
 	monitoringSigning := pub(t, secrets["monitoring-prod-keys"], "signing-1", nkeys.PrefixByteAccount)
 
 	var patch struct {
-		Patch struct {
-			Spec struct {
-				OperatorJWT      string `json:"operatorJWT"`
-				SystemAccountJWT string `json:"systemAccountJWT"`
-			} `json:"spec"`
-		} `json:"patch"`
+		Spec struct {
+			OperatorJWT      string `json:"operatorJWT"`
+			SystemAccountJWT string `json:"systemAccountJWT"`
+		} `json:"spec"`
 	}
-	require.NoError(t, yaml.UnmarshalStrict(out.Bytes(), &patch))
+	raw, err := os.ReadFile(filepath.Join(dir, "natsoperatortrust.json"))
+	require.NoError(t, err)
+	require.NoError(t, yaml.UnmarshalStrict(raw, &patch))
 
-	oc, err := jwt.DecodeOperatorClaims(patch.Patch.Spec.OperatorJWT)
+	oc, err := jwt.DecodeOperatorClaims(patch.Spec.OperatorJWT)
 	require.NoError(t, err)
 	require.Equal(t, operator, oc.Subject)
 	require.Equal(t, operator, oc.Issuer)
 	require.Equal(t, system, oc.SystemAccount)
 	require.Contains(t, oc.SigningKeys, operatorSigning)
 
-	ac, err := jwt.DecodeAccountClaims(patch.Patch.Spec.SystemAccountJWT)
+	ac, err := jwt.DecodeAccountClaims(patch.Spec.SystemAccountJWT)
 	require.NoError(t, err)
 	require.Equal(t, system, ac.Subject)
 	require.Equal(t, operatorSigning, ac.Issuer)

@@ -3,6 +3,7 @@ package main
 import (
 	"archive/tar"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
 )
 
@@ -87,7 +89,9 @@ func TestChartSets(t *testing.T) {
 // of the story they start from, remove their gateways' tls: 6, 8 after 6, 9
 // and 11.
 func TestStoriesDropGatewayTLS(t *testing.T) {
-	stories, err := selectBundles("../..", "")
+	generated, err := generateFixtures(t.TempDir())
+	require.NoError(t, err)
+	stories, err := selectBundles("../..", generated, "")
 	require.NoError(t, err)
 	got := map[int]bool{}
 	for _, b := range stories {
@@ -102,7 +106,9 @@ func TestStoriesDropGatewayTLS(t *testing.T) {
 // TestWatchedNamespaces pins that namespace-scoped runs watch story 1's
 // namespace, and the auth controller's system connection's where it runs.
 func TestWatchedNamespaces(t *testing.T) {
-	stories, err := selectBundles("../..", "1")
+	generated, err := generateFixtures(t.TempDir())
+	require.NoError(t, err)
+	stories, err := selectBundles("../..", generated, "1")
 	require.NoError(t, err)
 	require.Len(t, stories, 1)
 	require.Equal(t, []string{"nats-system"}, watchedNamespaces(stories, []string{"cluster", "auth", "jetstream"}))
@@ -110,8 +116,49 @@ func TestWatchedNamespaces(t *testing.T) {
 	require.Equal(t, []string{"nats-system"}, watchedNamespaces(nil, []string{"auth"}))
 	require.Empty(t, watchedNamespaces(nil, []string{"cluster"}))
 
-	_, err = selectBundles("../..", "99")
+	_, err = selectBundles("../..", generated, "99")
 	require.ErrorContains(t, err, `matches "99"`)
+}
+
+// TestGenerateFixtures pins that a run's fixtures are generated afresh, a
+// previous run's gone, and that the stories load with them: story 6 holds the
+// keys its fixture generates and a trust JWT from its patch file.
+func TestGenerateFixtures(t *testing.T) {
+	work := t.TempDir()
+	stale := filepath.Join(work, "fixtures", "06-supercluster", "e2e", "00-stale.yaml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(stale), 0o755))
+	require.NoError(t, os.WriteFile(stale, []byte("kind: ConfigMap\n"), 0o600))
+
+	generated, err := generateFixtures(work)
+	require.NoError(t, err)
+	require.NoFileExists(t, stale)
+	stories, err := selectBundles("../..", generated, "6")
+	require.NoError(t, err)
+	require.Len(t, stories, 1)
+
+	raw, err := os.ReadFile(filepath.Join(generated, "06-supercluster", "e2e", "natsoperatortrust.json"))
+	require.NoError(t, err)
+	var patch struct {
+		Spec struct {
+			OperatorJWT string `json:"operatorJWT"`
+		} `json:"spec"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &patch))
+	require.NotEmpty(t, patch.Spec.OperatorJWT)
+
+	var keys, trustJWTs []string
+	for _, o := range stories[0].Objects(1) {
+		switch o.GetKind() {
+		case "Secret":
+			keys = append(keys, o.GetName())
+		case "NatsOperatorTrust":
+			jwt, _, err := unstructured.NestedString(o.Object, "spec", "operatorJWT")
+			require.NoError(t, err)
+			trustJWTs = append(trustJWTs, jwt)
+		}
+	}
+	require.Subset(t, keys, []string{"acme-operator-keys", "sys-keys"})
+	require.Equal(t, []string{patch.Spec.OperatorJWT}, trustJWTs)
 }
 
 // TestE2EEnv pins that the E2E_* variables reach the machine's shell whole,

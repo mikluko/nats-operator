@@ -1,4 +1,4 @@
-package main
+package fixtures
 
 import (
 	"bytes"
@@ -8,7 +8,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"io"
 	"math/big"
 	"text/template"
 	"time"
@@ -24,7 +23,7 @@ type fixture struct {
 
 // unmanaged writes story 3's fixture into dir: a NATS cluster none of the
 // controllers deployed.
-func unmanaged(dir string, _ io.Writer) error {
+func unmanaged(dir string) error {
 	var f fixture
 	op, err := nkeys.CreateOperator()
 	if err != nil {

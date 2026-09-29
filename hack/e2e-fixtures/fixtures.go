@@ -1,18 +1,13 @@
-// Command e2e-fixtures writes into a story's e2e/ directory the fixture
-// files its e2e run stands on, every key generated afresh and guarding
-// nothing but the run:
-//
-//	go run ./hack/e2e-fixtures <story number> docs/content/docs/stories/<story>/e2e
-//
-// Where the story's substitutions take generated values, it prints them as
-// a substitution's patch. nsc cannot stand in: it writes keys and JWTs to its
-// own store, not the Secret manifests a story applies, and does not expand
-// jwtplane's presets into claims.
-package main
+// Package fixtures generates the files the e2e harness adds to a story's
+// e2e/ directory where they hold keys, every key generated afresh and
+// guarding nothing but the run. nsc cannot stand in: it writes keys and JWTs
+// to its own store, not the Secret manifests a story applies, and does not
+// expand jwtplane's presets into claims.
+package fixtures
 
 import (
+	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,14 +19,29 @@ import (
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
 
-// generators write a story's fixtures into dir and the substitutions they
-// take to out, keyed by story number.
-var generators = map[string]func(dir string, out io.Writer) error{
-	"3":  unmanaged,
-	"6":  supercluster,
-	"9":  acceptance,
-	"10": leafnodes,
-	"11": evacuation,
+// generators write a story's fixtures into dir, with the patch files of the
+// substitutions that take generated values, keyed by the story's directory.
+var generators = map[string]func(dir string) error{
+	"03-unmanaged":    unmanaged,
+	"06-supercluster": supercluster,
+	"09-acceptance":   acceptance,
+	"10-leafnodes":    leafnodes,
+	"11-evacuation":   evacuation,
+}
+
+// Generate writes every story's fixtures into root/<story>/e2e, root laid
+// out as the stories directory is.
+func Generate(root string) error {
+	for story, gen := range generators {
+		dir := filepath.Join(root, story, "e2e")
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return err
+		}
+		if err := gen(dir); err != nil {
+			return fmt.Errorf("%s: %w", story, err)
+		}
+	}
+	return nil
 }
 
 // funcs are the template functions every template here may call: dict
@@ -49,22 +59,6 @@ var funcs = template.FuncMap{
 	},
 }
 
-func main() {
-	if len(os.Args) != 3 {
-		_, _ = fmt.Fprintln(os.Stderr, "usage: e2e-fixtures <story number> <story e2e directory>")
-		os.Exit(2)
-	}
-	gen, ok := generators[os.Args[1]]
-	if !ok {
-		_, _ = fmt.Fprintf(os.Stderr, "e2e-fixtures: story %s has no fixtures\n", os.Args[1])
-		os.Exit(2)
-	}
-	if err := gen(os.Args[2], os.Stdout); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "e2e-fixtures:", err)
-		os.Exit(1)
-	}
-}
-
 // writeTemplate writes t executed on data to dir/name.
 func writeTemplate(dir, name string, t *template.Template, data any) error {
 	f, err := os.Create(filepath.Join(dir, name))
@@ -76,6 +70,15 @@ func writeTemplate(dir, name string, t *template.Template, data any) error {
 		return err
 	}
 	return f.Close()
+}
+
+// writePatch writes spec as the JSON merge patch {"spec": spec} to dir/name.
+func writePatch(dir, name string, spec map[string]string) error {
+	raw, err := json.Marshal(map[string]any{"spec": spec})
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, name), append(raw, '\n'), 0o600)
 }
 
 // keys generates an identity and one signing key, signing-1, of kind, and
