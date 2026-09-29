@@ -24,7 +24,7 @@ func Setup(ctx context.Context, mgr ctrl.Manager, d Distributor, s Sessions, rec
 	c := mgr.GetClient()
 	for _, r := range []interface{ SetupWithManager(ctrl.Manager) error }{
 		&OperatorReconciler{Client: c, Distributor: d, Recorder: rec},
-		&SystemAccountReconciler{Client: c, Distributor: d, RosterChanges: systemAccounts},
+		&SystemAccountReconciler{Client: c, Distributor: d, RosterChanges: systemAccounts, Recorder: rec},
 		&AccountReconciler{Client: c, Distributor: d, RosterChanges: accounts, Recorder: rec},
 		&OperatorTrustReconciler{Client: c},
 		&AccountTrustReconciler{Client: c},

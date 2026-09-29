@@ -47,7 +47,7 @@ func newPlane(t *testing.T) *plane {
 	require.NoError(t, err)
 	p.operator, err = jwt.DecodeOperatorClaims(opJWT)
 	require.NoError(t, err)
-	p.jwts[p.sysPub], err = jwtplane.SignSystemAccount(jwtplane.SystemAccount{Name: "SYS", Keys: sys, StepdownAccounts: []string{p.aPub}}, op, now)
+	p.jwts[p.sysPub], err = jwtplane.SignSystemAccount(jwtplane.SystemAccount{Name: "SYS", Keys: sys, StepdownAccounts: []string{p.aPub}}, op)
 	require.NoError(t, err)
 	stepdown, err := jwtplane.ExportPreset(jwtplane.ExportPresetJetStreamStepdown)
 	require.NoError(t, err)

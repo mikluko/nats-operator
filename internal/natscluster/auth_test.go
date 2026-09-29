@@ -71,7 +71,7 @@ func (p testPlane) sign(t *testing.T, op jwtplane.Keys, sys jwtplane.SystemAccou
 	t.Helper()
 	opJWT, err := jwtplane.SignOperator(jwtplane.Operator{Name: "demo", Keys: op, SystemAccount: publicKey(t, p.sys.Identity)})
 	require.NoError(t, err)
-	sysJWT, err := jwtplane.SignSystemAccount(sys, op, time.Now())
+	sysJWT, err := jwtplane.SignSystemAccount(sys, op)
 	require.NoError(t, err)
 	trust, err := ParseTrust(opJWT, sysJWT)
 	require.NoError(t, err)
@@ -118,7 +118,7 @@ func TestParseTrust(t *testing.T) {
 	}()
 	require.NoError(t, err)
 	strangerSys := jwtplane.Keys{Identity: newTestPair(t, nkeys.PrefixByteAccount), Signing: p.sys.Signing}
-	strangerJWT, err := jwtplane.SignSystemAccount(jwtplane.SystemAccount{Name: "SYS", Keys: strangerSys}, p.op, time.Now())
+	strangerJWT, err := jwtplane.SignSystemAccount(jwtplane.SystemAccount{Name: "SYS", Keys: strangerSys}, p.op)
 	require.NoError(t, err)
 
 	for _, tt := range []struct {

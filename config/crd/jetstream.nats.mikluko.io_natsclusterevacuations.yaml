@@ -57,7 +57,9 @@ spec:
             description: NatsClusterEvacuationSpec is the desired state of an evacuation.
             properties:
               connectionRef:
-                description: ConnectionRef names a NatsConnection with system credentials.
+                description: |-
+                  ConnectionRef names a NatsConnection with system credentials; it is
+                  immutable.
                 properties:
                   name:
                     description: Name of the referenced object.
@@ -71,8 +73,11 @@ spec:
                 required:
                 - name
                 type: object
+                x-kubernetes-validations:
+                - message: connectionRef is immutable
+                  rule: self == oldSelf
               from:
-                description: From is the NATS cluster emptied.
+                description: From is the NATS cluster emptied; it is immutable.
                 properties:
                   cluster:
                     description: Cluster is the NATS cluster's name.
@@ -81,8 +86,11 @@ spec:
                 required:
                 - cluster
                 type: object
+                x-kubernetes-validations:
+                - message: from is immutable
+                  rule: self == oldSelf
               to:
-                description: To is where the streams are moved.
+                description: To is where the streams are moved; it is immutable.
                 properties:
                   serverTags:
                     description: |-
@@ -95,6 +103,9 @@ spec:
                 required:
                 - serverTags
                 type: object
+                x-kubernetes-validations:
+                - message: to is immutable
+                  rule: self == oldSelf
             required:
             - connectionRef
             - from

@@ -84,7 +84,8 @@ spec:
               connectionRef:
                 description: |-
                   ConnectionRef names the NatsConnection whose credentials decide the
-                  account, the stream's own when StreamRef is set and this is omitted.
+                  account, the stream's own when StreamRef is set and this is omitted;
+                  it is immutable.
                 properties:
                   name:
                     description: Name of the referenced object.
@@ -216,12 +217,15 @@ spec:
               sampleFrequency:
                 type: string
               stream:
-                description: Stream is the server-side name of a stream with no resource.
+                description: |-
+                  Stream is the server-side name of a stream with no resource; it is
+                  immutable.
                 minLength: 1
                 type: string
               streamRef:
-                description: StreamRef names the NatsStream the consumer waits for
-                  and consumes.
+                description: |-
+                  StreamRef names the NatsStream the consumer waits for and consumes;
+                  it is immutable.
                 properties:
                   name:
                     description: Name of the referenced object.
@@ -248,6 +252,15 @@ spec:
               rule: has(self.stream) != has(self.streamRef)
             - message: connectionRef is required unless streamRef is set
               rule: has(self.connectionRef) || has(self.streamRef)
+            - message: connectionRef is immutable
+              rule: has(self.connectionRef) == has(oldSelf.connectionRef) && (!has(self.connectionRef)
+                || self.connectionRef == oldSelf.connectionRef)
+            - message: stream is immutable
+              rule: has(self.stream) == has(oldSelf.stream) && (!has(self.stream)
+                || self.stream == oldSelf.stream)
+            - message: streamRef is immutable
+              rule: has(self.streamRef) == has(oldSelf.streamRef) && (!has(self.streamRef)
+                || self.streamRef == oldSelf.streamRef)
             - message: deliverPolicy is immutable unless recreateOnImmutableChange
                 is set
               rule: (has(self.recreateOnImmutableChange) && self.recreateOnImmutableChange)

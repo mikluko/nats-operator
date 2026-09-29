@@ -96,10 +96,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `NatsStream` `status.transfer` reports a move to another NATS cluster while it runs.
 - Deleting a JetStream resource whose `NatsConnection` is gone or no longer admitted leaves its server object.
 - The JetStream controller manages the key-value buckets and object stores `NatsKeyValue` and `NatsObjectStore` declare.
+- `NatsStream`, `NatsConsumer`, `NatsKeyValue` and `NatsObjectStore` `spec.connectionRef`, and `NatsConsumer` `spec.stream` and `spec.streamRef`, cannot change after creation.
 - A JetStream object the servers refuse as invalid goes Terminal; one they cannot place is retried.
 - `NatsSystemBalancer` evens leaders, and optionally copies, across the servers of one NATS cluster over every account.
 - `NatsBalancer` evens leaders, and optionally copies, within pools of one account's streams.
 - `NatsClusterEvacuation` moves every JetStream object off one NATS cluster to servers carrying the target tags.
+- `NatsClusterEvacuation` `spec.connectionRef`, `spec.from` and `spec.to` cannot change after creation.
 - `NatsClusterEvacuation` `status.remaining` counts the streams still to leave the source cluster.
 - A `NatsStream` whose stream matches spec but whose transfer or consumers cannot be read reads `Ready` False, reason `ObserveFailed`, and is retried with backoff.
 - The API server refuses a `NatsBalancer` or `NatsSystemBalancer` `interval` that is not positive.

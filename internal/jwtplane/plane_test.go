@@ -42,7 +42,7 @@ func startPlane(t *testing.T) plane {
 
 	opJWT, err := jwtplane.SignOperator(jwtplane.Operator{Name: "op", Keys: op, SystemAccount: sysPub})
 	require.NoError(t, err)
-	sysJWT, err := jwtplane.SignSystemAccount(jwtplane.SystemAccount{Name: "SYS", Keys: sys, StepdownAccounts: []string{aPub}}, op, now)
+	sysJWT, err := jwtplane.SignSystemAccount(jwtplane.SystemAccount{Name: "SYS", Keys: sys, StepdownAccounts: []string{aPub}}, op)
 	require.NoError(t, err)
 
 	execute := jwtplane.Export{Name: "execute", Type: jwt.Service, Subject: "a.execute", Private: true, Importers: []string{bPub}}

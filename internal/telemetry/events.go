@@ -61,8 +61,8 @@ var (
 	}
 	JWTPushed = Event{
 		Reason: "JWTPushed", Type: corev1.EventTypeNormal, Action: "Push", Controller: AuthController,
-		Regarding: []string{"NatsOperator", "NatsAccount"},
-		When:      "A newly signed account JWT, or a NatsOperator's system account JWT, is pushed to the servers.",
+		Regarding: []string{"NatsSystemAccount", "NatsAccount"},
+		When:      "A newly signed account or system account JWT is pushed to the servers.",
 	}
 	JWTHeld = Event{
 		Reason: "JWTHeld", Type: corev1.EventTypeWarning, Action: "Sign", Controller: AuthController,

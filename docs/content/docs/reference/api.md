@@ -1000,9 +1000,9 @@ NatsClusterEvacuationSpec is the desired state of an evacuation.\
 Appears on: [NatsClusterEvacuation](#NatsClusterEvacuation).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `connectionRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | ConnectionRef names a NatsConnection with system credentials. |
-| `from` | [{{< type "EvacuationSource" >}}](#EvacuationSource) | Yes | From is the NATS cluster emptied. |
-| `to` | [{{< type "EvacuationTarget" >}}](#EvacuationTarget) | Yes | To is where the streams are moved. |
+| `connectionRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | ConnectionRef names a NatsConnection with system credentials; it is immutable. |
+| `from` | [{{< type "EvacuationSource" >}}](#EvacuationSource) | Yes | From is the NATS cluster emptied; it is immutable. |
+| `to` | [{{< type "EvacuationTarget" >}}](#EvacuationTarget) | Yes | To is where the streams are moved; it is immutable. |
 
 ### NatsClusterEvacuationStatus {#NatsClusterEvacuationStatus}
 NatsClusterEvacuationStatus is the observed state of an evacuation.\
@@ -1033,9 +1033,9 @@ NatsConsumerSpec is the desired state of a consumer. deliverPolicy, ackPolicy, r
 Appears on: [NatsConsumer](#NatsConsumer).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `connectionRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | No | ConnectionRef names the NatsConnection whose credentials decide the account, the stream's own when StreamRef is set and this is omitted. |
-| `stream` | {{< type "string" >}} | No | Stream is the server-side name of a stream with no resource. |
-| `streamRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | No | StreamRef names the NatsStream the consumer waits for and consumes. |
+| `connectionRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | No | ConnectionRef names the NatsConnection whose credentials decide the account, the stream's own when StreamRef is set and this is omitted; it is immutable. |
+| `stream` | {{< type "string" >}} | No | Stream is the server-side name of a stream with no resource; it is immutable. |
+| `streamRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | No | StreamRef names the NatsStream the consumer waits for and consumes; it is immutable. |
 | `adoptionPolicy` | [{{< type "AdoptionPolicy" >}}](#AdoptionPolicy) | No | AdoptionPolicy is what happens to an object of the same name the controller does not own. Default: `Never`. |
 | `terminalPolicy` | [{{< type "TerminalPolicy" >}}](#TerminalPolicy) | No | TerminalPolicy is what a Terminal condition waits for. Default: `Hold`. |
 | `deletionPolicy` | [{{< type "DeletionPolicy" >}}](#DeletionPolicy) | No | DeletionPolicy is what deleting the resource does to the consumer. Default: `Delete`. |
@@ -1100,7 +1100,7 @@ NatsKeyValueSpec is the desired state of a key-value bucket. The fields of the i
 Appears on: [NatsKeyValue](#NatsKeyValue).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `connectionRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | ConnectionRef names the NatsConnection whose credentials decide the account. |
+| `connectionRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | ConnectionRef names the NatsConnection whose credentials decide the account; it is immutable. |
 | `adoptionPolicy` | [{{< type "AdoptionPolicy" >}}](#AdoptionPolicy) | No | AdoptionPolicy is what happens to an object of the same name the controller does not own. Default: `Never`. |
 | `terminalPolicy` | [{{< type "TerminalPolicy" >}}](#TerminalPolicy) | No | TerminalPolicy is what a Terminal condition waits for. Default: `Hold`. |
 | `deletionPolicy` | [{{< type "DeletionPolicy" >}}](#DeletionPolicy) | No | DeletionPolicy is what deleting the resource does to the bucket. Default: `Retain`. |
@@ -1147,7 +1147,7 @@ NatsObjectStoreSpec is the desired state of an object store. The fields of the i
 Appears on: [NatsObjectStore](#NatsObjectStore).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `connectionRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | ConnectionRef names the NatsConnection whose credentials decide the account. |
+| `connectionRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | ConnectionRef names the NatsConnection whose credentials decide the account; it is immutable. |
 | `adoptionPolicy` | [{{< type "AdoptionPolicy" >}}](#AdoptionPolicy) | No | AdoptionPolicy is what happens to an object of the same name the controller does not own. Default: `Never`. |
 | `terminalPolicy` | [{{< type "TerminalPolicy" >}}](#TerminalPolicy) | No | TerminalPolicy is what a Terminal condition waits for. Default: `Hold`. |
 | `deletionPolicy` | [{{< type "DeletionPolicy" >}}](#DeletionPolicy) | No | DeletionPolicy is what deleting the resource does to the object store. Default: `Retain`. |
@@ -1188,7 +1188,7 @@ NatsStreamSpec is the desired state of a stream. The fields of the inlined Strea
 Appears on: [NatsStream](#NatsStream).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `connectionRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | ConnectionRef names the NatsConnection whose credentials decide the account. |
+| `connectionRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | ConnectionRef names the NatsConnection whose credentials decide the account; it is immutable. |
 | `adoptionPolicy` | [{{< type "AdoptionPolicy" >}}](#AdoptionPolicy) | No | AdoptionPolicy is what happens to an object of the same name the controller does not own. Default: `Never`. |
 | `terminalPolicy` | [{{< type "TerminalPolicy" >}}](#TerminalPolicy) | No | TerminalPolicy is what a Terminal condition waits for. Default: `Hold`. |
 | `deletionPolicy` | [{{< type "DeletionPolicy" >}}](#DeletionPolicy) | No | DeletionPolicy is what deleting the resource does to the stream. Default: `Retain`. |

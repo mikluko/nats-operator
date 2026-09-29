@@ -8,16 +8,20 @@ import (
 
 // NatsClusterEvacuationSpec is the desired state of an evacuation.
 type NatsClusterEvacuationSpec struct {
-	// ConnectionRef names a NatsConnection with system credentials.
+	// ConnectionRef names a NatsConnection with system credentials; it is
+	// immutable.
 	// +required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="connectionRef is immutable"
 	ConnectionRef natsv1beta1.ObjectReference `json:"connectionRef"`
 
-	// From is the NATS cluster emptied.
+	// From is the NATS cluster emptied; it is immutable.
 	// +required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="from is immutable"
 	From EvacuationSource `json:"from"`
 
-	// To is where the streams are moved.
+	// To is where the streams are moved; it is immutable.
 	// +required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="to is immutable"
 	To EvacuationTarget `json:"to"`
 }
 

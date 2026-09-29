@@ -44,7 +44,7 @@ func newPlane(t *testing.T) plane {
 	require.NoError(t, err)
 	p.opJWT, err = jwtplane.SignOperator(jwtplane.Operator{Name: "op", Keys: op, SystemAccount: p.sysPub})
 	require.NoError(t, err)
-	p.sysJWT, err = jwtplane.SignSystemAccount(jwtplane.SystemAccount{Name: "sys", Keys: sys}, op, time.Now())
+	p.sysJWT, err = jwtplane.SignSystemAccount(jwtplane.SystemAccount{Name: "sys", Keys: sys}, op)
 	require.NoError(t, err)
 	p.accJWT, err = jwtplane.SignAccount(jwtplane.Account{Name: "acc", Keys: acc, Limits: jwtplane.Limits{}}, op, time.Now())
 	require.NoError(t, err)

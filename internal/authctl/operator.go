@@ -30,14 +30,14 @@ import (
 )
 
 // OperatorReconciler signs a NatsOperator's JWT and its live system
-// account's JWT into its status.
+// account's JWT into its status; SystemAccountReconciler pushes the latter.
 type OperatorReconciler struct {
 	client.Client
-	// Distributor receives the system account JWT whenever it is newly
-	// signed; nil pushes nothing.
+	// Distributor is asked for the revocations and the newest JWT the
+	// servers hold for the system account, and receives deletes; nil asks
+	// and deletes nothing.
 	Distributor Distributor
-	// Recorder records system account JWTs pushed and held; nil records
-	// none.
+	// Recorder records system account JWTs held; nil records none.
 	Recorder events.EventRecorder
 }
 
@@ -149,23 +149,17 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 		Keys:             sysKeys.Keys,
 		StepdownAccounts: stepdownAccounts(accounts),
 		Revocations:      signedRevocations(sd.revocations),
-	}, keys.Keys, time.Now())
+	}, keys.Keys)
+
 	if err != nil {
 		notReady(ReasonInvalidKeys, err.Error())
 		return 0, nil
 	}
 	resign := prev == nil || prev.Name != sys.Name || !sameAccountClaims(prev.JWT, sysJWT)
 	if !resign && !unrecovered(st.Conditions) {
-		resign = repushStale(ctx, r.Distributor, client.ObjectKeyFromObject(op), prev.JWT)
+		resign = superseded(ctx, r.Distributor, client.ObjectKeyFromObject(op), prev.JWT)
 	}
 	if resign {
-		err := push(ctx, r.Distributor, client.ObjectKeyFromObject(op), sysJWT)
-		if err := ignoreUnreachable(err); err != nil {
-			return 0, fmt.Errorf("push system account JWT: %w", err)
-		}
-		if r.Distributor != nil && err == nil {
-			telemetry.Emit(r.Recorder, op, telemetry.JWTPushed, "system account JWT of %s pushed", sysPub)
-		}
 		st.SystemAccount = &authv1beta1.SystemAccountStatus{Name: sys.Name, PublicKey: sysPub, JWT: sysJWT}
 	}
 

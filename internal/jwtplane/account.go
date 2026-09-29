@@ -141,7 +141,7 @@ type SystemAccount struct {
 
 // SignSystemAccount returns the system account JWT, signed by the NATS
 // operator's active signing key. It never expires and has JetStream disabled.
-func SignSystemAccount(s SystemAccount, operator Keys, now time.Time) (string, error) {
+func SignSystemAccount(s SystemAccount, operator Keys) (string, error) {
 	c, err := accountClaims(s.Name, s.Keys, s.Revocations)
 	if err != nil {
 		return "", err

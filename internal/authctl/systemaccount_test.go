@@ -3,13 +3,13 @@ package authctl
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/nats-io/nkeys"
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -29,7 +29,7 @@ func TestSystemAccountReconciler_Push(t *testing.T) {
 	opKeys := jwtplane.Keys{Identity: pair(nkeys.PrefixByteOperator), Signing: []jwtplane.SigningKey{{Name: "s", Pair: pair(nkeys.PrefixByteOperator)}}}
 	sysPub, err := id.PublicKey()
 	require.NoError(t, err)
-	sysJWT, err := jwtplane.SignSystemAccount(jwtplane.SystemAccount{Name: "sys", Keys: jwtplane.Keys{Identity: id, Signing: []jwtplane.SigningKey{{Name: "s", Pair: sk}}}}, opKeys, time.Now())
+	sysJWT, err := jwtplane.SignSystemAccount(jwtplane.SystemAccount{Name: "sys", Keys: jwtplane.Keys{Identity: id, Signing: []jwtplane.SigningKey{{Name: "s", Pair: sk}}}}, opKeys)
 	require.NoError(t, err)
 	idSeed, err := id.Seed()
 	require.NoError(t, err)
@@ -42,10 +42,12 @@ func TestSystemAccountReconciler_Push(t *testing.T) {
 		unrecovered bool
 		wantPushes  int
 		wantTime    bool
+		wantEvents  []string
 	}{
-		{"reached", &countingDistributor{after: authv1beta1.Distribution{Servers: 1, Current: 1}}, false, 1, true},
-		{"unreachable", &countingDistributor{pushErr: unreachable, currentErr: unreachable}, false, 1, false},
-		{"revocations unrecovered", &countingDistributor{}, true, 0, false},
+		{"reached", &countingDistributor{after: authv1beta1.Distribution{Servers: 1, Current: 1}}, false, 1, true,
+			[]string{"Normal JWTPushed system account JWT of " + sysPub + " pushed"}},
+		{"unreachable", &countingDistributor{pushErr: unreachable, currentErr: unreachable}, false, 1, false, nil},
+		{"revocations unrecovered", &countingDistributor{}, true, 0, false, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -76,7 +78,8 @@ func TestSystemAccountReconciler_Push(t *testing.T) {
 			c := fake.NewClientBuilder().WithScheme(s).WithObjects(op, sys, secret).WithStatusSubresource(sys).
 				WithIndex(&authv1beta1.NatsUser{}, userAccountField, func(client.Object) []string { return nil }).
 				Build()
-			r := &SystemAccountReconciler{Client: c, Distributor: tt.d}
+			rec := events.NewFakeRecorder(10)
+			r := &SystemAccountReconciler{Client: c, Distributor: tt.d, Recorder: rec}
 			_, err := r.Reconcile(t.Context(), reconcile.Request{NamespacedName: client.ObjectKeyFromObject(sys)})
 			require.NoError(t, err)
 
@@ -85,6 +88,7 @@ func TestSystemAccountReconciler_Push(t *testing.T) {
 			require.Equal(t, tt.wantPushes, tt.d.pushes)
 			require.NotNil(t, sys.Status.Distribution)
 			require.Equal(t, tt.wantTime, sys.Status.Distribution.LastPushTime != nil, "LastPushTime %v", sys.Status.Distribution.LastPushTime)
+			require.Equal(t, tt.wantEvents, drained(rec))
 		})
 	}
 }

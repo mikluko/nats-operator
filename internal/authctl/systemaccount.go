@@ -9,6 +9,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -25,14 +26,16 @@ import (
 )
 
 // SystemAccountReconciler keeps a NatsSystemAccount's keys, revocations and
-// distribution; its JWT is signed into the status of the NatsOperator
-// naming it. The JWT is not pushed again while that NatsOperator's
-// RevocationsUnrecovered is True.
+// distribution, and is the only pusher of its JWT, which is signed into the
+// status of the NatsOperator naming it. The JWT is not pushed while that
+// NatsOperator's RevocationsUnrecovered is True.
 type SystemAccountReconciler struct {
 	client.Client
 	// Distributor receives every newly signed JWT, and again where servers
 	// lack it; nil pushes nothing.
 	Distributor Distributor
+	// Recorder records JWTs pushed; nil records none.
+	Recorder events.EventRecorder
 	// RosterChanges receives a NatsOperator whose servers changed; the
 	// system accounts naming it are reconciled. Nil receives nothing.
 	RosterChanges <-chan event.GenericEvent
@@ -119,8 +122,12 @@ func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta
 				return 0, fmt.Errorf("push system account JWT: %w", err)
 			}
 		}
+		sent := !held && r.Distributor != nil && err == nil
+		if sent {
+			telemetry.Emit(r.Recorder, sys, telemetry.JWTPushed, "system account JWT of %s pushed", pub)
+		}
 		st.JWTHash = hash
-		st.Distribution = pushed(st.Distribution, time.Now(), !held && r.Distributor != nil && err == nil)
+		st.Distribution = pushed(st.Distribution, time.Now(), sent)
 	}
 	conditions.Set(&st.Conditions, sys.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionTrue, Reason: ReasonSigned})
 	if held {

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"text/template"
-	"time"
 
 	"github.com/nats-io/nkeys"
 
@@ -48,7 +47,7 @@ func acceptance(dir string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	systemJWT, err := jwtplane.SignSystemAccount(jwtplane.SystemAccount{Name: "sys", Keys: sys}, op, time.Now())
+	systemJWT, err := jwtplane.SignSystemAccount(jwtplane.SystemAccount{Name: "sys", Keys: sys}, op)
 	if err != nil {
 		return err
 	}

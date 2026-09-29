@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/nats-io/jwt/v2"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -70,9 +71,10 @@ func recordDistribution(conds *[]metav1.Condition, gen int64, cond metav1.Condit
 	}
 }
 
-// repushStale pushes token where a server trusting operator lacks it and
-// reports whether d refused it with ErrStaleJWT; false with d nil.
-func repushStale(ctx context.Context, d Distributor, operator types.NamespacedName, token string) bool {
+// superseded reports whether a server trusting operator lacks token and
+// the servers hold a JWT for its account issued after it; false with d nil
+// or with a server not answering.
+func superseded(ctx context.Context, d Distributor, operator types.NamespacedName, token string) bool {
 	if d == nil || token == "" {
 		return false
 	}
@@ -80,7 +82,16 @@ func repushStale(ctx context.Context, d Distributor, operator types.NamespacedNa
 	if err != nil || got.Current >= got.Servers {
 		return false
 	}
-	return errors.Is(d.Push(ctx, operator, token), ErrStaleJWT)
+	c, err := jwt.DecodeAccountClaims(token)
+	if err != nil {
+		return false
+	}
+	held, err := d.Lookup(ctx, operator, c.Subject)
+	if err != nil || held == "" {
+		return false
+	}
+	hc, err := jwt.DecodeAccountClaims(held)
+	return err == nil && hc.IssuedAt > c.IssuedAt
 }
 
 // ignoreUnreachable is err, or nil when err is ErrUnreachable.

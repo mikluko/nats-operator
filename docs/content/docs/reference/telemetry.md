@@ -118,6 +118,6 @@ The controllers record these through the `events.k8s.io` API, regarding the reso
 | `RolloutStep` | Normal | cluster-controller | `NatsCluster` | A rollout restarts a server, or starts removing or replacing one. |
 | `GateBlocked` | Warning | cluster-controller | `NatsCluster` | A rollout's gate has been closed long enough for Progressing to read GateBlocked. |
 | `ReconcileFailed` | Warning | cluster-controller | `NatsCluster` | A reconcile fails on anything but a write conflict; Progressing reads ReconcileFailed with the same message. |
-| `JWTPushed` | Normal | auth-controller | `NatsOperator`, `NatsAccount` | A newly signed account JWT, or a NatsOperator's system account JWT, is pushed to the servers. |
+| `JWTPushed` | Normal | auth-controller | `NatsSystemAccount`, `NatsAccount` | A newly signed account or system account JWT is pushed to the servers. |
 | `JWTHeld` | Warning | auth-controller | `NatsOperator`, `NatsAccount` | An account JWT is not signed because its revocations cannot be recovered from the servers. |
 | `UserKicked` | Normal | auth-controller | `NatsUser` | A deleted user's live connections are closed. |

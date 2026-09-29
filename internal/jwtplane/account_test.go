@@ -280,7 +280,7 @@ func TestSignSystemAccount(t *testing.T) {
 	sys := newKeys(t, nkeys.PrefixByteAccount, "s")
 	payments := pub(t, newPair(t, nkeys.PrefixByteAccount))
 
-	tok, err := jwtplane.SignSystemAccount(jwtplane.SystemAccount{Name: "sys", Keys: sys, StepdownAccounts: []string{payments}}, op, time.Now())
+	tok, err := jwtplane.SignSystemAccount(jwtplane.SystemAccount{Name: "sys", Keys: sys, StepdownAccounts: []string{payments}}, op)
 	require.NoError(t, err)
 	c, err := jwt.DecodeAccountClaims(tok)
 	require.NoError(t, err)

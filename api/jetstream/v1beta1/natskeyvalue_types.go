@@ -72,8 +72,9 @@ type KeyValueConfig struct {
 // mean: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#KeyValueConfig.
 type NatsKeyValueSpec struct {
 	// ConnectionRef names the NatsConnection whose credentials decide the
-	// account.
+	// account; it is immutable.
 	// +required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="connectionRef is immutable"
 	ConnectionRef natsv1beta1.ObjectReference `json:"connectionRef"`
 
 	Policies `json:",inline"`

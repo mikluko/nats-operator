@@ -251,6 +251,9 @@ func testTransitionRules(t *testing.T, c client.Client) {
 	user := func(ref, spec string) string {
 		return manifest("NatsUser", "u", "{accountRef: "+ref+spec+"}")
 	}
+	evacuation := func(conn, from, tag string) string {
+		return manifest("NatsClusterEvacuation", "e", "{connectionRef: {name: "+conn+"}, from: {cluster: "+from+"}, to: {serverTags: ["+tag+"]}}")
+	}
 	tests := []struct {
 		name          string
 		before, after string
@@ -306,6 +309,27 @@ func testTransitionRules(t *testing.T, c client.Client) {
 		{"key-value storage late-initialized", manifest("NatsKeyValue", "kv", "{connectionRef: {name: c}}"), manifest("NatsKeyValue", "kv", "{connectionRef: {name: c}, storage: Memory}"), ""},
 		{"object store storage changed", manifest("NatsObjectStore", "os", "{connectionRef: {name: c}, storage: File}"), manifest("NatsObjectStore", "os", "{connectionRef: {name: c}, storage: Memory}"), "storage is immutable"},
 		{"object store renamed", manifest("NatsObjectStore", "os", "{connectionRef: {name: c}, name: a}"), manifest("NatsObjectStore", "os", "{connectionRef: {name: c}, name: b}"), "the bucket name is immutable"},
+
+		{"stream connection changed", stream("s", ""), manifest("NatsStream", "s", "{connectionRef: {name: d}}"), "connectionRef is immutable"},
+		{"stream connection moved to another namespace", stream("s", ""), manifest("NatsStream", "s", "{connectionRef: {name: c, namespace: other}}"), "connectionRef is immutable"},
+		{"stream connection unchanged", stream("s", ""), stream("s", ", maxMsgs: 5"), ""},
+		{"key-value connection changed", manifest("NatsKeyValue", "kv", "{connectionRef: {name: c}}"), manifest("NatsKeyValue", "kv", "{connectionRef: {name: d}}"), "connectionRef is immutable"},
+		{"key-value connection unchanged", manifest("NatsKeyValue", "kv", "{connectionRef: {name: c}}"), manifest("NatsKeyValue", "kv", "{connectionRef: {name: c}}"), ""},
+		{"object store connection changed", manifest("NatsObjectStore", "os", "{connectionRef: {name: c}}"), manifest("NatsObjectStore", "os", "{connectionRef: {name: d}}"), "connectionRef is immutable"},
+		{"object store connection unchanged", manifest("NatsObjectStore", "os", "{connectionRef: {name: c}}"), manifest("NatsObjectStore", "os", "{connectionRef: {name: c}}"), ""},
+		{"consumer connection changed", consumer(""), manifest("NatsConsumer", "k", "{connectionRef: {name: d}, stream: S}"), "connectionRef is immutable"},
+		{"consumer connection set", manifest("NatsConsumer", "k", "{streamRef: {name: s}}"), manifest("NatsConsumer", "k", "{connectionRef: {name: c}, streamRef: {name: s}}"), "connectionRef is immutable"},
+		{"consumer connection removed", manifest("NatsConsumer", "k", "{connectionRef: {name: c}, streamRef: {name: s}}"), manifest("NatsConsumer", "k", "{streamRef: {name: s}}"), "connectionRef is immutable"},
+		{"consumer stream changed", consumer(""), manifest("NatsConsumer", "k", "{connectionRef: {name: c}, stream: T}"), "stream is immutable"},
+		{"consumer stream swapped for a streamRef", consumer(""), manifest("NatsConsumer", "k", "{connectionRef: {name: c}, streamRef: {name: s}}"), "stream is immutable"},
+		{"consumer streamRef changed", manifest("NatsConsumer", "k", "{streamRef: {name: s}}"), manifest("NatsConsumer", "k", "{streamRef: {name: t}}"), "streamRef is immutable"},
+		{"consumer stream unchanged", consumer(""), consumer(", ackWait: 1m"), ""},
+		{"consumer streamRef unchanged", manifest("NatsConsumer", "k", "{streamRef: {name: s}}"), manifest("NatsConsumer", "k", "{streamRef: {name: s}, ackWait: 1m}"), ""},
+
+		{"evacuation connection changed", evacuation("c", "a", "t"), evacuation("d", "a", "t"), "connectionRef is immutable"},
+		{"evacuation source changed", evacuation("c", "a", "t"), evacuation("c", "b", "t"), "from is immutable"},
+		{"evacuation target changed", evacuation("c", "a", "t"), evacuation("c", "a", "u"), "to is immutable"},
+		{"evacuation unchanged", evacuation("c", "a", "t"), evacuation("c", "a", "t"), ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

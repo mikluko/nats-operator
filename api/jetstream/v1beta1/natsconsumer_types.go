@@ -171,6 +171,9 @@ type ConsumerConfig struct {
 // their like-named fields there mean: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#ConsumerConfig.
 // +kubebuilder:validation:XValidation:rule="has(self.stream) != has(self.streamRef)",message="set exactly one of stream and streamRef"
 // +kubebuilder:validation:XValidation:rule="has(self.connectionRef) || has(self.streamRef)",message="connectionRef is required unless streamRef is set"
+// +kubebuilder:validation:XValidation:rule="has(self.connectionRef) == has(oldSelf.connectionRef) && (!has(self.connectionRef) || self.connectionRef == oldSelf.connectionRef)",message="connectionRef is immutable"
+// +kubebuilder:validation:XValidation:rule="has(self.stream) == has(oldSelf.stream) && (!has(self.stream) || self.stream == oldSelf.stream)",message="stream is immutable"
+// +kubebuilder:validation:XValidation:rule="has(self.streamRef) == has(oldSelf.streamRef) && (!has(self.streamRef) || self.streamRef == oldSelf.streamRef)",message="streamRef is immutable"
 // +kubebuilder:validation:XValidation:rule="(has(self.recreateOnImmutableChange) && self.recreateOnImmutableChange) || !has(self.deliverPolicy) || !has(oldSelf.deliverPolicy) || self.deliverPolicy == oldSelf.deliverPolicy",message="deliverPolicy is immutable unless recreateOnImmutableChange is set"
 // +kubebuilder:validation:XValidation:rule="(has(self.recreateOnImmutableChange) && self.recreateOnImmutableChange) || !has(self.ackPolicy) || !has(oldSelf.ackPolicy) || self.ackPolicy == oldSelf.ackPolicy",message="ackPolicy is immutable unless recreateOnImmutableChange is set"
 // +kubebuilder:validation:XValidation:rule="(has(self.recreateOnImmutableChange) && self.recreateOnImmutableChange) || !has(self.replayPolicy) || !has(oldSelf.replayPolicy) || self.replayPolicy == oldSelf.replayPolicy",message="replayPolicy is immutable unless recreateOnImmutableChange is set"
@@ -181,16 +184,19 @@ type ConsumerConfig struct {
 // +kubebuilder:validation:XValidation:rule="(has(self.recreateOnImmutableChange) && self.recreateOnImmutableChange) || !has(self.maxWaiting) || !has(oldSelf.maxWaiting) || self.maxWaiting == oldSelf.maxWaiting",message="maxWaiting is immutable unless recreateOnImmutableChange is set"
 type NatsConsumerSpec struct {
 	// ConnectionRef names the NatsConnection whose credentials decide the
-	// account, the stream's own when StreamRef is set and this is omitted.
+	// account, the stream's own when StreamRef is set and this is omitted;
+	// it is immutable.
 	// +optional
 	ConnectionRef *natsv1beta1.ObjectReference `json:"connectionRef,omitempty"`
 
-	// Stream is the server-side name of a stream with no resource.
+	// Stream is the server-side name of a stream with no resource; it is
+	// immutable.
 	// +optional
 	// +kubebuilder:validation:MinLength=1
 	Stream string `json:"stream,omitempty"`
 
-	// StreamRef names the NatsStream the consumer waits for and consumes.
+	// StreamRef names the NatsStream the consumer waits for and consumes;
+	// it is immutable.
 	// +optional
 	StreamRef *natsv1beta1.ObjectReference `json:"streamRef,omitempty"`
 

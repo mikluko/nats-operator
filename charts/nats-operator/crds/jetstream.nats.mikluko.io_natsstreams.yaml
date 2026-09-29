@@ -101,7 +101,7 @@ spec:
               connectionRef:
                 description: |-
                   ConnectionRef names the NatsConnection whose credentials decide the
-                  account.
+                  account; it is immutable.
                 properties:
                   name:
                     description: Name of the referenced object.
@@ -115,6 +115,9 @@ spec:
                 required:
                 - name
                 type: object
+                x-kubernetes-validations:
+                - message: connectionRef is immutable
+                  rule: self == oldSelf
               consumerLimits:
                 description: StreamConsumerLimits are defaults for the stream's consumers.
                 properties:
