@@ -1,6 +1,7 @@
 package natscluster
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -23,7 +24,8 @@ import (
 
 // TestEnvtestLeafnodes drives the reconciler against a real API server for
 // story 10: the CEL rule on jetstream.domain, a leaf's remotes Secret and
-// status, and a hub's leafnode Service, certificate wait and auth rule.
+// status, a remote rendered out and back as its grant is withdrawn and
+// restored, and a hub's leafnode Service, certificate wait and auth rule.
 func TestEnvtestLeafnodes(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")
@@ -134,6 +136,86 @@ func TestEnvtestLeafnodes(t *testing.T) {
 			err := c.Get(ctx, types.NamespacedName{Namespace: "edge", Name: "edge-site-1-leaf-remotes"}, &corev1.Secret{})
 			require.True(t, apierrors.IsNotFound(err), "%v", err)
 		})
+	})
+
+	t.Run("withdrawing the grant of a remote renders it out", func(t *testing.T) {
+		namespace(t, "leafgrant")
+		namespace(t, "hubs")
+		creds := mintPlane(t).creds(t, newTestKeys(t, nkeys.PrefixByteAccount), leafUser())
+		conn := storyConnection(t, "edge.yaml", "hub", "tls://leaf.prod-east.acme.example:7422", false)
+		conn.Namespace = "hubs"
+		require.NoError(t, c.Create(ctx, conn))
+		require.NoError(t, c.Create(ctx, credsSecret("hubs", "edge-site-1-leaf-creds", creds)))
+		newGrant := func() *natsv1beta1.NatsReferenceGrant {
+			return &natsv1beta1.NatsReferenceGrant{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "hubs", Name: "leafs"},
+				Spec: natsv1beta1.NatsReferenceGrantSpec{
+					From: []natsv1beta1.ReferenceGrantFrom{{Group: clusterv1beta1.GroupVersion.Group, Kind: "NatsCluster", Namespace: "leafgrant"}},
+					To:   []natsv1beta1.ReferenceGrantTo{{Group: natsv1beta1.GroupVersion.Group, Kind: "NatsConnection"}},
+				},
+			}
+		}
+		grant := newGrant()
+		require.NoError(t, c.Create(ctx, grant))
+		nc := storyLeafCluster(t, "edge.yaml", "edge-site-1")
+		nc.Namespace = "leafgrant"
+		nc.Spec.LeafRemotes[0].ConnectionRef.Namespace = "hubs"
+		require.NoError(t, c.Create(ctx, nc))
+		key := client.ObjectKeyFromObject(nc)
+		secretKey := types.NamespacedName{Namespace: "leafgrant", Name: "edge-site-1-leaf-remotes"}
+		reloader := &fakeReloader{c: c}
+		reloader.reset("leafgrant")
+		snap := &sysobs.Snapshot{}
+		for i := range 3 {
+			name := serverName(nc, i)
+			snap.Servers = append(snap.Servers, sysobs.Server{Name: name, ID: name, Version: "2.15.0"})
+		}
+		robs := &fakeObserver{}
+		robs.set(snap)
+		rr := &Reconciler{Client: c, Observer: robs,
+			Reloader: func(context.Context, *clusterv1beta1.NatsCluster) (ServerReloader, error) { return reloader, nil }}
+		reconcile := func(t *testing.T, key types.NamespacedName) *clusterv1beta1.NatsCluster {
+			t.Helper()
+			_, err := rr.Reconcile(ctx, ctrl.Request{NamespacedName: key})
+			require.NoError(t, err)
+			got := &clusterv1beta1.NatsCluster{}
+			require.NoError(t, c.Get(ctx, key, got))
+			return got
+		}
+		configMap := func(t *testing.T) corev1.ConfigMap {
+			t.Helper()
+			var cm corev1.ConfigMap
+			require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "leafgrant", Name: "edge-site-1-0-config"}, &cm))
+			return cm
+		}
+		rendered := func(t *testing.T) string {
+			t.Helper()
+			cm := configMap(t)
+			return cm.Data[configFile]
+		}
+
+		reconcile(t, key)
+		var remotes corev1.Secret
+		require.NoError(t, c.Get(ctx, secretKey, &remotes))
+		require.Equal(t, map[string][]byte{"hubs_hub.creds": creds}, remotes.Data)
+		require.Contains(t, rendered(t), "hubs_hub.creds")
+
+		require.NoError(t, c.Delete(ctx, grant))
+		got := reconcile(t, key)
+		err := c.Get(ctx, secretKey, &corev1.Secret{})
+		require.True(t, apierrors.IsNotFound(err), "%v", err)
+		require.NotContains(t, rendered(t), "leafnodes")
+		require.Equal(t, string(clusterv1beta1.ConfigAppliedByReload), configMap(t).Annotations[AnnotationConfigApply])
+		cond := condition(t, got, ConditionLeafnodesConnected, metav1.ConditionFalse, "NoGrant")
+		require.Contains(t, cond.Message, "leafRemotes[0]: ")
+		require.Equal(t, []clusterv1beta1.LeafRemoteStatus{{ConnectionNamespace: "hubs", ConnectionName: "hub"}}, got.Status.LeafRemotes)
+
+		require.NoError(t, c.Create(ctx, newGrant()))
+		reconcile(t, key)
+		remotes = corev1.Secret{}
+		require.NoError(t, c.Get(ctx, secretKey, &remotes))
+		require.Equal(t, map[string][]byte{"hubs_hub.creds": creds}, remotes.Data)
+		require.Contains(t, rendered(t), "hubs_hub.creds")
 	})
 
 	t.Run("hub leafnodes", func(t *testing.T) {

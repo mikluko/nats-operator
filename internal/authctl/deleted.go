@@ -54,9 +54,8 @@ func recordDeleting(list []authv1beta1.DeletedAccount, accounts []authv1beta1.Na
 }
 
 // deletionRecorded reports whether op's status records d, or would drop it
-// from status.deletedAccounts as pruneDeleted does, given the public keys
-// live in accounts, the NatsAccounts naming op, of which refused are not
-// admitted to it.
+// from status.deletedAccounts as pruneDeleted does, given accounts, the
+// NatsAccounts naming op, and refused, those of them not admitted.
 func deletionRecorded(op *authv1beta1.NatsOperator, accounts []authv1beta1.NatsAccount, refused map[types.NamespacedName]bool, d authv1beta1.DeletedAccount, now time.Time) bool {
 	if slices.ContainsFunc(op.Status.DeletedAccounts, func(e authv1beta1.DeletedAccount) bool {
 		return e.PublicKey == d.PublicKey && e.Expires.Equal(d.Expires)

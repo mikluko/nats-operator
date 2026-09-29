@@ -99,6 +99,21 @@ type LeafRemote struct {
 	// HubAccount is the public key of the hub account Creds sign into,
 	// empty without Creds.
 	HubAccount string
+	// Refusal is why no grant admits Connection, its Reason and Message
+	// set, or nil when one does; a refused remote is neither in the
+	// leafnodes block nor in the remotes Secret.
+	Refusal *metav1.Condition
+}
+
+// admitted returns the remotes of remotes no refusal keeps out.
+func admitted(remotes []LeafRemote) []LeafRemote {
+	var out []LeafRemote
+	for _, r := range remotes {
+		if r.Refusal == nil {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // fileStem names the remote's files in the leaf remotes Secret: namespace
@@ -120,6 +135,7 @@ func leafnodesCertSecretName(nc *clusterv1beta1.NatsCluster) string {
 // l, or nil when nc has neither.
 func leafnodesConfig(nc *clusterv1beta1.NatsCluster, remotes []LeafRemote, l Layout) *LeafnodesConfig {
 	ln := nc.Spec.Leafnodes
+	remotes = admitted(remotes)
 	if ln == nil && len(remotes) == 0 {
 		return nil
 	}
@@ -191,9 +207,9 @@ func leafRefNamespaces(nc *clusterv1beta1.NatsCluster) []string {
 	return out
 }
 
-// readLeafRemotes resolves nc's leafRemotes under trust, nil exactly when nc
-// has no auth plane; a remote it cannot resolve returns nil and the
-// Progressing condition saying why.
+// readLeafRemotes resolves nc's leafRemotes under trust; a remote whose
+// NatsConnection no grant admits carries its Refusal, and any other remote
+// it cannot resolve returns nil and the Progressing condition saying why.
 func readLeafRemotes(ctx context.Context, r client.Reader, nc *clusterv1beta1.NatsCluster, trust *Trust) ([]LeafRemote, *metav1.Condition, error) {
 	notProgressing := func(reason, format string, args ...any) *metav1.Condition {
 		return &metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: reason, Message: fmt.Sprintf(format, args...)}
@@ -212,7 +228,12 @@ func readLeafRemotes(ctx context.Context, r client.Reader, nc *clusterv1beta1.Na
 			return nil, nil, err
 		}
 		if denied != nil {
-			return nil, notProgressing(denied.Reason, "leafRemotes[%d]: %s", i, denied.Message), nil
+			lr.Refusal = &metav1.Condition{Reason: denied.Reason, Message: fmt.Sprintf("leafRemotes[%d]: %s", i, denied.Message)}
+			if err := readRefusedLocalAccount(ctx, r, from, nc, trust, spec, &lr); err != nil {
+				return nil, nil, err
+			}
+			out = append(out, lr)
+			continue
 		}
 		conn := &natsv1beta1.NatsConnection{}
 		if err := r.Get(ctx, lr.Connection, conn); err != nil {
@@ -257,6 +278,16 @@ func readLeafRemotes(ctx context.Context, r client.Reader, nc *clusterv1beta1.Na
 		return nil, notProgressing(ReasonUnsupportedSpec, "a leaf preloading accounts keeps its Full resolver on jetstream.volumeClaimTemplate, which is not set; set it, or set auth.resolver: Cache"), nil
 	}
 	return out, nil, nil
+}
+
+// readRefusedLocalAccount fills refused remote lr's local account as far as
+// it resolves, so the account it preloads stays preloaded.
+func readRefusedLocalAccount(ctx context.Context, r client.Reader, from grant.Referrer, nc *clusterv1beta1.NatsCluster, trust *Trust, spec clusterv1beta1.LeafRemote, lr *LeafRemote) error {
+	if spec.LocalAccountTrustRef == nil {
+		return nil
+	}
+	_, err := readLocalAccount(ctx, r, from, nc, trust, *spec.LocalAccountTrustRef, lr)
+	return err
 }
 
 // readLocalAccount fills lr's local account from the NatsAccountTrust ref
@@ -319,9 +350,10 @@ func checkAccountJWT(trust *Trust, pub, accJWT string) error {
 	return nil
 }
 
-// leafRemotesSecret is the Secret holding each remote's creds as
-// <stem>.creds and CA as <stem>.ca.crt, or nil when nc has no remotes.
+// leafRemotesSecret is the Secret holding each admitted remote's creds as
+// <stem>.creds and CA as <stem>.ca.crt, or nil when nc has none.
 func leafRemotesSecret(nc *clusterv1beta1.NatsCluster, remotes []LeafRemote) *corev1.Secret {
+	remotes = admitted(remotes)
 	if len(remotes) == 0 {
 		return nil
 	}
@@ -504,12 +536,17 @@ func (r *Reconciler) observeLeafs(ctx context.Context, nc *clusterv1beta1.NatsCl
 		meta.RemoveStatusCondition(&st.Conditions, ConditionLeafnodesConnected)
 		return
 	}
-	leafs, err := r.Observer.ObserveLeafs(ctx, nc)
+	var leafs map[string][]sysobs.Leaf
+	var err error
+	if len(admitted(plan.LeafRemotes)) > 0 {
+		leafs, err = r.Observer.ObserveLeafs(ctx, nc)
+	}
 	leafStatus(st, nc, plan, leafs, err)
 }
 
 // leafStatus reports each remote's connected servers and hub account, and
-// LeafnodesConnected: True once every server holds every remote. LEAFZ
+// LeafnodesConnected: False with the first refusal's reason while any
+// remote is refused, and True once every server holds every remote. LEAFZ
 // names no remote, so a server holds one once it has dialed as many
 // connections in its local account as there are remotes binding it.
 func leafStatus(st *clusterv1beta1.NatsClusterStatus, nc *clusterv1beta1.NatsCluster, plan *Plan, leafs map[string][]sysobs.Leaf, observeErr error) {
@@ -524,9 +561,10 @@ func leafStatus(st *clusterv1beta1.NatsClusterStatus, nc *clusterv1beta1.NatsClu
 		}
 		return lr.LocalAccount
 	}
+	rendered := admitted(plan.LeafRemotes)
 	need := map[string]int{}
-	for i := range plan.LeafRemotes {
-		need[account(&plan.LeafRemotes[i])]++
+	for i := range rendered {
+		need[account(&rendered[i])]++
 	}
 	held := map[string]int32{}
 	for _, s := range plan.Servers {
@@ -545,7 +583,8 @@ func leafStatus(st *clusterv1beta1.NatsClusterStatus, nc *clusterv1beta1.NatsClu
 
 	replicas := int32(len(plan.Servers))
 	st.LeafRemotes = nil
-	var short []string
+	var short, refused []string
+	var refusal string
 	for i := range plan.LeafRemotes {
 		lr := &plan.LeafRemotes[i]
 		rs := clusterv1beta1.LeafRemoteStatus{
@@ -554,10 +593,17 @@ func leafStatus(st *clusterv1beta1.NatsClusterStatus, nc *clusterv1beta1.NatsClu
 			Account:             lr.HubAccount,
 			Connected:           prev[lr.Connection],
 		}
-		if leafs != nil {
+		switch {
+		case lr.Refusal != nil:
+			rs.Connected = 0
+			if refusal == "" {
+				refusal = lr.Refusal.Reason
+			}
+			refused = append(refused, lr.Refusal.Message)
+		case leafs != nil:
 			rs.Connected = held[account(lr)]
 		}
-		if rs.Connected < replicas {
+		if lr.Refusal == nil && rs.Connected < replicas {
 			short = append(short, fmt.Sprintf("%s: %d of %d servers connected", lr.Connection, rs.Connected, replicas))
 		}
 		st.LeafRemotes = append(st.LeafRemotes, rs)
@@ -565,6 +611,8 @@ func leafStatus(st *clusterv1beta1.NatsClusterStatus, nc *clusterv1beta1.NatsClu
 
 	c := metav1.Condition{Type: ConditionLeafnodesConnected}
 	switch {
+	case len(refused) > 0:
+		c.Status, c.Reason, c.Message = metav1.ConditionFalse, refusal, strings.Join(append(refused, short...), "; ")
 	case leafs == nil:
 		c.Status, c.Reason = metav1.ConditionUnknown, ReasonObservationFailed
 		if observeErr != nil {

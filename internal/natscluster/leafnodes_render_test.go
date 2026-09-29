@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -198,6 +199,36 @@ func TestRender_Leaf(t *testing.T) {
 		require.Equal(t, map[string]any{f.p.trust.SystemAccount: f.p.trust.SystemAccountJWT, tel: f.telJWT}, m["resolver_preload"])
 		require.Len(t, leafRemotesSecret(nc, remotes).Data, 4)
 	})
+
+	t.Run("a remote no grant admits renders out, its preload kept", func(t *testing.T) {
+		nc := storyLeafCluster(t, "edge-operator.yaml", "edge-site-2")
+		nc.Spec.LeafRemotes[1].ConnectionRef.Namespace = "hubs"
+		remotes, cond, err := readLeafRemotes(ctx, c, nc, f.p.trust)
+		require.NoError(t, err)
+		require.Nil(t, cond)
+		require.Len(t, remotes, 2)
+		require.Nil(t, remotes[0].Refusal)
+		require.NotNil(t, remotes[1].Refusal)
+		require.Equal(t, "NoGrant", remotes[1].Refusal.Reason)
+		require.Contains(t, remotes[1].Refusal.Message, "leafRemotes[1]: ")
+		tel := publicKey(t, f.telemetry.Identity)
+		m := renderedConfig(t, nc, f.p.trust, remotes...)
+		leaf := m["leafnodes"].(map[string]any)["remotes"].([]any)
+		require.Len(t, leaf, 1)
+		require.Equal(t, f.p.trust.SystemAccount, leaf[0].(map[string]any)["account"])
+		require.Equal(t, "full", m["resolver"].(map[string]any)["type"])
+		require.Equal(t, map[string]any{f.p.trust.SystemAccount: f.p.trust.SystemAccountJWT, tel: f.telJWT}, m["resolver_preload"])
+		data := leafRemotesSecret(nc, remotes).Data
+		require.Len(t, data, 2)
+		require.NotContains(t, data, "hubs_hub-telemetry.creds")
+
+		nc.Spec.LeafRemotes[0].ConnectionRef.Namespace = "hubs"
+		remotes, cond, err = readLeafRemotes(ctx, c, nc, f.p.trust)
+		require.NoError(t, err)
+		require.Nil(t, cond)
+		require.NotContains(t, renderedConfig(t, nc, f.p.trust, remotes...), "leafnodes")
+		require.Nil(t, leafRemotesSecret(nc, remotes))
+	})
 }
 
 // TestResolverType pins the resolver a NatsCluster runs: auth.resolver
@@ -253,11 +284,6 @@ func TestReadLeafRemotes_Refusals(t *testing.T) {
 			nc.Spec.LeafRemotes[0].ConnectionRef.Name = "nowhere"
 			return nc
 		}, nil, ReasonLeafRemoteNotFound, "NatsConnection nats-system/nowhere does not exist"},
-		{"NatsConnection in another namespace without a grant", func(t *testing.T) *clusterv1beta1.NatsCluster {
-			nc := storyLeafCluster(t, "edge.yaml", "edge-site-1")
-			nc.Spec.LeafRemotes[0].ConnectionRef.Namespace = "hubs"
-			return nc
-		}, nil, "NoGrant", "leafRemotes[0]"},
 		{"one NatsConnection named twice", func(t *testing.T) *clusterv1beta1.NatsCluster {
 			nc := storyLeafCluster(t, "edge.yaml", "edge-site-1")
 			again := nc.Spec.LeafRemotes[0]
@@ -448,6 +474,35 @@ func TestLeafStatus(t *testing.T) {
 		c := meta.FindStatusCondition(st.Conditions, ConditionLeafnodesConnected)
 		require.Equal(t, metav1.ConditionUnknown, c.Status)
 		require.Equal(t, "no answer", c.Message)
+	})
+	t.Run("a refused remote reads its refusal and counts no server", func(t *testing.T) {
+		plan := *plan
+		plan.LeafRemotes = slices.Clone(remotes)
+		plan.LeafRemotes[1].HubAccount = ""
+		plan.LeafRemotes[1].Refusal = &metav1.Condition{Reason: "NoGrant", Message: "leafRemotes[1]: no grant"}
+		st := clusterv1beta1.NatsClusterStatus{LeafRemotes: []clusterv1beta1.LeafRemoteStatus{
+			{ConnectionNamespace: "orders", ConnectionName: "hub", Connected: 3, Account: "AORD"},
+		}}
+		one := []sysobs.Leaf{spoke(globalAccount), spoke("ASYS")}
+		leafStatus(&st, nc, &plan, map[string][]sysobs.Leaf{"edge-site-1-0": one, "edge-site-1-1": one, "edge-site-1-2": one}, nil)
+		require.Equal(t, []clusterv1beta1.LeafRemoteStatus{
+			{ConnectionNamespace: "nats-system", ConnectionName: "hub", Connected: 3, Account: "ATEL"},
+			{ConnectionNamespace: "orders", ConnectionName: "hub"},
+			{ConnectionNamespace: "nats-system", ConnectionName: "hub-system", Connected: 3, Account: "ASYS"},
+		}, st.LeafRemotes)
+		c := meta.FindStatusCondition(st.Conditions, ConditionLeafnodesConnected)
+		require.Equal(t, metav1.ConditionFalse, c.Status)
+		require.Equal(t, "NoGrant", c.Reason)
+		require.Equal(t, "leafRemotes[1]: no grant", c.Message)
+	})
+	t.Run("every remote refused still reads its refusal", func(t *testing.T) {
+		plan := &Plan{Servers: plan.Servers, LeafRemotes: []LeafRemote{{Connection: types.NamespacedName{Namespace: "orders", Name: "hub"},
+			Refusal: &metav1.Condition{Reason: "NoGrant", Message: "leafRemotes[0]: no grant"}}}}
+		var st clusterv1beta1.NatsClusterStatus
+		(&Reconciler{Observer: &fakeObserver{}}).observeLeafs(context.Background(), nc, plan, &st)
+		c := meta.FindStatusCondition(st.Conditions, ConditionLeafnodesConnected)
+		require.Equal(t, metav1.ConditionFalse, c.Status)
+		require.Equal(t, "NoGrant", c.Reason)
 	})
 	t.Run("no remotes clears both", func(t *testing.T) {
 		st := clusterv1beta1.NatsClusterStatus{LeafRemotes: []clusterv1beta1.LeafRemoteStatus{{ConnectionNamespace: "nats-system", ConnectionName: "hub"}}}

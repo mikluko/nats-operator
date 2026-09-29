@@ -206,10 +206,10 @@ spec:
                 x-kubernetes-list-type: map
               deletedAccounts:
                 description: |-
-                  DeletedAccounts are the accounts deleted, or no longer admitted by a
-                  NatsReferenceGrant, while a server may still hold a valid JWT for
-                  one; the delete is re-sent to every server that joins, until that JWT
-                  would have expired or an admitted account holds its key again.
+                  DeletedAccounts are the accounts deleted or no longer admitted while a
+                  server may hold a valid JWT for one; the delete is re-sent to each
+                  joining server until that JWT expires or an admitted account holds its
+                  key again.
                 items:
                   description: DeletedAccount is an account deleted from the resolvers.
                   properties:

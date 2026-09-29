@@ -58,10 +58,10 @@ type NatsOperatorStatus struct {
 	// +optional
 	SystemAccount *SystemAccountStatus `json:"systemAccount,omitempty"`
 
-	// DeletedAccounts are the accounts deleted, or no longer admitted by a
-	// NatsReferenceGrant, while a server may still hold a valid JWT for
-	// one; the delete is re-sent to every server that joins, until that JWT
-	// would have expired or an admitted account holds its key again.
+	// DeletedAccounts are the accounts deleted or no longer admitted while a
+	// server may hold a valid JWT for one; the delete is re-sent to each
+	// joining server until that JWT expires or an admitted account holds its
+	// key again.
 	// +optional
 	// +listType=map
 	// +listMapKey=publicKey

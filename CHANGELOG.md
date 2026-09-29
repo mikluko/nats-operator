@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Deleting the `NatsReferenceGrant` that admits a `NatsCluster`'s leaf remote to its `NatsConnection` drops that remote from the rendered leafnodes config and its credentials from `<name>-leaf-remotes`, the other remotes kept, and `LeafnodesConnected` reads False with the refusal naming the remote; restoring the grant renders it back.
 - Deleting the `NatsReferenceGrant` that admits a `NatsAccount` to its `NatsOperator` deletes the account's JWT from the servers and empties its `status.jwt`, and its `NatsUser`s read `Ready` False, reason `AccountNotAdmitted`, and are not signed; restoring the grant signs both again.
 - Licensed under Apache-2.0; the chart carries `artifacthub.io/license: Apache-2.0`.
 - `SECURITY.md` states how to report a vulnerability through the repository's GitHub private vulnerability reporting, the acknowledgement time for a report, the supported versions, the trust boundaries between namespaces, and how to verify a release's signatures and provenance.

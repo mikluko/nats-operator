@@ -234,7 +234,7 @@ Appears on: [NatsOperator](#NatsOperator).
 | `seedSecrets` | [{{< type "SeedSecrets" >}}](#SeedSecrets) | No | SeedSecrets name the Secrets holding the generated seeds. |
 | `jwt` | {{< type "string" >}} | No | JWT is the NATS operator JWT. |
 | `systemAccount` | [{{< type "SystemAccountStatus" >}}](#SystemAccountStatus) | No | SystemAccount is the system account the NATS operator JWT names. |
-| `deletedAccounts` | [{{< type "[]DeletedAccount" >}}](#DeletedAccount) | No | DeletedAccounts are the accounts deleted, or no longer admitted by a NatsReferenceGrant, while a server may still hold a valid JWT for one; the delete is re-sent to every server that joins, until that JWT would have expired or an admitted account holds its key again. |
+| `deletedAccounts` | [{{< type "[]DeletedAccount" >}}](#DeletedAccount) | No | DeletedAccounts are the accounts deleted or no longer admitted while a server may hold a valid JWT for one; the delete is re-sent to each joining server until that JWT expires or an admitted account holds its key again. |
 
 ### NatsSystemAccount {#NatsSystemAccount}
 NatsSystemAccount is a system account, signed only while a NatsOperator references it.
