@@ -67,11 +67,11 @@ tests:
               tlsConfig: {insecureSkipVerify: true}
               interval: 30s
         documentIndex: 1
-  - it: scrapes the metrics port with the bearer token metrics.serviceMonitor.authorization names, in place of the Prometheus pod's own
+  - it: scrapes the metrics port with the bearer token metrics.serviceMonitor.authorization.credentials names, in place of the Prometheus pod's own
     set:
       metrics.service.enabled: true
       metrics.serviceMonitor.enabled: true
-      metrics.serviceMonitor.authorization: {name: prometheus-token, key: token}
+      metrics.serviceMonitor.authorization: {credentials: {name: prometheus-token, key: token}}
       metrics.prometheus.enabled: true
       cluster.enabled: false
       jetstream.enabled: false

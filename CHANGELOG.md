@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Every controller serves its Prometheus metrics over HTTPS, to a bearer token of a user allowed `get` on the non-resource URL `/metrics`; an allow is cached for five minutes and a denial for thirty seconds.
 - Chart value `metrics.scraper.serviceAccount`, the `namespace/name` of a ServiceAccount granted `get` on `/metrics`.
 - Chart value `metrics.prometheus.enabled` serves each controller's OpenTelemetry metrics on port `9464` over plain HTTP, through the metrics Service and ServiceMonitor.
-- Chart value `metrics.serviceMonitor.authorization` has each ServiceMonitor scrape with the bearer token in a Secret key, as `authorization`, in place of `bearerTokenFile`.
+- Chart value `metrics.serviceMonitor.authorization.credentials` has each ServiceMonitor scrape with the bearer token in a Secret key, as `authorization`, in place of `bearerTokenFile`.
 - Chart values `networkPolicy.enabled` and `networkPolicy.from` render a NetworkPolicy over each controller's pods admitting its metrics ports `8080` and `9464` only from `networkPolicy.from`.
 - `helm test` on the chart checks every enabled controller's `/readyz`.
 - A failed `NatsCluster` reconcile reads `Progressing=False, reason: ReconcileFailed` and records a `ReconcileFailed` Warning event.
@@ -57,7 +57,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A controller releases its leader-election lease as it shuts down.
 - Each release publishes the three controller images for linux/amd64 and linux/arm64, the chart as an OCI artifact, and a GitHub release carrying the version's changelog entry.
 - Documentation site at <https://mikluko.github.io/nats-operator/>, of the latest release: the stories, the design and the ADRs.
-- The documentation site publishes nothing under a story's `e2e/` directory, and the stories' fixtures that hold keys are not in the repository: `just e2e` generates them afresh on every run.
 - Documentation page `/docs/install/`: installing the chart, its values, the controllers' flags and RBAC, upgrade and uninstall.
 - Documentation page `/docs/reference/api/`: every kind, field and enum value of the four API groups.
 - Documentation page `/docs/reference/nats-permissions/`: the nats-server subjects each controller requests and the presets that grant them.

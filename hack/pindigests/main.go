@@ -3,7 +3,9 @@
 // its argument.
 //
 // It reads from stdin the images job's [{"name","digest"}] list. It exists
-// because yq re-encodes the file and drops its blank lines.
+// because yq re-encodes the file, dropping its blank lines, and refuses
+// nothing, where this refuses an image left unpinned, a digest already set and
+// a built image no value pulls.
 package main
 
 import (

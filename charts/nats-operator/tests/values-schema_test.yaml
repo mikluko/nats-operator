@@ -42,7 +42,7 @@ tests:
       metrics.serviceMonitor.enabled: true
       metrics.serviceMonitor.labels: {release: prometheus}
       metrics.serviceMonitor.interval: 1m30s
-      metrics.serviceMonitor.authorization: {name: prometheus-token, key: token}
+      metrics.serviceMonitor.authorization: {credentials: {name: prometheus-token, key: token}}
       networkPolicy.enabled: true
       networkPolicy.from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}}]
     asserts:
@@ -137,9 +137,15 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "at '/podAnnotations/replicas': got number, want string"
-  - it: refuses an authorization without its key
+  - it: refuses authorization credentials without their key
     set:
-      metrics.serviceMonitor.authorization: {name: prometheus-token}
+      metrics.serviceMonitor.authorization: {credentials: {name: prometheus-token}}
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/metrics/serviceMonitor/authorization/credentials'"
+  - it: refuses an authorization given as a bare Secret key
+    set:
+      metrics.serviceMonitor.authorization: {name: prometheus-token, key: token}
     asserts:
       - failedTemplate:
           errorPattern: "at '/metrics/serviceMonitor/authorization'"

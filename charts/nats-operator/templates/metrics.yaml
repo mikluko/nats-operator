@@ -50,7 +50,7 @@ spec:
     - port: metrics
       path: /metrics
       scheme: https
-      {{- with $metrics.serviceMonitor.authorization }}
+      {{- with $metrics.serviceMonitor.authorization.credentials }}
       authorization:
         type: Bearer
         credentials:
