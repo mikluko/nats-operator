@@ -31,6 +31,7 @@ func TestLoadBundles_Stories(t *testing.T) {
 		require.Equal(t, i+1, b.Number, b.Name)
 		require.NotEmpty(t, b.Steps, b.Name)
 		require.Equal(t, b.Name == "12-metrics", b.ScrapeMetrics, b.Name)
+		require.Equal(t, b.ScrapeMetrics, b.ChartValues != nil, b.Name)
 		for _, s := range b.Steps {
 			for _, e := range s.Expectations {
 				_, err := b.Target(s.Number, e)

@@ -6,43 +6,40 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"io"
-	"net"
-	"net/http"
 	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"strconv"
+	"strings"
+	"time"
 
-	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/portforward"
-	"k8s.io/client-go/transport/spdy"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
 	"github.com/mikluko/nats-operator/internal/e2e"
 	"github.com/mikluko/nats-operator/internal/e2e/fixtures"
-	"github.com/mikluko/nats-operator/internal/natscluster"
 )
 
 // What a story that scrapes metrics runs under: the Secret metrics are
 // served under, the fixtures holding it and a Secret whose CA did not sign
-// it, and the ServiceAccount that scrapes.
+// it, the ServiceAccount that scrapes, and the image it scrapes with.
 const (
 	metricsSecret       = release + "-metrics-tls"
+	otherMetricsSecret  = release + "-metrics-tls-other"
 	metricsFixture      = "metrics-tls.yaml"
 	otherMetricsFixture = "metrics-tls-other.yaml"
 	scraperNamespace    = "monitoring"
 	scraperName         = "prometheus"
+	scraperImage        = "docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777"
 )
 
 // metricsDNSNames are the DNS names of every controller's metrics Service.
@@ -57,8 +54,8 @@ func metricsDNSNames() []string {
 // generateMetricsFixtures writes metricsFixture and otherMetricsFixture into
 // dir, each from a CA of its own.
 func generateMetricsFixtures(dir string) error {
-	for _, f := range []string{metricsFixture, otherMetricsFixture} {
-		if err := fixtures.MetricsTLS(filepath.Join(dir, f), metricsSecret, releaseNS, metricsDNSNames()); err != nil {
+	for f, name := range map[string]string{metricsFixture: metricsSecret, otherMetricsFixture: otherMetricsSecret} {
+		if err := fixtures.MetricsTLS(filepath.Join(dir, f), name, releaseNS, metricsDNSNames()); err != nil {
 			return err
 		}
 	}
@@ -113,18 +110,57 @@ func findAPIServer(ctx context.Context, c client.Client) (apiServer, error) {
 }
 
 // metricsValues are the chart values a story that scrapes metrics installs:
-// metrics served under metricsSecret on a Service, granted to the scraper;
-// and a NetworkPolicy admitting the scraper's namespace to the metrics port,
-// and egress to api, DNS, and the client and monitoring ports of the NATS
-// servers in natsNamespaces, and to nothing else.
-func metricsValues(api apiServer, natsNamespaces []string) map[string]any {
-	namespace := func(ns string) map[string]any {
-		return map[string]any{"namespaceSelector": map[string]any{"matchLabels": map[string]any{corev1.LabelMetadataName: ns}}}
+// page, the values its page shows, with every egress rule whose peers are all
+// ipBlocks replaced by rules admitting api, and without ServiceMonitors. It
+// fails unless page serves metrics under metricsSecret to the scraper's
+// ServiceAccount and has such a rule.
+func metricsValues(page map[string]any, api apiServer) (map[string]any, error) {
+	vals := runtime.DeepCopyJSON(page)
+	for path, want := range map[string]string{
+		"metrics.tls.secretName":         metricsSecret,
+		"metrics.scraper.serviceAccount": scraperNamespace + "/" + scraperName,
+	} {
+		got, _, err := unstructured.NestedString(vals, strings.Split(path, ".")...)
+		if err != nil || got != want {
+			return nil, fmt.Errorf("%s: want %q, got %q", path, want, got)
+		}
 	}
-	port := func(proto corev1.Protocol, p int) map[string]any {
-		return map[string]any{"protocol": string(proto), "port": p}
+	if err := unstructured.SetNestedField(vals, false, "metrics", "serviceMonitor", "enabled"); err != nil {
+		return nil, err
 	}
-	ipBlock := func(a netip.Addr) map[string]any {
+	egress, _, err := unstructured.NestedSlice(vals, "networkPolicy", "egress")
+	if err != nil {
+		return nil, err
+	}
+	at := slices.IndexFunc(egress, onlyIPBlocks)
+	if at < 0 {
+		return nil, errors.New("networkPolicy.egress: no rule of ipBlocks alone, which the API server's rules replace")
+	}
+	egress = slices.DeleteFunc(egress, onlyIPBlocks)
+	egress = slices.Insert(egress, at, apiServerRules(api)...)
+	if err := unstructured.SetNestedSlice(vals, egress, "networkPolicy", "egress"); err != nil {
+		return nil, err
+	}
+	return vals, nil
+}
+
+// onlyIPBlocks reports whether rule is an egress rule to ipBlock peers alone.
+func onlyIPBlocks(rule any) bool {
+	to, _, _ := unstructured.NestedSlice(rule.(map[string]any), "to")
+	return len(to) > 0 && !slices.ContainsFunc(to, func(peer any) bool {
+		p, ok := peer.(map[string]any)
+		_, block := p["ipBlock"]
+		return !ok || len(p) != 1 || !block
+	})
+}
+
+// apiServerRules are the egress rules admitting api: its Service address
+// and port, and its endpoints' addresses and ports.
+func apiServerRules(api apiServer) []any {
+	port := func(p uint16) any {
+		return map[string]any{"protocol": string(corev1.ProtocolTCP), "port": int64(p)}
+	}
+	ipBlock := func(a netip.Addr) any {
 		return map[string]any{"ipBlock": map[string]any{"cidr": netip.PrefixFrom(a, a.BitLen()).String()}}
 	}
 	var addrs []netip.Addr
@@ -135,35 +171,16 @@ func metricsValues(api apiServer, natsNamespaces []string) map[string]any {
 	}
 	slices.SortFunc(addrs, netip.Addr.Compare)
 	slices.Sort(ports)
-	var endpointPeers, endpointPorts []any
+	var peers, endpointPorts []any
 	for _, a := range slices.Compact(addrs) {
-		endpointPeers = append(endpointPeers, ipBlock(a))
+		peers = append(peers, ipBlock(a))
 	}
 	for _, p := range slices.Compact(ports) {
-		endpointPorts = append(endpointPorts, port(corev1.ProtocolTCP, int(p)))
+		endpointPorts = append(endpointPorts, port(p))
 	}
-	dns := namespace(metav1.NamespaceSystem)
-	dns["podSelector"] = map[string]any{"matchLabels": map[string]any{"k8s-app": "kube-dns"}}
-	var nats []any
-	for _, ns := range natsNamespaces {
-		nats = append(nats, namespace(ns))
-	}
-	return map[string]any{
-		"metrics": map[string]any{
-			"service": map[string]any{"enabled": true},
-			"tls":     map[string]any{"secretName": metricsSecret},
-			"scraper": map[string]any{"serviceAccount": scraperNamespace + "/" + scraperName},
-		},
-		"networkPolicy": map[string]any{
-			"enabled": true,
-			"from":    []any{namespace(scraperNamespace)},
-			"egress": []any{
-				map[string]any{"to": []any{ipBlock(api.service.Addr())}, "ports": []any{port(corev1.ProtocolTCP, int(api.service.Port()))}},
-				map[string]any{"to": endpointPeers, "ports": endpointPorts},
-				map[string]any{"to": []any{dns}, "ports": []any{port(corev1.ProtocolUDP, 53), port(corev1.ProtocolTCP, 53)}},
-				map[string]any{"to": nats, "ports": []any{port(corev1.ProtocolTCP, natscluster.PortClient), port(corev1.ProtocolTCP, natscluster.PortMonitor)}},
-			},
-		},
+	return []any{
+		map[string]any{"to": []any{ipBlock(api.service.Addr())}, "ports": []any{port(api.service.Port())}},
+		map[string]any{"to": peers, "ports": endpointPorts},
 	}
 }
 
@@ -190,13 +207,10 @@ func renderChart(ctx context.Context, root string, args []string) ([]byte, error
 	return out, nil
 }
 
-// scrapeMetrics scrapes every endpoint of the ServiceMonitors the chart
-// under root renders with args and metrics.serviceMonitor.enabled, as
-// Prometheus would: with the scraper's token, trusting only the CA its
-// tlsConfig names and verifying serverName, through a port-forward to a
-// ready pod behind it. It fails unless every scrape succeeds, and unless the
-// same scrape trusting the CA of otherCA, a PEM file, fails verification.
-func scrapeMetrics(ctx context.Context, rc *rest.Config, c client.Client, root string, args []string, otherCA []byte) error {
+// scrapeMetrics scrapes every https endpoint of the ServiceMonitors the
+// chart renders with args, as Prometheus would; it fails unless each scrape
+// succeeds and the same scrape trusting otherCA, PEM, fails verification.
+func scrapeMetrics(ctx context.Context, cs kubernetes.Interface, c client.Client, root string, args []string, otherCA []byte) error {
 	rendered, err := renderChart(ctx, root, append(slices.Clone(args), "--set", "metrics.serviceMonitor.enabled=true"))
 	if err != nil {
 		return err
@@ -212,52 +226,140 @@ func scrapeMetrics(ctx context.Context, rc *rest.Config, c client.Client, root s
 	if len(endpoints) == 0 {
 		return errors.New("the chart renders no ServiceMonitor endpoint over https")
 	}
-	token, err := scraperToken(ctx, c)
-	if err != nil {
+	if err := createScraper(ctx, c); err != nil {
 		return err
 	}
-	other := x509.NewCertPool()
-	if !other.AppendCertsFromPEM(otherCA) {
-		return errors.New("the other CA holds no PEM certificate")
-	}
 	for _, ep := range endpoints {
-		if err := scrapeEndpoint(ctx, rc, c, ep, token, other); err != nil {
+		if err := scrapeEndpoint(ctx, cs, c, ep, otherCA); err != nil {
 			return fmt.Errorf("ServiceMonitor %s/%s: %w", ep.Namespace, ep.Monitor, err)
 		}
 	}
 	return nil
 }
 
-// scrapeEndpoint scrapes ep as scrapeMetrics says.
-func scrapeEndpoint(ctx context.Context, rc *rest.Config, c client.Client, ep e2e.MetricsEndpoint, token string, other *x509.CertPool) error {
-	var ca corev1.Secret
-	if err := c.Get(ctx, client.ObjectKey{Namespace: ep.Namespace, Name: ep.CA.Name}, &ca); err != nil {
+// Keys of the ConfigMap a scraper pod mounts at scraperCADir: the CA ep's
+// tlsConfig names, and the one that did not sign the serving certificate.
+const (
+	scraperCADir   = "/etc/scrape"
+	scraperCA      = "ca.crt"
+	scraperOtherCA = "other-ca.crt"
+)
+
+// scrapeEndpoint scrapes ep from a pod in scraperNamespace running as the
+// scraper, with ep's bearerTokenFile, to the IP of a ready pod behind it:
+// once trusting only the CA ep's tlsConfig names, which must succeed, and
+// once trusting otherCA alone, which must fail verification.
+func scrapeEndpoint(ctx context.Context, cs kubernetes.Interface, c client.Client, ep e2e.MetricsEndpoint, otherCA []byte) error {
+	if ep.BearerTokenFile == "" {
+		return errors.New("the endpoint names no bearerTokenFile")
+	}
+	var secret corev1.Secret
+	if err := c.Get(ctx, client.ObjectKey{Namespace: ep.Namespace, Name: ep.CA.Name}, &secret); err != nil {
 		return fmt.Errorf("get CA Secret: %w", err)
 	}
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(ca.Data[ep.CA.Key]) {
-		return fmt.Errorf("key %s of Secret %s holds no PEM certificate", ep.CA.Name, ep.CA.Key)
+	ca := secret.Data[ep.CA.Key]
+	if !x509.NewCertPool().AppendCertsFromPEM(ca) {
+		return fmt.Errorf("key %s of Secret %s holds no PEM certificate", ep.CA.Key, ep.CA.Name)
 	}
-	pod, port, err := endpointPod(ctx, c, ep)
+	target, port, err := endpointPod(ctx, c, ep)
 	if err != nil {
 		return err
 	}
-	addr, stop, err := forward(ctx, rc, pod, port)
+	ip, err := netip.ParseAddr(target.Status.PodIP)
 	if err != nil {
-		return fmt.Errorf("port-forward to %s/%s:%d: %w", pod.Namespace, pod.Name, port, err)
+		return fmt.Errorf("pod %s: IP %q: %w", target.Name, target.Status.PodIP, err)
 	}
-	defer stop()
-	if _, err := e2e.Scrape(ctx, addr, ep.Path, roots, ep.ServerName, token); err != nil {
-		return fmt.Errorf("scrape %s as %s: %w", pod.Name, ep.ServerName, err)
+
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Namespace: scraperNamespace, GenerateName: "scrape-"},
+		Data:       map[string]string{scraperCA: string(ca), scraperOtherCA: string(otherCA)},
 	}
-	_, err = e2e.Scrape(ctx, addr, ep.Path, other, ep.ServerName, token)
-	switch _, unknown := errors.AsType[x509.UnknownAuthorityError](err); {
-	case err == nil:
-		return fmt.Errorf("scrape %s trusting another CA succeeded", pod.Name)
-	case !unknown:
-		return fmt.Errorf("scrape %s trusting another CA: want an unknown authority, got %w", pod.Name, err)
+	if err := c.Create(ctx, cm); err != nil {
+		return fmt.Errorf("create ConfigMap in %s: %w", scraperNamespace, err)
+	}
+	defer func() { _ = c.Delete(context.WithoutCancel(ctx), cm) }()
+	container := func(name, caKey string) corev1.Container {
+		return corev1.Container{
+			Name:         name,
+			Image:        scraperImage,
+			Command:      e2e.ScrapeCommand(ip, port, ep.ServerName, ep.Path, scraperCADir+"/"+caKey, ep.BearerTokenFile),
+			VolumeMounts: []corev1.VolumeMount{{Name: "ca", MountPath: scraperCADir, ReadOnly: true}},
+			SecurityContext: &corev1.SecurityContext{
+				AllowPrivilegeEscalation: new(false),
+				ReadOnlyRootFilesystem:   new(true),
+				Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+			},
+		}
+	}
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Namespace: scraperNamespace, Name: cm.Name},
+		Spec: corev1.PodSpec{
+			ServiceAccountName: scraperName,
+			RestartPolicy:      corev1.RestartPolicyNever,
+			Containers:         []corev1.Container{container("verified", scraperCA), container("other-ca", scraperOtherCA)},
+			Volumes: []corev1.Volume{{Name: "ca", VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: cm.Name}},
+			}}},
+		},
+	}
+	if err := c.Create(ctx, pod); err != nil {
+		return fmt.Errorf("create pod in %s: %w", scraperNamespace, err)
+	}
+	defer func() { _ = c.Delete(context.WithoutCancel(ctx), pod) }()
+	exits, err := awaitExits(ctx, c, pod)
+	if err != nil {
+		return err
+	}
+	for name, want := range map[string]int32{"verified": 0, "other-ca": e2e.ExitUnverified} {
+		if got := exits[name]; got != want {
+			return fmt.Errorf("scrape of pod %s at %s as %s, trusting %s: curl exited %d, want %d: %s",
+				target.Name, ip, ep.ServerName, name, got, want, containerLog(ctx, cs, pod, name))
+		}
 	}
 	return nil
+}
+
+// scrapeTimeout bounds a scraper pod's run, pulling its image included.
+const scrapeTimeout = 3 * time.Minute
+
+// awaitExits waits until every container of pod has terminated and returns
+// their exit codes by name.
+func awaitExits(ctx context.Context, c client.Client, pod *corev1.Pod) (map[string]int32, error) {
+	ctx, cancel := context.WithTimeout(ctx, scrapeTimeout)
+	defer cancel()
+	for {
+		var live corev1.Pod
+		if err := c.Get(ctx, client.ObjectKeyFromObject(pod), &live); err != nil {
+			return nil, fmt.Errorf("pod %s/%s: %w", pod.Namespace, pod.Name, err)
+		}
+		exits := map[string]int32{}
+		var waiting []string
+		for _, st := range live.Status.ContainerStatuses {
+			switch {
+			case st.State.Terminated != nil:
+				exits[st.Name] = st.State.Terminated.ExitCode
+			case st.State.Waiting != nil:
+				waiting = append(waiting, st.Name+": "+st.State.Waiting.Reason)
+			}
+		}
+		if len(exits) == len(pod.Spec.Containers) {
+			return exits, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("pod %s/%s: containers still running after %s: %v", pod.Namespace, pod.Name, scrapeTimeout, waiting)
+		case <-time.After(2 * time.Second):
+		}
+	}
+}
+
+// containerLog returns the log of container name of pod, or why it cannot.
+func containerLog(ctx context.Context, cs kubernetes.Interface, pod *corev1.Pod, name string) string {
+	raw, err := cs.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{Container: name}).DoRaw(ctx)
+	if err != nil {
+		return fmt.Sprintf("no log: %v", err)
+	}
+	return strings.TrimSpace(string(raw))
 }
 
 // endpointPod returns a ready pod behind the one Service ep selects that has
@@ -308,55 +410,15 @@ func podReady(pod *corev1.Pod) bool {
 	})
 }
 
-// scraperToken returns a token of the scraper ServiceAccount, created with
-// its namespace where either is missing.
-func scraperToken(ctx context.Context, c client.Client) (string, error) {
+// createScraper creates the scraper's namespace and ServiceAccount where
+// either is missing.
+func createScraper(ctx context.Context, c client.Client) error {
 	if err := createNamespaces(ctx, c, []string{scraperNamespace}); err != nil {
-		return "", err
+		return err
 	}
 	sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: scraperNamespace, Name: scraperName}}
 	if err := c.Create(ctx, sa); err != nil && !apierrors.IsAlreadyExists(err) {
-		return "", fmt.Errorf("create ServiceAccount %s/%s: %w", scraperNamespace, scraperName, err)
+		return fmt.Errorf("create ServiceAccount %s/%s: %w", scraperNamespace, scraperName, err)
 	}
-	tr := &authenticationv1.TokenRequest{Spec: authenticationv1.TokenRequestSpec{ExpirationSeconds: new(int64(600))}}
-	if err := c.SubResource("token").Create(ctx, sa, tr); err != nil {
-		return "", fmt.Errorf("token of ServiceAccount %s/%s: %w", scraperNamespace, scraperName, err)
-	}
-	return tr.Status.Token, nil
-}
-
-// forward forwards a local port to port of pod through the API server
-// rc reaches, and returns the local address and the function that stops it.
-func forward(ctx context.Context, rc *rest.Config, pod *corev1.Pod, port int32) (string, func(), error) {
-	cs, err := kubernetes.NewForConfig(rc)
-	if err != nil {
-		return "", nil, err
-	}
-	transport, upgrader, err := spdy.RoundTripperFor(rc)
-	if err != nil {
-		return "", nil, err
-	}
-	url := cs.CoreV1().RESTClient().Post().Resource("pods").Namespace(pod.Namespace).Name(pod.Name).SubResource("portforward").URL()
-	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, url)
-	stop, ready := make(chan struct{}), make(chan struct{})
-	fw, err := portforward.NewOnAddresses(dialer, []string{"127.0.0.1"}, []string{"0:" + strconv.Itoa(int(port))}, stop, ready, io.Discard, io.Discard)
-	if err != nil {
-		return "", nil, err
-	}
-	done := make(chan error, 1)
-	go func() { done <- fw.ForwardPorts() }()
-	select {
-	case <-ready:
-	case err := <-done:
-		return "", nil, err
-	case <-ctx.Done():
-		close(stop)
-		return "", nil, ctx.Err()
-	}
-	ports, err := fw.GetPorts()
-	if err != nil || len(ports) != 1 {
-		close(stop)
-		return "", nil, fmt.Errorf("forwarded ports %v: %w", ports, err)
-	}
-	return net.JoinHostPort("127.0.0.1", strconv.Itoa(int(ports[0].Local))), func() { close(stop) }, nil
+	return nil
 }

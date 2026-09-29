@@ -17,6 +17,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -179,8 +180,14 @@ func (ci *chartInstall) prepareMetrics(ctx context.Context, c client.Client, gen
 	if objs, err = e2e.DecodeObjects(raw); err != nil {
 		return err
 	}
+	if len(objs) != 1 {
+		return fmt.Errorf("%s: want one object, got %d", otherMetricsFixture, len(objs))
+	}
 	ca, _, err := unstructured.NestedString(objs[0].Object, "stringData", "ca.crt")
-	if err != nil || ca == "" {
+	if err != nil {
+		return fmt.Errorf("%s: %w", otherMetricsFixture, err)
+	}
+	if ca == "" {
 		return fmt.Errorf("%s holds no ca.crt", otherMetricsFixture)
 	}
 	ci.otherCA = []byte(ca)
@@ -188,15 +195,19 @@ func (ci *chartInstall) prepareMetrics(ctx context.Context, c client.Client, gen
 }
 
 // valuesFor returns what b runs under in cluster i: base, with, in the home
-// cluster of a story that scrapes metrics, metricsValues for its
-// namespaces written beside the run's other files.
+// cluster of a story that scrapes metrics, metricsValues of its page written
+// beside the run's other files.
 func (ci *chartInstall) valuesFor(b *e2e.Bundle, i int) (chartValues, error) {
 	vals := ci.base
 	if i > 0 || !b.ScrapeMetrics {
 		return vals, nil
 	}
+	metrics, err := metricsValues(b.ChartValues, ci.api)
+	if err != nil {
+		return vals, fmt.Errorf("%s: %w", b.Name, err)
+	}
 	vals.values = filepath.Join(ci.work, b.Name+"-values.yaml")
-	return vals, writeValues(vals.values, metricsValues(ci.api, b.Namespaces()))
+	return vals, writeValues(vals.values, metrics)
 }
 
 // upgrade installs the chart in cluster i with vals.
@@ -245,8 +256,12 @@ func (ci *chartInstall) after(ctx context.Context, c client.Client, b *e2e.Bundl
 		return nil
 	}
 	logf("%s: scrape metrics", b.Name)
+	cs, err := kubernetes.NewForConfig(ci.home)
+	if err != nil {
+		return err
+	}
 	args := chartSets(ci.enabled(0), ci.images, ci.installed[0])
-	return scrapeMetrics(ctx, ci.home, c, ci.root, args, ci.otherCA)
+	return scrapeMetrics(ctx, cs, c, ci.root, args, ci.otherCA)
 }
 
 func orNone(s string) string {

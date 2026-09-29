@@ -1,0 +1,7 @@
+apiVersion: nats.mikluko.io/v1beta1
+kind: NatsConnection
+metadata:
+  name: outside
+  namespace: nats-system
+spec:
+  servers: ["nats://outside.nats-outside.svc:4222"]

@@ -52,7 +52,10 @@ type Bundle struct {
 	// certificate and egress policy, and scrape every controller once its
 	// steps pass.
 	ScrapeMetrics bool
-	Steps         []Step
+	// ChartValues are the chart values the page shows under
+	// ChartValuesHeading; set where ScrapeMetrics is.
+	ChartValues map[string]any
+	Steps       []Step
 
 	files []bundleFile
 }
@@ -268,6 +271,12 @@ func loadBundle(dir, gen string) (*Bundle, error) {
 	b := &Bundle{}
 	if err := readFrontMatter(filepath.Join(dir, "index.md"), b); err != nil {
 		return nil, err
+	}
+	if b.ScrapeMetrics {
+		var err error
+		if b.ChartValues, err = readChartValues(filepath.Join(dir, "index.md")); err != nil {
+			return nil, err
+		}
 	}
 	paths, err := bundlePaths(dir, gen)
 	if err != nil {

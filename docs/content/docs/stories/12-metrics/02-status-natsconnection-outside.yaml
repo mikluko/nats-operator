@@ -1,0 +1,5 @@
+status:
+  conditions:
+    - type: Ready
+      status: "False"
+      reason: ConnectFailed

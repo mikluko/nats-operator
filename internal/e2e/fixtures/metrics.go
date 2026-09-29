@@ -7,9 +7,9 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// MetricsTLS writes to path, readable by its owner alone, a
-// kubernetes.io/tls Secret name in namespace holding a new CA as ca.crt and
-// the certificate and key it signs for dnsNames as tls.crt and tls.key.
+// MetricsTLS writes to path, owner-readable, a kubernetes.io/tls Secret
+// named name in namespace, holding a new CA as ca.crt and the certificate and
+// key it signs for dnsNames.
 func MetricsTLS(path, name, namespace string, dnsNames []string) error {
 	ca, cert, key, err := certificates(name+"-ca", dnsNames)
 	if err != nil {

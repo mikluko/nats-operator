@@ -99,11 +99,10 @@ func runStory(ctx context.Context, r *e2e.Runner, home client.Client, b *e2e.Bun
 	}
 	r.Fresh = fresh
 	res := r.Run(ctx, b)
-	if res.Outcome != e2e.Pass {
-		return res
-	}
-	if err := ci.after(ctx, home, b); err != nil {
-		res.Outcome, res.Detail = e2e.Fail, err.Error()
+	if res.Outcome == e2e.Pass {
+		if err := ci.after(ctx, home, b); err != nil {
+			res.Outcome, res.Detail = e2e.Fail, err.Error()
+		}
 	}
 	res.Elapsed = time.Since(start).Round(time.Second)
 	return res

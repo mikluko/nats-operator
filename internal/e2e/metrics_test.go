@@ -2,10 +2,11 @@ package e2e
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -50,13 +51,14 @@ func TestMetricsEndpoints(t *testing.T) {
 	eps, err := MetricsEndpoints(objs)
 	require.NoError(t, err)
 	require.Equal(t, []MetricsEndpoint{{
-		Namespace:  "ns",
-		Monitor:    "r-cluster-controller-metrics",
-		Selector:   map[string]string{"app.kubernetes.io/name": "cluster-controller"},
-		Port:       "metrics",
-		Path:       "/metrics",
-		CA:         SecretKey{Name: "tls", Key: "ca.crt"},
-		ServerName: "r-cluster-controller-metrics.ns.svc",
+		Namespace:       "ns",
+		Monitor:         "r-cluster-controller-metrics",
+		Selector:        map[string]string{"app.kubernetes.io/name": "cluster-controller"},
+		Port:            "metrics",
+		Path:            "/metrics",
+		CA:              SecretKey{Name: "tls", Key: "ca.crt"},
+		ServerName:      "r-cluster-controller-metrics.ns.svc",
+		BearerTokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token",
 	}}, eps)
 
 	insecure := strings.Replace(serviceMonitor, `ca:
@@ -68,12 +70,12 @@ func TestMetricsEndpoints(t *testing.T) {
 	require.ErrorContains(t, err, "endpoint 0 does not verify")
 }
 
-// metricsSecret returns the stringData of a Secret fixtures.MetricsTLS
-// generates for name.
-func metricsSecret(t *testing.T, name string) map[string]string {
+// metricsSecret returns the stringData of the Secret secret that
+// fixtures.MetricsTLS generates for name.
+func metricsSecret(t *testing.T, secret, name string) map[string]string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "tls.yaml")
-	require.NoError(t, fixtures.MetricsTLS(path, "tls", "ns", []string{name}))
+	require.NoError(t, fixtures.MetricsTLS(path, secret, "ns", []string{name}))
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
 	objs, err := DecodeObjects(raw)
@@ -84,11 +86,13 @@ func metricsSecret(t *testing.T, name string) map[string]string {
 	return data
 }
 
-// TestScrape pins that a scrape succeeds only with a token, against a
-// certificate that chains to roots and names serverName.
-func TestScrape(t *testing.T) {
+// TestScrapeCommand pins that a scrape succeeds only with the token, against
+// a certificate that chains to the CA file and names serverName.
+func TestScrapeCommand(t *testing.T) {
+	curl, err := exec.LookPath("curl")
+	require.NoError(t, err, "TestScrapeCommand runs the scrape with curl")
 	const name = "r-cluster-controller-metrics.ns.svc"
-	secret := metricsSecret(t, name)
+	secret := metricsSecret(t, "tls", name)
 	pair, err := tls.X509KeyPair([]byte(secret["tls.crt"]), []byte(secret["tls.key"]))
 	require.NoError(t, err)
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -101,31 +105,37 @@ func TestScrape(t *testing.T) {
 	srv.TLS = &tls.Config{Certificates: []tls.Certificate{pair}}
 	srv.StartTLS()
 	defer srv.Close()
-	pool := func(ca string) *x509.CertPool {
-		p := x509.NewCertPool()
-		require.True(t, p.AppendCertsFromPEM([]byte(ca)))
-		return p
-	}
-	roots, otherRoots := pool(secret["ca.crt"]), pool(metricsSecret(t, name)["ca.crt"])
-	addr := srv.Listener.Addr().String()
+	at := netip.MustParseAddrPort(srv.Listener.Addr().String())
 
-	body, err := Scrape(t.Context(), addr, "/metrics", roots, name, "tok")
-	require.NoError(t, err)
-	require.Contains(t, string(body), "up 1")
+	dir := t.TempDir()
+	file := func(name, content string) string {
+		path := filepath.Join(dir, name)
+		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+		return path
+	}
+	ca, otherCA := file("ca.crt", secret["ca.crt"]), file("other.crt", metricsSecret(t, "other", name)["ca.crt"])
+	token, otherToken := file("token", "tok\n"), file("other-token", "nope")
 
 	for desc, tc := range map[string]struct {
-		roots      *x509.CertPool
-		serverName string
-		token      string
-		want       string
+		serverName, ca, token string
+		exit                  int
 	}{
-		"another CA":    {otherRoots, name, "tok", "certificate signed by unknown authority"},
-		"another name":  {roots, "other.ns.svc", "tok", "not other.ns.svc"},
-		"another token": {roots, name, "nope", "403 Forbidden"},
+		"verified":      {name, ca, token, 0},
+		"another CA":    {name, otherCA, token, ExitUnverified},
+		"another name":  {"other.ns.svc", ca, token, ExitUnverified},
+		"another token": {name, ca, otherToken, 22},
 	} {
 		t.Run(desc, func(t *testing.T) {
-			_, err := Scrape(t.Context(), addr, "/metrics", tc.roots, tc.serverName, tc.token)
-			require.ErrorContains(t, err, tc.want)
+			args := ScrapeCommand(at.Addr(), int32(at.Port()), tc.serverName, "/metrics", tc.ca, tc.token)
+			require.Equal(t, "curl", args[0])
+			out, err := exec.CommandContext(t.Context(), curl, args[1:]...).CombinedOutput()
+			if tc.exit == 0 {
+				require.NoError(t, err, string(out))
+				return
+			}
+			var exit *exec.ExitError
+			require.ErrorAs(t, err, &exit, string(out))
+			require.Equal(t, tc.exit, exit.ExitCode(), string(out))
 		})
 	}
 }

@@ -10,7 +10,7 @@ A platform engineer has Prometheus, run by prometheus-operator in `monitoring`, 
 
 ## The certificate
 
-Each controller serves its metrics under the certificate in one Secret in the release namespace, which must name every enabled controller's metrics Service. For the release `nats-operator` in `nats-operator`, a cert-manager `Certificate` from a CA issuer, which also writes the CA to the Secret's `ca.crt`:
+Each controller serves its metrics under the certificate in one Secret in the release namespace, which must name every enabled controller's metrics Service. For the release `nats-operator` in `nats-operator`, a `Certificate` from `ca-issuer`, an existing cert-manager CA ClusterIssuer, which writes its CA to the Secret's `ca.crt`:
 
 ```yaml
 apiVersion: cert-manager.io/v1
@@ -69,13 +69,25 @@ A NATS cluster and a stream, reconciled through those rules alone.
 
 {{< manifest "01-natscluster.yaml" >}}
 
-{{< manifest "01-status-natscluster.yaml" >}}
+{{< manifest "01-status-natscluster-demo.yaml" >}}
 
 {{< manifest "02-natsconnection.yaml" >}}
 
 {{< manifest "02-natsstream.yaml" >}}
 
 {{< manifest "02-status-natsstream.yaml" >}}
+
+## Outside the policy
+
+The controllers reach nothing the policy omits. A NATS cluster in `nats-outside`, which no egress rule admits, comes up, as the cluster controller deploys it through the API server; a `NatsConnection` to it stays unready, as the JetStream controller's dial is dropped.
+
+{{< manifest "01-natscluster-outside.yaml" >}}
+
+{{< manifest "01-status-natscluster-outside.yaml" >}}
+
+{{< manifest "02-natsconnection-outside.yaml" >}}
+
+{{< manifest "02-status-natsconnection-outside.yaml" >}}
 
 ## Scraping by hand
 

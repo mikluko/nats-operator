@@ -1,12 +1,10 @@
 package e2e
 
 import (
-	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
-	"io"
-	"net/http"
+	"net"
+	"net/netip"
+	"strconv"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -23,12 +21,16 @@ type MetricsEndpoint struct {
 	Namespace, Monitor string
 	// Selector is the matchLabels selecting the Services scraped.
 	Selector map[string]string
-	// Port names the Service port scraped.
+	// Port names the Service port scraped, and Path the path.
 	Port, Path string
-	// CA holds the PEM CA the serving certificate is verified against.
+	// CA names the Secret key holding the PEM CA the serving certificate is
+	// verified against.
 	CA SecretKey
 	// ServerName is the name the serving certificate is verified for.
 	ServerName string
+	// BearerTokenFile is the scraper's path to the token it sends; "" is
+	// none.
+	BearerTokenFile string
 }
 
 // MetricsEndpoints returns the endpoints of scheme https of the
@@ -62,6 +64,7 @@ func MetricsEndpoints(objs []*unstructured.Unstructured) ([]MetricsEndpoint, err
 			m.CA.Name, _, _ = unstructured.NestedString(ep, "tlsConfig", "ca", "secret", "name")
 			m.CA.Key, _, _ = unstructured.NestedString(ep, "tlsConfig", "ca", "secret", "key")
 			m.ServerName, _, _ = unstructured.NestedString(ep, "tlsConfig", "serverName")
+			m.BearerTokenFile, _, _ = unstructured.NestedString(ep, "bearerTokenFile")
 			if m.CA.Name == "" || m.CA.Key == "" || m.ServerName == "" {
 				return nil, fmt.Errorf("ServiceMonitor %s: endpoint %d does not verify: tlsConfig names no ca.secret or serverName", key(o), i)
 			}
@@ -71,30 +74,27 @@ func MetricsEndpoints(objs []*unstructured.Unstructured) ([]MetricsEndpoint, err
 	return out, nil
 }
 
-// Scrape GETs path from addr over HTTPS with bearer token, trusting roots
-// alone and verifying the certificate for serverName, and returns the body;
-// it fails unless the answer is 200 OK.
-func Scrape(ctx context.Context, addr, path string, roots *x509.CertPool, serverName, token string) ([]byte, error) {
-	hc := &http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: serverName, MinVersion: tls.VersionTLS12},
-	}}
-	defer hc.CloseIdleConnections()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+addr+path, nil)
-	if err != nil {
-		return nil, err
+// ExitUnverified is the exit status of a ScrapeCommand whose server's
+// certificate does not verify.
+const ExitUnverified = 60
+
+// ScrapeCommand is the curl command line that GETs path over HTTPS from
+// serverName, resolved to addr, on port, through no proxy, with the bearer
+// token in tokenFile, trusting caFile alone and verifying the certificate for
+// serverName. curl exits 0 on a 2xx answer, ExitUnverified where the
+// certificate does not verify, and 22 on an HTTP error.
+func ScrapeCommand(addr netip.Addr, port int32, serverName, path, caFile, tokenFile string) []string {
+	resolved := addr.String()
+	if addr.Is6() {
+		resolved = "[" + resolved + "]"
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := hc.Do(req)
-	if err != nil {
-		return nil, err
+	hostPort := net.JoinHostPort(serverName, strconv.Itoa(int(port)))
+	return []string{
+		"curl", "--silent", "--show-error", "--fail", "--max-time", "10", "--output", "/dev/null", "--noproxy", "*",
+		"--cacert", caFile,
+		"--resolve", hostPort + ":" + resolved,
+		"--variable", "token@" + tokenFile,
+		"--expand-header", "Authorization: Bearer {{token:trim}}",
+		"https://" + hostPort + path,
 	}
-	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GET %s: %s", path, resp.Status)
-	}
-	return body, nil
 }
