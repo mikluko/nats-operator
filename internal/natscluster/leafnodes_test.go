@@ -142,10 +142,7 @@ func (b *booted) clientURL(i int) string {
 }
 
 // bootRendered starts every server of nc from its config rendered under
-// trust with remotes, on loopback ports the servers bind, with the leafnode
-// listener's certificate and the leaf remotes Secret's files written where
-// the layout names them. Each server's config file is rewritten with its
-// bound ports and every route; the monitoring port stays server-picked.
+// trust with remotes, rewriting each config with every bound port.
 func bootRendered(t *testing.T, nc *clusterv1beta1.NatsCluster, trust *Trust, remotes []LeafRemote, leafTLSDir string) *booted {
 	t.Helper()
 	b := &booted{nc: nc, trust: trust, remotesDir: t.TempDir()}

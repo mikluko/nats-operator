@@ -2,7 +2,6 @@ controllers := `cd cmd && echo *-controller`
 envtest_k8s_version := env("ENVTEST_K8S_VERSION", "1.36.x")
 bin := justfile_directory() / "bin"
 lychee_version := "0.24.2"
-golangci_lint_version := "2.14.0"
 
 default: generate build test lint
 
@@ -27,31 +26,8 @@ test:
     env -u KUBEBUILDER_ASSETS go test -race ./...
     env -u KUBEBUILDER_ASSETS go test -run OperatorReload ./internal/natscluster
 
-lint: golangci-lint
-    "{{ bin }}/golangci-lint" run
-
-# Installs the pinned golangci-lint into bin/.
-golangci-lint:
-    #!/usr/bin/env sh
-    set -eu
-    if [ "$("{{ bin }}/golangci-lint" version --short 2>/dev/null)" = "{{ golangci_lint_version }}" ]; then
-        exit 0
-    fi
-    case "{{ os() }}-{{ arch() }}" in
-        macos-aarch64) target=darwin-arm64 sum=5ef5f36a7147e91dc58ef9ef4d11bb7bad5ead0c76eb6c01327a73c641d1dcc3 ;;
-        linux-x86_64) target=linux-amd64 sum=ab90aeb7b066f92a33415b638a50fe5344bbb75a0d32ad30cc248d88f81032ab ;;
-        linux-aarch64) target=linux-arm64 sum=ee7ec5f3453d15ddf106fae5a4d6c71737712348a979d1fe9cd52ec7ea299bae ;;
-        *) echo "no pinned golangci-lint build for {{ os() }}-{{ arch() }}" >&2; exit 1 ;;
-    esac
-    name="golangci-lint-{{ golangci_lint_version }}-$target"
-    tmp="$(mktemp -d "${TMPDIR:-/tmp}/golangci-lint.XXXXXX")"
-    trap 'rm -rf "$tmp"' EXIT
-    curl -fsSLo "$tmp/golangci-lint.tar.gz" \
-        "https://github.com/golangci/golangci-lint/releases/download/v{{ golangci_lint_version }}/$name.tar.gz"
-    echo "$sum  $tmp/golangci-lint.tar.gz" | shasum -a 256 -c -
-    tar -xzf "$tmp/golangci-lint.tar.gz" -C "$tmp"
-    mkdir -p "{{ bin }}"
-    mv "$tmp/$name/golangci-lint" "{{ bin }}/golangci-lint"
+lint:
+    go tool -modfile=hack/tools/go.mod golangci-lint run
 
 fmt:
     gofmt -s -w .

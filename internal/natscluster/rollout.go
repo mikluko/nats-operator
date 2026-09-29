@@ -405,9 +405,8 @@ func (r *Reconciler) rollout(ctx context.Context, nc *clusterv1beta1.NatsCluster
 	return d, nil
 }
 
-// clearAnnotation removes annotation key from nc and returns a conflict
-// when key no longer holds acted, the value read and acted on, even where
-// a status patch since has refreshed nc.
+// clearAnnotation removes annotation key from nc, or returns a conflict
+// when it no longer holds acted.
 func (r *Reconciler) clearAnnotation(ctx context.Context, nc *clusterv1beta1.NatsCluster, key, acted string) error {
 	if got := nc.Annotations[key]; got != acted {
 		return fmt.Errorf("clear %s: %w", key, apierrors.NewConflict(

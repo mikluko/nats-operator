@@ -50,15 +50,6 @@
     },
     {
       "customType": "regex",
-      "description": "golangci-lint; the PR fails ci until the Justfile's checksums are the new release's",
-      "managerFilePatterns": ["/^Justfile$/"],
-      "matchStrings": ["golangci_lint_version := \"(?<currentValue>[^\"]+)\""],
-      "depNameTemplate": "golangci/golangci-lint",
-      "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v(?<version>.+)$"
-    },
-    {
-      "customType": "regex",
       "description": "ko, wherever setup-ko installs it",
       "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/"],
       "matchStrings": ["uses: ko-build/setup-ko@\\S+ # \\S+\\s+with:\\s+version: (?<currentValue>v\\S+)"],

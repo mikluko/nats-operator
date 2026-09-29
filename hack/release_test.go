@@ -16,6 +16,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 	yamlv3 "go.yaml.in/yaml/v3"
+	"golang.org/x/mod/modfile"
+	"golang.org/x/mod/semver"
 	"sigs.k8s.io/yaml"
 
 	"github.com/mikluko/nats-operator/internal/e2e"
@@ -419,9 +421,13 @@ func TestRelease_AttestsBeforeRelease(t *testing.T) {
 	}
 }
 
-// TestCI_LintsWithJustfilePin pins that ci lints through the Justfile's
-// golangci-lint, the one pin of its version.
-func TestCI_LintsWithJustfilePin(t *testing.T) {
+// toolsModfile pins golangci-lint in a module graph apart from the
+// controllers'.
+const toolsModfile = "hack/tools/go.mod"
+
+// TestCI_LintsWithToolsPin pins that ci lints through `just lint`, which runs
+// the golangci-lint toolsModfile requires, the one pin of its version.
+func TestCI_LintsWithToolsPin(t *testing.T) {
 	var lints int
 	files, err := filepath.Glob("../.github/workflows/*.yml")
 	require.NoError(t, err)
@@ -437,6 +443,57 @@ func TestCI_LintsWithJustfilePin(t *testing.T) {
 		}
 	}
 	require.Equal(t, 1, lints)
+
+	const lintModule = "github.com/golangci/golangci-lint/v2"
+	b, err := os.ReadFile(filepath.Join("..", toolsModfile))
+	require.NoError(t, err)
+	tools, err := modfile.Parse(toolsModfile, b, nil)
+	require.NoError(t, err)
+	require.Len(t, tools.Tool, 1)
+	require.Equal(t, lintModule+"/cmd/golangci-lint", tools.Tool[0].Path)
+	var version string
+	for _, r := range tools.Require {
+		if r.Mod.Path == lintModule {
+			version = r.Mod.Version
+		}
+	}
+	require.True(t, semver.IsValid(version), "%s requires %s at %q", toolsModfile, lintModule, version)
+
+	b, err = os.ReadFile("../go.mod")
+	require.NoError(t, err)
+	root, err := modfile.Parse("go.mod", b, nil)
+	require.NoError(t, err)
+	for _, r := range root.Require {
+		require.NotEqual(t, lintModule, r.Mod.Path, "go.mod")
+	}
+
+	just, err := exec.LookPath("just")
+	if err != nil {
+		t.Skip("just is not on PATH")
+	}
+	out, err := exec.Command(just, "--justfile", "../Justfile", "--dump", "--dump-format", "json").Output()
+	require.NoError(t, err)
+	var dump struct {
+		Recipes map[string]struct {
+			Body         [][]json.RawMessage `json:"body"`
+			Dependencies []json.RawMessage   `json:"dependencies"`
+		} `json:"recipes"`
+	}
+	require.NoError(t, json.Unmarshal(out, &dump))
+	lint := dump.Recipes["lint"]
+	require.Empty(t, lint.Dependencies)
+	require.Len(t, lint.Body, 1)
+	var cmdline string
+	require.Len(t, lint.Body[0], 1)
+	require.NoError(t, json.Unmarshal(lint.Body[0][0], &cmdline))
+	args := strings.Fields(cmdline)
+	require.Equal(t, []string{"go", "tool", "-modfile=" + toolsModfile, "golangci-lint", "run"}, args)
+
+	cmd := exec.Command(args[0], append(args[1:len(args)-1], "version", "--short")...)
+	cmd.Dir = ".."
+	out, err = cmd.Output()
+	require.NoError(t, err)
+	require.Equal(t, strings.TrimPrefix(version, "v"), strings.TrimSpace(string(out)))
 }
 
 // renovateConfig is the part of .github/renovate.json its regex managers
@@ -530,7 +587,6 @@ func TestRenovate_WatchesToolPins(t *testing.T) {
 		"helm-unittest/helm-unittest",
 		"gohugoio/hugo",
 		"lycheeverse/lychee",
-		"golangci/golangci-lint",
 		"cgr.dev/chainguard/static",
 		"natsio/prometheus-nats-exporter",
 		"golang.org/x/vuln",
@@ -541,6 +597,20 @@ func TestRenovate_WatchesToolPins(t *testing.T) {
 	}
 	require.Equal(t, pinned["kindest/node"]+1, found["kindest/node"], "internal/e2e.KindNodeImage")
 	require.Equal(t, 2, found["busybox"], "values.yaml and install.md")
+
+	var gomod struct {
+		Gomod struct {
+			ManagerFilePatterns []string `json:"managerFilePatterns"`
+		} `json:"gomod"`
+	}
+	require.NoError(t, json.Unmarshal(b, &gomod))
+	patterns := gomod.Gomod.ManagerFilePatterns
+	if len(patterns) == 0 {
+		patterns = []string{`/(^|/)go\.mod$/`}
+	}
+	require.True(t, slices.ContainsFunc(patterns, func(p string) bool {
+		return regexp.MustCompile(p[1 : len(p)-1]).MatchString(toolsModfile)
+	}), "gomod manager misses %s", toolsModfile)
 }
 
 func TestRenovate_OwnsActionsAndGomod(t *testing.T) {
