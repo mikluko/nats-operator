@@ -47,41 +47,46 @@ jobs:
           fetch-depth: 0
       - id: changelog
         uses: mikluko/action-changelog@6dc550835d89afd4e826611ec06b9e054a362cb0 # v1.3.1
-      # A version whose chart is in the registry is published, tagged or not.
+      # A version whose chart is in the registry is published; untagged, it fails
+      # the plan until a human tags it.
       - id: due
         name: Due
         env:
           VERSION: ${{ steps.changelog.outputs.version }}
           TAGGED: ${{ steps.changelog.outputs['already-tagged'] }}
-          ACTOR: ${{ github.actor }}
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          repository=${CHART_REPOSITORY#oci://ghcr.io/}/nats-operator
+          package=${CHART_REPOSITORY#oci://ghcr.io/"$GITHUB_REPOSITORY_OWNER"/}/nats-operator
+          versions="$GITHUB_API_URL/users/$GITHUB_REPOSITORY_OWNER/packages/container/${package//\//%2F}/versions"
           due=false
           if [ -z "$VERSION" ]; then
             reason="CHANGELOG.md names no version"
           elif [ "$TAGGED" != false ]; then
             reason="v$VERSION is tagged"
           else
-            status=$(printf 'user = "%s:%s"\n' "$ACTOR" "$TOKEN" | curl -sS -K - -o "$RUNNER_TEMP/token.json" -w '%{http_code}' \
-              "https://ghcr.io/token?scope=repository:$repository:pull")
-            case "$status" in
-              200)
-                bearer=$(jq -r .token "$RUNNER_TEMP/token.json")
-                status=$(printf 'header = "Authorization: Bearer %s"\n' "$bearer" | curl -sS -K - -o /dev/null -w '%{http_code}' --head \
-                  -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
-                  "https://ghcr.io/v2/$repository/manifests/$VERSION")
+            pushed=false
+            page=1
+            while :; do
+              status=$(printf 'header = "Authorization: Bearer %s"\n' "$TOKEN" | curl -sS -K - -o "$RUNNER_TEMP/versions.json" -w '%{http_code}' \
+                -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "$versions?per_page=100&page=$page")
+              [ "$status" = 200 ] || break
+              pushed=$(jq --arg v "$VERSION" 'if type == "array" then any(.[].metadata.container.tags[]?; . == $v) else error("not a version list") end' "$RUNNER_TEMP/versions.json")
+              count=$(jq length "$RUNNER_TEMP/versions.json")
+              [ "$pushed" = false ] && [ "$count" -eq 100 ] || break
+              page=$((page + 1))
+            done
+            case "$status:$pushed" in
+              200:true)
+                echo "::error::chart $VERSION is in $CHART_REPOSITORY but v$VERSION is untagged; tag it"
+                exit 1
                 ;;
-              403) status=404 ;;
-            esac
-            case "$status" in
-              200) reason="chart $VERSION is in $CHART_REPOSITORY" ;;
-              404)
+              200:false | 404:false)
                 due=true
                 reason="v$VERSION is untagged and its chart is not in $CHART_REPOSITORY"
                 ;;
               *)
-                echo "ghcr.io answered $status for $repository:$VERSION" >&2
+                echo "::error::GitHub answered $status for the versions of package $package"
                 exit 1
                 ;;
             esac

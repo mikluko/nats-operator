@@ -5,7 +5,7 @@
 // It reads from stdin the JSON list the release workflow's images job
 // outputs, [{"name": "<repository>", "digest": "sha256:<hex>"}], and fills in
 // image.digest of every top-level block whose image.repository is under
-// -registry.
+// -registry. It exists because yq re-encodes the file and drops its blank lines.
 package main
 
 import (

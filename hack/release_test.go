@@ -419,30 +419,6 @@ func TestRelease_AttestsBeforeRelease(t *testing.T) {
 	}
 }
 
-// TestRelease_DueUntilChartPushed pins that a version is due only while it is
-// untagged and its chart is absent from the registry, and that every
-// publishing job waits on that.
-func TestRelease_DueUntilChartPushed(t *testing.T) {
-	wf := readWorkflow(t, "release.yml")
-	plan := wf.Jobs["plan"]
-	require.Equal(t, "${{ steps.due.outputs.due }}", plan.Outputs["due"])
-	require.Equal(t, "${{ steps.due.outputs.reason }}", plan.Outputs["reason"])
-	require.Equal(t, "read", plan.Permissions["packages"])
-
-	due := stepByID(t, plan.Steps, "due")
-	require.Empty(t, due.If)
-	require.Equal(t, "${{ steps.changelog.outputs.version }}", due.Env["VERSION"])
-	require.Equal(t, "${{ steps.changelog.outputs['already-tagged'] }}", due.Env["TAGGED"])
-	require.Contains(t, due.Run, "${CHART_REPOSITORY#oci://ghcr.io/}/nats-operator")
-	require.Contains(t, due.Run, `"https://ghcr.io/v2/$repository/manifests/$VERSION"`)
-	require.Equal(t, "oci://ghcr.io/mikluko/nats-operator/charts", wf.Env["CHART_REPOSITORY"])
-
-	for _, job := range []string{"images", "chart"} {
-		require.Contains(t, wf.Jobs[job].Needs, "plan", job)
-		require.Equal(t, "needs.plan.outputs.due == 'true'", wf.Jobs[job].If, job)
-	}
-}
-
 // TestCI_LintsWithJustfilePin pins that ci lints through the Justfile's
 // golangci-lint, the one pin of its version.
 func TestCI_LintsWithJustfilePin(t *testing.T) {

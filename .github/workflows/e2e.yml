@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       stories:
-        description: Comma-separated story numbers; empty runs every single-cluster story.
+        description: Comma-separated story numbers; empty runs every story.
         type: string
         default: ""
       watch-namespaces:
