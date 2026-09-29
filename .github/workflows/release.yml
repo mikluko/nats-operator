@@ -47,7 +47,6 @@ jobs:
           fetch-depth: 0
       - id: changelog
         uses: mikluko/action-changelog@6dc550835d89afd4e826611ec06b9e054a362cb0 # v1.3.1
-      # A version whose chart is in the registry but untagged fails the plan.
       - id: due
         name: Due
         env:

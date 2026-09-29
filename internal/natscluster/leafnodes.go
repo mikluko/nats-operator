@@ -105,7 +105,7 @@ type LeafRemote struct {
 	Refusal *metav1.Condition
 }
 
-// admitted returns the remotes of remotes no refusal keeps out.
+// admitted returns the remotes without a Refusal.
 func admitted(remotes []LeafRemote) []LeafRemote {
 	var out []LeafRemote
 	for _, r := range remotes {

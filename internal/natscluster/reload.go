@@ -54,8 +54,9 @@ func (a *configApply) restart(server, reason string) {
 }
 
 // applyConfig reloads every server whose StatefulSet or ConfigMap is not on
-// plan's revision and whose change reloads, and reports the rest, and any
-// reload not confirmed within reloadWindow, as needing a restart.
+// plan's revision and whose change reloads, recreating the deleted ConfigMap
+// of a server on that revision, and reports the rest, and any reload not
+// confirmed within reloadWindow, as needing a restart.
 func (r *Reconciler) applyConfig(ctx context.Context, nc *clusterv1beta1.NatsCluster, plan *Plan, sts map[string]*appsv1.StatefulSet, snap *sysobs.Snapshot) (configApply, error) {
 	var a configApply
 	var rl ServerReloader
@@ -82,10 +83,12 @@ func (r *Reconciler) applyConfig(ctx context.Context, nc *clusterv1beta1.NatsClu
 		if apierrors.IsNotFound(err) {
 			if !onTarget {
 				a.restart(s.Name, fmt.Sprintf("ConfigMap %s does not exist", s.ConfigMap.Name))
+				continue
 			}
-			continue
-		}
-		if err != nil {
+			if cm, err = r.recreateConfigMap(ctx, nc, s); err != nil {
+				return a, err
+			}
+		} else if err != nil {
 			return a, fmt.Errorf("get configmap %s: %w", s.ConfigMap.Name, err)
 		}
 		if onTarget && cm.Annotations[AnnotationConfigRevision] == plan.Revision {
@@ -228,6 +231,21 @@ func serverID(snap *sysobs.Snapshot, name string) string {
 func (r *Reconciler) reloadExpired(cm *corev1.ConfigMap) bool {
 	since, err := time.Parse(time.RFC3339, cm.Annotations[AnnotationReloadSince])
 	return err != nil || r.now().Sub(since) > reloadWindow
+}
+
+// recreateConfigMap creates server s's rendered ConfigMap without a
+// revision, since which revision its server has loaded is unknown.
+func (r *Reconciler) recreateConfigMap(ctx context.Context, nc *clusterv1beta1.NatsCluster, s Server) (*corev1.ConfigMap, error) {
+	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: s.ConfigMap.Name, Namespace: s.ConfigMap.Namespace}}
+	if err := r.createOrUpdate(ctx, nc, cm, func() {
+		cm.Labels = s.ConfigMap.Labels
+		cm.Annotations = merged(cm.Annotations, s.ConfigMap.Annotations)
+		delete(cm.Annotations, AnnotationConfigRevision)
+		cm.Data = s.ConfigMap.Data
+	}); err != nil {
+		return nil, fmt.Errorf("recreate configmap %s: %w", cm.Name, err)
+	}
+	return cm, nil
 }
 
 // writeForReload writes server s's rendered config into cm, marked for a

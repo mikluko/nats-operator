@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -220,6 +221,59 @@ func TestChangeRestartReasonDigest(t *testing.T) {
 	require.Equal(t, "version 2.14.1 -> 2.15.0 is restart-only", changeRestartReason(nc, cur, &corev1.ConfigMap{}, s))
 }
 
+// reloadEnv is plan's servers created on a fake client, controlled by nc,
+// with a reconciler reloading them through server.
+type reloadEnv struct {
+	c      client.Client
+	r      *Reconciler
+	server *fakeReloader
+	names  []string
+	snap   *sysobs.Snapshot
+	nc     *clusterv1beta1.NatsCluster
+}
+
+func reloadFixture(t *testing.T, nc *clusterv1beta1.NatsCluster, plan *Plan) *reloadEnv {
+	t.Helper()
+	e := &reloadEnv{c: fake.NewClientBuilder().WithScheme(leafScheme(t)).Build(), snap: &sysobs.Snapshot{}, nc: nc}
+	for _, s := range plan.Servers {
+		for _, obj := range []client.Object{s.StatefulSet.DeepCopy(), s.ConfigMap.DeepCopy()} {
+			require.NoError(t, controllerutil.SetControllerReference(nc, obj, e.c.Scheme()))
+			require.NoError(t, e.c.Create(t.Context(), obj))
+		}
+		e.snap.Servers = append(e.snap.Servers, sysobs.Server{Name: s.Name, ID: s.Name, Metadata: map[string]string{}})
+		e.names = append(e.names, s.Name)
+	}
+	e.server = &fakeReloader{c: e.c}
+	e.server.reset(nc.Namespace)
+	e.r = &Reconciler{Client: e.c, Now: func() time.Time { return time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC) },
+		Reloader: func(context.Context, *clusterv1beta1.NatsCluster) (ServerReloader, error) { return e.server, nil }}
+	return e
+}
+
+func (e *reloadEnv) statefulSets(t *testing.T) map[string]*appsv1.StatefulSet {
+	t.Helper()
+	sts := map[string]*appsv1.StatefulSet{}
+	for _, name := range e.names {
+		sts[name] = &appsv1.StatefulSet{}
+		require.NoError(t, e.c.Get(t.Context(), types.NamespacedName{Namespace: e.nc.Namespace, Name: name}, sts[name]))
+	}
+	return sts
+}
+
+func (e *reloadEnv) apply(t *testing.T, plan *Plan) configApply {
+	t.Helper()
+	got, err := e.r.applyConfig(t.Context(), e.nc, plan, e.statefulSets(t), e.snap)
+	require.NoError(t, err)
+	return got
+}
+
+func (e *reloadEnv) configMap(t *testing.T, name string) *corev1.ConfigMap {
+	t.Helper()
+	cm := &corev1.ConfigMap{}
+	require.NoError(t, e.c.Get(t.Context(), types.NamespacedName{Namespace: e.nc.Namespace, Name: configMapName(name)}, cm))
+	return cm
+}
+
 // TestApplyConfigRevertDuringPendingReload pins that a server whose config
 // returns to its StatefulSet's revision while its reload to another is
 // unconfirmed gets that revision written back to its ConfigMap and reloaded.
@@ -235,74 +289,75 @@ func TestApplyConfigRevertDuringPendingReload(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, a.Revision, b.Revision)
 
-	c := fake.NewClientBuilder().WithScheme(leafScheme(t)).Build()
-	snap := &sysobs.Snapshot{}
-	var names []string
-	for _, s := range a.Servers {
-		for _, obj := range []client.Object{s.StatefulSet.DeepCopy(), s.ConfigMap.DeepCopy()} {
-			require.NoError(t, controllerutil.SetControllerReference(nc, obj, c.Scheme()))
-			require.NoError(t, c.Create(ctx, obj))
-		}
-		snap.Servers = append(snap.Servers, sysobs.Server{Name: s.Name, ID: s.Name})
-		names = append(names, s.Name)
-	}
-	server := &fakeReloader{c: c, lag: true}
-	server.reset(nc.Namespace)
-	clock := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
-	r := &Reconciler{Client: c, Now: func() time.Time { return clock },
-		Reloader: func(context.Context, *clusterv1beta1.NatsCluster) (ServerReloader, error) { return server, nil }}
-	apply := func(t *testing.T, plan *Plan) configApply {
-		t.Helper()
-		sts := map[string]*appsv1.StatefulSet{}
-		for _, name := range names {
-			sts[name] = &appsv1.StatefulSet{}
-			require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: nc.Namespace, Name: name}, sts[name]))
-		}
-		got, err := r.applyConfig(ctx, nc, plan, sts, snap)
-		require.NoError(t, err)
-		return got
-	}
-	configMap := func(t *testing.T, name string) *corev1.ConfigMap {
-		t.Helper()
-		cm := &corev1.ConfigMap{}
-		require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: nc.Namespace, Name: configMapName(name)}, cm))
-		return cm
+	e := reloadFixture(t, nc, a)
+	e.server.lag = true
+
+	require.ElementsMatch(t, e.names, e.apply(t, b).Reloading)
+	for _, name := range e.names {
+		require.Equal(t, b.Revision, e.configMap(t, name).Annotations[AnnotationConfigRevision])
 	}
 
-	require.ElementsMatch(t, names, apply(t, b).Reloading)
-	for _, name := range names {
-		require.Equal(t, b.Revision, configMap(t, name).Annotations[AnnotationConfigRevision])
-	}
-
-	calls := len(server.reloaded())
-	got := apply(t, a)
-	require.ElementsMatch(t, names, got.Reloading)
+	calls := len(e.server.reloaded())
+	got := e.apply(t, a)
+	require.ElementsMatch(t, e.names, got.Reloading)
 	require.Empty(t, got.Restart)
-	require.Len(t, server.reloaded(), calls+len(names), "the reverted revision was not reloaded")
+	require.Len(t, e.server.reloaded(), calls+len(e.names), "the reverted revision was not reloaded")
 	for _, s := range a.Servers {
-		cm := configMap(t, s.Name)
+		cm := e.configMap(t, s.Name)
 		require.Equal(t, a.Revision, cm.Annotations[AnnotationConfigRevision], s.Name)
 		require.Equal(t, s.ConfigMap.Data, cm.Data, s.Name)
 	}
 
-	server.lag = false
-	got = apply(t, a)
-	require.ElementsMatch(t, names, got.Reloaded)
+	e.server.lag = false
+	got = e.apply(t, a)
+	require.ElementsMatch(t, e.names, got.Reloaded)
 	require.Empty(t, got.Reloading)
 	for _, s := range a.Servers {
 		want, err := configDigest([]byte(s.ConfigMap.Data[configFile]))
 		require.NoError(t, err)
-		state, err := server.Config(ctx, s.Name)
+		state, err := e.server.Config(ctx, s.Name)
 		require.NoError(t, err)
 		require.Equal(t, want, state.Digest, s.Name)
 		sts := &appsv1.StatefulSet{}
-		require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(s.StatefulSet), sts))
+		require.NoError(t, e.c.Get(ctx, client.ObjectKeyFromObject(s.StatefulSet), sts))
 		require.Equal(t, a.Revision, sts.Annotations[AnnotationConfigRevision], s.Name)
 	}
 
-	calls = len(server.reloaded())
-	require.Empty(t, apply(t, a))
-	require.Len(t, server.reloaded(), calls, "a confirmed revision was reloaded again")
+	calls = len(e.server.reloaded())
+	require.Empty(t, e.apply(t, a))
+	require.Len(t, e.server.reloaded(), calls, "a confirmed revision was reloaded again")
+}
+
+// TestApplyConfigRecreatesConfigMap pins that a server on the plan's
+// revision whose ConfigMap was deleted gets it back with the plan's data and
+// is reloaded until its server confirms that data.
+func TestApplyConfigRecreatesConfigMap(t *testing.T) {
+	nc := storyCluster(t)
+	nc.UID = "demo-uid"
+	a, err := Render(nc, Inputs{})
+	require.NoError(t, err)
+	e := reloadFixture(t, nc, a)
+	e.server.lag = true
+	require.Empty(t, e.apply(t, a))
+
+	gone := a.Servers[0]
+	require.NoError(t, e.c.Delete(t.Context(), gone.ConfigMap.DeepCopy()))
+
+	got := e.apply(t, a)
+	require.Equal(t, []string{gone.Name}, got.Reloading)
+	require.Empty(t, got.Restart)
+	cm := e.configMap(t, gone.Name)
+	require.Equal(t, gone.ConfigMap.Data, cm.Data)
+	require.Equal(t, a.Revision, cm.Annotations[AnnotationConfigRevision])
+	require.True(t, metav1.IsControlledBy(cm, nc))
+	require.NotEqual(t, a.Revision, e.statefulSets(t)[gone.Name].Annotations[AnnotationConfigRevision])
+
+	require.Equal(t, []string{gone.Name}, e.apply(t, a).Reloading, "an unconfirmed reload was dropped")
+
+	e.server.lag = false
+	require.Equal(t, []string{gone.Name}, e.apply(t, a).Reloaded)
+	require.Equal(t, a.Revision, e.statefulSets(t)[gone.Name].Annotations[AnnotationConfigRevision])
+	require.Empty(t, e.apply(t, a))
 }
 
 // TestRestartServerToTemplateRevision pins that a restart fallback for a
@@ -320,68 +375,39 @@ func TestRestartServerToTemplateRevision(t *testing.T) {
 	b, err := Render(retagged, Inputs{})
 	require.NoError(t, err)
 
-	c := fake.NewClientBuilder().WithScheme(leafScheme(t)).Build()
-	snap := &sysobs.Snapshot{}
-	var names []string
-	for _, s := range a.Servers {
-		for _, obj := range []client.Object{s.StatefulSet.DeepCopy(), s.ConfigMap.DeepCopy()} {
-			require.NoError(t, controllerutil.SetControllerReference(nc, obj, c.Scheme()))
-			require.NoError(t, c.Create(ctx, obj))
-		}
-		snap.Servers = append(snap.Servers, sysobs.Server{Name: s.Name, ID: s.Name, Metadata: map[string]string{}})
-		names = append(names, s.Name)
-	}
-	server := &fakeReloader{c: c}
-	server.reset(nc.Namespace)
-	r := &Reconciler{Client: c, Now: func() time.Time { return time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC) },
-		Reloader: func(context.Context, *clusterv1beta1.NatsCluster) (ServerReloader, error) { return server, nil }}
-	statefulSets := func(t *testing.T) map[string]*appsv1.StatefulSet {
-		t.Helper()
-		sts := map[string]*appsv1.StatefulSet{}
-		for _, name := range names {
-			sts[name] = &appsv1.StatefulSet{}
-			require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: nc.Namespace, Name: name}, sts[name]))
-		}
-		return sts
-	}
-	apply := func(t *testing.T, plan *Plan) configApply {
-		t.Helper()
-		got, err := r.applyConfig(ctx, nc, plan, statefulSets(t), snap)
-		require.NoError(t, err)
-		return got
-	}
+	e := reloadFixture(t, nc, a)
 	report := func(revision string) {
-		for i := range snap.Servers {
-			snap.Servers[i].Metadata[MetadataConfigRevision] = revision
+		for i := range e.snap.Servers {
+			e.snap.Servers[i].Metadata[MetadataConfigRevision] = revision
 		}
 	}
 
-	require.ElementsMatch(t, names, apply(t, b).Reloaded)
+	require.ElementsMatch(t, e.names, e.apply(t, b).Reloaded)
 	report(b.Revision)
 
-	server.reject = errors.New("refused")
-	back := apply(t, a)
-	require.ElementsMatch(t, names, slices.Collect(maps.Keys(back.Restart)))
+	e.server.reject = errors.New("refused")
+	back := e.apply(t, a)
+	require.ElementsMatch(t, e.names, slices.Collect(maps.Keys(back.Restart)))
 
 	step := a.Servers[0]
-	cur := statefulSets(t)[step.Name]
+	cur := e.statefulSets(t)[step.Name]
 	require.Equal(t, a.Revision, cur.Spec.Template.Annotations[AnnotationConfigRevision], "the pod template left revision A")
 	for gen := 1; gen <= 2; gen++ {
 		was := cur.Spec.Template.DeepCopy()
-		_, err := r.restartServer(ctx, nc, step, cur, back.Restart[step.Name])
+		_, err := e.r.restartServer(ctx, nc, step, cur, back.Restart[step.Name])
 		require.NoError(t, err)
-		cur = statefulSets(t)[step.Name]
+		cur = e.statefulSets(t)[step.Name]
 		require.NotEqual(t, was, &cur.Spec.Template, "the restart left the pod template unchanged")
 		require.Equal(t, strconv.Itoa(gen), cur.Spec.Template.Annotations[AnnotationRestartGeneration])
 	}
 
 	gate := func(t *testing.T) gateState {
 		t.Helper()
-		sets := statefulSets(t)
+		sets := e.statefulSets(t)
 		for _, sts := range sets {
 			sts.Status = appsv1.StatefulSetStatus{ObservedGeneration: sts.Generation, UpdatedReplicas: 1, ReadyReplicas: 1}
 		}
-		return judgeGate(r.rolloutState(nc, a, Observed{StatefulSets: sets, Snapshot: snap, Apply: apply(t, a)}))
+		return judgeGate(e.r.rolloutState(nc, a, Observed{StatefulSets: sets, Snapshot: e.snap, Apply: e.apply(t, a)}))
 	}
 	g := gate(t)
 	require.Equal(t, GateTargetRevision, g.waitingFor)
