@@ -47,8 +47,7 @@ jobs:
           fetch-depth: 0
       - id: changelog
         uses: mikluko/action-changelog@6dc550835d89afd4e826611ec06b9e054a362cb0 # v1.3.1
-      # A version whose chart is in the registry is published; untagged, it fails
-      # the plan until a human tags it.
+      # A version whose chart is in the registry but untagged fails the plan.
       - id: due
         name: Due
         env:
@@ -56,37 +55,38 @@ jobs:
           TAGGED: ${{ steps.changelog.outputs['already-tagged'] }}
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          package=${CHART_REPOSITORY#oci://ghcr.io/"$GITHUB_REPOSITORY_OWNER"/}/nats-operator
-          versions="$GITHUB_API_URL/users/$GITHUB_REPOSITORY_OWNER/packages/container/${package//\//%2F}/versions"
+          repository=${CHART_REPOSITORY#oci://}
+          host=${repository%%/*}
+          package=${repository#*/}/nats-operator
           due=false
           if [ -z "$VERSION" ]; then
             reason="CHANGELOG.md names no version"
           elif [ "$TAGGED" != false ]; then
             reason="v$VERSION is tagged"
           else
-            pushed=false
-            page=1
-            while :; do
-              status=$(printf 'header = "Authorization: Bearer %s"\n' "$TOKEN" | curl -sS -K - -o "$RUNNER_TEMP/versions.json" -w '%{http_code}' \
-                -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' \
-                "$versions?per_page=100&page=$page")
-              [ "$status" = 200 ] || break
-              pushed=$(jq --arg v "$VERSION" 'if type == "array" then any(.[].metadata.container.tags[]?; . == $v) else error("not a version list") end' "$RUNNER_TEMP/versions.json")
-              count=$(jq length "$RUNNER_TEMP/versions.json")
-              [ "$pushed" = false ] && [ "$count" -eq 100 ] || break
-              page=$((page + 1))
-            done
-            case "$status:$pushed" in
-              200:true)
-                echo "::error::chart $VERSION is in $CHART_REPOSITORY but v$VERSION is untagged; tag it"
+            status=$(printf 'user = "%s:%s"\n' "$GITHUB_ACTOR" "$TOKEN" | curl -sS -K - -o "$RUNNER_TEMP/token.json" -w '%{http_code}' \
+              "https://$host/token?service=$host&scope=repository:$package:pull")
+            bearer=$(jq -r 'try .token // ""' "$RUNNER_TEMP/token.json" 2>/dev/null || true)
+            if [ "$status" != 200 ] || [ -z "$bearer" ]; then
+              echo "::error::$host answered $status without a pull token for $package"
+              exit 1
+            fi
+            echo "::add-mask::$bearer"
+            status=$(printf 'header = "Authorization: Bearer %s"\n' "$bearer" | curl -sS -K - -o "$RUNNER_TEMP/manifest.json" -w '%{http_code}' \
+              -H 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json' \
+              "https://$host/v2/$package/manifests/$VERSION")
+            code=$(jq -r 'try .errors[0].code // ""' "$RUNNER_TEMP/manifest.json" 2>/dev/null || true)
+            case "$status:$code" in
+              200:*)
+                echo "::error::chart $VERSION is in $CHART_REPOSITORY but v$VERSION is untagged; re-run the failed jobs of the release run that pushed it"
                 exit 1
                 ;;
-              200:false | 404:false)
+              404:MANIFEST_UNKNOWN | 404:NAME_UNKNOWN)
                 due=true
                 reason="v$VERSION is untagged and its chart is not in $CHART_REPOSITORY"
                 ;;
               *)
-                echo "::error::GitHub answered $status for the versions of package $package"
+                echo "::error::$host answered $status ${code:-with no error code} for $package:$VERSION"
                 exit 1
                 ;;
             esac
