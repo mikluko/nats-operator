@@ -37,8 +37,12 @@ const (
 // selfSignedValidity. A certificate one call signs verifies against the CA
 // of any other call with the same nc and caKeyPair.
 func issueRouteSecrets(nc *clusterv1beta1.NatsCluster, hosts []string, caKeyPair *ecdsa.PrivateKey, now time.Time) (caSecret, routes *corev1.Secret, err error) {
+	caSerial, err := serial()
+	if err != nil {
+		return nil, nil, err
+	}
 	caTmpl := &x509.Certificate{
-		SerialNumber:          serial(),
+		SerialNumber:          caSerial,
 		Subject:               pkix.Name{CommonName: nc.Name + " route CA"},
 		NotBefore:             now.Add(-time.Hour),
 		NotAfter:              now.Add(selfSignedValidity),
@@ -63,8 +67,12 @@ func issueRouteSecrets(nc *clusterv1beta1.NatsCluster, hosts []string, caKeyPair
 	if err != nil {
 		return nil, nil, err
 	}
+	leafSerial, err := serial()
+	if err != nil {
+		return nil, nil, err
+	}
 	leafTmpl := &x509.Certificate{
-		SerialNumber: serial(),
+		SerialNumber: leafSerial,
 		Subject:      pkix.Name{CommonName: nc.Name + " routes"},
 		NotBefore:    now.Add(-time.Hour),
 		NotAfter:     now.Add(selfSignedValidity),
@@ -140,12 +148,12 @@ func routeRenewalDue(routes *corev1.Secret, ca *x509.Certificate, now time.Time)
 	return !now.Before(leaf.NotAfter.Add(-selfSignedRenewBefore)) || !now.Before(ca.NotAfter.Add(-selfSignedRenewBefore))
 }
 
-func serial() *big.Int {
+func serial() (*big.Int, error) {
 	n, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 127))
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("certificate serial: %w", err)
 	}
-	return n
+	return n, nil
 }
 
 // routesSecret names the Secret the route certificate is mounted from, or

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io/fs"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
@@ -14,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/html"
@@ -22,8 +24,12 @@ import (
 // siteBase is the base URL the site is built under in tests.
 const siteBase = "https://site.test/base/"
 
+// siteRemote is the host the theme fetches its icons from when building.
+const siteRemote = "unpkg.com:443"
+
 // buildSite renders docs/ under siteBase and returns the output directory.
-// It skips the test when hugo is not on PATH.
+// It skips the test when hugo is not on PATH, or when the build fails
+// while siteRemote is unreachable.
 func buildSite(t *testing.T) string {
 	t.Helper()
 	hugo, err := exec.LookPath("hugo")
@@ -34,6 +40,13 @@ func buildSite(t *testing.T) string {
 	cmd := exec.Command(hugo, "--gc", "--minify", "--baseURL", siteBase, "--destination", out, "--panicOnWarning")
 	cmd.Dir = "../docs"
 	combined, err := cmd.CombinedOutput()
+	if err != nil {
+		conn, dialErr := net.DialTimeout("tcp", siteRemote, 5*time.Second)
+		if dialErr != nil {
+			t.Skipf("hugo failed with %s unreachable (%v): %s", siteRemote, dialErr, combined)
+		}
+		_ = conn.Close()
+	}
 	require.NoError(t, err, "%s", combined)
 	return out
 }

@@ -450,8 +450,8 @@ func (r *Reconciler) createServer(ctx context.Context, nc *clusterv1beta1.NatsCl
 	return sts, nil
 }
 
-// readExisting reads obj, which a create found existing, from the API server
-// into obj, and returns a *notControlledError when nc does not control it.
+// readExisting reads obj through uncached and returns a *notControlledError
+// when nc does not control it.
 func (r *Reconciler) readExisting(ctx context.Context, nc *clusterv1beta1.NatsCluster, obj client.Object) error {
 	if err := r.uncached().Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
 		return fmt.Errorf("read existing %s: %w", obj.GetName(), err)

@@ -419,9 +419,9 @@ func (r *Resolvers) setRoster(st *resolverState, answered map[string]bool) bool 
 	return changed
 }
 
-// mergeRoster returns the misses of each server in the roster after a poll
-// that answered answered, prev being those before it; changed reports a server
-// joining, leaving, or answering after a miss.
+// mergeRoster returns each roster server's missed-poll count after a poll
+// answered by answered, and whether a server joined, left, or answered
+// after a miss.
 func mergeRoster(prev map[string]int, answered map[string]bool) (next map[string]int, changed bool) {
 	next = make(map[string]int, max(len(prev), len(answered)))
 	for id, n := range prev {

@@ -314,12 +314,7 @@ func (r *Reconciler) requestReplacement(ctx context.Context, nc *clusterv1beta1.
 			return err
 		}
 	}
-	orig := nc.DeepCopy()
-	delete(nc.Annotations, clusterv1beta1.AnnotationReplaceServer)
-	if err := r.Client.Patch(ctx, nc, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{})); err != nil {
-		return fmt.Errorf("clear %s: %w", clusterv1beta1.AnnotationReplaceServer, err)
-	}
-	return nil
+	return r.clearAnnotation(ctx, nc, clusterv1beta1.AnnotationReplaceServer, name)
 }
 
 // remove carries out step. An evacuation or removal the meta leader

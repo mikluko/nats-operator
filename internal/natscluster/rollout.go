@@ -9,6 +9,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/events"
@@ -397,13 +398,28 @@ func (r *Reconciler) rollout(ctx context.Context, nc *clusterv1beta1.NatsCluster
 		telemetry.Emit(r.Recorder, nc, telemetry.RolloutStep, "restarting %s", d.Step)
 	}
 	if d.ClearForceStep {
-		orig := nc.DeepCopy()
-		delete(nc.Annotations, clusterv1beta1.AnnotationForceStep)
-		if err := r.Client.Patch(ctx, nc, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{})); err != nil {
-			return d, fmt.Errorf("clear %s: %w", clusterv1beta1.AnnotationForceStep, err)
+		if err := r.clearAnnotation(ctx, nc, clusterv1beta1.AnnotationForceStep, st.ForceStep); err != nil {
+			return d, err
 		}
 	}
 	return d, nil
+}
+
+// clearAnnotation removes annotation key from nc and returns a conflict
+// when key no longer holds acted, the value read and acted on, even where
+// a status patch since has refreshed nc.
+func (r *Reconciler) clearAnnotation(ctx context.Context, nc *clusterv1beta1.NatsCluster, key, acted string) error {
+	if got := nc.Annotations[key]; got != acted {
+		return fmt.Errorf("clear %s: %w", key, apierrors.NewConflict(
+			clusterv1beta1.GroupVersion.WithResource("natsclusters").GroupResource(), nc.Name,
+			fmt.Errorf("%s changed from %q to %q since it was read", key, acted, got)))
+	}
+	orig := nc.DeepCopy()
+	delete(nc.Annotations, key)
+	if err := r.Client.Patch(ctx, nc, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{})); err != nil {
+		return fmt.Errorf("clear %s: %w", key, err)
+	}
+	return nil
 }
 
 // restartServer writes server s's rendered ConfigMap, marked for a restart
