@@ -78,3 +78,9 @@ tests:
       - equal:
           path: spec.containers[0].image
           value: busybox:1.37.0@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  - it: mounts no ServiceAccount token into the test Pod
+    documentSelector: {path: kind, value: Pod}
+    asserts:
+      - equal:
+          path: spec.automountServiceAccountToken
+          value: false

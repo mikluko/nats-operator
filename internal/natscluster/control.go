@@ -47,8 +47,7 @@ func (r *Reconciler) createOrUpdate(ctx context.Context, nc *clusterv1beta1.Nats
 	return err
 }
 
-// refusals accumulates the objects several writes refused, so that one
-// refusal does not hide the next.
+// refusals accumulates the objects several writes refused.
 type refusals struct {
 	objects []string
 }

@@ -213,7 +213,7 @@ func TestEnvtestRemoval(t *testing.T) {
 		h.w.streams["R1"] = []string{"demo-4"}
 		h.w.streams["WIDE"] = slices.Clone(h.w.meta)
 		for _, s := range []string{"demo-3", "demo-4"} {
-			createClaim(t, c, "scaledown", s)
+			createClaim(t, c, h.get(t), s)
 		}
 		h.w.sync(t, ctx)
 
@@ -248,7 +248,7 @@ func TestEnvtestRemoval(t *testing.T) {
 
 	t.Run("replace-server replaces one server under its own name", func(t *testing.T) {
 		h := setUp(t, "replace", 3, "demo-0")
-		createClaim(t, c, "replace", "demo-1")
+		createClaim(t, c, h.get(t), "demo-1")
 		before := h.sts(t, "demo-1").UID
 
 		nc := h.get(t)
@@ -291,7 +291,7 @@ func TestEnvtestRemoval(t *testing.T) {
 
 	t.Run("a replacement whose claim deletion failed deletes the claim before recreating the server", func(t *testing.T) {
 		h := setUp(t, "replacefault", 3, "demo-0")
-		createClaim(t, c, "replacefault", "demo-1")
+		createClaim(t, c, h.get(t), "demo-1")
 		nc := h.get(t)
 		nc.Annotations = map[string]string{clusterv1beta1.AnnotationReplaceServer: "demo-1"}
 		require.NoError(t, c.Update(ctx, nc))
@@ -314,7 +314,7 @@ func TestEnvtestRemoval(t *testing.T) {
 
 	t.Run("a scale-down whose claim deletion failed deletes the claim", func(t *testing.T) {
 		h := setUp(t, "scaledownfault", 4, "demo-0")
-		createClaim(t, c, "scaledownfault", "demo-3")
+		createClaim(t, c, h.get(t), "demo-3")
 		nc := h.get(t)
 		nc.Spec.Replicas = 3
 		require.NoError(t, c.Update(ctx, nc))
@@ -328,6 +328,34 @@ func TestEnvtestRemoval(t *testing.T) {
 		requireClaimDeleted(t, c, "scaledownfault", "demo-3")
 		requireGone(t, c, &corev1.ConfigMap{}, "scaledownfault", configMapName("demo-3"))
 		require.Empty(t, h.get(t).Status.Removals)
+	})
+
+	t.Run("a scale-down leaves the claim and ConfigMap it does not own and names them", func(t *testing.T) {
+		h := setUp(t, "scaledownforeign", 4, "demo-0")
+		createClaimLabelled(t, c, "scaledownforeign", "demo-3", nil)
+		cm := &corev1.ConfigMap{}
+		require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "scaledownforeign", Name: configMapName("demo-3")}, cm))
+		cm.OwnerReferences = nil
+		require.NoError(t, c.Update(ctx, cm))
+		nc := h.get(t)
+		nc.Spec.Replicas = 3
+		require.NoError(t, c.Update(ctx, nc))
+
+		h.untilError(t)
+		err := h.tryReconcile(t)
+		var nce *notControlledError
+		require.ErrorAs(t, err, &nce)
+		require.Equal(t, []string{"PersistentVolumeClaim data-demo-3-0", "ConfigMap demo-3-config"}, nce.Objects)
+		got := h.get(t)
+		requireCondition(t, got, ConditionReady, metav1.ConditionFalse, ReasonReconcileFailed)
+		require.Equal(t, "not controlled by this NatsCluster: PersistentVolumeClaim data-demo-3-0, ConfigMap demo-3-config",
+			meta.FindStatusCondition(got.Status.Conditions, ConditionReady).Message)
+		requireGone(t, c, &appsv1.StatefulSet{}, "scaledownforeign", "demo-3")
+		pvc := &corev1.PersistentVolumeClaim{}
+		require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "scaledownforeign", Name: dataClaimName("demo-3")}, pvc))
+		require.True(t, pvc.DeletionTimestamp.IsZero(), "unlabelled claim deleted")
+		require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(cm), cm))
+		require.True(t, cm.DeletionTimestamp.IsZero(), "uncontrolled ConfigMap deleted")
 	})
 
 	t.Run("a failed rollout step reads Progressing and records a warning", func(t *testing.T) {
@@ -512,12 +540,18 @@ func requireCondition(t *testing.T, nc *clusterv1beta1.NatsCluster, typ string, 
 	require.Equal(t, reason, c.Reason, "%s: %s", typ, c.Message)
 }
 
-// createClaim creates server's data volume claim, as the StatefulSet
-// controller would.
-func createClaim(t *testing.T, c client.Client, ns, server string) {
+// createClaim creates server's data volume claim of nc, labelled as the
+// StatefulSet controller would.
+func createClaim(t *testing.T, c client.Client, nc *clusterv1beta1.NatsCluster, server string) {
+	t.Helper()
+	createClaimLabelled(t, c, nc.Namespace, server, serverSelector(nc, server))
+}
+
+// createClaimLabelled creates server's data volume claim in ns with labels.
+func createClaimLabelled(t *testing.T, c client.Client, ns, server string, labels map[string]string) {
 	t.Helper()
 	require.NoError(t, c.Create(t.Context(), &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: dataClaimName(server)},
+		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: dataClaimName(server), Labels: labels},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 			Resources:   corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("20Gi")}},

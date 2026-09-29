@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8slabels "k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
@@ -418,22 +419,47 @@ func (r *Reconciler) finishDeletions(ctx context.Context, nc *clusterv1beta1.Nat
 	return waiting, nil
 }
 
-// deleteServer deletes server's StatefulSet and its data volume claim, and
-// for a surplus server its ConfigMap.
+// deleteServer deletes server's StatefulSet, its data volume claim when the
+// claim carries server's selector labels, and for a surplus server its
+// ConfigMap when nc controls it. It returns a *notControlledError naming
+// every claim or ConfigMap it left.
 func (r *Reconciler) deleteServer(ctx context.Context, nc *clusterv1beta1.NatsCluster, server string, sts *appsv1.StatefulSet, surplus bool) error {
 	if sts != nil {
 		if err := r.Client.Delete(ctx, sts, client.PropagationPolicy(metav1.DeletePropagationBackground)); client.IgnoreNotFound(err) != nil {
 			return fmt.Errorf("delete statefulset %s: %w", server, err)
 		}
 	}
-	objs := []client.Object{&corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Namespace: nc.Namespace, Name: dataClaimName(server)}}}
-	if surplus {
-		objs = append(objs, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: nc.Namespace, Name: configMapName(server)}})
+	var refused refusals
+	claim := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Namespace: nc.Namespace, Name: dataClaimName(server)}}
+	if err := refused.add(r.deleteIf(ctx, claim, func() bool {
+		return k8slabels.SelectorFromSet(serverSelector(nc, server)).Matches(k8slabels.Set(claim.Labels))
+	})); err != nil {
+		return err
 	}
-	for _, o := range objs {
-		if err := r.Client.Delete(ctx, o); client.IgnoreNotFound(err) != nil {
-			return fmt.Errorf("delete %s: %w", o.GetName(), err)
+	if surplus {
+		cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: nc.Namespace, Name: configMapName(server)}}
+		if err := refused.add(r.deleteIf(ctx, cm, func() bool { return metav1.IsControlledBy(cm, nc) })); err != nil {
+			return err
 		}
+	}
+	return refused.err()
+}
+
+// deleteIf deletes obj, as read, when it exists and ours reports it as
+// nc's, and returns a *notControlledError when it exists and is not.
+func (r *Reconciler) deleteIf(ctx context.Context, obj client.Object, ours func() bool) error {
+	if err := r.Client.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("get %s: %w", obj.GetName(), err)
+	}
+	if !ours() {
+		return r.notControlled(obj)
+	}
+	uid, rv := obj.GetUID(), obj.GetResourceVersion()
+	if err := r.Client.Delete(ctx, obj, client.Preconditions{UID: &uid, ResourceVersion: &rv}); client.IgnoreNotFound(err) != nil {
+		return fmt.Errorf("delete %s: %w", obj.GetName(), err)
 	}
 	return nil
 }

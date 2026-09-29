@@ -342,8 +342,8 @@ func (r *Reconciler) patchStatus(ctx context.Context, orig, nc *clusterv1beta1.N
 }
 
 // applyShared creates or updates the Services, the PodDisruptionBudget and
-// the NetworkPolicy, skipping any nc does not control, and deletes the ones
-// plan does not render.
+// the NetworkPolicy, refusing any nc does not control, and deletes the
+// gateway Service and NetworkPolicy plan does not render.
 func (r *Reconciler) applyShared(ctx context.Context, nc *clusterv1beta1.NatsCluster, plan *Plan) error {
 	services := []*corev1.Service{plan.HeadlessService, plan.ClientService}
 	if plan.GatewayService != nil {

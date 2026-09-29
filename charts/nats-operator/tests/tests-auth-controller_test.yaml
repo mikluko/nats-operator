@@ -70,3 +70,9 @@ tests:
       - equal:
           path: spec.containers[0].image
           value: registry.example/busybox:1.36
+  - it: mounts no ServiceAccount token into the test Pod
+    documentSelector: {path: kind, value: Pod}
+    asserts:
+      - equal:
+          path: spec.automountServiceAccountToken
+          value: false

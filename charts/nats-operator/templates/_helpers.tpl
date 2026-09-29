@@ -330,6 +330,7 @@ metadata:
     helm.sh/hook-delete-policy: before-hook-creation
 spec:
   restartPolicy: Never
+  automountServiceAccountToken: false
   {{- with .root.Values.imagePullSecrets }}
   imagePullSecrets:
     {{- toYaml . | nindent 4 }}
