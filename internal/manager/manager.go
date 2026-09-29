@@ -185,7 +185,6 @@ func newManager(cfg *rest.Config, opts ctrl.Options) (ctrl.Manager, error) {
 	return w, nil
 }
 
-// managerOptions returns New's options.
 func managerOptions(o *Options, scheme *runtime.Scheme, owned Owned) (ctrl.Options, error) {
 	cacheOpts, err := cacheOptions(owned)
 	if err != nil {

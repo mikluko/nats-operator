@@ -90,7 +90,8 @@ own, before extraArgs). Its ClusterRole's rules are those of
 files/rbac/<name>.yaml, a copy of the role controller-gen generates for it.
 With watchNamespaces set, the ClusterRole holds only the rules of
 files/rbac/<name>-cluster-scoped.yaml, and each namespace named gets a Role
-and RoleBinding of those of files/rbac/<name>-namespaced.yaml.
+and RoleBinding of those of files/rbac/<name>-namespaced.yaml. It fails with
+more than one replica while leaderElection.enabled is false.
 */}}
 {{- define "nats-operator.controller" -}}
 {{- $fullname := include "nats-operator.fullname" . -}}
@@ -104,6 +105,13 @@ and RoleBinding of those of files/rbac/<name>-namespaced.yaml.
 {{- $prometheusEnv := list -}}
 {{- if $prometheus -}}
 {{- $prometheusEnv = list (dict "name" "OTEL_METRICS_EXPORTER" "value" "prometheus") (dict "name" "OTEL_EXPORTER_PROMETHEUS_HOST" "value" "0.0.0.0") -}}
+{{- end -}}
+{{- $memoryEnv := list -}}
+{{- if and .values.resources .values.resources.limits .values.resources.limits.memory -}}
+{{- $memoryEnv = list (dict "name" "GOMEMLIMIT" "valueFrom" (dict "resourceFieldRef" (dict "resource" "limits.memory"))) -}}
+{{- end -}}
+{{- if and (not .root.Values.leaderElection.enabled) (gt (int .values.replicas) 1) -}}
+{{- fail (printf "%s.replicas is %d: more than one replica needs leaderElection.enabled" (trimSuffix "-controller" .name) (int .values.replicas)) -}}
 {{- end -}}
 apiVersion: v1
 kind: ServiceAccount
@@ -270,7 +278,7 @@ spec:
             {{- range concat (.args | default list) .root.Values.extraArgs .values.extraArgs }}
             - {{ . | quote }}
             {{- end }}
-          {{- with include "nats-operator.env" (list $prometheusEnv .root.Values.env .values.env) }}
+          {{- with include "nats-operator.env" (list $memoryEnv $prometheusEnv .root.Values.env .values.env) }}
           env:
             {{- . | nindent 12 }}
           {{- end }}

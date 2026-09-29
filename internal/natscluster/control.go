@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -37,14 +38,24 @@ func (r *Reconciler) notControlled(obj client.Object) *notControlledError {
 // returns a *notControlledError, writing nothing, when obj exists and nc
 // does not control it.
 func (r *Reconciler) createOrUpdate(ctx context.Context, nc *clusterv1beta1.NatsCluster, obj client.Object, mutate func()) error {
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, obj, func() error {
+	apply := func() error {
 		if obj.GetResourceVersion() != "" && !metav1.IsControlledBy(obj, nc) {
 			return r.notControlled(obj)
 		}
 		mutate()
 		return controllerutil.SetControllerReference(nc, obj, r.Client.Scheme())
-	})
-	return err
+	}
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, obj, apply)
+	if !apierrors.IsAlreadyExists(err) {
+		return err
+	}
+	if err := r.readExisting(ctx, nc, obj); err != nil {
+		return err
+	}
+	if err := apply(); err != nil {
+		return err
+	}
+	return r.Client.Update(ctx, obj)
 }
 
 // refusals accumulates the objects several writes refused.

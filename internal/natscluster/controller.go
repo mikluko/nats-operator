@@ -78,8 +78,11 @@ const (
 type Reconciler struct {
 	// Client reads Secrets from the API server, as manager.ClientOptions
 	// sets, since the reconciler watches only their metadata.
-	Client   client.Client
-	Observer Observer
+	Client client.Client
+	// APIReader reads from the API server an object a create found
+	// existing, which Client's cache may not hold; nil, Client reads it.
+	APIReader client.Reader
+	Observer  Observer
 	// Reloader reaches a NATS cluster's system account to reload its
 	// servers; nil restarts every config change.
 	Reloader ReloaderFunc
@@ -105,7 +108,7 @@ type Reconciler struct {
 // +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters,verbs=get;list;watch;patch
 // +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters/status,verbs=patch
 // +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters/finalizers,verbs=update
-// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services;secrets,verbs=get;list;watch;create;update;delete
 // +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;delete
@@ -442,10 +445,30 @@ func (r *Reconciler) createServer(ctx context.Context, nc *clusterv1beta1.NatsCl
 		return nil, err
 	}
 	if err := r.Client.Create(ctx, sts); err != nil {
-		if apierrors.IsAlreadyExists(err) {
-			return nil, r.notControlled(sts)
+		if !apierrors.IsAlreadyExists(err) {
+			return nil, fmt.Errorf("create statefulset %s: %w", sts.Name, err)
 		}
-		return nil, fmt.Errorf("create statefulset %s: %w", sts.Name, err)
+		have := &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: sts.Name, Namespace: sts.Namespace}}
+		if err := r.readExisting(ctx, nc, have); err != nil {
+			return nil, err
+		}
+		return have, nil
 	}
 	return sts, nil
+}
+
+// readExisting reads obj, which a create found existing, from the API server
+// into obj, and returns a *notControlledError when nc does not control it.
+func (r *Reconciler) readExisting(ctx context.Context, nc *clusterv1beta1.NatsCluster, obj client.Object) error {
+	var reader client.Reader = r.Client
+	if r.APIReader != nil {
+		reader = r.APIReader
+	}
+	if err := reader.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
+		return fmt.Errorf("read existing %s: %w", obj.GetName(), err)
+	}
+	if !metav1.IsControlledBy(obj, nc) {
+		return r.notControlled(obj)
+	}
+	return nil
 }

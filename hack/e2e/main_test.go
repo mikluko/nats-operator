@@ -78,9 +78,25 @@ func TestChartSets(t *testing.T) {
 		"--set", "cluster.image.tag=abc",
 		"--set", "cluster.image.pullPolicy=Never",
 		"--set", "cluster.enabled=true",
-	}, chartSets([]string{"cluster"}, images, nil))
-	require.Equal(t, []string{"--set", "watchNamespaces={a,nats-system}"},
-		chartSets(nil, nil, []string{"a", "nats-system"})[8:])
+	}, chartSets([]string{"cluster"}, images, chartValues{}))
+	require.Equal(t, []string{"--set", "watchNamespaces={a,nats-system}", "--set", "cluster.allowGatewayWithoutTLS=true"},
+		chartSets(nil, nil, chartValues{watch: []string{"a", "nats-system"}, allowGatewayWithoutTLS: true})[8:])
+}
+
+// TestStoriesDropGatewayTLS pins the stories whose substitutions, or those
+// of the story they start from, remove their gateways' tls: 6, 8 after 6, 9
+// and 11.
+func TestStoriesDropGatewayTLS(t *testing.T) {
+	stories, err := selectBundles("../..", "")
+	require.NoError(t, err)
+	got := map[int]bool{}
+	for _, b := range stories {
+		got[b.Number] = b.DropsGatewayTLS()
+	}
+	for n, drops := range got {
+		require.Equal(t, n == 6 || n == 8 || n == 9 || n == 11, drops, "story %d", n)
+	}
+	require.Contains(t, got, 1)
 }
 
 // TestWatchedNamespaces pins that namespace-scoped runs watch story 1's

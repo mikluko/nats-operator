@@ -41,7 +41,7 @@ tests:
               verbs: [create, delete, get, list, update, watch]
             - apiGroups: [apps]
               resources: [statefulsets]
-              verbs: [create, delete, list, patch, update, watch]
+              verbs: [create, delete, get, list, patch, update, watch]
             - apiGroups: [authentication.k8s.io]
               resources: [tokenreviews]
               verbs: [create]
@@ -156,6 +156,19 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].image
           value: ghcr.io/mikluko/nats-operator/cluster-controller:v9
+  - it: refuses more than one replica while leaderElection.enabled is false
+    set:
+      leaderElection.enabled: false
+      cluster.replicas: 2
+    asserts:
+      - failedTemplate:
+          errorMessage: "cluster.replicas is 2: more than one replica needs leaderElection.enabled"
+  - it: renders more than one replica while leaderElection.enabled is set
+    set:
+      cluster.replicas: 2
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal: {path: spec.replicas, value: 2}
   - it: drops the leader election Role and passes --leader-elect=false while leaderElection.enabled is false
     set:
       leaderElection.enabled: false
@@ -275,14 +288,30 @@ tests:
       - notExists: {path: spec.template.metadata.annotations}
       - notExists: {path: spec.template.spec.nodeSelector}
       - notExists: {path: spec.template.spec.affinity}
-  - it: sets no tolerations, priorityClassName, topologySpreadConstraints or env by default
+  - it: sets no tolerations, priorityClassName or topologySpreadConstraints, and of env only GOMEMLIMIT, by default
     documentSelector: {path: kind, value: Deployment}
     asserts:
       - notExists: {path: spec.template.spec.tolerations}
       - notExists: {path: spec.template.spec.priorityClassName}
       - notExists: {path: spec.template.spec.topologySpreadConstraints}
+      - equal:
+          path: spec.template.spec.containers[0].env
+          value: [{name: GOMEMLIMIT, valueFrom: {resourceFieldRef: {resource: limits.memory}}}]
+  - it: sets no GOMEMLIMIT without a memory limit
+    set:
+      cluster.resources.limits: null
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
       - notExists:
           path: spec.template.spec.containers[0].env
+  - it: lets an env entry named GOMEMLIMIT replace the one its memory limit sets
+    set:
+      cluster.env: [{name: GOMEMLIMIT, value: 200MiB}]
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env
+          value: [{name: GOMEMLIMIT, value: 200MiB}]
   - it: takes the global tolerations, priorityClassName and topologySpreadConstraints
     set:
       tolerations: [{key: pool, operator: Equal, value: system, effect: NoSchedule}]
@@ -344,7 +373,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].env
-          value: [{name: A, value: global}, {name: B, value: own}, {name: C, value: own}]
+          value: [{name: GOMEMLIMIT, valueFrom: {resourceFieldRef: {resource: limits.memory}}}, {name: A, value: global}, {name: B, value: own}, {name: C, value: own}]
   - it: exposes only the metrics and probes ports by default
     documentSelector: {path: kind, value: Deployment}
     asserts:
@@ -360,6 +389,7 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].env
           value:
+            - {name: GOMEMLIMIT, valueFrom: {resourceFieldRef: {resource: limits.memory}}}
             - {name: OTEL_METRICS_EXPORTER, value: prometheus}
             - {name: OTEL_EXPORTER_PROMETHEUS_HOST, value: 0.0.0.0}
       - equal:
@@ -379,6 +409,7 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].env
           value:
+            - {name: GOMEMLIMIT, valueFrom: {resourceFieldRef: {resource: limits.memory}}}
             - {name: OTEL_EXPORTER_PROMETHEUS_HOST, value: global}
             - {name: A, value: global}
             - {name: OTEL_METRICS_EXPORTER, value: own}
@@ -390,8 +421,9 @@ tests:
     documentSelector: {path: kind, value: Deployment}
     asserts:
       - notExists: {path: spec.template.spec.tolerations}
-      - notExists:
+      - equal:
           path: spec.template.spec.containers[0].env
+          value: [{name: GOMEMLIMIT, valueFrom: {resourceFieldRef: {resource: limits.memory}}}]
       - lengthEqual:
           path: spec.template.spec.containers[0].args
           count: 4
@@ -442,7 +474,7 @@ tests:
               verbs: [create, delete, get, list, update, watch]
             - apiGroups: [apps]
               resources: [statefulsets]
-              verbs: [create, delete, list, patch, update, watch]
+              verbs: [create, delete, get, list, patch, update, watch]
             - apiGroups: [cert-manager.io]
               resources: [certificates]
               verbs: [create, delete, get, update]

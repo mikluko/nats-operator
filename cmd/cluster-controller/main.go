@@ -83,12 +83,13 @@ func setupWith(ctx context.Context, mgr ctrl.Manager, allowGatewayWithoutTLS boo
 		Fallback: natscluster.PodMonitor{Monitor: sysobs.NewMonitor(&http.Client{Timeout: 5 * time.Second}, 0)},
 	}
 	r := &natscluster.Reconciler{
-		Client:   mgr.GetClient(),
-		Observer: sys,
-		Reloader: sys.Reloader,
-		Admin:    sys.Admin,
-		Forget:   sys.Forget,
-		Recorder: mgr.GetEventRecorder(telemetry.ClusterController),
+		Client:    mgr.GetClient(),
+		APIReader: mgr.GetAPIReader(),
+		Observer:  sys,
+		Reloader:  sys.Reloader,
+		Admin:     sys.Admin,
+		Forget:    sys.Forget,
+		Recorder:  mgr.GetEventRecorder(telemetry.ClusterController),
 
 		AllowGatewayWithoutTLS: allowGatewayWithoutTLS,
 	}

@@ -93,6 +93,34 @@ func TestRelease_FailOnAndCIName(t *testing.T) {
 	require.Equal(t, []string{ci.Name}, release.On.WorkflowRun.Workflows)
 }
 
+// TestE2E_Nightly pins that e2e runs on a schedule, its stories and
+// watch-namespaces left empty so that every single-cluster story runs
+// cluster-wide.
+func TestE2E_Nightly(t *testing.T) {
+	var e2eWorkflow struct {
+		On struct {
+			Schedule []struct {
+				Cron string `yaml:"cron"`
+			} `yaml:"schedule"`
+		} `yaml:"on"`
+	}
+	b, err := os.ReadFile("../.github/workflows/e2e.yml")
+	require.NoError(t, err)
+	require.NoError(t, yamlv3.Unmarshal(b, &e2eWorkflow))
+	require.Len(t, e2eWorkflow.On.Schedule, 1)
+	require.Len(t, strings.Fields(e2eWorkflow.On.Schedule[0].Cron), 5, "a five-field cron")
+
+	var run step
+	for _, s := range readWorkflow(t, "e2e.yml").Jobs["stories"].Steps {
+		if s.Name == "Stories" {
+			run = s
+		}
+	}
+	require.Equal(t, "1", run.Env["E2E_CLUSTERS"])
+	require.Equal(t, "${{ inputs.stories }}", run.Env["E2E_STORIES"])
+	require.Equal(t, "${{ inputs.watch-namespaces }}", run.Env["E2E_WATCH_NAMESPACES"])
+}
+
 func stepByID(t *testing.T, steps []step, id string) step {
 	t.Helper()
 	for _, s := range steps {

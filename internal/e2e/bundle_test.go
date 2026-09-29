@@ -414,3 +414,24 @@ func TestLoadBundles_Fixtures(t *testing.T) {
 	require.Equal(t, "00-status-job.yaml", b.Steps[0].Expectations[0].File)
 	require.Equal(t, []string{"fixture", "story"}, b.Namespaces())
 }
+
+func TestBundle_DropsGatewayTLS(t *testing.T) {
+	drops := Substitution{Files: []string{"01-a.yaml"}, Patch: map[string]any{"spec": map[string]any{"gateway": map[string]any{"tls": nil}}}}
+	sets := Substitution{Files: []string{"01-a.yaml"}, Patch: map[string]any{"spec": map[string]any{"gateway": map[string]any{"tls": map[string]any{}}}}}
+	other := Substitution{Files: []string{"01-a.yaml"}, Patch: map[string]any{"spec": map[string]any{"replicas": 1}}}
+	for _, tc := range []struct {
+		name string
+		b    *Bundle
+		want bool
+	}{
+		{name: "none", b: &Bundle{}},
+		{name: "other fields", b: &Bundle{Substitutions: []Substitution{other}}},
+		{name: "tls set", b: &Bundle{Substitutions: []Substitution{sets}}},
+		{name: "tls removed", b: &Bundle{Substitutions: []Substitution{other, drops}}, want: true},
+		{name: "tls removed by the base", b: &Bundle{Base: &Bundle{Substitutions: []Substitution{drops}}}, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, tc.b.DropsGatewayTLS())
+		})
+	}
+}

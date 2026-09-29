@@ -456,7 +456,8 @@ func (w *walker) pos(instr ssa.Instruction) string {
 	return w.prog.Fset.Position(instr.Pos()).String()
 }
 
-// call records what one call site requires.
+// call records what one call site requires. A read through the manager's
+// API reader counts as a cached read, requiring list and watch as well.
 func (w *walker) call(call ssa.CallInstruction) {
 	common := call.Common()
 	pos := w.pos(call)
@@ -485,8 +486,6 @@ func (w *walker) call(call ssa.CallInstruction) {
 				w.req.add("events.k8s.io/events", pos, "create", "patch")
 			case "GetEventRecorderFor":
 				w.req.add("/events", pos, "create", "patch")
-			case "GetAPIReader":
-				w.t.Errorf("%s: an uncached reader is not modelled", pos)
 			}
 		}
 		return

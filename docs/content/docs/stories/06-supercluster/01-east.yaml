@@ -43,8 +43,8 @@ spec:
         url: tls://nats-east.example.net:7222
       - name: west
         url: tls://nats-west.example.net:7222
-    # TLS is optional on every listener; without a `tls` block gateways run
-    # in the clear.
+    # Without a `tls` block the NatsCluster is refused unless the cluster
+    # controller runs with `--allow-gateway-without-tls`.
     tls:
       certManager:
         issuerRef:

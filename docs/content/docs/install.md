@@ -8,7 +8,7 @@ The Helm chart `nats-operator` installs the CRDs of all four API groups and any 
 
 ## Prerequisites
 
-- **Kubernetes 1.29 or later.** The chart declares `kubeVersion: ">=1.29.0-0"`; Helm refuses to install it on an older Kubernetes cluster.
+- **Kubernetes 1.33 or later.** The chart declares `kubeVersion: ">=1.33.0-0"`; Helm refuses to install it on an older Kubernetes cluster.
 - **Helm**, to install from an OCI registry.
 - **nats-server 2.15.0 or later.** The API server refuses a `NatsCluster` whose `spec.version` is below 2.15.0.
 - **cert-manager, optional.** Only the cluster controller uses it, and only for a `NatsCluster` that names `certManager` under `tls`, `routes.tls`, `gateway.tls` or `leafnodes.tls`. Without cert-manager, such a `NatsCluster` reports `Progressing` with the message `cert-manager Certificate is not a known kind: cert-manager is not installed`, and its servers wait for the certificate. Route TLS with no certificate named is self-signed and needs no cert-manager.
@@ -53,7 +53,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | Value | Default | What it sets |
 |---|---|---|
 | `imagePullSecrets` | `[]` | Pull secrets of every controller's pod. |
-| `leaderElection.enabled` | `true` | `--leader-elect` on every controller, and a Role on Leases in the release namespace. Keep it on with more than one replica. |
+| `leaderElection.enabled` | `true` | `--leader-elect` on every controller, and a Role on Leases in the release namespace. Off, the chart refuses to render a controller whose `replicas` is above `1`. |
 | `watchNamespaces` | `[]` | Namespaces every controller watches and reconciles in, passed as `--watch-namespaces`, with RBAC granted in them alone; see [RBAC](#rbac). Empty, every namespace. The namespace of `auth.systemConnection` must be among them. |
 | `nodeSelector` | `{}` | Node selector of every controller's pod. |
 | `annotations` | `{}` | Annotations of every controller's Deployment. |
@@ -71,7 +71,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `cluster.image.tag` | `""` | Its image tag; empty is the chart's `appVersion`. |
 | `cluster.image.digest` | the release's image digest; `""` in the source tree | `sha256:<hex>` appended to its image reference as `@<digest>`, pinning the image, while its tag is the chart's `appVersion`. |
 | `cluster.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
-| `cluster.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources. |
+| `cluster.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources; a memory limit also sets its `GOMEMLIMIT`, which an `env` entry of that name replaces. |
 | `cluster.nodeSelector` | `{}` | Its pod's node selector, each key set over `nodeSelector`. |
 | `cluster.annotations` | `{}` | Its Deployment's annotations, each key set over `annotations`. |
 | `cluster.podAnnotations` | `{}` | Its pod's annotations, each key set over `podAnnotations`. |
@@ -88,7 +88,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `auth.image.tag` | `""` | Its image tag; empty is the chart's `appVersion`. |
 | `auth.image.digest` | the release's image digest; `""` in the source tree | `sha256:<hex>` appended to its image reference as `@<digest>`, pinning the image, while its tag is the chart's `appVersion`. |
 | `auth.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
-| `auth.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources. |
+| `auth.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources; a memory limit also sets its `GOMEMLIMIT`, which an `env` entry of that name replaces. |
 | `auth.nodeSelector` | `{}` | Its pod's node selector, each key set over `nodeSelector`. |
 | `auth.annotations` | `{}` | Its Deployment's annotations, each key set over `annotations`. |
 | `auth.podAnnotations` | `{}` | Its pod's annotations, each key set over `podAnnotations`. |
@@ -104,7 +104,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `jetstream.image.tag` | `""` | Its image tag; empty is the chart's `appVersion`. |
 | `jetstream.image.digest` | the release's image digest; `""` in the source tree | `sha256:<hex>` appended to its image reference as `@<digest>`, pinning the image, while its tag is the chart's `appVersion`. |
 | `jetstream.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
-| `jetstream.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources. |
+| `jetstream.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources; a memory limit also sets its `GOMEMLIMIT`, which an `env` entry of that name replaces. |
 | `jetstream.nodeSelector` | `{}` | Its pod's node selector, each key set over `nodeSelector`. |
 | `jetstream.annotations` | `{}` | Its Deployment's annotations, each key set over `annotations`. |
 | `jetstream.podAnnotations` | `{}` | Its pod's annotations, each key set over `podAnnotations`. |
@@ -150,7 +150,7 @@ The flags below are the binaries' own. Of those not named above, the chart sets 
 
 Each controller serves its metrics over HTTPS on port `8080` under a self-signed certificate it generates at start, so a scraper cannot verify it and must skip verification; what authenticates the scrape is the bearer token, which must be that of a ServiceAccount allowed `get` on `/metrics`, such as `metrics.scraper.serviceAccount`. With `metrics.serviceMonitor.enabled`, each ServiceMonitor scrapes with `scheme: https`, `tlsConfig.insecureSkipVerify: true` and the Prometheus pod's own ServiceAccount token, read from `/var/run/secrets/kubernetes.io/serviceaccount/token`; set `metrics.scraper.serviceAccount` to that ServiceAccount. A Prometheus that denies file access through ServiceMonitors (`arbitraryFSAccessThroughSMs.deny: true`) refuses `bearerTokenFile`; for it, set `metrics.serviceMonitor.bearerTokenSecret` to a key of a Secret in the release namespace holding that ServiceAccount's token.
 
-Port `8080` serves controller-runtime's metrics only. The controllers' own instruments, `nats_operator.account.jwt_expiry` among them, are OpenTelemetry metrics under [Telemetry]({{< relref "/docs/reference/telemetry#metrics" >}}); with `metrics.prometheus.enabled`, each controller serves them at `/metrics` on port `9464` over plain HTTP to any client that reaches the pod, and each ServiceMonitor scrapes that port with `scheme: http` and no token. That page names the kind, namespace and name of every resource the controller reconciles in every namespace it watches, with the type and reason of each of its conditions; `networkPolicy.enabled` admits ports `8080` and `9464` from the peers `networkPolicy.from` names alone.
+Port `8080` serves controller-runtime's metrics only. The controllers' own instruments, `nats_operator.account.jwt_expiry` among them, are OpenTelemetry metrics under [Telemetry]({{< relref "/docs/reference/telemetry#metrics" >}}); with `metrics.prometheus.enabled`, each controller serves them at `/metrics` on port `9464` over plain HTTP to any client that reaches the pod, and each ServiceMonitor scrapes that port with `scheme: http` and no token. The page on port 9464 names the kind, namespace and name of every resource the controller reconciles in every namespace it watches, with the type and reason of each of its conditions; `networkPolicy.enabled` admits ports `8080` and `9464` from the peers `networkPolicy.from` names alone.
 
 ## RBAC
 
@@ -175,7 +175,7 @@ While `metrics.scraper.serviceAccount` is set, the ClusterRole `<release>-metric
 | `""` | `configmaps` | `get`, `list`, `watch`, `create`, `update`, `patch`, `delete` |
 | `""` | `persistentvolumeclaims` | `get`, `list`, `watch`, `delete` |
 | `""` | `secrets`, `services` | `get`, `list`, `watch`, `create`, `update`, `delete` |
-| `apps` | `statefulsets` | `list`, `watch`, `create`, `update`, `patch`, `delete` |
+| `apps` | `statefulsets` | `get`, `list`, `watch`, `create`, `update`, `patch`, `delete` |
 | `cert-manager.io` | `certificates` | `get`, `create`, `update`, `delete` |
 | `cluster.nats.mikluko.io` | `natsclusters` | `get`, `list`, `watch`, `patch` |
 | `cluster.nats.mikluko.io` | `natsclusters/finalizers` | `update` |

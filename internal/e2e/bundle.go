@@ -629,6 +629,21 @@ func namespaces(ns []string, steps []Step) []string {
 	return ns
 }
 
+// DropsGatewayTLS reports whether a substitution of b, or of a bundle it
+// starts from, removes spec.gateway.tls from the manifests it reaches.
+func (b *Bundle) DropsGatewayTLS() bool {
+	for _, c := range b.Chain() {
+		for _, s := range c.Substitutions {
+			spec, _ := s.Patch["spec"].(map[string]any)
+			gateway, _ := spec["gateway"].(map[string]any)
+			if tls, ok := gateway["tls"]; ok && tls == nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // SkipReason returns why b is not run: its own Skip, or that of a bundle
 // it starts from. It returns "" when b runs.
 func (b *Bundle) SkipReason() string {
