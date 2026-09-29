@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/utils/ptr"
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
@@ -28,8 +29,8 @@ func newConsumer(name, server string, mutate func(*js.NatsConsumerSpec)) *js.Nat
 			DeletionPolicy: js.DeletionDelete,
 			ConsumerConfig: js.ConsumerConfig{
 				Name:          server,
-				DeliverPolicy: ptrTo(js.DeliverAll),
-				AckPolicy:     ptrTo(js.AckExplicit),
+				DeliverPolicy: ptr.To(js.DeliverAll),
+				AckPolicy:     ptr.To(js.AckExplicit),
 			},
 		},
 	}
@@ -99,7 +100,7 @@ func TestConsumerStreamRef(t *testing.T) {
 		c.ConnectionRef, c.Stream = nil, ""
 		c.StreamRef = &natsv1beta1.ObjectReference{Name: "orders"}
 		c.AdoptionPolicy = js.AdoptionAdoptOrCreate
-		c.MaxDeliver = ptrTo(int64(10))
+		c.MaxDeliver = ptr.To(int64(10))
 	}))
 
 	f.reconcileConsumer("settlement")
@@ -152,7 +153,7 @@ func TestConsumerImmutableChange(t *testing.T) {
 			f.reconcileConsumer("audit")
 			before := f.serverConsumer("AUDIT").Created
 
-			f.editConsumer("audit", func(c *js.NatsConsumerSpec) { c.DeliverPolicy = ptrTo(js.DeliverNew) })
+			f.editConsumer("audit", func(c *js.NatsConsumerSpec) { c.DeliverPolicy = ptr.To(js.DeliverNew) })
 			f.reconcileConsumer("audit")
 			c := f.consumer("audit")
 			info := f.serverConsumer("AUDIT")
@@ -184,7 +185,7 @@ func TestConsumerPullToPushIsImmutable(t *testing.T) {
 func TestConsumerDrift(t *testing.T) {
 	f := newFixture(t)
 	f.withOrders()
-	f.create(newConsumer("audit", "AUDIT", func(c *js.NatsConsumerSpec) { c.MaxDeliver = ptrTo(int64(5)) }))
+	f.create(newConsumer("audit", "AUDIT", func(c *js.NatsConsumerSpec) { c.MaxDeliver = ptr.To(int64(5)) }))
 	f.reconcileConsumer("audit")
 
 	info := f.serverConsumer("AUDIT")

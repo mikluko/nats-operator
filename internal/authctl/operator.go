@@ -150,7 +150,6 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 		StepdownAccounts: stepdownAccounts(accounts),
 		Revocations:      signedRevocations(sd.revocations),
 	}, keys.Keys)
-
 	if err != nil {
 		notReady(ReasonInvalidKeys, err.Error())
 		return 0, nil

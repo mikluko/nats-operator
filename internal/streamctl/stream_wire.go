@@ -3,6 +3,8 @@ package streamctl
 import (
 	"time"
 
+	"k8s.io/utils/ptr"
+
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 )
 
@@ -139,7 +141,7 @@ func streamToWire(c *js.StreamConfig) streamWire {
 		w.Placement = &placementWire{Cluster: p.Cluster, Tags: p.Tags, Preferred: p.Preferred}
 	}
 	if c.Mirror != nil {
-		w.Mirror = ptrTo(sourceToWire(c.Mirror))
+		w.Mirror = ptr.To(sourceToWire(c.Mirror))
 	}
 	for i := range c.Sources {
 		w.Sources = append(w.Sources, sourceToWire(&c.Sources[i]))
@@ -180,7 +182,7 @@ func sourceToWire(s *js.StreamSource) sourceWire {
 func streamFromWire(w *streamWire) js.StreamConfig {
 	c := js.StreamConfig{
 		Name:                   w.Name,
-		Description:            deref(w.Description),
+		Description:            ptr.Deref(w.Description, ""),
 		Subjects:               w.Subjects,
 		Retention:              retentions.api(w.Retention),
 		MaxConsumers:           nonZero(w.MaxConsumers),
@@ -215,7 +217,7 @@ func streamFromWire(w *streamWire) js.StreamConfig {
 		c.Placement = &js.Placement{Cluster: p.Cluster, Tags: p.Tags, Preferred: p.Preferred}
 	}
 	if w.Mirror != nil {
-		c.Mirror = ptrTo(sourceFromWire(w.Mirror))
+		c.Mirror = ptr.To(sourceFromWire(w.Mirror))
 	}
 	for i := range w.Sources {
 		c.Sources = append(c.Sources, sourceFromWire(&w.Sources[i]))
@@ -226,7 +228,7 @@ func streamFromWire(w *streamWire) js.StreamConfig {
 	if r := w.Republish; r != nil && r.Destination != "" {
 		c.Republish = &js.Republish{Source: r.Source, Destination: r.Destination, HeadersOnly: nonZero(r.HeadersOnly)}
 	}
-	if l := w.ConsumerLimits; l != nil && (deref(l.InactiveThreshold) != 0 || deref(l.MaxAckPending) != 0) {
+	if l := w.ConsumerLimits; l != nil && (ptr.Deref(l.InactiveThreshold, 0) != 0 || ptr.Deref(l.MaxAckPending, 0) != 0) {
 		c.ConsumerLimits = &js.StreamConsumerLimits{InactiveThreshold: durationAPI(l.InactiveThreshold), MaxAckPending: nonZero(l.MaxAckPending)}
 	}
 	return c

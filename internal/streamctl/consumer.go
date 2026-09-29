@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -85,7 +86,7 @@ var consumerKind = lifecycle.Kind[*js.NatsConsumer]{
 	Record: func(c *js.NatsConsumer, info *lifecycle.Info) {
 		s := &js.ConsumerServerStatus{}
 		if !info.Created.IsZero() {
-			s.Created = ptrTo(metav1.NewTime(info.Created))
+			s.Created = ptr.To(metav1.NewTime(info.Created))
 		}
 		s.Leader, s.Replicas = cluster(info.Cluster)
 		c.Status.Server = s

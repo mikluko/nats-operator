@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/nats-io/nats.go/jetstream"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -84,7 +85,7 @@ func (o *keyValueObject) Fetch(ctx context.Context) (*lifecycle.Info, error) {
 	if err != nil || info == nil {
 		return nil, err
 	}
-	if deref(s.MaxMsgsPerSubject) < 1 {
+	if ptr.Deref(s.MaxMsgsPerSubject, 0) < 1 {
 		return nil, &lifecycle.TerminalError{
 			Reason:  ReasonNotABucket,
 			Message: fmt.Sprintf("stream %s exists and is not a key-value bucket", s.Name),

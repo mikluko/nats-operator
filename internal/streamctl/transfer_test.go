@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
@@ -118,8 +119,8 @@ func TestStreamMove(t *testing.T) {
 	sc := startSupercluster(t, "east", "west")
 	f := newFixtureOn(t, sc["east"])
 	f.create(newStream("orders", "ORDERS", func(s *js.NatsStreamSpec) {
-		s.Replicas = ptrTo(int32(3))
-		s.Storage = ptrTo(js.StorageFile)
+		s.Replicas = ptr.To(int32(3))
+		s.Storage = ptr.To(js.StorageFile)
 		s.Placement = &js.Placement{Cluster: "east"}
 	}))
 	require.Eventually(t, func() bool {

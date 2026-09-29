@@ -1,6 +1,7 @@
 package authctl_test
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -49,7 +50,8 @@ func startFullCluster(t *testing.T, p plane, n int) *fullCluster {
 }
 
 // start starts server i on its directory, routed to server 0, and waits
-// for every running server to route to every other.
+// for every running server to route to every other and for the system
+// account's interest to cross those routes.
 func (c *fullCluster) start(i int) {
 	t := c.t
 	t.Helper()
@@ -85,6 +87,35 @@ func (c *fullCluster) start(i int) {
 		}
 		return true
 	}, 10*time.Second, 50*time.Millisecond)
+	c.awaitSystemInterest()
+}
+
+// awaitSystemInterest waits until every running server's CLAIMS.UPDATE
+// subscription in the system account has crossed the routes to every other.
+func (c *fullCluster) awaitSystemInterest() {
+	t := c.t
+	t.Helper()
+	up := c.running()
+	require.Eventually(t, func() bool {
+		for _, s := range up {
+			rz, err := s.Routez(&server.RoutezOptions{Subscriptions: true, SubscriptionsDetail: true})
+			if err != nil {
+				return false
+			}
+			carried := map[string]bool{}
+			for _, r := range rz.Routes {
+				for _, sub := range r.SubsDetail {
+					if cmp.Or(sub.Account, r.Account) == c.p.sysPub && sub.Subject == "$SYS.REQ.CLAIMS.UPDATE" {
+						carried[r.RemoteID] = true
+					}
+				}
+			}
+			if len(carried) < len(up)-1 {
+				return false
+			}
+		}
+		return true
+	}, 30*time.Second, 50*time.Millisecond, "the system account's interest did not cross the routes")
 }
 
 func (c *fullCluster) stop(i int) {

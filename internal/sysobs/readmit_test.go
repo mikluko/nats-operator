@@ -18,11 +18,11 @@ import (
 // and restarted under its own name on an empty store answers and names the
 // leader, yet is absent until its tombstone lapses.
 func TestObserve_RemoteMetaLeaderListsItsPeers(t *testing.T) {
-	c1 := newTestCluster(t, "C1", 3)
-	c2 := newTestCluster(t, "C2", 3)
+	c1 := newTestCluster("C1", 3)
+	c2 := newTestCluster("C2", 3)
 	srvs := startSupercluster(t, c1, c2)
 	ctx := context.Background()
-	o := New(connect(t, c1.clientPort[0], "sys"), "C1")
+	o := New(connect(t, c1.Servers[0], "sys"), "C1")
 
 	require.Eventually(t, func() bool {
 		for name, s := range srvs {
@@ -53,11 +53,10 @@ func TestObserve_RemoteMetaLeaderListsItsPeers(t *testing.T) {
 	}, 30*time.Second, 500*time.Millisecond, "C1-2 not removed from the meta group")
 	x.Shutdown()
 	x.WaitForShutdown()
-	opts, err := server.ProcessConfigFile(x.conf)
+	opts, err := server.ProcessConfigFile(x.Conf)
 	require.NoError(t, err)
 	require.NoError(t, os.RemoveAll(opts.StoreDir))
-	x = startServer(t, x.conf)
-	require.True(t, x.ReadyForConnections(15*time.Second))
+	x = x.Restart(t)
 	require.Eventually(t, func() bool {
 		jsz, err := x.Jsz(&server.JSzOptions{})
 		return err == nil && jsz.Meta != nil && strings.HasPrefix(jsz.Meta.Leader, "C2-")

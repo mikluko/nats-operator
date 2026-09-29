@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 
+	"k8s.io/utils/ptr"
+
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 )
 
@@ -69,7 +71,7 @@ func kvToWire(c *js.KeyValueConfig, bucket string) kvWire {
 		w.Republish = &republishWire{Source: r.Source, Destination: r.Destination, HeadersOnly: r.HeadersOnly}
 	}
 	if c.Mirror != nil {
-		w.Mirror = ptrTo(mirrorSource(sourceToWire(c.Mirror)))
+		w.Mirror = ptr.To(mirrorSource(sourceToWire(c.Mirror)))
 	}
 	for i := range c.Sources {
 		w.Sources = append(w.Sources, bucketSource(sourceToWire(&c.Sources[i]), bucket))
@@ -81,7 +83,7 @@ func kvToWire(c *js.KeyValueConfig, bucket string) kvWire {
 // non-zero value for; name and metadata are left unset.
 func kvFromWire(w *kvWire) js.KeyValueConfig {
 	c := js.KeyValueConfig{
-		Description:    deref(w.Description),
+		Description:    ptr.Deref(w.Description, ""),
 		MaxValueSize:   quantityAPI(w.MaxValueSize),
 		History:        int32API(w.History),
 		TTL:            durationAPI(w.TTL),
@@ -96,7 +98,7 @@ func kvFromWire(w *kvWire) js.KeyValueConfig {
 		c.Republish = &js.Republish{Source: r.Source, Destination: r.Destination, HeadersOnly: nonZero(r.HeadersOnly)}
 	}
 	if w.Mirror != nil {
-		c.Mirror = ptrTo(sourceFromWire(w.Mirror))
+		c.Mirror = ptr.To(sourceFromWire(w.Mirror))
 	}
 	for i := range w.Sources {
 		c.Sources = append(c.Sources, sourceFromWire(&w.Sources[i]))
@@ -127,7 +129,7 @@ func kvFromStream(s *streamWire) kvWire {
 		w.Republish = r
 	}
 	if s.Mirror != nil {
-		w.Mirror = ptrTo(mirrorSource(*s.Mirror))
+		w.Mirror = ptr.To(mirrorSource(*s.Mirror))
 	}
 	for _, src := range s.Sources {
 		w.Sources = append(w.Sources, bucketSource(src, bucket))
@@ -155,7 +157,7 @@ func objToWire(c *js.ObjectStoreConfig, bucket string) objWire {
 // holds a non-zero value for; name and metadata are left unset.
 func objFromWire(w *objWire) js.ObjectStoreConfig {
 	return js.ObjectStoreConfig{
-		Description: deref(w.Description),
+		Description: ptr.Deref(w.Description, ""),
 		TTL:         durationAPI(w.TTL),
 		MaxBytes:    quantityAPI(w.MaxBytes),
 		Storage:     storages.api(w.Storage),
@@ -231,5 +233,5 @@ func compressed(c *string) *bool {
 	if c == nil || *c == "" || *c == "none" {
 		return nil
 	}
-	return ptrTo(true)
+	return ptr.To(true)
 }

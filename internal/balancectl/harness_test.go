@@ -3,8 +3,6 @@ package balancectl
 import (
 	"context"
 	"fmt"
-	"net"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +16,7 @@ import (
 	"k8s.io/client-go/tools/events"
 
 	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"github.com/mikluko/nats-operator/internal/natstest"
 )
 
 // A plane is an auth plane signed by jwtplane: account A carries the
@@ -118,9 +117,7 @@ func (p *plane) configure(t *testing.T, opts *server.Options) {
 const clusterSize = 3
 
 // startSupercluster runs one NATS cluster of clusterSize JetStream servers per
-// name, <name>-0 onwards, each gatewayed to every other, under p. A
-// clustered JetStream server refuses to start with no route configured, so
-// every port is settled before any server starts.
+// name, <name>-0 onwards, each gatewayed to every other, under p.
 func startSupercluster(t *testing.T, p *plane, names ...string) map[string][]*server.Server {
 	t.Helper()
 	return startTaggedSupercluster(t, p, nil, names...)
@@ -130,65 +127,21 @@ func startSupercluster(t *testing.T, p *plane, names ...string) map[string][]*se
 // cluster carrying tags[name].
 func startTaggedSupercluster(t *testing.T, p *plane, tags map[string][]string, names ...string) map[string][]*server.Server {
 	t.Helper()
-	listen := func() int {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
-		require.NoError(t, err)
-		defer func() { require.NoError(t, l.Close()) }()
-		return l.Addr().(*net.TCPAddr).Port
-	}
-	routes, gateways := map[string][]*url.URL{}, map[string][]*url.URL{}
-	routePorts, gatewayPorts := map[string][]int{}, map[string][]int{}
+	var clusters []*natstest.Cluster
 	for _, name := range names {
-		for range clusterSize {
-			rp, gp := listen(), listen()
-			routePorts[name], gatewayPorts[name] = append(routePorts[name], rp), append(gatewayPorts[name], gp)
-			routes[name] = append(routes[name], &url.URL{Scheme: "nats", Host: fmt.Sprintf("127.0.0.1:%d", rp)})
-			gateways[name] = append(gateways[name], &url.URL{Scheme: "nats", Host: fmt.Sprintf("127.0.0.1:%d", gp)})
-		}
+		clusters = append(clusters, &natstest.Cluster{Name: name, Size: clusterSize, Configure: func(_ int, o *server.Options) {
+			o.JetStreamMaxStore, o.JetStreamMaxMemory = 256<<20, 64<<20
+			o.Tags = jwt.TagList(tags[name])
+			p.configure(t, o)
+		}})
 	}
-	var remotes []*server.RemoteGatewayOpts
-	for _, name := range names {
-		remotes = append(remotes, &server.RemoteGatewayOpts{Name: name, URLs: gateways[name]})
-	}
+	natstest.StartSupercluster(t, clusters...)
 	out := map[string][]*server.Server{}
-	var all []*server.Server
-	for _, name := range names {
-		for i := range clusterSize {
-			opts := &server.Options{
-				ServerName:         fmt.Sprintf("%s-%d", name, i),
-				Host:               "127.0.0.1",
-				Port:               -1,
-				NoLog:              true,
-				NoSigs:             true,
-				JetStream:          true,
-				JetStreamMaxStore:  256 << 20,
-				JetStreamMaxMemory: 64 << 20,
-				StoreDir:           t.TempDir(),
-				Tags:               jwt.TagList(tags[name]),
-				Cluster:            server.ClusterOpts{Name: name, Host: "127.0.0.1", Port: routePorts[name][i]},
-				Routes:             routes[name],
-				Gateway:            server.GatewayOpts{Name: name, Host: "127.0.0.1", Port: gatewayPorts[name][i], Gateways: remotes},
-			}
-			p.configure(t, opts)
-			srv, err := server.NewServer(opts)
-			require.NoError(t, err)
-			go srv.Start()
-			t.Cleanup(srv.Shutdown)
-			out[name] = append(out[name], srv)
-			all = append(all, srv)
+	for _, c := range clusters {
+		for _, s := range c.Servers {
+			out[c.Name] = append(out[c.Name], s.Server)
 		}
 	}
-	for _, srv := range all {
-		require.True(t, srv.ReadyForConnections(15*time.Second), "%s did not start", srv.Name())
-	}
-	require.Eventually(t, func() bool {
-		for _, srv := range all {
-			if srv.JetStreamIsLeader() {
-				return len(srv.JetStreamClusterPeers()) == len(all)
-			}
-		}
-		return false
-	}, time.Minute, 100*time.Millisecond, "the supercluster elected no meta leader seeing all %d servers", len(all))
 	return out
 }
 

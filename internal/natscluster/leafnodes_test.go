@@ -32,6 +32,7 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/natsconn"
+	"github.com/mikluko/nats-operator/internal/natstest"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
@@ -141,56 +142,51 @@ func (b *booted) clientURL(i int) string {
 }
 
 // bootRendered starts every server of nc from its config rendered under
-// trust with remotes, on loopback ports, with the leafnode listener's
-// certificate and the leaf remotes Secret's files written where the layout
-// names them.
+// trust with remotes, on loopback ports the servers bind, with the leafnode
+// listener's certificate and the leaf remotes Secret's files written where
+// the layout names them. Each server's config file is rewritten with its
+// bound ports and every route; the monitoring port stays server-picked.
 func bootRendered(t *testing.T, nc *clusterv1beta1.NatsCluster, trust *Trust, remotes []LeafRemote, leafTLSDir string) *booted {
 	t.Helper()
 	b := &booted{nc: nc, trust: trust, remotesDir: t.TempDir()}
 	names := serverNames(nc)
-	var routes []string
-	routePorts := make([]int, len(names))
-	for i := range names {
-		routePorts[i] = freePort(t)
-		routes = append(routes, fmt.Sprintf("nats-route://127.0.0.1:%d", routePorts[i]))
-	}
+	ports := make([]natstest.Ports, len(names))
 	tlsDir := writeRouteCert(t, nc)
-	for i := range names {
-		dir := t.TempDir()
-		leafPort := freePort(t)
-		if i == 0 {
-			b.leafPort = leafPort
-		}
-		b.layouts = append(b.layouts, Layout{
-			ClientListen:    fmt.Sprintf("127.0.0.1:%d", freePort(t)),
-			RouteListen:     fmt.Sprintf("127.0.0.1:%d", routePorts[i]),
-			MonitorListen:   fmt.Sprintf("127.0.0.1:%d", freePort(t)),
+	layout := func(i int) {
+		dir := filepath.Dir(b.files[i])
+		b.layouts[i] = Layout{
+			ClientListen:    natstest.Listen(ports[i].Client),
+			RouteListen:     natstest.Listen(ports[i].Route),
+			MonitorListen:   natstest.Listen(0),
 			PidFile:         filepath.Join(dir, "nats.pid"),
 			StoreDir:        filepath.Join(dir, "jetstream"),
 			ResolverDir:     filepath.Join(dir, "resolver"),
-			Routes:          routes,
+			Routes:          boundRoutes(ports),
 			TLSDir:          tlsDir,
-			LeafnodesListen: fmt.Sprintf("127.0.0.1:%d", leafPort),
+			LeafnodesListen: natstest.Listen(ports[i].Leafnode),
 			LeafnodesTLSDir: leafTLSDir,
 			LeafRemotesDir:  b.remotesDir,
-		})
-		b.files = append(b.files, filepath.Join(dir, "nats.conf"))
+		}
+	}
+	for range names {
+		b.files = append(b.files, filepath.Join(t.TempDir(), "nats.conf"))
+		b.layouts = append(b.layouts, Layout{})
+	}
+	for i, name := range names {
+		for j := range names {
+			layout(j)
+		}
+		b.write(t, remotes)
+		s := natstest.Start(t, b.files[i])
+		ports[i] = s.Bound(t)
+		b.srvs = append(b.srvs, s.Server)
+		b.eps = append(b.eps, sysobs.Endpoint{Name: name, URL: "http://" + s.MonitorAddr().String()})
+	}
+	for i := range names {
+		layout(i)
 	}
 	b.write(t, remotes)
-	for i, name := range names {
-		o, err := server.ProcessConfigFile(b.files[i])
-		require.NoError(t, err)
-		o.NoLog, o.NoSigs = true, true
-		s, err := server.NewServer(o)
-		require.NoError(t, err)
-		go s.Start()
-		t.Cleanup(s.Shutdown)
-		b.srvs = append(b.srvs, s)
-		b.eps = append(b.eps, sysobs.Endpoint{Name: name, URL: "http://" + b.layouts[i].MonitorListen})
-	}
-	for _, s := range b.srvs {
-		require.True(t, s.ReadyForConnections(15*time.Second))
-	}
+	b.leafPort = ports[0].Leafnode
 	return b
 }
 
@@ -273,40 +269,10 @@ func startHub(t *testing.T) *hub {
 		require.NoError(t, os.WriteFile(filepath.Join(leafTLS, k), v, 0o600))
 	}
 	h.caPEM = cert.Data[caKey]
-	port := freePort(t)
-	nc.Spec.Leafnodes.Advertise = fmt.Sprintf("127.0.0.1:%d", port)
-	h.booted = bootRenderedAt(t, nc, h.p.trust, leafTLS, port)
+	nc.Spec.Leafnodes.Advertise = ""
+	h.booted = bootRendered(t, nc, h.p.trust, nil, leafTLS)
 	h.push(t, jwtplane.Account{Name: "telemetry", Keys: h.telemetry})
 	return h
-}
-
-// bootRenderedAt is bootRendered for a single server with its leafnode
-// listener on port.
-func bootRenderedAt(t *testing.T, nc *clusterv1beta1.NatsCluster, trust *Trust, leafTLSDir string, port int) *booted {
-	t.Helper()
-	require.EqualValues(t, 1, nc.Spec.Replicas)
-	b := &booted{nc: nc, trust: trust, remotesDir: t.TempDir(), leafPort: port}
-	dir := t.TempDir()
-	route := freePort(t)
-	b.layouts = []Layout{{
-		ClientListen:    fmt.Sprintf("127.0.0.1:%d", freePort(t)),
-		RouteListen:     fmt.Sprintf("127.0.0.1:%d", route),
-		MonitorListen:   fmt.Sprintf("127.0.0.1:%d", freePort(t)),
-		PidFile:         filepath.Join(dir, "nats.pid"),
-		StoreDir:        filepath.Join(dir, "jetstream"),
-		ResolverDir:     filepath.Join(dir, "resolver"),
-		Routes:          []string{fmt.Sprintf("nats-route://127.0.0.1:%d", route)},
-		TLSDir:          writeRouteCert(t, nc),
-		LeafnodesListen: fmt.Sprintf("127.0.0.1:%d", port),
-		LeafnodesTLSDir: leafTLSDir,
-		LeafRemotesDir:  t.TempDir(),
-	}}
-	b.files = []string{filepath.Join(dir, "nats.conf")}
-	b.write(t, nil)
-	s := startFile(t, b.files[0])
-	b.srvs = []*server.Server{s}
-	b.eps = []sysobs.Endpoint{{Name: serverName(nc, 0), URL: "http://" + b.layouts[0].MonitorListen}}
-	return b
 }
 
 // push signs account under the hub's NATS operator and pushes it over $SYS as

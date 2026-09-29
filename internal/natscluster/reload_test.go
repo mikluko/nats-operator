@@ -121,7 +121,7 @@ func TestReloadServerCertRotation(t *testing.T) {
 	obs := sysobs.New(conn, "demo")
 	snap := &sysobs.Snapshot{Servers: []sysobs.Server{{Name: "demo-0", ID: s.ID()}}}
 	ctx := context.Background()
-	routeAddr := m["cluster"].(map[string]any)["listen"].(string)
+	routeAddr := s.ClusterAddr().String()
 	require.Equal(t, leafSerial(t, first), servedSerial(t, routeAddr, tlsDir))
 
 	rotated, err := selfSignedRouteSecret(nc, []string{"127.0.0.1"}, time.Now().Add(time.Hour))

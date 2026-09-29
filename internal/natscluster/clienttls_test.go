@@ -15,6 +15,7 @@ import (
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/natstest"
 )
 
 func withClientTLS(nc *clusterv1beta1.NatsCluster, src clusterv1beta1.CertificateSource) *clusterv1beta1.NatsCluster {
@@ -66,12 +67,11 @@ func TestClientTLS_Server(t *testing.T) {
 	nc.Spec.Routes = &clusterv1beta1.Routes{TLS: &clusterv1beta1.RoutesTLS{Enabled: new(bool)}}
 	certDir := writeRouteCert(t, nc)
 	dir := t.TempDir()
-	port, route := freePort(t), freePort(t)
 	l := Layout{
-		ClientListen:  fmt.Sprintf("127.0.0.1:%d", port),
-		RouteListen:   fmt.Sprintf("127.0.0.1:%d", route),
-		Routes:        []string{fmt.Sprintf("nats-route://127.0.0.1:%d", route)},
-		MonitorListen: fmt.Sprintf("127.0.0.1:%d", freePort(t)),
+		ClientListen:  natstest.Listen(0),
+		RouteListen:   natstest.Listen(0),
+		Routes:        []string{natstest.Unroutable},
+		MonitorListen: natstest.Listen(0),
 		PidFile:       filepath.Join(dir, "nats.pid"),
 		ClientTLSDir:  certDir,
 	}
@@ -79,9 +79,9 @@ func TestClientTLS_Server(t *testing.T) {
 	require.NoError(t, err)
 	f := filepath.Join(dir, "nats.conf")
 	require.NoError(t, os.WriteFile(f, b, 0o600))
-	startFile(t, f)
+	s := startFile(t, f)
 
-	url := fmt.Sprintf("tls://127.0.0.1:%d", port)
+	url := fmt.Sprintf("tls://%s", s.Addr())
 	conn, err := nats.Connect(url, nats.RootCAs(filepath.Join(certDir, caKey)), nats.Timeout(5*time.Second))
 	require.NoError(t, err)
 	require.True(t, conn.TLSRequired())

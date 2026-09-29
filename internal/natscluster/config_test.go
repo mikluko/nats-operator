@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,6 +20,7 @@ import (
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/natstest"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
@@ -147,32 +147,22 @@ func TestServerConfig(t *testing.T) {
 }
 
 // startRendered boots every server of nc from its config rendered under
-// trust, on loopback ports and temporary directories, with each of override
-// applied to the parsed options, and returns their monitoring endpoints,
-// the servers, the first server's client URL and each server's config file.
+// trust, on loopback ports the servers bind and temporary directories, with
+// each of override applied to the parsed options, and returns their
+// monitoring endpoints, the servers, the first server's client URL and each
+// server's config file, rewritten with its bound ports and every route.
 func startRendered(t *testing.T, nc *clusterv1beta1.NatsCluster, trust *Trust, revision string, override ...func(*server.Options)) ([]sysobs.Endpoint, []*server.Server, string, []string) {
 	t.Helper()
 	return startRenderedWith(t, nc, Inputs{Trust: trust}, revision, nil, override...)
 }
 
 // startRenderedWith is startRendered from in, with layout, when not nil,
-// applied to the i-th server's Layout before its config is rendered.
+// applied to the i-th server's Layout before its config is rendered; a
+// gateway listener layout sets is bound by the server. The monitoring port
+// stays server-picked in the rewritten files, since nats-server refuses to
+// reload a changed one.
 func startRenderedWith(t *testing.T, nc *clusterv1beta1.NatsCluster, in Inputs, revision string, layout func(i int, l *Layout), override ...func(*server.Options)) ([]sysobs.Endpoint, []*server.Server, string, []string) {
 	t.Helper()
-	free := func() int {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
-		require.NoError(t, err)
-		defer func() { require.NoError(t, l.Close()) }()
-		return l.Addr().(*net.TCPAddr).Port
-	}
-	names := serverNames(nc)
-	var client, route, monitor []int
-	var routes []string
-	for range names {
-		client, route, monitor = append(client, free()), append(route, free()), append(monitor, free())
-		routes = append(routes, fmt.Sprintf("nats-route://127.0.0.1:%d", route[len(route)-1]))
-	}
-
 	tlsDir := t.TempDir()
 	secret, err := selfSignedRouteSecret(nc, []string{"127.0.0.1"}, time.Now())
 	require.NoError(t, err)
@@ -180,45 +170,45 @@ func startRenderedWith(t *testing.T, nc *clusterv1beta1.NatsCluster, in Inputs, 
 		require.NoError(t, os.WriteFile(filepath.Join(tlsDir, k), v, 0o600))
 	}
 
-	var eps []sysobs.Endpoint
-	var srvs []*server.Server
-	var files []string
-	for i, name := range names {
-		dir := t.TempDir()
+	names := serverNames(nc)
+	ports := make([]natstest.Ports, len(names))
+	files := make([]string, len(names))
+	render := func(i int) {
+		dir := filepath.Dir(files[i])
 		l := Layout{
-			ClientListen:  fmt.Sprintf("127.0.0.1:%d", client[i]),
-			RouteListen:   fmt.Sprintf("127.0.0.1:%d", route[i]),
-			MonitorListen: fmt.Sprintf("127.0.0.1:%d", monitor[i]),
+			ClientListen:  natstest.Listen(ports[i].Client),
+			RouteListen:   natstest.Listen(ports[i].Route),
+			MonitorListen: natstest.Listen(0),
 			PidFile:       filepath.Join(dir, "nats.pid"),
 			StoreDir:      filepath.Join(dir, "jetstream"),
 			ResolverDir:   filepath.Join(dir, "resolver"),
-			Routes:        routes,
+			Routes:        boundRoutes(ports),
 			TLSDir:        tlsDir,
 		}
 		if layout != nil {
 			layout(i, &l)
 		}
-		cfg, err := serverConfig(nc, in, name, l, revision).Render()
-		require.NoError(t, err)
-		f := filepath.Join(dir, "nats.conf")
-		require.NoError(t, os.WriteFile(f, cfg, 0o600))
-		files = append(files, f)
-		o, err := server.ProcessConfigFile(f)
-		require.NoError(t, err)
-		require.NotNil(t, o.Cluster.TLSConfig, "route TLS not parsed")
-		o.NoLog, o.NoSigs = true, true
-		for _, f := range override {
-			f(o)
+		if l.GatewayListen != "" {
+			l.GatewayListen = natstest.Listen(ports[i].Gateway)
 		}
-		s, err := server.NewServer(o)
+		cfg, err := serverConfig(nc, in, names[i], l, revision).Render()
 		require.NoError(t, err)
-		go s.Start()
-		t.Cleanup(s.Shutdown)
-		srvs = append(srvs, s)
-		eps = append(eps, sysobs.Endpoint{Name: name, URL: fmt.Sprintf("http://127.0.0.1:%d", monitor[i])})
+		require.NoError(t, os.WriteFile(files[i], cfg, 0o600))
 	}
-	for _, s := range srvs {
-		require.True(t, s.ReadyForConnections(15*time.Second))
+	parsed := func(o *server.Options) { require.NotNil(t, o.Cluster.TLSConfig, "route TLS not parsed") }
+
+	var eps []sysobs.Endpoint
+	var srvs []*server.Server
+	for i, name := range names {
+		files[i] = filepath.Join(t.TempDir(), "nats.conf")
+		render(i)
+		s := natstest.Start(t, files[i], append([]func(*server.Options){parsed}, override...)...)
+		ports[i] = s.Bound(t)
+		srvs = append(srvs, s.Server)
+		eps = append(eps, sysobs.Endpoint{Name: name, URL: "http://" + s.MonitorAddr().String()})
+	}
+	for i := range names {
+		render(i)
 	}
 	require.Eventually(t, func() bool {
 		for _, s := range srvs {
@@ -228,7 +218,22 @@ func startRenderedWith(t *testing.T, nc *clusterv1beta1.NatsCluster, in Inputs, 
 		}
 		return true
 	}, 15*time.Second, 100*time.Millisecond, "routes over self-signed TLS did not form")
-	return eps, srvs, fmt.Sprintf("nats://127.0.0.1:%d", client[0]), files
+	return eps, srvs, natstest.URL(ports[0].Client), files
+}
+
+// boundRoutes are the route URLs of the bound route ports of ports, or
+// [natstest.Unroutable] where none is.
+func boundRoutes(ports []natstest.Ports) []string {
+	var out []string
+	for _, p := range ports {
+		if p.Route != 0 {
+			out = append(out, fmt.Sprintf("nats-route://127.0.0.1:%d", p.Route))
+		}
+	}
+	if len(out) == 0 {
+		return []string{natstest.Unroutable}
+	}
+	return out
 }
 
 // TestRenderedConfigRunsCluster pins that nats-server 2.15.0 runs story 1's

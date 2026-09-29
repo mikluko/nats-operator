@@ -3,8 +3,6 @@ package balance
 import (
 	"context"
 	"fmt"
-	"net"
-	"net/url"
 	"testing"
 	"time"
 
@@ -14,58 +12,26 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nats-io/nkeys"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mikluko/nats-operator/internal/natstest"
 )
 
 // testCluster is the NATS cluster name every harness server joins.
 const testCluster = "test"
 
 // startCluster runs three JetStream servers routed into one NATS cluster,
-// n0 to n2, under p's auth plane where p is not nil. A clustered JetStream
-// server refuses to start with no route configured, so every route port is
-// settled before any server starts.
+// n0 to n2, under p's auth plane where p is not nil.
 func startCluster(t *testing.T, p *plane) []*server.Server {
 	t.Helper()
-	const n = 3
-	var routes []*url.URL
-	ports := make([]int, n)
-	for i := range ports {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
-		require.NoError(t, err)
-		ports[i] = l.Addr().(*net.TCPAddr).Port
-		require.NoError(t, l.Close())
-		routes = append(routes, &url.URL{Scheme: "nats", Host: fmt.Sprintf("127.0.0.1:%d", ports[i])})
+	c := &natstest.Cluster{Name: testCluster, Size: 3, Prefix: "n"}
+	if p != nil {
+		c.Configure = func(_ int, o *server.Options) { p.configure(t, o) }
 	}
+	natstest.StartSupercluster(t, c)
 	var servers []*server.Server
-	for i := range n {
-		opts := &server.Options{
-			ServerName: fmt.Sprintf("n%d", i),
-			Host:       "127.0.0.1",
-			Port:       -1,
-			NoLog:      true,
-			NoSigs:     true,
-			JetStream:  true,
-			StoreDir:   t.TempDir(),
-			Cluster:    server.ClusterOpts{Name: testCluster, Host: "127.0.0.1", Port: ports[i]},
-			Routes:     routes,
-		}
-		if p != nil {
-			p.configure(t, opts)
-		}
-		srv, err := server.NewServer(opts)
-		require.NoError(t, err)
-		go srv.Start()
-		t.Cleanup(srv.Shutdown)
-		require.True(t, srv.ReadyForConnections(10*time.Second), "n%d did not start", i)
-		servers = append(servers, srv)
+	for _, s := range c.Servers {
+		servers = append(servers, s.Server)
 	}
-	require.Eventually(t, func() bool {
-		for _, srv := range servers {
-			if srv.JetStreamIsLeader() {
-				return len(srv.JetStreamClusterPeers()) == n
-			}
-		}
-		return false
-	}, 30*time.Second, 100*time.Millisecond, "the NATS cluster elected no meta leader seeing all %d servers", n)
 	return servers
 }
 

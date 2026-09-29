@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"math/big"
 	"net"
-	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -31,14 +30,13 @@ import (
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	"github.com/mikluko/nats-operator/internal/natstest"
 )
 
 // testNATS is a NATS cluster of in-process JetStream servers.
 type testNATS struct {
-	servers []*server.Server
-	// opts are each server's options, for restart.
-	opts []*server.Options
-	urls []string
+	servers []*natstest.Server
+	urls    []string
 	// ca and creds are set on a secure NATS cluster: client TLS signed by ca,
 	// and a NATS operator with one JetStream account, creds being its user's.
 	ca    []byte
@@ -50,126 +48,45 @@ type testNATS struct {
 func startNATS(t *testing.T, n int, secure bool) *testNATS {
 	t.Helper()
 	tn := &testNATS{}
-	var configure func(*server.Options)
+	configure := func(o *server.Options) { o.JetStreamMaxStore = 1 << 40 }
 	if secure {
-		configure = tn.secure(t)
+		sec := tn.secure(t)
+		configure = func(o *server.Options) { o.JetStreamMaxStore = 1 << 40; sec(o) }
 	}
-	var routes []*url.URL
-	ports := make([]int, n)
-	if n > 1 {
-		for i := range ports {
-			l, err := net.Listen("tcp", "127.0.0.1:0")
-			require.NoError(t, err)
-			ports[i] = l.Addr().(*net.TCPAddr).Port
-			require.NoError(t, l.Close())
-			routes = append(routes, &url.URL{Scheme: "nats", Host: fmt.Sprintf("127.0.0.1:%d", ports[i])})
-		}
+	if n == 1 {
+		f := filepath.Join(t.TempDir(), "nats.conf")
+		conf := fmt.Sprintf("server_name: n0\nlisten: %q\njetstream { store_dir: %q }\n", natstest.Listen(0), t.TempDir())
+		require.NoError(t, os.WriteFile(f, []byte(conf), 0o600))
+		tn.servers = []*natstest.Server{natstest.Start(t, f, configure)}
+	} else {
+		c := &natstest.Cluster{Name: "test", Size: n, Prefix: "n", Configure: func(_ int, o *server.Options) { configure(o) }}
+		natstest.StartSupercluster(t, c)
+		tn.servers = c.Servers
 	}
-	for i := range n {
-		opts := &server.Options{
-			ServerName:        fmt.Sprintf("n%d", i),
-			Host:              "127.0.0.1",
-			Port:              -1,
-			NoLog:             true,
-			NoSigs:            true,
-			JetStream:         true,
-			StoreDir:          t.TempDir(),
-			JetStreamMaxStore: 1 << 40,
-		}
-		if n > 1 {
-			opts.Cluster = server.ClusterOpts{Name: "test", Host: "127.0.0.1", Port: ports[i]}
-			opts.Routes = routes
-		}
-		if configure != nil {
-			configure(opts)
-		}
-		srv, err := server.NewServer(opts)
-		require.NoError(t, err)
-		go srv.Start()
-		t.Cleanup(srv.Shutdown)
-		require.True(t, srv.ReadyForConnections(10*time.Second), "n%d did not start", i)
-		tn.servers = append(tn.servers, srv)
-		tn.urls = append(tn.urls, srv.ClientURL())
-	}
-	if n > 1 {
-		require.Eventually(t, func() bool {
-			for _, srv := range tn.servers {
-				if srv.JetStreamIsLeader() {
-					return len(srv.JetStreamClusterPeers()) == n
-				}
-			}
-			return false
-		}, 30*time.Second, 100*time.Millisecond, "no meta leader seeing all %d servers", n)
+	for _, s := range tn.servers {
+		tn.urls = append(tn.urls, s.ClientURL())
 	}
 	return tn
 }
 
 // startSupercluster runs one NATS cluster of three JetStream servers per
 // name, <name>-0 onwards, each gatewayed to every other, and returns them by
-// name. Every port is settled before any server starts, since a clustered
-// JetStream server refuses to start with no route.
+// name.
 func startSupercluster(t *testing.T, names ...string) map[string]*testNATS {
 	t.Helper()
-	const size = 3
-	listen := func() int {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
-		require.NoError(t, err)
-		defer func() { require.NoError(t, l.Close()) }()
-		return l.Addr().(*net.TCPAddr).Port
-	}
-	routes, routePorts, gatewayPorts := map[string][]*url.URL{}, map[string][]int{}, map[string][]int{}
-	var remotes []*server.RemoteGatewayOpts
+	var clusters []*natstest.Cluster
 	for _, name := range names {
-		var gateways []*url.URL
-		for range size {
-			rp, gp := listen(), listen()
-			routePorts[name], gatewayPorts[name] = append(routePorts[name], rp), append(gatewayPorts[name], gp)
-			routes[name] = append(routes[name], &url.URL{Scheme: "nats", Host: fmt.Sprintf("127.0.0.1:%d", rp)})
-			gateways = append(gateways, &url.URL{Scheme: "nats", Host: fmt.Sprintf("127.0.0.1:%d", gp)})
-		}
-		remotes = append(remotes, &server.RemoteGatewayOpts{Name: name, URLs: gateways})
+		clusters = append(clusters, &natstest.Cluster{Name: name, Size: 3, Configure: func(_ int, o *server.Options) { o.JetStreamMaxStore = 1 << 30 }})
 	}
+	natstest.StartSupercluster(t, clusters...)
 	out := map[string]*testNATS{}
-	var all []*server.Server
-	for _, name := range names {
-		tn := &testNATS{}
-		for i := range size {
-			opts := &server.Options{
-				ServerName:        fmt.Sprintf("%s-%d", name, i),
-				Host:              "127.0.0.1",
-				Port:              -1,
-				NoLog:             true,
-				NoSigs:            true,
-				JetStream:         true,
-				StoreDir:          t.TempDir(),
-				JetStreamMaxStore: 1 << 30,
-				Cluster:           server.ClusterOpts{Name: name, Host: "127.0.0.1", Port: routePorts[name][i]},
-				Routes:            routes[name],
-				Gateway:           server.GatewayOpts{Name: name, Host: "127.0.0.1", Port: gatewayPorts[name][i], Gateways: remotes},
-			}
-			srv, err := server.NewServer(opts)
-			require.NoError(t, err)
-			go srv.Start()
-			t.Cleanup(srv.Shutdown)
-			tn.servers, tn.opts = append(tn.servers, srv), append(tn.opts, opts)
-			all = append(all, srv)
+	for _, c := range clusters {
+		tn := &testNATS{servers: c.Servers}
+		for _, s := range c.Servers {
+			tn.urls = append(tn.urls, s.ClientURL())
 		}
-		out[name] = tn
+		out[c.Name] = tn
 	}
-	for _, name := range names {
-		for _, srv := range out[name].servers {
-			require.True(t, srv.ReadyForConnections(15*time.Second), "%s did not start", srv.Name())
-			out[name].urls = append(out[name].urls, srv.ClientURL())
-		}
-	}
-	require.Eventually(t, func() bool {
-		for _, srv := range all {
-			if srv.JetStreamIsLeader() {
-				return len(srv.JetStreamClusterPeers()) == len(all)
-			}
-		}
-		return false
-	}, time.Minute, 100*time.Millisecond, "the supercluster elected no meta leader seeing all %d servers", len(all))
 	return out
 }
 
@@ -177,18 +94,11 @@ func startSupercluster(t *testing.T, names ...string) map[string]*testNATS {
 // on its own store.
 func (tn *testNATS) stop(t *testing.T, name string) (restart func()) {
 	t.Helper()
-	i := slices.IndexFunc(tn.servers, func(s *server.Server) bool { return s.Name() == name })
+	i := slices.IndexFunc(tn.servers, func(s *natstest.Server) bool { return s.Name() == name })
 	require.GreaterOrEqual(t, i, 0, "no server %s", name)
 	tn.servers[i].Shutdown()
 	tn.servers[i].WaitForShutdown()
-	return func() {
-		srv, err := server.NewServer(tn.opts[i])
-		require.NoError(t, err)
-		go srv.Start()
-		t.Cleanup(srv.Shutdown)
-		require.True(t, srv.ReadyForConnections(15*time.Second), "%s did not restart", name)
-		tn.servers[i] = srv
-	}
+	return func() { tn.servers[i] = tn.servers[i].Restart(t) }
 }
 
 // secure mints a NATS operator, a system account and one JetStream account

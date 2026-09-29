@@ -5,6 +5,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 )
 
 // enum maps an API enum to its nats-server JSON spelling.
@@ -92,28 +93,18 @@ func nonZero[T comparable](v *T) *T {
 	return v
 }
 
-func ptrTo[T any](v T) *T { return &v }
-
-func deref[T any](v *T) T {
-	var zero T
-	if v == nil {
-		return zero
-	}
-	return *v
-}
-
 func int32Wire(v *int32) *int64 {
 	if v == nil {
 		return nil
 	}
-	return ptrTo(int64(*v))
+	return ptr.To(int64(*v))
 }
 
 func int32API(v *int64) *int32 {
 	if v == nil || *v == 0 {
 		return nil
 	}
-	return ptrTo(int32(*v)) //nolint:gosec // replica counts are bounded by the schema.
+	return ptr.To(int32(*v)) //nolint:gosec // replica counts are bounded by the schema.
 }
 
 func durationsWire(ds []metav1.Duration) []int64 {

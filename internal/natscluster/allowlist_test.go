@@ -2,8 +2,6 @@ package natscluster
 
 import (
 	"encoding/json"
-	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -16,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
+	"github.com/mikluko/nats-operator/internal/natstest"
 )
 
 // TestReloadAllowLists_EverySupportedVersion pins a reload allow-list for
@@ -78,25 +77,16 @@ func setPath(m map[string]any, path string, v any) {
 	m[parts[len(parts)-1]] = v
 }
 
-// testGateway gives the config a gateway listening on a free port, with one
-// remote at remoteURL.
-func testGateway(t *testing.T, remoteURL string) func(*testing.T, map[string]any) {
-	port := freePort(t)
-	return func(t *testing.T, m map[string]any) {
+// testGateway gives the config a gateway listening on a port the server
+// binds, with one remote at remoteURL.
+func testGateway(remoteURL string) func(*testing.T, map[string]any) {
+	return func(_ *testing.T, m map[string]any) {
 		setPath(m, "gateway", map[string]any{
 			"name":     "demo",
-			"listen":   fmt.Sprintf("127.0.0.1:%d", port),
+			"listen":   natstest.Listen(0),
 			"gateways": []any{map[string]any{"name": "west", "urls": []any{remoteURL}}},
 		})
 	}
-}
-
-func freePort(t *testing.T) int {
-	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	defer func() { require.NoError(t, l.Close()) }()
-	return l.Addr().(*net.TCPAddr).Port
 }
 
 // writeRouteCert writes a fresh self-signed route certificate into a new
@@ -115,7 +105,7 @@ func writeRouteCert(t *testing.T, nc *clusterv1beta1.NatsCluster) string {
 // configCases are the changes both the classification table and the
 // running server judge. Each builds on story 1's rendered config with
 // memory and file store limits set.
-func configCases(t *testing.T, nc *clusterv1beta1.NatsCluster) []configCase {
+func configCases(nc *clusterv1beta1.NatsCluster) []configCase {
 	none := func(*testing.T, map[string]any) {}
 	newCert := func(t *testing.T, m map[string]any) {
 		dir := writeRouteCert(t, nc)
@@ -134,7 +124,7 @@ func configCases(t *testing.T, nc *clusterv1beta1.NatsCluster) []configCase {
 		{"server tags", none, set("server_tags", []any{"az:b"}), ""},
 		{"config revision", none, set("server_metadata.config_revision", "r2"), ""},
 		{"routes", none, func(_ *testing.T, m map[string]any) {
-			setPath(m, "cluster.routes", append(m["cluster"].(map[string]any)["routes"].([]any), "nats-route://127.0.0.1:1"))
+			setPath(m, "cluster.routes", append(m["cluster"].(map[string]any)["routes"].([]any), "nats-route://127.0.0.1:2"))
 		}, ""},
 		{"max_payload", none, set("max_payload", 2<<20), ""},
 		{"memory store raised", none, set("jetstream.max_memory_store", 512<<20), ""},
@@ -145,9 +135,9 @@ func configCases(t *testing.T, nc *clusterv1beta1.NatsCluster) []configCase {
 			setPath(m, "jetstream.store_dir", t.TempDir())
 		}, "jetstream.store_dir is restart-only"},
 		{"server_name", none, set("server_name", "other"), "server_name is restart-only"},
-		{"gateway added", none, testGateway(t, "nats://127.0.0.1:1"), "gateway is restart-only"},
-		{"gateway remote", testGateway(t, "nats://127.0.0.1:2"), otherRemote, "gateway.gateways is restart-only"},
-		{"TLS certificate and gateway remote", testGateway(t, "nats://127.0.0.1:2"), func(t *testing.T, m map[string]any) {
+		{"gateway added", none, testGateway("nats://127.0.0.1:1"), "gateway is restart-only"},
+		{"gateway remote", testGateway("nats://127.0.0.1:2"), otherRemote, "gateway.gateways is restart-only"},
+		{"TLS certificate and gateway remote", testGateway("nats://127.0.0.1:2"), func(t *testing.T, m map[string]any) {
 			newCert(t, m)
 			otherRemote(t, m)
 		}, "gateway.gateways is restart-only"},
@@ -156,7 +146,7 @@ func configCases(t *testing.T, nc *clusterv1beta1.NatsCluster) []configCase {
 			setPath(m, "jetstream.domain", "hub")
 		}, "jetstream.domain is restart-only"},
 		{"route listener and server name", none, func(t *testing.T, m map[string]any) {
-			setPath(m, "cluster.listen", fmt.Sprintf("127.0.0.1:%d", freePort(t)))
+			setPath(m, "cluster.listen", "127.0.0.1:1")
 			setPath(m, "server_name", "other")
 		}, "cluster.listen, server_name are restart-only"},
 	}
@@ -172,15 +162,14 @@ func renderedMap(t *testing.T, nc *clusterv1beta1.NatsCluster, tlsDir string) ma
 func renderedTrustMap(t *testing.T, nc *clusterv1beta1.NatsCluster, trust *Trust, tlsDir string) map[string]any {
 	t.Helper()
 	dir := t.TempDir()
-	route := freePort(t)
 	l := Layout{
-		ClientListen:  fmt.Sprintf("127.0.0.1:%d", freePort(t)),
-		RouteListen:   fmt.Sprintf("127.0.0.1:%d", route),
-		MonitorListen: fmt.Sprintf("127.0.0.1:%d", freePort(t)),
+		ClientListen:  natstest.Listen(0),
+		RouteListen:   natstest.Listen(0),
+		MonitorListen: natstest.Listen(0),
 		PidFile:       filepath.Join(dir, "nats.pid"),
 		StoreDir:      filepath.Join(dir, "jetstream"),
 		ResolverDir:   filepath.Join(dir, "resolver"),
-		Routes:        []string{fmt.Sprintf("nats-route://127.0.0.1:%d", route)},
+		Routes:        []string{natstest.Unroutable},
 		TLSDir:        tlsDir,
 	}
 	b, err := serverConfig(nc, Inputs{Trust: trust}, "demo-0", l, "r1").Render()
@@ -208,7 +197,7 @@ func encode(t *testing.T, m map[string]any) []byte {
 func TestRestartReason(t *testing.T) {
 	nc := limitedStoryCluster(t)
 	tlsDir := writeRouteCert(t, nc)
-	for _, tt := range configCases(t, nc) {
+	for _, tt := range configCases(nc) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := renderedMap(t, nc, tlsDir)
 			tt.base(t, m)
@@ -258,7 +247,7 @@ func TestRestartReason(t *testing.T) {
 func TestRestartReason_AgreesWithServer(t *testing.T) {
 	nc := limitedStoryCluster(t)
 	tlsDir := writeRouteCert(t, nc)
-	for _, tt := range configCases(t, nc) {
+	for _, tt := range configCases(nc) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := renderedMap(t, nc, tlsDir)
 			tt.base(t, m)

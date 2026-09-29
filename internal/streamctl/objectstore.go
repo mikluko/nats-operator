@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/nats-io/nats.go/jetstream"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -97,7 +98,7 @@ func (o *objectStoreObject) Fetch(ctx context.Context) (*lifecycle.Info, error) 
 // isObjectStore reports whether s takes the chunk and meta subjects of
 // bucket and allows rollups, as nats.go's object store needs.
 func isObjectStore(s *streamWire, bucket string) bool {
-	return deref(s.AllowRollup) &&
+	return ptr.Deref(s.AllowRollup, false) &&
 		slices.Contains(s.Subjects, "$O."+bucket+".C.>") &&
 		slices.Contains(s.Subjects, "$O."+bucket+".M.>")
 }

@@ -5,52 +5,39 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"slices"
 	"testing"
 	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mikluko/nats-operator/internal/natstest"
 )
 
 // startNoAuthCluster starts a NATS cluster with no accounts, no client auth
 // and system_account unset, each server with its monitoring port and
 // server_metadata rev: <name>.
-func startNoAuthCluster(t *testing.T, c *testCluster) (map[string]*testServer, []Endpoint) {
+func startNoAuthCluster(t *testing.T, name string, size int) (*natstest.Cluster, []Endpoint) {
 	t.Helper()
-	srvs := map[string]*testServer{}
+	c := &natstest.Cluster{Name: name, Size: size}
+	c.Config = func(i int) string {
+		return fmt.Sprintf("http: %q\nserver_metadata { rev: %s }\n", natstest.Listen(0), c.ServerName(i))
+	}
+	natstest.StartSupercluster(t, c)
 	var eps []Endpoint
-	for i := range c.size {
-		conf := fmt.Sprintf(`server_name: %s
-listen: %q
-http: %q
-server_metadata { rev: %s }
-jetstream { store_dir: %q }
-cluster { name: %s, listen: %q, routes: [%s] }
-`, c.serverName(i), listen(0), listen(0), c.serverName(i), c.storeDir[i], c.name, listen(0), routes(c.routePort))
-		f := filepath.Join(t.TempDir(), "s.conf")
-		require.NoError(t, os.WriteFile(f, []byte(conf), 0o600))
-		s := startServer(t, f)
-		c.peered(t, i, s, false)
-		srvs[c.serverName(i)] = s
+	for i, s := range c.Servers {
+		eps = append(eps, Endpoint{Name: c.ServerName(i), URL: "http://" + s.MonitorAddr().String()})
 	}
-	for i := range c.size {
-		s := srvs[c.serverName(i)]
-		c.ready(t, i, s)
-		eps = append(eps, Endpoint{Name: c.serverName(i), URL: "http://" + s.MonitorAddr().String()})
-	}
-	return srvs, eps
+	return c, eps
 }
 
 // TestNoAuthClusterHidesSystemAccount pins why a NATS cluster without an
 // auth plane is observed over HTTP: a client lands in the global account and
 // the system API has no responder there.
 func TestNoAuthClusterHidesSystemAccount(t *testing.T) {
-	c := newTestCluster(t, "N", 1)
-	_, _ = startNoAuthCluster(t, c)
-	nc, err := nats.Connect(fmt.Sprintf("nats://127.0.0.1:%d", c.clientPort[0]))
+	c, _ := startNoAuthCluster(t, "N", 1)
+	nc, err := nats.Connect(c.Servers[0].ClientURL())
 	require.NoError(t, err)
 	t.Cleanup(nc.Close)
 	_, err = nc.Request(subjPingJsz, nil, time.Second)
@@ -58,10 +45,9 @@ func TestNoAuthClusterHidesSystemAccount(t *testing.T) {
 }
 
 func TestMonitorObserve(t *testing.T) {
-	c := newTestCluster(t, "N", 3)
-	srvs, eps := startNoAuthCluster(t, c)
+	c, eps := startNoAuthCluster(t, "N", 3)
 
-	nc, err := nats.Connect(fmt.Sprintf("nats://127.0.0.1:%d", c.clientPort[0]))
+	nc, err := nats.Connect(c.Servers[0].ClientURL())
 	require.NoError(t, err)
 	t.Cleanup(nc.Close)
 	js, err := nc.JetStream()
@@ -87,7 +73,7 @@ func TestMonitorObserve(t *testing.T) {
 	require.Equal(t, &Placement{Cluster: "N"}, findGroup(t, snap, KindStream, "R3", "").Placement)
 	require.Equal(t, &Placement{Cluster: "N"}, findGroup(t, snap, KindConsumer, "R3", "D").Placement)
 	for _, s := range snap.Servers {
-		require.Equal(t, srvs[s.Name].ID(), s.ID)
+		require.Equal(t, c.Server(s.Name).ID(), s.ID)
 		require.Equal(t, map[string]string{"rev": s.Name}, s.Metadata)
 		require.True(t, s.JetStream)
 		require.NotEmpty(t, s.Version)
@@ -107,7 +93,7 @@ func TestMonitorObserve(t *testing.T) {
 	if findGroup(t, snap, KindStream, "R3", "").Leader == down {
 		down = "N-2"
 	}
-	srvs[down].Shutdown()
+	c.Server(down).Shutdown()
 	require.Eventually(t, func() bool {
 		s, err := o.Observe(context.Background(), eps)
 		if err != nil {

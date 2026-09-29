@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/nats-io/nats-server/v2/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -26,6 +27,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/e2e/placeholders"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/natsconn"
+	"github.com/mikluko/nats-operator/internal/natstest"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
@@ -351,38 +353,20 @@ type member struct {
 	url  string
 }
 
-// freePorts returns n loopback ports free at the time of the call.
-func freePorts(t *testing.T, n int) []int {
-	t.Helper()
-	var out []int
-	for range n {
-		l, err := net.Listen("tcp", "127.0.0.1:0")
-		require.NoError(t, err)
-		out = append(out, l.Addr().(*net.TCPAddr).Port)
-		require.NoError(t, l.Close())
-	}
-	return out
-}
-
 // supercluster boots story 6's east and west on loopback under one NATS
 // operator, with gateway TLS from one CA and each server advertising its own
-// listener; mutate adjusts both NatsClusters before they render.
+// listener; mutate adjusts both NatsClusters before they render. East names
+// every remote unroutable and learns west's listeners from west's
+// connections.
 func supercluster(t *testing.T, mutate func(east, west *clusterv1beta1.NatsCluster)) (east, west *member) {
 	t.Helper()
 	p := mintPlane(t)
 	ncs := map[string]*clusterv1beta1.NatsCluster{"east": storySupercluster(t, "east"), "west": storySupercluster(t, "west")}
-	ports := map[string][]int{}
-	for name, nc := range ncs {
+	for _, nc := range ncs {
 		nc.Spec.JetStream.Limits = &clusterv1beta1.JetStreamLimits{MaxMemoryStore: quantity("256Mi"), MaxFileStore: quantity("1Gi")}
 		nc.Spec.Gateway.Advertise = ""
-		ports[name] = freePorts(t, int(nc.Spec.Replicas))
-	}
-	for _, nc := range ncs {
-		for i, r := range nc.Spec.Gateway.Remotes {
-			u, err := url.Parse(r.URL)
-			require.NoError(t, err)
-			u.Host = fmt.Sprintf("127.0.0.1:%d", ports[r.Name][0])
-			nc.Spec.Gateway.Remotes[i].URL = u.String()
+		for i := range nc.Spec.Gateway.Remotes {
+			setRemoteHost(t, nc, i, strings.TrimPrefix(natstest.Unroutable, "nats://"))
 		}
 	}
 	mutate(ncs["east"], ncs["west"])
@@ -398,15 +382,25 @@ func supercluster(t *testing.T, mutate func(east, west *clusterv1beta1.NatsClust
 	require.NoError(t, clientgoscheme.AddToScheme(scheme))
 	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetClusterController))
 	t.Cleanup(pool.Close)
+	var eastGateway int
 	start := func(name string) *member {
 		m := &member{nc: ncs[name]}
+		for i, r := range m.nc.Spec.Gateway.Remotes {
+			if r.Name == "east" && eastGateway != 0 {
+				setRemoteHost(t, m.nc, i, fmt.Sprintf("127.0.0.1:%d", eastGateway))
+			}
+		}
 		in := Inputs{Trust: p.trust}
 		m.plan, err = Render(m.nc, in)
 		require.NoError(t, err)
-		_, _, m.url, _ = startRenderedWith(t, m.nc, in, m.plan.Revision, func(i int, l *Layout) {
-			l.GatewayListen = fmt.Sprintf("127.0.0.1:%d", ports[name][i])
+		var srvs []*server.Server
+		_, srvs, m.url, _ = startRenderedWith(t, m.nc, in, m.plan.Revision, func(_ int, l *Layout) {
+			l.GatewayListen = natstest.Listen(0)
 			l.GatewayTLSDir = gwTLS
 		})
+		if name == "east" {
+			eastGateway = srvs[0].GatewayAddr().Port
+		}
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Namespace: m.nc.Namespace, Name: m.nc.Spec.Auth.SystemCredentials.SecretKeyRef.Name},
 			Data:       map[string][]byte{natsconn.DefaultCredentialsKey: p.systemCreds(t, jwtplane.PresetClusterController)},
@@ -419,6 +413,15 @@ func supercluster(t *testing.T, mutate func(east, west *clusterv1beta1.NatsClust
 		return m
 	}
 	return start("east"), start("west")
+}
+
+// setRemoteHost points nc's i-th gateway remote at host.
+func setRemoteHost(t *testing.T, nc *clusterv1beta1.NatsCluster, i int, host string) {
+	t.Helper()
+	u, err := url.Parse(nc.Spec.Gateway.Remotes[i].URL)
+	require.NoError(t, err)
+	u.Host = host
+	nc.Spec.Gateway.Remotes[i].URL = u.String()
 }
 
 // status observes m over $SYS and computes its status, every server Ready.

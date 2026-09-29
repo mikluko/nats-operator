@@ -52,11 +52,11 @@ func settledSnapshot(t *testing.T, o *SystemClient, want int) *Snapshot {
 }
 
 func TestObserve_SuperclusterFiltersToOneCluster(t *testing.T) {
-	c1 := newTestCluster(t, "C1", 3)
-	c2 := newTestCluster(t, "C2", 1)
+	c1 := newTestCluster("C1", 3)
+	c2 := newTestCluster("C2", 1)
 	srvs := startSupercluster(t, c1, c2)
 
-	js, err := connect(t, c1.clientPort[0], "a").JetStream()
+	js, err := connect(t, c1.Servers[0], "a").JetStream()
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
 		_, err := js.AddStream(&nats.StreamConfig{Name: "R3", Subjects: []string{"r3"}, Replicas: 3, Placement: &nats.Placement{Cluster: "C1"}})
@@ -69,7 +69,7 @@ func TestObserve_SuperclusterFiltersToOneCluster(t *testing.T) {
 	_, err = js.AddStream(&nats.StreamConfig{Name: "ELSEWHERE", Subjects: []string{"e"}, Replicas: 1, Placement: &nats.Placement{Cluster: "C2"}})
 	require.NoError(t, err)
 
-	o := New(connect(t, c2.clientPort[0], "sys"), "C1")
+	o := New(connect(t, c2.Servers[0], "sys"), "C1")
 
 	roster, err := o.Roster(context.Background())
 	require.NoError(t, err)
@@ -112,17 +112,17 @@ func TestObserve_SuperclusterFiltersToOneCluster(t *testing.T) {
 }
 
 func TestObserve_ServerDownIsNotSettled(t *testing.T) {
-	c1 := newTestCluster(t, "C1", 3)
+	c1 := newTestCluster("C1", 3)
 	srvs := startSupercluster(t, c1)
 
-	js, err := connect(t, c1.clientPort[0], "a").JetStream()
+	js, err := connect(t, c1.Servers[0], "a").JetStream()
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
 		_, err := js.AddStream(&nats.StreamConfig{Name: "R3", Subjects: []string{"r3"}, Replicas: 3})
 		return err == nil
 	}, 30*time.Second, 200*time.Millisecond)
 
-	o := New(connect(t, c1.clientPort[0], "sys"), "C1")
+	o := New(connect(t, c1.Servers[0], "sys"), "C1")
 	snap := settledSnapshot(t, o, 2)
 	r3 := findGroup(t, snap, KindStream, "R3", "")
 	down := "C1-1"
@@ -149,10 +149,10 @@ func TestObserve_ServerDownIsNotSettled(t *testing.T) {
 }
 
 func TestReload(t *testing.T) {
-	c1 := newTestCluster(t, "C1", 3)
+	c1 := newTestCluster("C1", 3)
 	srvs := startSupercluster(t, c1)
 	target := srvs["C1-0"]
-	o := New(connect(t, c1.clientPort[1], "sys"), "C1")
+	o := New(connect(t, c1.Servers[1], "sys"), "C1")
 
 	var before ConfigState
 	require.Eventually(t, func() bool {
@@ -162,7 +162,7 @@ func TestReload(t *testing.T) {
 	}, 10*time.Second, 100*time.Millisecond, "the target's system subscriptions never reached the observer")
 	require.NotEmpty(t, before.Digest)
 
-	raw, err := os.ReadFile(target.conf)
+	raw, err := os.ReadFile(target.Conf)
 	require.NoError(t, err)
 	base := string(raw)
 	tests := []struct {
@@ -177,7 +177,7 @@ func TestReload(t *testing.T) {
 	prev := before
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.NoError(t, os.WriteFile(target.conf, []byte(base+tt.extra), 0o600))
+			require.NoError(t, os.WriteFile(target.Conf, []byte(base+tt.extra), 0o600))
 			got, err := o.Reload(context.Background(), target.ID())
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
@@ -195,11 +195,11 @@ func TestReload(t *testing.T) {
 }
 
 func TestObserve_Gateways(t *testing.T) {
-	c1 := newTestCluster(t, "C1", 3)
-	c2 := newTestCluster(t, "C2", 2)
+	c1 := newTestCluster("C1", 3)
+	c2 := newTestCluster("C2", 2)
 	startSupercluster(t, c1, c2)
 
-	o := New(connect(t, c1.clientPort[0], "sys"), "C1", WithGateways())
+	o := New(connect(t, c1.Servers[0], "sys"), "C1", WithGateways())
 	require.Eventually(t, func() bool {
 		s, err := o.Observe(context.Background())
 		if err != nil || len(s.Servers) != 3 {

@@ -147,9 +147,7 @@ spec:
 
 // testAccountKeyHeld pins that a granted namespace's NatsAccount declaring
 // the public key of an account or of the system account already signed under
-// the NatsOperator is refused, Ready False, PublicKeyInUse naming the
-// holder, records no key, and has nothing signed with its signing key
-// pushed.
+// the NatsOperator is refused.
 func (e *env) testAccountKeyHeld(t *testing.T) {
 	e.apply(t, `
 apiVersion: auth.nats.mikluko.io/v1beta1
@@ -285,9 +283,7 @@ spec:
 }
 
 // testSystemKeyUnrecorded pins that a NatsAccount with the identity of a
-// NatsSystemAccount whose status records no key yet is refused: declared
-// after it, with nothing it signs pushed; declared before it, once the
-// NatsSystemAccount's identity Secret changes to that key.
+// NatsSystemAccount whose status records no key yet is refused.
 func (e *env) testSystemKeyUnrecorded(t *testing.T) {
 	first := e.seedSecret(t, "adopt", "sys-first", nkeys.PrefixByteAccount)
 	adopted := e.seedSecret(t, "adopt", "sys-adopted", nkeys.PrefixByteAccount)

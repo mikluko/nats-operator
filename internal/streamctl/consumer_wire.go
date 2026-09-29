@@ -3,6 +3,8 @@ package streamctl
 import (
 	"time"
 
+	"k8s.io/utils/ptr"
+
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 )
 
@@ -103,7 +105,7 @@ func consumerToWire(c *js.ConsumerConfig, name string) consumerWire {
 // left unset.
 func consumerFromWire(w *consumerWire) js.ConsumerConfig {
 	return js.ConsumerConfig{
-		Description:        deref(w.Description),
+		Description:        ptr.Deref(w.Description, ""),
 		DeliverPolicy:      deliverPolicies.api(w.DeliverPolicy),
 		OptStartSeq:        nonZero(w.OptStartSeq),
 		OptStartTime:       timeAPI(w.OptStartTime),
@@ -111,11 +113,11 @@ func consumerFromWire(w *consumerWire) js.ConsumerConfig {
 		AckWait:            durationAPI(w.AckWait),
 		MaxDeliver:         nonZero(w.MaxDeliver),
 		BackOff:            durationsAPI(w.BackOff),
-		FilterSubject:      deref(w.FilterSubject),
+		FilterSubject:      ptr.Deref(w.FilterSubject, ""),
 		FilterSubjects:     w.FilterSubjects,
 		ReplayPolicy:       replayPolicies.api(w.ReplayPolicy),
 		RateLimit:          nonZero(w.RateLimit),
-		SampleFrequency:    deref(w.SampleFrequency),
+		SampleFrequency:    ptr.Deref(w.SampleFrequency, ""),
 		MaxWaiting:         nonZero(w.MaxWaiting),
 		MaxAckPending:      nonZero(w.MaxAckPending),
 		FlowControl:        nonZero(w.FlowControl),
@@ -123,8 +125,8 @@ func consumerFromWire(w *consumerWire) js.ConsumerConfig {
 		MaxRequestBatch:    nonZero(w.MaxRequestBatch),
 		MaxRequestExpires:  durationAPI(w.MaxRequestExpires),
 		MaxRequestMaxBytes: nonZero(w.MaxRequestMaxBytes),
-		DeliverSubject:     deref(w.DeliverSubject),
-		DeliverGroup:       deref(w.DeliverGroup),
+		DeliverSubject:     ptr.Deref(w.DeliverSubject, ""),
+		DeliverGroup:       ptr.Deref(w.DeliverGroup, ""),
 		Heartbeat:          durationAPI(w.Heartbeat),
 		InactiveThreshold:  durationAPI(w.InactiveThreshold),
 		Replicas:           int32API(w.Replicas),

@@ -316,7 +316,7 @@ func (r *Reconciler) requestReplacement(ctx context.Context, nc *clusterv1beta1.
 	}
 	orig := nc.DeepCopy()
 	delete(nc.Annotations, clusterv1beta1.AnnotationReplaceServer)
-	if err := r.Client.Patch(ctx, nc, client.MergeFrom(orig)); err != nil {
+	if err := r.Client.Patch(ctx, nc, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{})); err != nil {
 		return fmt.Errorf("clear %s: %w", clusterv1beta1.AnnotationReplaceServer, err)
 	}
 	return nil

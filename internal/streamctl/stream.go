@@ -8,6 +8,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -128,7 +129,7 @@ func streamServerStatus(info *lifecycle.Info) *js.StreamServerStatus {
 		Bytes:    resource.NewQuantity(int64(si.State.Bytes), resource.BinarySI), //nolint:gosec // byte counts fit.
 	}
 	if !info.Created.IsZero() {
-		out.Created = ptrTo(metav1.NewTime(info.Created))
+		out.Created = ptr.To(metav1.NewTime(info.Created))
 	}
 	out.Leader, out.Replicas = cluster(info.Cluster)
 	return out

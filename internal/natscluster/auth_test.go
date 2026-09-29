@@ -27,6 +27,7 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 	"github.com/mikluko/nats-operator/internal/natsconn"
+	"github.com/mikluko/nats-operator/internal/natstest"
 	"github.com/mikluko/nats-operator/internal/refindex"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
@@ -320,15 +321,7 @@ func TestOperatorReload_AgreesWithClassification(t *testing.T) {
 
 func startFile(t *testing.T, f string) *server.Server {
 	t.Helper()
-	o, err := server.ProcessConfigFile(f)
-	require.NoError(t, err)
-	o.NoLog, o.NoSigs = true, true
-	s, err := server.NewServer(o)
-	require.NoError(t, err)
-	go s.Start()
-	t.Cleanup(s.Shutdown)
-	require.True(t, s.ReadyForConnections(10*time.Second))
-	return s
+	return natstest.Start(t, f).Server
 }
 
 // authCluster is story 2's NatsCluster booted in-process from its config

@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/utils/ptr"
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
@@ -35,9 +36,9 @@ func TestStreamCreate(t *testing.T) {
 	f := newFixture(t)
 	f.create(newStream("orders", "ORDERS", func(s *js.NatsStreamSpec) {
 		s.MaxAge = &metav1.Duration{Duration: 72 * time.Hour}
-		s.MaxBytes = ptrTo(resource.MustParse("5Gi"))
-		s.Storage = ptrTo(js.StorageFile)
-		s.Retention = ptrTo(js.RetentionLimits)
+		s.MaxBytes = ptr.To(resource.MustParse("5Gi"))
+		s.Storage = ptr.To(js.StorageFile)
+		s.Retention = ptr.To(js.RetentionLimits)
 	}))
 
 	res := f.reconcileStream("orders")

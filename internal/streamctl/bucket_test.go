@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
@@ -80,13 +81,13 @@ func requireInSync(t *testing.T, conds []metav1.Condition) {
 func TestKeyValueCreate(t *testing.T) {
 	f := newFixture(t)
 	f.create(newKeyValue("sessions", func(s *js.NatsKeyValueSpec) {
-		s.History = ptrTo(int32(5))
+		s.History = ptr.To(int32(5))
 		s.TTL = &metav1.Duration{Duration: 24 * time.Hour}
-		s.MaxValueSize = ptrTo(resource.MustParse("64Ki"))
-		s.MaxBytes = ptrTo(resource.MustParse("1Gi"))
-		s.Storage = ptrTo(js.StorageFile)
-		s.Replicas = ptrTo(int32(1))
-		s.Compression = ptrTo(true)
+		s.MaxValueSize = ptr.To(resource.MustParse("64Ki"))
+		s.MaxBytes = ptr.To(resource.MustParse("1Gi"))
+		s.Storage = ptr.To(js.StorageFile)
+		s.Replicas = ptr.To(int32(1))
+		s.Compression = ptr.To(true)
 		s.Metadata = map[string]string{"team": "payments"}
 	}))
 
@@ -127,9 +128,9 @@ func TestKeyValueReadBack(t *testing.T) {
 		{"defaults", nil},
 		{"description and limits", func(s *js.NatsKeyValueSpec) {
 			s.Description = "sessions"
-			s.MaxBytes = ptrTo(resource.MustParse("1Mi"))
+			s.MaxBytes = ptr.To(resource.MustParse("1Mi"))
 			s.TTL = &metav1.Duration{Duration: time.Minute}
-			s.Storage = ptrTo(js.StorageMemory)
+			s.Storage = ptr.To(js.StorageMemory)
 		}},
 		{"limit marker TTL", func(s *js.NatsKeyValueSpec) {
 			s.LimitMarkerTTL = &metav1.Duration{Duration: time.Minute}
@@ -167,7 +168,7 @@ func TestKeyValueReadBack(t *testing.T) {
 
 func TestKeyValueDrift(t *testing.T) {
 	f := newFixture(t)
-	f.create(newKeyValue("sessions", func(s *js.NatsKeyValueSpec) { s.History = ptrTo(int32(5)) }))
+	f.create(newKeyValue("sessions", func(s *js.NatsKeyValueSpec) { s.History = ptr.To(int32(5)) }))
 	f.reconcile(f.kvs, "sessions")
 
 	cfg := f.serverStream("KV_sessions")
@@ -193,7 +194,7 @@ func TestKeyValueAdoption(t *testing.T) {
 		message string
 	}{
 		{"adopt", js.AdoptionAdopt, nil, 3, "adopted existing key-value bucket sessions; spec written from the server"},
-		{"adopt or create", js.AdoptionAdoptOrCreate, ptrTo(int32(7)), 7, "adopted existing key-value bucket sessions; spec applied over the server config"},
+		{"adopt or create", js.AdoptionAdoptOrCreate, ptr.To(int32(7)), 7, "adopted existing key-value bucket sessions; spec applied over the server config"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture(t)
@@ -342,10 +343,10 @@ func TestObjectStoreCreate(t *testing.T) {
 		s.Name = "RECEIPTS"
 		s.Description = "receipts"
 		s.TTL = &metav1.Duration{Duration: 2160 * time.Hour}
-		s.MaxBytes = ptrTo(resource.MustParse("1Gi"))
-		s.Storage = ptrTo(js.StorageFile)
-		s.Replicas = ptrTo(int32(1))
-		s.Compression = ptrTo(true)
+		s.MaxBytes = ptr.To(resource.MustParse("1Gi"))
+		s.Storage = ptr.To(js.StorageFile)
+		s.Replicas = ptr.To(int32(1))
+		s.Compression = ptr.To(true)
 	}))
 
 	f.reconcile(f.stores, "receipts")

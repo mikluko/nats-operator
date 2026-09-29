@@ -399,7 +399,7 @@ func (r *Reconciler) rollout(ctx context.Context, nc *clusterv1beta1.NatsCluster
 	if d.ClearForceStep {
 		orig := nc.DeepCopy()
 		delete(nc.Annotations, clusterv1beta1.AnnotationForceStep)
-		if err := r.Client.Patch(ctx, nc, client.MergeFrom(orig)); err != nil {
+		if err := r.Client.Patch(ctx, nc, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{})); err != nil {
 			return d, fmt.Errorf("clear %s: %w", clusterv1beta1.AnnotationForceStep, err)
 		}
 	}

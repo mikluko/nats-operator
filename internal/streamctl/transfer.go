@@ -10,6 +10,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	"github.com/mikluko/nats-operator/internal/conditions"
@@ -67,7 +68,7 @@ func streamTransfer(c *clusterWire) *js.StreamTransfer {
 	}
 	t := &js.StreamTransfer{From: from, To: c.Desired.Name}
 	if !c.Desired.Created.IsZero() {
-		t.Started = ptrTo(metav1.NewTime(c.Desired.Created))
+		t.Started = ptr.To(metav1.NewTime(c.Desired.Created))
 	}
 	for _, d := range c.Desired.Replicas {
 		r := js.ReplicaStatus{Name: d.Name, Current: d.Name == c.Leader}
