@@ -1,4 +1,4 @@
-// The cluster controller owns cluster.nats.mikluko.io and reads
+// Command cluster-controller owns cluster.nats.mikluko.io and reads
 // nats.mikluko.io.
 package main
 

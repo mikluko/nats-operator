@@ -19,8 +19,8 @@ const page = "docs/content/docs/reference/telemetry.md"
 //go:embed environment.md
 var environment string
 
-//go:embed operator.md
-var operator string
+//go:embed otel-operator.md
+var otelOperator string
 
 // jwtExpiry is the account JWT expiry alert, a format taking the gauge's
 // Prometheus name.
@@ -55,7 +55,7 @@ Each controller exports metrics and traces through the OpenTelemetry Go SDK, con
 
 `)
 	b.WriteString(environment)
-	b.WriteString(operator)
+	b.WriteString(otelOperator)
 
 	b.WriteString("\n## Metrics\n\nThe gauges are read off the resources' status at each export. Every point carries `kind`, `namespace` and `name` of the resource it describes. The Prometheus column is each instrument's name as `OTEL_METRICS_EXPORTER=prometheus` serves it on port 9464, which `metrics.prometheus.enabled` sets.\n\n")
 	b.WriteString("| Instrument | Prometheus | Type | Unit | Controllers | Attributes | Reads | Value |\n|---|---|---|---|---|---|---|---|\n")
