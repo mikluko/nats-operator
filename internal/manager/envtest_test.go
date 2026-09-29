@@ -14,6 +14,8 @@ import (
 	"github.com/go-logr/logr/funcr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	authnv1 "k8s.io/api/authentication/v1"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -323,3 +325,45 @@ func TestEnvtestReleasesLease(t *testing.T) {
 	require.NoError(t, admin.Get(t.Context(), client.ObjectKey{Namespace: ns, Name: id}, &lease))
 	require.Empty(t, ptr.Deref(lease.Spec.HolderIdentity, ""), "the lease is still held")
 }
+
+// TestEnvtestFlushAfterReconcilers pins that run flushes telemetry only once
+// a leader-election runnable still finishing at shutdown, as a reconcile
+// does, has returned, so the span it ends is exported.
+func TestEnvtestFlushAfterReconcilers(t *testing.T) {
+	cfg := startEnvtest(t).Config
+	scheme, err := NewScheme()
+	require.NoError(t, err)
+	mgr, err := New(cfg, &Options{MetricsAddr: "0", ProbeAddr: "0"}, scheme, Owned{})
+	require.NoError(t, err)
+	spans := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithBatcher(keptSpans{spans}))
+	started := make(chan struct{})
+	require.NoError(t, mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		_, span := tp.Tracer("test").Start(context.WithoutCancel(ctx), "reconcile")
+		close(started)
+		<-ctx.Done()
+		time.Sleep(200 * time.Millisecond)
+		span.End()
+		return nil
+	})))
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- run(ctx, mgr, tp.Shutdown) }()
+	select {
+	case <-started:
+	case err := <-done:
+		require.FailNow(t, "run returned before the runnable started", "%v", err)
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the runnable did not start")
+	}
+	cancel()
+	require.NoError(t, <-done)
+	got := spans.GetSpans()
+	require.Len(t, got, 1)
+	require.Equal(t, "reconcile", got[0].Name)
+}
+
+// keptSpans is an in-memory exporter whose Shutdown keeps the spans it holds.
+type keptSpans struct{ *tracetest.InMemoryExporter }
+
+func (keptSpans) Shutdown(context.Context) error { return nil }

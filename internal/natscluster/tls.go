@@ -32,17 +32,6 @@ const (
 	selfSignedRenewBefore = selfSignedValidity / 3
 )
 
-// selfSignedRouteSecret returns a kubernetes.io/tls Secret holding a new CA
-// and a certificate it signs for hosts, as issueRouteSecrets does.
-func selfSignedRouteSecret(nc *clusterv1beta1.NatsCluster, hosts []string, now time.Time) (*corev1.Secret, error) {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return nil, err
-	}
-	_, routes, err := issueRouteSecrets(nc, hosts, key, now)
-	return routes, err
-}
-
 // issueRouteSecrets returns the CA Secret of caKeyPair and the route Secret
 // of a certificate it signs for hosts, both valid from now for
 // selfSignedValidity. A certificate one call signs verifies against the CA

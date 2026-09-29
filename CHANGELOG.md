@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A failed `NatsCluster` reconcile reads `Progressing=False, reason: ReconcileFailed` and records a `ReconcileFailed` Warning event.
 - The cluster controller leaves untouched any object of a name it renders that it does not control, and the `NatsCluster` reads `Ready=False, reason: ReconcileFailed` naming each one.
 - Removing a `NatsCluster` server deletes its data volume claim only when the claim carries the server's labels, and its ConfigMap only when the `NatsCluster` controls it; the `NatsCluster` reads `Ready=False, reason: ReconcileFailed` naming each one left.
+- `NatsCluster` `status.version` moves only once every server `replicas` plans reports the new version; a server being removed does not count.
 - `NatsCluster` `status.removals` names each server being removed or replaced, its phase and since when; a replaced server is recreated only once its old volume claim is gone.
 - CRDs for every kind at `v1beta1`, under `config/crd/`, in the API groups `nats.mikluko.io`, `cluster.nats.mikluko.io`, `auth.nats.mikluko.io` and `jetstream.nats.mikluko.io`.
 - The API server refuses mutually exclusive fields set together, a `NatsCluster` version below 2.15.0 or a move of more than one minor, and changes nats-server would refuse to the immutable fields of JetStream objects.
@@ -54,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation page `/docs/reference/telemetry/`: the controllers' OpenTelemetry configuration, instruments, spans and Kubernetes events.
 - The auth controller exports `nats_operator.account.jwt_expiry`, when each `NatsAccount`'s current JWT expires.
 - Each controller exports OpenTelemetry metrics and traces once the SDK's environment names an exporter or endpoint.
+- The 0/1 gauges `nats_operator.condition` and `nats_operator.rollout.gate` carry no unit, and Prometheus reads them as `nats_operator_condition` and `nats_operator_rollout_gate`.
 - The controllers record Kubernetes events for balancer moves, evacuations, rollout steps, JWT pushes and user kicks.
 - The cluster controller deploys a `NatsCluster` as one StatefulSet and ConfigMap per server, with Services, a PodDisruptionBudget, route TLS and a `prometheus-nats-exporter` sidecar.
 - `NatsCluster` rolls a restart-only change one server at a time, each step gated on the NATS cluster being Settled.
@@ -97,8 +99,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deleting a JetStream resource whose `NatsConnection` is gone or no longer admitted leaves its server object.
 - The JetStream controller manages the key-value buckets and object stores `NatsKeyValue` and `NatsObjectStore` declare.
 - `NatsStream`, `NatsConsumer`, `NatsKeyValue` and `NatsObjectStore` `spec.connectionRef`, and `NatsConsumer` `spec.stream` and `spec.streamRef`, cannot change after creation.
+- A `NatsObjectStore` whose stream `OBJ_<bucket>` exists without the object store's subjects or rollups goes Terminal, reason `NotABucket`, and the stream is left untouched.
 - A JetStream object the servers refuse as invalid goes Terminal; one they cannot place is retried.
 - `NatsSystemBalancer` evens leaders, and optionally copies, across the servers of one NATS cluster over every account.
+- A `NatsSystemBalancer` with `moves.leader: false` probes no account's `jetstream-stepdown` export and leaves `status.capabilities.leader` unset.
 - `NatsBalancer` evens leaders, and optionally copies, within pools of one account's streams.
 - `NatsClusterEvacuation` moves every JetStream object off one NATS cluster to servers carrying the target tags.
 - `NatsClusterEvacuation` `spec.connectionRef`, `spec.from` and `spec.to` cannot change after creation.

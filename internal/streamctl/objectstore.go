@@ -3,6 +3,8 @@ package streamctl
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 
 	"github.com/nats-io/nats.go/jetstream"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -76,12 +78,28 @@ func (o *objectStoreObject) manager() (jetstream.ObjectStoreManager, error) {
 
 func (o *objectStoreObject) Describe() string { return "object store " + o.bucket() }
 
+// Fetch treats a stream OBJ_<bucket> that isObjectStore refuses as no
+// bucket, and as Terminal.
 func (o *objectStoreObject) Fetch(ctx context.Context) (*lifecycle.Info, error) {
 	info, s, err := bucketStream(ctx, o.api, objStreamPrefix, o.bucket())
 	if err != nil || info == nil {
 		return nil, err
 	}
+	if !isObjectStore(s, o.bucket()) {
+		return nil, &lifecycle.TerminalError{
+			Reason:  ReasonNotABucket,
+			Message: fmt.Sprintf("stream %s exists and is not an object store", s.Name),
+		}
+	}
 	return withConfig(info, objFromStream(s))
+}
+
+// isObjectStore reports whether s takes the chunk and meta subjects of
+// bucket and allows rollups, as nats.go's object store needs.
+func isObjectStore(s *streamWire, bucket string) bool {
+	return deref(s.AllowRollup) &&
+		slices.Contains(s.Subjects, "$O."+bucket+".C.>") &&
+		slices.Contains(s.Subjects, "$O."+bucket+".M.>")
 }
 
 func (o *objectStoreObject) Desired() (lifecycle.Config, error) {

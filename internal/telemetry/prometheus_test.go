@@ -51,8 +51,17 @@ func scrape(t *testing.T, controller string) []string {
 }
 
 // TestPrometheusName pins each instrument's PrometheusName to the name a
-// scrape of the Prometheus exporter reads.
+// scrape of the Prometheus exporter reads, and the 0/1 gauges' names to
+// carry no unit suffix.
 func TestPrometheusName(t *testing.T) {
+	for in, want := range map[*Instrument]string{
+		&Condition:   "nats_operator_condition",
+		&RolloutGate: "nats_operator_rollout_gate",
+	} {
+		name, err := in.PrometheusName()
+		require.NoError(t, err)
+		require.Equal(t, want, name)
+	}
 	for _, controller := range controllers {
 		t.Run(controller, func(t *testing.T) {
 			var want []string

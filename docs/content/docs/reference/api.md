@@ -791,7 +791,7 @@ Appears on: [NatsSystemBalancerStatus](#NatsSystemBalancerStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `placement` | {{< type "bool" >}} | No | Placement reports whether placement moves are possible. |
-| `leader` | [{{< type "LeaderCapability" >}}](#LeaderCapability) | No | Leader is Full when every account holding a stream carries the jetstream-stepdown export, None when none does, and Partial otherwise. |
+| `leader` | [{{< type "LeaderCapability" >}}](#LeaderCapability) | No | Leader is Full when every account holding a stream carries the jetstream-stepdown export, None when none does, and Partial otherwise; unset while moves.leader is false. |
 | `leaderReason` | {{< type "string" >}} | No | LeaderReason explains a leader capability short of Full. |
 
 ### ConsumerConfig {#ConsumerConfig}

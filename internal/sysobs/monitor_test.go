@@ -65,7 +65,7 @@ func TestMonitorObserve(t *testing.T) {
 	js, err := nc.JetStream()
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
-		_, err := js.AddStream(&nats.StreamConfig{Name: "R3", Subjects: []string{"r3"}, Replicas: 3})
+		_, err := js.AddStream(&nats.StreamConfig{Name: "R3", Subjects: []string{"r3"}, Replicas: 3, Placement: &nats.Placement{Cluster: "N"}})
 		return err == nil
 	}, 30*time.Second, 200*time.Millisecond)
 	_, err = js.AddConsumer("R3", &nats.ConsumerConfig{Durable: "D", AckPolicy: nats.AckExplicitPolicy})
@@ -82,6 +82,8 @@ func TestMonitorObserve(t *testing.T) {
 		return true
 	}, 30*time.Second, 200*time.Millisecond)
 	require.Equal(t, []string{"meta://", "stream:$G/R3/", "consumer:$G/R3/D"}, groupNames(snap))
+	require.Equal(t, &Placement{Cluster: "N"}, findGroup(t, snap, KindStream, "R3", "").Placement)
+	require.Equal(t, &Placement{Cluster: "N"}, findGroup(t, snap, KindConsumer, "R3", "D").Placement)
 	for _, s := range snap.Servers {
 		require.Equal(t, srvs[s.Name].ID(), s.ID)
 		require.Equal(t, map[string]string{"rev": s.Name}, s.Metadata)

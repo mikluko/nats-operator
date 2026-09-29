@@ -136,11 +136,12 @@ func (r *SystemBalancerReconciler) balance(ctx context.Context, b *js.NatsSystem
 	}
 
 	now := time.Now()
-	reach := newStepdownReach(nc)
+	var reach *stepdownReach
 	k := r.balancers.balancer(b)
 	k.Observer, k.Leaders, k.Placement = ev, nil, nil
 	k.Yield = func(id balance.StreamID) string { return cmp.Or(obs.Pinned(id), ev.Yield(id)) }
 	if moves(b.Spec.Moves).leader {
+		reach = newStepdownReach(nc)
 		k.Leaders = balance.Stepdown{Conn: nc, Prefix: reach.prefix}
 	}
 	if moves(b.Spec.Moves).placement {
@@ -191,7 +192,7 @@ func (r *SystemBalancerReconciler) balance(ctx context.Context, b *js.NatsSystem
 	default:
 		r.setHolding(b, false, ReasonSettled, "")
 	}
-	if reach.err != nil {
+	if reach != nil && reach.err != nil {
 		r.setReady(b, false, ReasonPassFailed, reach.err.Error())
 	} else {
 		r.setReady(b, true, ReasonBalancing, "")
@@ -337,8 +338,12 @@ func placementPending(pending []js.Move) bool {
 }
 
 // capabilities is what the balancer can move in obs: placement moves for
-// every account, and leader moves for the accounts reach reaches.
+// every account, and leader moves for the accounts reach reaches. A nil
+// reach, leader moves being off, probes nothing and reports no Leader.
 func capabilities(ctx context.Context, obs balance.Observation, reach *stepdownReach) *js.Capabilities {
+	if reach == nil {
+		return &js.Capabilities{Placement: true}
+	}
 	accounts := map[string]bool{}
 	for _, g := range obs.Groups {
 		accounts[g.Account] = true

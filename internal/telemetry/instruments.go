@@ -84,7 +84,6 @@ var resourceAttrs = []string{AttrKind, AttrNamespace, AttrName}
 var (
 	Condition = Instrument{
 		Name:        "nats_operator.condition",
-		Unit:        "1",
 		Description: "1 while the condition is True, 0 while it is False or Unknown.",
 		Type:        Gauge,
 		Controllers: []string{ClusterController, AuthController, JetStreamController},
@@ -111,7 +110,6 @@ var (
 	}
 	RolloutGate = Instrument{
 		Name:        "nats_operator.rollout.gate",
-		Unit:        "1",
 		Description: "1 while the rollout's gate is closed, by what it waits for.",
 		Type:        Gauge,
 		Controllers: []string{ClusterController},

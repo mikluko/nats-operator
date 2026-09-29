@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/events"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -270,6 +271,55 @@ func TestSystemBalancer_ProbeFailsAfterMove(t *testing.T) {
 	require.Equal(t, p.aPub, b.Status.LastMove.Account)
 	require.Equal(t, "C1-0", b.Status.LastMove.From)
 	require.Equal(t, []js.Move{*b.Status.LastMove}, b.Status.Pending)
+}
+
+// TestSystemBalancer_LeaderMovesOffProbesNothing pins that a balancer with
+// leader moves off sends no stepdown probe, so an account whose probe would
+// time out leaves it Ready, with no leader capability reported.
+func TestSystemBalancer_LeaderMovesOffProbesNothing(t *testing.T) {
+	t.Parallel()
+	p := newPlane(t)
+	sc := startSupercluster(t, p, "C1")
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
+	defer cancel()
+	skewedStreams(t, ctx, accountJS(t, sc["C1"][1], p.a), "A", 1)
+	skewedStreams(t, ctx, accountJS(t, sc["C1"][2], p.b), "B", 1)
+
+	token, seed := newUser(t, jwtplane.User{}, p.sys)
+	sink, err := nats.Connect(sc["C1"][0].ClientURL(), nats.UserJWTAndSeed(token, string(seed)))
+	require.NoError(t, err)
+	t.Cleanup(sink.Close)
+	probed := make(chan string, 16)
+	_, err = sink.Subscribe(jwtplane.StepdownPrefix(p.bPub)+">", func(m *nats.Msg) {
+		if m.Reply != "" {
+			probed <- m.Subject
+		}
+	})
+	require.NoError(t, err)
+	probe := jwtplane.StreamStepdownSubject(p.bPub, probeStream)
+	require.Eventually(t, func() bool {
+		_, err := sink.Request(probe, nil, 100*time.Millisecond)
+		return errors.Is(err, nats.ErrTimeout)
+	}, 10*time.Second, 50*time.Millisecond, "B's stepdown probe still finds no responders")
+	for len(probed) > 0 {
+		<-probed
+	}
+
+	b := balancer("demo", "c1", time.Now())
+	b.Spec.Moves = &js.Moves{Leader: ptr.To(false)}
+	objs := append(connection("c1", sc["C1"][1].ClientURL(), p.sysCreds), b)
+	c := fake.NewClientBuilder().WithScheme(testScheme(t)).WithStatusSubresource(&js.NatsSystemBalancer{}).WithObjects(objs...).Build()
+	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetJetStreamController))
+	t.Cleanup(pool.Close)
+	r := &SystemBalancerReconciler{Client: c, Dialer: &natsconn.Dialer{Reader: c, Pool: pool}, PendingPoll: time.Millisecond, Leases: &MoveLeases{}}
+
+	got := reconciled(t, ctx, r, "demo", func(ct *assert.CollectT, b *js.NatsSystemBalancer) {
+		condition(ct, b, ConditionReady, metav1.ConditionTrue, ReasonBalancing)
+		assert.NotEmpty(ct, b.Status.Servers)
+	}, "the balancer did not come Ready")
+	require.Equal(t, &js.Capabilities{Placement: true}, got.Status.Capabilities)
+	require.NoError(t, sink.Flush())
+	require.Empty(t, probed, "a stepdown probe was sent with leader moves off")
 }
 
 // streamLeader is the leader of stream name as j sees it.

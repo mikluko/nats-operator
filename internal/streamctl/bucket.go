@@ -13,6 +13,10 @@ import (
 	"github.com/mikluko/nats-operator/internal/lifecycle"
 )
 
+// ReasonNotABucket is Terminal's reason when the stream a bucket would be
+// kept in exists and is not a bucket of its resource's kind.
+const ReasonNotABucket = "NotABucket"
+
 // bucketName is a bucket resource's server-side bucket name.
 func bucketName(spec string, obj client.Object) string {
 	if spec != "" {

@@ -107,6 +107,7 @@ func (m *MonitorObserver) observeOne(ctx context.Context, ep Endpoint) (Server, 
 			"accounts":  {"true"},
 			"streams":   {"true"},
 			"consumers": {"true"},
+			"config":    {"true"},
 			"offset":    {strconv.Itoa(offset)},
 			"limit":     {strconv.Itoa(jszPageSize)},
 		}

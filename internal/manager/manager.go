@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/config"
@@ -78,16 +79,27 @@ func start(ctx context.Context, cfg *rest.Config, o *Options, c Controller, log 
 	if err != nil {
 		return err
 	}
-	if err := telemetry.Install(ctx, mgr, c.Name, Version); err != nil {
+	flush, err := telemetry.Start(ctx, c.Name, Version, mgr.GetLogger().WithName("opentelemetry"))
+	if err != nil {
 		return fmt.Errorf("set up telemetry: %w", err)
 	}
 	if err := c.Setup(ctx, mgr); err != nil {
-		return fmt.Errorf("set up controllers: %w", err)
+		return errors.Join(fmt.Errorf("set up controllers: %w", err), flush.Flush(ctx))
 	}
-	if err := mgr.Start(ctx); err != nil {
-		return fmt.Errorf("run: %w", err)
+	return run(ctx, mgr, flush)
+}
+
+// run starts mgr until ctx ends and calls flush once every runnable mgr
+// started, reconcilers included, has returned.
+func run(ctx context.Context, mgr ctrl.Manager, flush telemetry.Shutdown) error {
+	var err error
+	if err = mgr.Start(ctx); err != nil {
+		err = fmt.Errorf("run: %w", err)
 	}
-	return nil
+	if ferr := flush.Flush(ctx); ferr != nil {
+		err = errors.Join(err, fmt.Errorf("flush telemetry: %w", ferr))
+	}
+	return err
 }
 
 // NewScheme returns a scheme of client-go's kinds and those add registers.
@@ -189,7 +201,7 @@ func managerOptions(o *Options, scheme *runtime.Scheme, owned Owned) (ctrl.Optio
 		Scheme:                        scheme,
 		Cache:                         cacheOpts,
 		Client:                        ClientOptions(),
-		Controller:                    config.Controller{EnableWarmup: new(true)},
+		Controller:                    config.Controller{EnableWarmup: ptr.To(true)},
 		Metrics:                       metricsOptions(o.MetricsAddr),
 		HealthProbeBindAddress:        o.ProbeAddr,
 		LeaderElection:                o.LeaderElection,

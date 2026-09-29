@@ -182,6 +182,34 @@ func TestComputeStatus_KeepsUnobservedVersion(t *testing.T) {
 	}
 }
 
+// TestComputeStatus_VersionCountsPlannedServers pins that status.version
+// moves only once every planned server reports it, a reporting surplus
+// server standing in for none.
+func TestComputeStatus_VersionCountsPlannedServers(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		reporting []string
+		want      string
+	}{
+		{"every planned server", []string{"demo-0", "demo-1", "demo-2"}, "2.15.1"},
+		{"a planned server silent, a surplus one reporting", []string{"demo-0", "demo-1", "demo-3"}, "2.15.0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			nc := storyCluster(t)
+			nc.Status.Version = "2.15.0"
+			plan, err := Render(nc, Inputs{})
+			require.NoError(t, err)
+			require.Len(t, plan.Servers, 3)
+			snap := &sysobs.Snapshot{}
+			for _, name := range tc.reporting {
+				snap.Servers = append(snap.Servers, sysobs.Server{Name: name, Version: "2.15.1", JetStream: true})
+			}
+			got := computeStatus(nc, plan, Observed{StatefulSets: readySets(plan, true, true, true), Snapshot: snap})
+			require.Equal(t, tc.want, got.Version)
+		})
+	}
+}
+
 func TestReadyCondition(t *testing.T) {
 	tests := []struct {
 		ready, want int32

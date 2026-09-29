@@ -173,3 +173,14 @@ func TestRouteCertRenewal(t *testing.T) {
 	other := routeServer(t, "demo-2", foreign, url)
 	require.Never(t, func() bool { return other.NumRoutes() > 0 }, 3*time.Second, 100*time.Millisecond)
 }
+
+// selfSignedRouteSecret returns a kubernetes.io/tls Secret holding a new CA
+// and a certificate it signs for hosts, as issueRouteSecrets does.
+func selfSignedRouteSecret(nc *clusterv1beta1.NatsCluster, hosts []string, now time.Time) (*corev1.Secret, error) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	_, routes, err := issueRouteSecrets(nc, hosts, key, now)
+	return routes, err
+}

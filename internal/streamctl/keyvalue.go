@@ -19,10 +19,6 @@ import (
 // KeyValueKind is the kind a NatsKeyValue is referred to by.
 const KeyValueKind = "NatsKeyValue"
 
-// ReasonNotABucket is Terminal's reason when the stream a bucket would be
-// kept in exists and is not a key-value bucket.
-const ReasonNotABucket = "NotABucket"
-
 // +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natskeyvalues,verbs=get;list;watch;patch
 // +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natskeyvalues/status,verbs=patch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections;natsreferencegrants,verbs=list;watch

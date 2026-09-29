@@ -403,3 +403,30 @@ func TestObjectStoreAdopt(t *testing.T) {
 	require.Equal(t, string(os.UID), cfg.Metadata[lifecycle.OwnerKey])
 	require.Equal(t, "payments", cfg.Metadata["team"])
 }
+
+// TestObjectStoreNotABucket pins that a NatsObjectStore does not take over a
+// stream OBJ_<bucket> lacking the store's subjects or rollups, and goes
+// Terminal with reason NotABucket.
+func TestObjectStoreNotABucket(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		stream jetstream.StreamConfig
+	}{
+		{"other subjects", jetstream.StreamConfig{Name: "OBJ_receipts", Subjects: []string{"receipts.>"}, AllowRollup: true}},
+		{"meta subject missing", jetstream.StreamConfig{Name: "OBJ_receipts", Subjects: []string{"$O.receipts.C.>"}, AllowRollup: true}},
+		{"no rollups", jetstream.StreamConfig{Name: "OBJ_receipts", Subjects: []string{"$O.receipts.C.>", "$O.receipts.M.>"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t)
+			_, err := f.js.CreateStream(t.Context(), tc.stream)
+			require.NoError(t, err)
+			f.create(newObjectStore("receipts", func(s *js.NatsObjectStoreSpec) { s.AdoptionPolicy = js.AdoptionAdoptOrCreate }))
+			require.Zero(t, f.reconcile(f.stores, "receipts").RequeueAfter, "Hold waits for an edit")
+			os := f.objectStore("receipts")
+			term := condition(t, os.Status.Conditions, lifecycle.ConditionTerminal, metav1.ConditionTrue, ReasonNotABucket)
+			require.Equal(t, "stream OBJ_receipts exists and is not an object store", term.Message)
+			require.Nil(t, os.Status.Ownership)
+			require.Empty(t, f.serverStream("OBJ_receipts").Metadata[lifecycle.OwnerKey])
+		})
+	}
+}

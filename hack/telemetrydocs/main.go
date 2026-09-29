@@ -64,8 +64,12 @@ Each controller exports metrics and traces through the OpenTelemetry Go SDK, con
 		if err != nil {
 			return "", fmt.Errorf("instrument %s: %w", in.Name, err)
 		}
-		fmt.Fprintf(&b, "| `%s` | `%s` | %s | `%s` | %s | %s | %s | %s |\n",
-			in.Name, prom, in.Type, in.Unit, strings.Join(in.Controllers, ", "), code(in.Attributes, ", "), in.Reads, in.Description)
+		var unit []string
+		if in.Unit != "" {
+			unit = []string{in.Unit}
+		}
+		fmt.Fprintf(&b, "| `%s` | `%s` | %s | %s | %s | %s | %s | %s |\n",
+			in.Name, prom, in.Type, code(unit, ""), strings.Join(in.Controllers, ", "), code(in.Attributes, ", "), in.Reads, in.Description)
 	}
 	expiry, err := telemetry.AccountJWTExpiry.PrometheusName()
 	if err != nil {

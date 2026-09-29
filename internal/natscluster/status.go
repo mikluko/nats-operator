@@ -114,6 +114,7 @@ func computeStatus(nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed) clust
 	st.Servers = nil
 	st.ReadyReplicas = 0
 	versions := map[string]bool{}
+	plannedReported := 0
 	for _, s := range plan.Servers {
 		ss := clusterv1beta1.ServerStatus{Name: s.Name}
 		if sts := o.StatefulSets[s.Name]; sts != nil && sts.Status.ReadyReplicas > 0 {
@@ -124,10 +125,11 @@ func computeStatus(nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed) clust
 			ss.Version = r.Version
 			ss.ConfigRevision = r.Metadata[MetadataConfigRevision]
 			versions[r.Version] = true
+			plannedReported++
 		}
 		st.Servers = append(st.Servers, ss)
 	}
-	if len(versions) == 1 && len(reported) >= len(plan.Servers) {
+	if len(versions) == 1 && plannedReported == len(plan.Servers) {
 		for v := range versions {
 			st.Version = v
 		}

@@ -19,7 +19,6 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 // The controllers, as their instruments, events and service.name name them.
@@ -31,25 +30,15 @@ const (
 
 const shutdownTimeout = 5 * time.Second
 
-// Shutdown flushes and stops the providers Start installed, as a manager
-// runnable on every replica, leader or not.
+// Shutdown flushes and stops the providers Start installed.
 type Shutdown func(context.Context) error
 
-var (
-	_ manager.Runnable               = Shutdown(nil)
-	_ manager.LeaderElectionRunnable = Shutdown(nil)
-)
-
-// Start blocks until ctx ends, then calls s with shutdownTimeout to flush.
-func (s Shutdown) Start(ctx context.Context) error {
-	<-ctx.Done()
+// Flush calls s with shutdownTimeout, whether or not ctx has ended.
+func (s Shutdown) Flush(ctx context.Context) error {
 	flush, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
 	defer cancel()
 	return s(flush)
 }
-
-// NeedLeaderElection is false.
-func (Shutdown) NeedLeaderElection() bool { return false }
 
 // Start installs the global meter and tracer providers of the controller
 // named service at version for each signal exporters turns on, the SDK
@@ -157,16 +146,4 @@ func newResource(ctx context.Context, service, version string) (*resource.Resour
 		return nil, fmt.Errorf("resource: %w", err)
 	}
 	return res, nil
-}
-
-// Install starts telemetry for service at version and adds its shutdown to mgr.
-func Install(ctx context.Context, mgr manager.Manager, service, version string) error {
-	stop, err := Start(ctx, service, version, mgr.GetLogger().WithName("opentelemetry"))
-	if err != nil {
-		return fmt.Errorf("start telemetry: %w", err)
-	}
-	if err := mgr.Add(stop); err != nil {
-		return errors.Join(fmt.Errorf("add telemetry shutdown: %w", err), stop(ctx))
-	}
-	return nil
 }

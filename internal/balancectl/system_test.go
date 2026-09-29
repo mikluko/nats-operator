@@ -132,6 +132,9 @@ func TestCapabilities(t *testing.T) {
 			LeaderReason: "3 of 3 accounts carry no jetstream-stepdown export; their leaders are not moved",
 		}},
 	}
+	t.Run("leader moves off", func(t *testing.T) {
+		require.Equal(t, &js.Capabilities{Placement: true}, capabilities(t.Context(), obs, nil))
+	})
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &stepdownReach{known: map[string]bool{}}
