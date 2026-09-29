@@ -97,10 +97,11 @@ when every list is empty.
 {{/*
 nats-operator.controller renders one controller's ServiceAccount, RBAC and
 Deployment. It takes a dict of root (the chart context), name (the
-controller's, and its image's), group (its API group; its lease is <release>-<group>), values (its
-block of values) and, optionally, args (flags appended to the controller's
-own, before extraArgs). Its ClusterRole's rules are those of
-files/rbac/<name>.yaml, a copy of the role controller-gen generates for it.
+controller's, and its image's), group (its API group; its lease is
+<release>-<group>), values (its block of values) and, optionally, args (flags
+appended to the controller's own, before extraArgs). Its ClusterRole's rules
+are those of files/rbac/<name>.yaml, a copy of the role controller-gen
+generates for it.
 With watchNamespaces set, the ClusterRole holds only the rules of
 files/rbac/<name>-cluster-scoped.yaml, and each namespace named gets a Role
 and RoleBinding of those of files/rbac/<name>-namespaced.yaml. It fails with

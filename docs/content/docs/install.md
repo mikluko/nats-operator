@@ -132,7 +132,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 
 ## Controller flags
 
-The chart runs every controller with `--leader-elect` set from `leaderElection.enabled`, `--leader-election-id` set to `<release>-<API group>`, such as `nats-operator-cluster.nats.mikluko.io`, metrics on `:8080` (container port `metrics`) and health probes on `:8081` (`/healthz`, `/readyz`), followed by `extraArgs` and the controller's own `extraArgs`. It creates a Service for the metrics port only while `metrics.service.enabled` is set.
+The chart runs every controller with `--leader-elect` set from `leaderElection.enabled`, `--leader-election-id` set to `<release>-<API group>`, such as `nats-operator-cluster.nats.mikluko.io`, metrics on `:8080` (container port `metrics`) and health probes on `:8081` (`/healthz`, `/readyz`), followed by `extraArgs` and the controller's own `extraArgs`. Two releases must watch disjoint namespaces, and a release with `watchNamespaces` empty must be the only one in the Kubernetes cluster: each release elects its own leader, so both would reconcile the same objects. It creates a Service for the metrics port only while `metrics.service.enabled` is set.
 
 The flags below are the binaries' own. Of those not named above, the chart sets only `--system-connection`, from `auth.systemConnection`, `--allow-gateway-without-tls`, from `cluster.allowGatewayWithoutTLS`, and `--watch-namespaces`, from `watchNamespaces`:
 

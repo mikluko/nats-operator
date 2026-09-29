@@ -426,8 +426,8 @@ func (r *Reconciler) statefulSets(ctx context.Context, nc *clusterv1beta1.NatsCl
 }
 
 // createServer creates a server's ConfigMap, replacing one left without its
-// StatefulSet, then the StatefulSet; of an existing StatefulSet nc controls
-// it restores only the labels.
+// StatefulSet, then the StatefulSet, restoring only the labels of one nc
+// already controls.
 func (r *Reconciler) createServer(ctx context.Context, nc *clusterv1beta1.NatsCluster, s Server) (*appsv1.StatefulSet, error) {
 	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: s.ConfigMap.Name, Namespace: s.ConfigMap.Namespace}}
 	if err := r.createOrUpdate(ctx, nc, cm, func() {

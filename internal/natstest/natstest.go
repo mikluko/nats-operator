@@ -189,11 +189,11 @@ func (c *Cluster) conf(i int, peers []*Cluster) string {
 	return b.String()
 }
 
-// StartSupercluster starts every server of every cluster, each gatewayed to
-// all the others when there is more than one, on ports the servers bind
-// themselves. It returns once each server is routed to its cluster's other
-// servers and gatewayed to every other cluster and, where there is more
-// than one server, a JetStream meta leader counts every server as a peer.
+// StartSupercluster starts every server of every NATS cluster, each gatewayed
+// to all the others when there is more than one, on ports the servers bind
+// themselves. It returns once each server is routed to its NATS cluster's
+// other servers and gatewayed to every other NATS cluster and, where there is
+// more than one server, a JetStream meta leader counts every server as a peer.
 // Each server's config file is rewritten with every port bound.
 func StartSupercluster(t testing.TB, clusters ...*Cluster) {
 	t.Helper()
