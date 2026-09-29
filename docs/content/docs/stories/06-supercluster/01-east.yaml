@@ -24,7 +24,7 @@ spec:
     region: us-east-2
   auth:
     # The literal NatsOperatorTrust replicated to every member, even here in
-    # the home cluster, so every member boots from the same object.
+    # the home Kubernetes cluster.
     trustRef:
       name: acme
     systemCredentials:
@@ -32,11 +32,10 @@ spec:
         name: cluster-controller-creds
   gateway:
     # Joining a supercluster is this list: every member's NatsCluster carries
-    # the same one, kept alike by GitOps (a shared component). Explicit
-    # renders each entry as a gateway remote with reject_unknown on; Gossip
-    # renders them as seeds with reject_unknown off. Either way a change
-    # restarts servers: gateway config is not reloadable. A NATS
-    # cluster's own entry is allowed and skipped.
+    # the same one. Explicit renders each entry as a gateway remote with
+    # reject_unknown on; Gossip renders them as seeds with reject_unknown off.
+    # Either way a change restarts servers: gateway config is not reloadable.
+    # A NATS cluster's own entry is allowed and skipped.
     discovery: Explicit
     remotes:
       - name: east

@@ -59,8 +59,8 @@ type NatsClusterSpec struct {
 	// PodTemplate is merged into every server's pod, over its security
 	// context and automountServiceAccountToken too: whoever may write a
 	// NatsCluster runs pods with any privilege its namespace admits. Its
-	// affinity, when set, replaces the rendered one, a preferred
-	// anti-affinity spreading the servers across nodes.
+	// affinity, when set, replaces the rendered preferred anti-affinity
+	// across nodes.
 	// +optional
 	PodTemplate *PodTemplate `json:"podTemplate,omitempty"`
 

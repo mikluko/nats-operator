@@ -28,8 +28,8 @@ const (
 	subjClaimsLookup = "$SYS.REQ.ACCOUNT.%s.CLAIMS.LOOKUP"
 )
 
-// rosterMisses is how many roster polls in a row a server may miss before
-// it leaves the roster: until then it is counted, and asked, as any other.
+// rosterMisses is how many roster polls in a row a server misses to leave
+// the roster: until then it is counted, and asked, as any other.
 const rosterMisses = 3
 
 // ErrOperatorGone is wrapped by a Resolvers Conn error for a NatsOperator
@@ -64,12 +64,13 @@ type resolverState struct {
 	roster map[string]bool
 	// misses counts, per server of roster, the polls in a row it missed.
 	misses map[string]int
-	// newest is, per account public key, the issue time of the newest JWT
-	// pushed or seen on a server, and pushedAt when it was last pushed.
+	// newest is, per account public key, the issue time of the newest JWT a
+	// server acknowledged or held, and pushedAt when a server last
+	// acknowledged a push of it.
 	newest   map[string]int64
 	pushedAt map[string]time.Time
-	// deletes are the accounts request deletes, and acked the servers that
-	// acknowledged it.
+	// request is the signed delete request, deletes the accounts it names,
+	// issuer its signer, and acked the servers that acknowledged it.
 	deletes []string
 	issuer  string
 	request string

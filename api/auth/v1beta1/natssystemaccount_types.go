@@ -31,7 +31,7 @@ type NatsSystemAccountStatus struct {
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	// Conditions describe the account's state.
+	// Conditions: Ready, ReferencesResolved, Distributed.
 	// +optional
 	// +listType=map
 	// +listMapKey=type

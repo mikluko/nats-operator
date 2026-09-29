@@ -33,7 +33,7 @@ const (
 	authConnection = "nats-system/auth-controller"
 )
 
-// harness brings up the clusters and runs the stories on them, or with
+// harness brings up the kind clusters and runs the stories on them, or with
 // down deletes them. It runs where podman does: on a Linux host, or inside
 // the darwin machine.
 func harness(ctx context.Context, cfg config, root, imagesFile string, down bool) error {
@@ -125,8 +125,8 @@ func harness(ctx context.Context, cfg config, root, imagesFile string, down bool
 }
 
 // watchedNamespaces are the namespaces the chart watches under
-// E2E_WATCH_NAMESPACES: those stories declare objects in, and, where
-// controllers has the auth controller, its system connection's.
+// E2E_WATCH_NAMESPACES: those stories declare objects in, plus the namespace
+// of the auth controller's system connection where controllers has it.
 func watchedNamespaces(stories []*e2e.Bundle, controllers []string) []string {
 	var ns []string
 	for _, b := range stories {

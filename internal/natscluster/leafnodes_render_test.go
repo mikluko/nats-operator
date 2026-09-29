@@ -35,10 +35,7 @@ func renderedConfig(t *testing.T, nc *clusterv1beta1.NatsCluster, trust *Trust, 
 	return m
 }
 
-// TestRender_Hub pins what hub.yaml's leafnodes renders: the listener with
-// its advertise address and certificate, the container port and mount,
-// the external Service from its template, and the Certificate for the
-// advertised host.
+// TestRender_Hub pins what hub.yaml's leafnodes renders.
 func TestRender_Hub(t *testing.T) {
 	p := mintPlane(t)
 	nc := storyLeafCluster(t, "hub.yaml", "prod-east")
@@ -157,10 +154,7 @@ func testCA(t *testing.T) []byte {
 	return s.Data[caKey]
 }
 
-// TestRender_Leaf pins what edge.yaml and edge-operator.yaml render: each
-// remote's URLs, creds and CA file under the config directory, the local
-// account each binds, the telemetry JWT preloaded into a Full resolver,
-// and the Secret the files come from.
+// TestRender_Leaf pins what edge.yaml and edge-operator.yaml render.
 func TestRender_Leaf(t *testing.T) {
 	f := newLeafFixture(t)
 	c := f.client(t)

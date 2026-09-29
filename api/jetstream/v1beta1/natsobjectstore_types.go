@@ -47,9 +47,8 @@ type ObjectStoreConfig struct {
 }
 
 // NatsObjectStoreSpec is the desired state of an object store. The fields of
-// the inlined ObjectStoreConfig mirror nats.go's
-// jetstream.ObjectStoreConfig, the config as clients see it, and mean what
-// their like-named fields there mean: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#ObjectStoreConfig.
+// the inlined ObjectStoreConfig mirror nats.go's jetstream.ObjectStoreConfig
+// and mean what their like-named fields there mean: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#ObjectStoreConfig.
 type NatsObjectStoreSpec struct {
 	// ConnectionRef names the NatsConnection whose credentials decide the
 	// account; it is immutable.

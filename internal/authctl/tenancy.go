@@ -96,7 +96,8 @@ func accountKeyHolder(ctx context.Context, c client.Client, acc *authv1beta1.Nat
 
 // isSystemKey reports whether pub is sys's identity: the key its status
 // records, or the one its spec or identity seed Secret resolves to. A seed
-// that is absent or does not parse resolves to none.
+// that is absent, does not parse, or sits under a generated name without
+// being generated for sys resolves to none.
 func isSystemKey(ctx context.Context, c client.Client, sys *authv1beta1.NatsSystemAccount, pub string) (bool, error) {
 	if sys.Status.PublicKey == pub {
 		return true, nil

@@ -121,7 +121,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `metrics.serviceMonitor.labels` | `{}` | Labels of each ServiceMonitor, for a Prometheus that selects them by label. |
 | `metrics.serviceMonitor.interval` | `""` | Scrape interval of each ServiceMonitor; empty, Prometheus's own. |
 | `metrics.serviceMonitor.bearerTokenSecret` | `{}` | A Secret key, `{name, key}`, in the release namespace whose token each ServiceMonitor scrapes port `metrics` with, as `bearerTokenSecret` in place of `bearerTokenFile`. See [Metrics](#metrics). |
-| `networkPolicy.enabled` | `false` | A NetworkPolicy `<release>-<controller>` per enabled controller over its pods, admitting ports `8080` and `9464` from `networkPolicy.from` alone, port `8081` from the pods carrying the controller's selector labels, its `helm test` pod among them, and nothing else inbound. |
+| `networkPolicy.enabled` | `false` | A NetworkPolicy `<release>-<controller>` per enabled controller over its pods, admitting ports `8080` and `9464` from `networkPolicy.from` alone, port `8081` from the controller's pods and its `helm test` pod, and nothing else inbound. |
 | `networkPolicy.from` | `[]` | NetworkPolicy peers admitted to ports `8080` and `9464`; empty, no one. |
 | `tests.image.repository` | `busybox` | Image of the `helm test` pods. |
 | `tests.image.tag` | `"1.37.0"` | Its image tag. |

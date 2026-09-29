@@ -66,8 +66,9 @@ const (
 	// refused a move.
 	ReasonMoveRefused = "MoveRefused"
 	// ReasonServersDown is Ready's and Progressing's reason while a server
-	// of the source does not answer, or the meta group reports a server of
-	// the NATS system offline; no move is made and none is counted done.
+	// of the source does not answer, the meta group has no leader, or its
+	// leader reports a server of the NATS system offline; no move is made and
+	// none is counted done.
 	ReasonServersDown = "ServersDown"
 )
 
@@ -92,8 +93,9 @@ type EvacuationReconciler struct {
 	// MaxInFlight is how many moves an evacuation keeps in flight at once;
 	// zero is DefaultMaxInFlight.
 	MaxInFlight int
-	// PendingPoll is how soon an evacuation with moves in flight is
-	// reconciled again; zero is DefaultPendingPoll.
+	// PendingPoll is how soon an evacuation with moves in flight, or held
+	// with reason ServersDown, is reconciled again; zero is
+	// DefaultPendingPoll.
 	PendingPoll time.Duration
 	// Recorder records moves started, done, refused and cancelled, and a
 	// refused evacuation; nil records none.
@@ -370,8 +372,7 @@ func resources(ctx context.Context, c client.Reader) (map[types.UID]owner, error
 
 // pinnedIn is the resources whose spec declares placement.cluster from and
 // whose stream snap, the source NATS cluster, holds, sorted by namespace,
-// name and kind. A resource declaring from whose stream sits in another NATS
-// system with a NATS cluster of that name is not among them.
+// name and kind.
 func pinnedIn(snap *sysobs.Snapshot, owners map[types.UID]owner, from string) []js.PinnedObject {
 	var out []js.PinnedObject
 	for _, g := range snap.Groups {

@@ -62,8 +62,8 @@ type Runner struct {
 	// Report is how often a step still waiting logs what it waits for; 0
 	// logs nothing.
 	Report time.Duration
-	// Namespaces are watched for stuck pods and failed Jobs in every
-	// Kubernetes cluster, besides the story's own.
+	// Namespaces are watched for stuck pods and failed Jobs, besides the
+	// story's own, in each Kubernetes cluster a step reaches.
 	Namespaces []string
 	Log        io.Writer
 	// Publish, where set, runs with Clients at the start of every round of

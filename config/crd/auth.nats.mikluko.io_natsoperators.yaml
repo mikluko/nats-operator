@@ -143,7 +143,9 @@ spec:
             description: NatsOperatorStatus is the observed state of a NATS operator.
             properties:
               conditions:
-                description: Conditions describe the NATS operator's state.
+                description: |-
+                  Conditions: Ready, ReferencesResolved, RetiringKeysInUse, and where it
+                  applies RevocationsUnrecovered.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

@@ -31,8 +31,8 @@ import (
 // NatsOperator's RevocationsUnrecovered is True.
 type SystemAccountReconciler struct {
 	client.Client
-	// Distributor receives every newly signed JWT, and again where servers
-	// lack it; nil pushes nothing.
+	// Distributor receives newly signed JWTs, and again where servers lack
+	// them; nil pushes nothing.
 	Distributor Distributor
 	// Recorder records JWTs pushed; nil records none.
 	Recorder events.EventRecorder

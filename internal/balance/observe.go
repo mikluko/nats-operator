@@ -19,8 +19,7 @@ type Observer interface {
 type Observation struct {
 	// Cluster is the NATS cluster's name.
 	Cluster string
-	// Servers is the NATS cluster's roster: every server in it, whether or not
-	// it holds anything.
+	// Servers is the NATS cluster's roster.
 	Servers []Server
 	// Groups is every stream and consumer Raft group placed in the NATS
 	// cluster. The meta group is not among them.

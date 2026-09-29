@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chart value `metrics.scraper.serviceAccount`, the `namespace/name` of a ServiceAccount granted `get` on `/metrics`.
 - Chart value `metrics.prometheus.enabled` serves each controller's OpenTelemetry metrics on port `9464` over plain HTTP, through the metrics Service and ServiceMonitor.
 - Chart value `metrics.serviceMonitor.bearerTokenSecret` has each ServiceMonitor scrape with the token in a Secret key in place of `bearerTokenFile`.
-- Chart values `networkPolicy.enabled` and `networkPolicy.from` render a NetworkPolicy over each controller's pods admitting its metrics ports `8080` and `9464` from the peers named alone.
+- Chart values `networkPolicy.enabled` and `networkPolicy.from` render a NetworkPolicy over each controller's pods admitting its metrics ports `8080` and `9464` only from `networkPolicy.from`.
 - `helm test` on the chart checks every enabled controller's `/readyz`.
 - A failed `NatsCluster` reconcile reads `Progressing=False, reason: ReconcileFailed` and records a `ReconcileFailed` Warning event.
 - The cluster controller leaves untouched any object of a name it renders that it does not control, and the `NatsCluster` reads `Ready=False, reason: ReconcileFailed` naming each one.
@@ -106,9 +106,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `NatsSystemBalancer` evens leaders, and optionally copies, across the servers of one NATS cluster over every account.
 - A `NatsSystemBalancer` with `moves.leader: false` probes no account's `jetstream-stepdown` export and leaves `status.capabilities.leader` unset.
 - `NatsBalancer` evens leaders, and optionally copies, within pools of one account's streams.
-- `NatsClusterEvacuation` moves every JetStream object off one NATS cluster to servers carrying the target tags.
+- `NatsClusterEvacuation` moves every JetStream object whose resource sets no `placement.cluster` off one NATS cluster to servers carrying the target tags.
 - `NatsClusterEvacuation` `spec.connectionRef`, `spec.from` and `spec.to` cannot change after creation.
-- `NatsClusterEvacuation` `status.remaining` counts the streams still to leave the source cluster.
+- `NatsClusterEvacuation` `status.remaining` counts the streams still to leave the source NATS cluster.
 - A `NatsStream` whose stream matches spec but whose transfer or consumers cannot be read reads `Ready` False, reason `ObserveFailed`, and is retried with backoff.
 - The API server refuses a `NatsBalancer` or `NatsSystemBalancer` `interval` that is not positive.
 - A `NatsAccount` or `NatsUser` whose `publicKey` another account or user under the same `NatsOperator` holds reads `Ready` False, reason `PublicKeyInUse`.

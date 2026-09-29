@@ -9,8 +9,7 @@ import (
 )
 
 // SystemObserver is a [balance.Observer] of one NATS cluster over every
-// account, read as the system account through sysobs. It keeps the last
-// observation it made.
+// account, read as the system account through sysobs.
 //
 // A SystemObserver is not safe for concurrent use.
 type SystemObserver struct {

@@ -338,9 +338,9 @@ func (e *env) testExportsImported(t *testing.T) {
 	require.Contains(t, mc.SigningKeys.Keys(), act.Issuer, "minted with the exporter's signing key")
 }
 
-// testServed boots a nats-server from the trust object's JWTs and the
-// accounts' JWTs, and connects users signed with the generated account
-// signing keys: story 5's stream and private service imports carry traffic.
+// testServed pins that a nats-server booted from the trust object's and the
+// accounts' JWTs carries story 5's stream and private service imports
+// between users signed with the generated account signing keys.
 func (e *env) testServed(t *testing.T) {
 	var trust natsv1beta1.NatsOperatorTrust
 	require.NoError(t, e.c.Get(t.Context(), demo, &trust))
@@ -592,9 +592,8 @@ spec:
 	require.Zero(t, c.Expires)
 }
 
-// testRotation adds a signing key to a NatsOperator with adopted keys, marks
-// the old one retiring, and removes it: accounts are re-signed with the new
-// key before the old one leaves the NATS operator JWT.
+// testRotation pins that accounts are re-signed with a NatsOperator's new
+// signing key before the retiring one leaves the NATS operator JWT.
 func (e *env) testRotation(t *testing.T) {
 	seeds := map[string]nkeys.PrefixByte{"rot-id": nkeys.PrefixByteOperator, "rot-k1": nkeys.PrefixByteOperator, "rot-k2": nkeys.PrefixByteOperator}
 	pubs := map[string]string{}
@@ -785,9 +784,10 @@ spec:
 		"nothing is generated for identities held offline")
 }
 
-// testFlipAndStepdown flips a NatsOperator's systemAccountRef between two
-// NatsSystemAccounts, and signs the stepdown imports of an account carrying
-// the jetstream-stepdown preset into the system account JWT.
+// testFlipAndStepdown pins that a NatsOperator's systemAccountRef flips
+// between two NatsSystemAccounts, and that the stepdown imports of an
+// account carrying the jetstream-stepdown preset are signed into the system
+// account JWT.
 func (e *env) testFlipAndStepdown(t *testing.T) {
 	e.apply(t, `
 apiVersion: auth.nats.mikluko.io/v1beta1

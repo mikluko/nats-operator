@@ -21,10 +21,8 @@ spec:
           requests:
             storage: 20Gi
   auth:
-    # Every NatsCluster reaches its trust roots this way, standalone,
-    # supercluster member or leaf. From them the cluster controller renders
-    # `operator`, `system_account` and the resolver with the system account
-    # preloaded.
+    # From the trust roots the cluster controller renders `operator`,
+    # `system_account` and the resolver with the system account preloaded.
     trustRef:
       name: demo
     # What the cluster controller connects as for reloads and settledness.

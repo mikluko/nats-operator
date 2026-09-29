@@ -80,7 +80,7 @@ func streamTransfer(c *clusterWire) *js.StreamTransfer {
 	return t
 }
 
-// consumersMoved counts, of consumers, those in cluster to and at their
+// consumersMoved counts, of consumers, those in NATS cluster to and at their
 // placement, out of total.
 func consumersMoved(consumers []clusterWire, total int, to string) *js.TransferConsumers {
 	out := &js.TransferConsumers{Total: int32(total)} //nolint:gosec // consumer counts fit.

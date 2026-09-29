@@ -23,9 +23,9 @@ import (
 )
 
 // fullCluster is a routed NATS cluster trusting a plane's NATS operator,
-// each with a full resolver on a directory of its own that deletes are
-// allowed on and that outlives a restart. The resolvers sync once an hour,
-// so only pushes and deletes move JWTs between them.
+// each server running a full resolver that allows deletes, on a directory of
+// its own that outlives a restart. The resolvers sync once an hour, so only
+// pushes and deletes move JWTs between them.
 type fullCluster struct {
 	t    *testing.T
 	oc   *jwt.OperatorClaims
@@ -346,12 +346,11 @@ func userCreds(t *testing.T, keys jwtplane.Keys) nats.Option {
 	return nats.UserJWTAndSeed(token, string(seed))
 }
 
-// TestResolvers_SystemAccountKeyPushed pins what nats-server does with an
-// account JWT for the system account's key that the NATS operator signed with
-// signing keys of someone else's: it takes it in place of the system
-// account's own, closes the connections of the system account's users,
-// the pushing one among them before its reply, and that someone's users
-// then hold the system account.
+// TestResolvers_SystemAccountKeyPushed pins that nats-server takes an account
+// JWT the NATS operator signed for the system account's key, listing another
+// party's signing keys, in place of the system account's own, closes the
+// system account users' connections, the pushing one among them before its
+// reply, and admits that party's users to the system account.
 func TestResolvers_SystemAccountKeyPushed(t *testing.T) {
 	p := newPlane(t)
 	c := startFullCluster(t, p, 1)

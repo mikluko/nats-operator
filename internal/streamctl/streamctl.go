@@ -1,6 +1,6 @@
 // Package streamctl reconciles NatsStreams, NatsConsumers, NatsKeyValues
 // and NatsObjectStores into streams, consumers, key-value buckets and
-// object stores on the NATS cluster their NatsConnection reaches, under the
+// object stores on the NATS system their NatsConnection reaches, under the
 // lifecycle package's policies.
 package streamctl
 

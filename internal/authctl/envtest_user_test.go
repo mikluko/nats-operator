@@ -66,10 +66,10 @@ func (e *env) creds(ct assert.TestingT, k types.NamespacedName) (token, seed str
 	return token, string(b), s
 }
 
-// testUserCreds applies story 2's users: creds land in Secrets owned by
-// their users, signed by the account's signing key; the bring-your-own-key
-// user gets its JWT in status and no Secret; the controller presets sign
-// into the system account.
+// testUserCreds pins that story 2's users get creds in Secrets they own,
+// signed by the account's signing key, that the bring-your-own-key user gets
+// its JWT in status and no Secret, and that the controller presets sign into
+// the system account.
 func (e *env) testUserCreds(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join(storiesDir, "02-auth-plane/01-natsusers.yaml"))
 	require.NoError(t, err)
@@ -153,10 +153,10 @@ func (e *env) testUserCreds(t *testing.T) {
 	})
 }
 
-// testUsersUnderGrant applies story 4: users in the payments namespace attach
-// to the payments account in nats-system through a grant, a user no grant
-// covers is refused, and deleting the grant revokes the users it had admitted
-// until it is restored.
+// testUsersUnderGrant pins that story 4's users in the payments namespace
+// attach to the payments account in nats-system through a grant, that a user
+// no grant covers is refused, and that deleting the grant revokes the users
+// it admitted until it is restored.
 func (e *env) testUsersUnderGrant(t *testing.T) {
 	for _, f := range []string{"04-team-self-service/01-platform.yaml", "04-team-self-service/01-team.yaml"} {
 		raw, err := os.ReadFile(filepath.Join(storiesDir, f))
@@ -253,11 +253,10 @@ spec:
 	})
 }
 
-// testDeletion connects orders-service to a nats-server serving the auth
-// plane, with the account JWTs the reconcilers push applied to it, and
-// deletes the user: the account JWT revokes it, the finalizer holds the
-// Secret until distribution is current and a kick pass through the
-// auth-controller preset finds nothing, and the client is dropped.
+// testDeletion pins that a deleted user is revoked in the account JWT, that
+// the finalizer holds its Secret until distribution is current and a kick
+// pass through the auth-controller preset finds nothing, and that its client
+// is dropped.
 func (e *env) testDeletion(t *testing.T) {
 	var trust natsv1beta1.NatsOperatorTrust
 	var orders authv1beta1.NatsAccount

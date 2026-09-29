@@ -1,7 +1,6 @@
 // Package grant decides whether a reference may cross into another
 // namespace, which it may only where a NatsReferenceGrant in the target
-// namespace admits it. Nothing is cached between calls: a controller asks on
-// every reconcile, so deleting a grant revokes what it admitted.
+// namespace admits it.
 package grant
 
 import (

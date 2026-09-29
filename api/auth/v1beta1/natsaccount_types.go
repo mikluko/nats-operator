@@ -187,7 +187,10 @@ type NatsAccountStatus struct {
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	// Conditions describe the account's state.
+	// Conditions: Ready, ReferencesResolved, Distributed, and where it
+	// applies RevocationsUnrecovered. Ready is False, reason PublicKeyInUse,
+	// while the NatsOperator's NatsSystemAccount or another NatsAccount under
+	// it holds the account's public key.
 	// +optional
 	// +listType=map
 	// +listMapKey=type

@@ -318,6 +318,7 @@ of root (the chart context) and name (the controller's name).
 {{- $fullname := include "nats-operator.fullname" . -}}
 {{- $image := .root.Values.tests.image -}}
 {{- $ns := .root.Release.Namespace -}}
+{{- $pod := dict "root" .root "name" (printf "%s-test" .name) -}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -343,7 +344,7 @@ metadata:
   name: {{ $fullname }}-test
   namespace: {{ $ns }}
   labels:
-    {{- include "nats-operator.labels" . | nindent 4 }}
+    {{- include "nats-operator.labels" $pod | nindent 4 }}
   annotations:
     helm.sh/hook: test
     helm.sh/hook-delete-policy: before-hook-creation

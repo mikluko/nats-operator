@@ -46,8 +46,9 @@ const (
 	// ReasonNotClustered is Ready's reason while the connection reaches a
 	// server that is in no NATS cluster.
 	ReasonNotClustered = "NotClustered"
-	// ReasonDuplicate is Ready's reason on every NatsSystemBalancer of a
-	// NATS cluster but the one created first.
+	// ReasonDuplicate is Ready's reason on a NatsSystemBalancer while
+	// another whose connection reaches the same NATS cluster was created
+	// before it, or in the same second and sorts first by namespace and name.
 	ReasonDuplicate = "DuplicateBalancer"
 	// ReasonPassFailed is Ready's reason after a pass that failed to observe
 	// or to move.
@@ -68,9 +69,11 @@ const (
 
 const (
 	// DefaultInterval is the least time between two moves where the spec
-	// sets no interval.
+	// sets no interval, and how soon an evacuation with no move in flight is
+	// reconciled again.
 	DefaultInterval = time.Minute
-	// DefaultPendingPoll is SystemBalancerReconciler.PendingPoll's default.
+	// DefaultPendingPoll is the PendingPoll default of every balancer and
+	// evacuation reconciler.
 	DefaultPendingPoll = 5 * time.Second
 )
 
@@ -85,8 +88,8 @@ const (
 type SystemBalancerReconciler struct {
 	Client client.Client
 	Dialer *natsconn.Dialer
-	// PendingPoll is how soon a balancer with a move pending is reconciled
-	// again; zero is DefaultPendingPoll.
+	// PendingPoll is how soon a balancer with a move pending, or held off by
+	// another's move lease, is reconciled again; zero is DefaultPendingPoll.
 	PendingPoll time.Duration
 	// Recorder records moves started and done; nil records none.
 	Recorder events.EventRecorder

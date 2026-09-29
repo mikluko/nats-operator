@@ -18,7 +18,7 @@ tests:
           count: 2
       - containsDocument: {kind: NetworkPolicy, apiVersion: networking.k8s.io/v1, name: rel-cluster-controller, namespace: nats, any: true}
       - containsDocument: {kind: NetworkPolicy, apiVersion: networking.k8s.io/v1, name: rel-jetstream-controller, namespace: nats, any: true}
-  - it: admits the metrics ports from the peers networkPolicy.from names, and the probes port from the pods carrying the controller's selector labels, its helm test pod among them
+  - it: admits the metrics ports from the peers networkPolicy.from names, and the probes port from the controller's pods and its helm test pod
     set:
       networkPolicy.enabled: true
       networkPolicy.from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}}]
@@ -43,6 +43,11 @@ tests:
                         app.kubernetes.io/name: nats-operator
                         app.kubernetes.io/instance: rel
                         app.kubernetes.io/component: auth-controller
+                  - podSelector:
+                      matchLabels:
+                        app.kubernetes.io/name: nats-operator
+                        app.kubernetes.io/instance: rel
+                        app.kubernetes.io/component: auth-controller-test
                 ports: [{protocol: TCP, port: 8081}]
   - it: admits no one to the metrics ports while networkPolicy.from is empty
     set:

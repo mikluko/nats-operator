@@ -76,3 +76,12 @@ tests:
       - equal:
           path: spec.automountServiceAccountToken
           value: false
+  - it: labels the test Pod with a component of its own, so no controller Deployment selects it
+    documentSelector: {path: kind, value: Pod}
+    asserts:
+      - equal:
+          path: metadata.labels["app.kubernetes.io/component"]
+          value: auth-controller-test
+      - equal:
+          path: metadata.labels["app.kubernetes.io/instance"]
+          value: rel

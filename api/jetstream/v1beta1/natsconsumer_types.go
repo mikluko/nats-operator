@@ -167,8 +167,7 @@ type ConsumerConfig struct {
 // ackPolicy, replayPolicy, optStartSeq, optStartTime, heartbeat, flowControl
 // and maxWaiting are immutable unless recreateOnImmutableChange is set. The
 // fields of the inlined ConsumerConfig mirror nats.go's
-// jetstream.ConsumerConfig, the config as clients see it, and mean what
-// their like-named fields there mean: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#ConsumerConfig.
+// jetstream.ConsumerConfig and mean what their like-named fields there mean: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#ConsumerConfig.
 // +kubebuilder:validation:XValidation:rule="has(self.stream) != has(self.streamRef)",message="set exactly one of stream and streamRef"
 // +kubebuilder:validation:XValidation:rule="has(self.connectionRef) || has(self.streamRef)",message="connectionRef is required unless streamRef is set"
 // +kubebuilder:validation:XValidation:rule="has(self.connectionRef) == has(oldSelf.connectionRef) && (!has(self.connectionRef) || self.connectionRef == oldSelf.connectionRef)",message="connectionRef is immutable"

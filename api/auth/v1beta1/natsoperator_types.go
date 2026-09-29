@@ -31,7 +31,8 @@ type NatsOperatorStatus struct {
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	// Conditions describe the NATS operator's state.
+	// Conditions: Ready, ReferencesResolved, RetiringKeysInUse, and where it
+	// applies RevocationsUnrecovered.
 	// +optional
 	// +listType=map
 	// +listMapKey=type

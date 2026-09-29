@@ -1,5 +1,5 @@
-// Package placeholders reads the tag that marks a value in a story's status
-// or live file as an example.
+// Package placeholders defines the tag that marks a value in a story's
+// status or live file as an example, and strips it.
 package placeholders
 
 import "go.yaml.in/yaml/v3"

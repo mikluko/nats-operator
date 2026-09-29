@@ -118,8 +118,7 @@ func TestKeyValueCreate(t *testing.T) {
 }
 
 // TestKeyValueReadBack pins that each config nats.go builds a bucket's
-// stream from reads back from that stream as itself, so a resync finds no
-// drift where there is none.
+// stream from reads back from that stream as itself.
 func TestKeyValueReadBack(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

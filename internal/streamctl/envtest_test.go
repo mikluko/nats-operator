@@ -64,9 +64,9 @@ func TestEnvtest(t *testing.T) {
 	t.Run("ConnectionGone", func(t *testing.T) { testConnectionGone(t, c, quickstart) })
 }
 
-// testConnectionGone deletes a NatsConnection before the resources that
-// name it, each under deletionPolicy Delete, and sees every resource go
-// while its server object stays.
+// testConnectionGone pins that resources under deletionPolicy Delete go once
+// the NatsConnection they name is deleted first, leaving their server
+// objects in place.
 func testConnectionGone(t *testing.T, c client.Client, n *testNATS) {
 	const ns = "teardown"
 	require.NoError(t, c.Create(t.Context(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}))
@@ -268,9 +268,9 @@ func testStory3(t *testing.T, c client.Client, n *testNATS) {
 	})
 }
 
-// testStory3Buckets checks story 3's bucket and object store: both created
-// from their manifests, and both kept on the server when their resources
-// are deleted under the default Retain.
+// testStory3Buckets pins that story 3's bucket and object store are created
+// from their manifests and stay on the server when their resources are
+// deleted under the default Retain.
 func testStory3Buckets(t *testing.T, c client.Client, j jetstream.JetStream) {
 	kv := &js.NatsKeyValue{ObjectMeta: metav1.ObjectMeta{Namespace: "payments", Name: "sessions"}}
 	eventually(t, c, kv, func(ct *assert.CollectT) {

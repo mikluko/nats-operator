@@ -62,8 +62,9 @@ cluster:
 auth:
   enabled: true
   replicas: 1
-  # namespace/name of a NatsConnection as the system account, passed as
-  # --system-connection; empty, no server receives an account JWT.
+  # namespace/name of the NatsConnection the auth controller reaches the
+  # system account through, passed as --system-connection; empty, no server
+  # receives an account JWT.
   systemConnection: ""
   image:
     repository: ghcr.io/mikluko/nats-operator/auth-controller
@@ -146,8 +147,8 @@ metrics:
     bearerTokenSecret: {}
 
 # A NetworkPolicy over each enabled controller's pods admitting ports 8080
-# and 9464 from the peers in from alone, and port 8081 from pods carrying the
-# controller's selector labels; nothing else inbound.
+# and 9464 from the peers in from alone, and port 8081 from the controller's
+# pods and its `helm test` pod; nothing else inbound.
 networkPolicy:
   enabled: false
   # NetworkPolicy peers. Empty, ports 8080 and 9464 admit no one.

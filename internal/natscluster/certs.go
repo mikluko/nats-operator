@@ -144,7 +144,7 @@ func (r *Reconciler) ensureCerts(ctx context.Context, nc *clusterv1beta1.NatsClu
 }
 
 // ensureCertSecret applies the cert-manager Certificate want, or deletes
-// the one named name that nc owns when want is nil, then reads Secret
+// the one named name that nc controls when want is nil, then reads Secret
 // secret. It returns what the servers wait for, "" once the Secret holds
 // every key in keys, and the Secret, nil until then or when secret is "".
 func (r *Reconciler) ensureCertSecret(ctx context.Context, nc *clusterv1beta1.NatsCluster, name string, want *unstructured.Unstructured, secret string, keys ...string) (string, *corev1.Secret, error) {
@@ -279,7 +279,7 @@ func (r *Reconciler) applyCertificate(ctx context.Context, nc *clusterv1beta1.Na
 }
 
 // deleteCertificate deletes the cert-manager Certificate named name when
-// nc owns it. Without cert-manager installed there is none to delete.
+// nc controls it. Without cert-manager installed there is none to delete.
 func (r *Reconciler) deleteCertificate(ctx context.Context, nc *clusterv1beta1.NatsCluster, name string) error {
 	cert := &unstructured.Unstructured{}
 	cert.SetGroupVersionKind(certificateGVK)

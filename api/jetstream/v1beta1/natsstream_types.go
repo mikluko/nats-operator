@@ -206,8 +206,8 @@ type StreamConsumerLimits struct {
 }
 
 // NatsStreamSpec is the desired state of a stream. The fields of the inlined
-// StreamConfig mirror nats.go's jetstream.StreamConfig, the config as
-// clients see it, and mean what their like-named fields there mean:
+// StreamConfig mirror nats.go's jetstream.StreamConfig and mean what their
+// like-named fields there mean:
 // https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#StreamConfig.
 type NatsStreamSpec struct {
 	// ConnectionRef names the NatsConnection whose credentials decide the

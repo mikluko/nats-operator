@@ -35,7 +35,7 @@ var generators = map[string]func(dir string, out io.Writer) error{
 }
 
 // funcs are the template functions every template here may call: dict
-// builds a map from key, value pairs, and secret a credsSecret's data.
+// builds a map from key, value pairs, and secret builds a credsSecret's data.
 var funcs = template.FuncMap{
 	"dict": func(kv ...string) map[string]string {
 		m := map[string]string{}

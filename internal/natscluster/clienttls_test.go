@@ -22,9 +22,7 @@ func withClientTLS(nc *clusterv1beta1.NatsCluster, src clusterv1beta1.Certificat
 	return nc
 }
 
-// TestClientTLS_Render pins what spec.tls renders: the client listener's
-// certificate, its mount, a tls:// client endpoint, and a cert-manager
-// Certificate for the client Service's names.
+// TestClientTLS_Render pins what spec.tls renders.
 func TestClientTLS_Render(t *testing.T) {
 	t.Run("off", func(t *testing.T) {
 		nc := storyCluster(t)

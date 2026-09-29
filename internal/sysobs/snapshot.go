@@ -95,8 +95,8 @@ type Group struct {
 type Snapshot struct {
 	Servers []Server
 
-	// Silent lists the roster's servers that did not answer every page of
-	// the JSZ request; their groups may be missing from Groups.
+	// Silent lists the roster's servers that sent no complete JetStream
+	// report; their groups may be missing from Groups.
 	Silent []string
 
 	// Groups has the meta group first, when any server reports one, then

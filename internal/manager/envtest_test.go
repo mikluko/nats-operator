@@ -89,9 +89,8 @@ func TestEnvtestStart(t *testing.T) {
 }
 
 // TestEnvtestCache pins that New's cache holds only labelled objects of an
-// owned kind and the metadata of Secrets without annotations, kept current,
-// while the manager's client reads a Secret whole and never lists or watches
-// whole Secrets.
+// owned kind and the metadata of unannotated Secrets, and that the manager's
+// client reads a Secret whole without listing or watching whole Secrets.
 func TestEnvtestCache(t *testing.T) {
 	cfg := startEnvtest(t).Config
 	scheme, err := NewScheme()

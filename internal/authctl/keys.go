@@ -62,7 +62,7 @@ type keySource struct {
 	// publicKey is an identity held offline; set, no identity seed is read
 	// or generated.
 	publicKey string
-	// recorded is the identity owner's status holds; set, a missing
+	// recorded is the identity the owner's status holds; set, a missing
 	// generated identity seed is not generated again.
 	recorded string
 	prefix   nkeys.PrefixByte

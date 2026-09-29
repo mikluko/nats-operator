@@ -21,10 +21,10 @@ import (
 	"github.com/mikluko/nats-operator/internal/e2e/placeholders"
 )
 
-// testStory8 runs story 8 on a two-cluster supercluster, holding the move
-// from east to west in flight by stopping two of the three new replicas so
-// the transferring status can be read. Only the NatsConnection the story's
-// fixture declares is created here, reaching east without credentials.
+// testStory8 pins that the NatsStream of story 8 reads each of the story's
+// status files, in east, transferring and in west, on a two-cluster
+// supercluster, with the move held in flight by stopping two of the three
+// new replicas.
 func testStory8(t *testing.T, c client.Client, sc map[string]*testNATS) {
 	const ns = "orders"
 	require.NoError(t, c.Create(t.Context(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}))

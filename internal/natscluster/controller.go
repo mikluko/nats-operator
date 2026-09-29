@@ -97,11 +97,12 @@ type Reconciler struct {
 	// Recorder records the rollout's events; nil records none.
 	Recorder events.EventRecorder
 	// ControllerNamespace is the namespace the NetworkPolicy admits to the
-	// monitoring port; SetupWithManager fills in the namespace of its own
+	// monitoring port, and to the metrics port while the exporter runs;
+	// SetupWithManager fills in the namespace of its own
 	// pod when it is empty.
 	ControllerNamespace string
-	// AllowGatewayWithoutTLS renders a gateway without tls; false, such a
-	// NatsCluster is refused with reason GatewayWithoutTLS.
+	// AllowGatewayWithoutTLS renders a gateway without tls; unset, a
+	// NatsCluster with one is refused with reason GatewayWithoutTLS.
 	AllowGatewayWithoutTLS bool
 }
 
@@ -226,7 +227,7 @@ func (r *Reconciler) reconcile(ctx context.Context, nc *clusterv1beta1.NatsClust
 	if gatewayWithoutTLS(&nc.Spec, r.AllowGatewayWithoutTLS) {
 		return ctrl.Result{}, r.refuseGatewayWithoutTLS(ctx, orig, nc)
 	}
-	if fields := unsupportedFields(&nc.Spec); len(fields) > 0 {
+	if fields := unsupportedLeafFields(&nc.Spec); len(fields) > 0 {
 		return ctrl.Result{}, r.hold(ctx, orig, nc, unsupportedSpec("not rendered by this cluster controller: "+strings.Join(fields, ", ")))
 	}
 	trust, cond, err := readTrust(ctx, r.Client, nc)
@@ -314,11 +315,6 @@ func (r *Reconciler) reconcile(ctx context.Context, nc *clusterv1beta1.NatsClust
 	return ctrl.Result{RequeueAfter: resyncUnsettled}, nil
 }
 
-// unsupportedFields names the spec fields this controller does not render.
-func unsupportedFields(spec *clusterv1beta1.NatsClusterSpec) []string {
-	return unsupportedLeafFields(spec)
-}
-
 // hold sets nc's Progressing condition to held, which names what stops
 // rendering, and patches the status.
 func (r *Reconciler) hold(ctx context.Context, orig, nc *clusterv1beta1.NatsCluster, held *metav1.Condition) error {
@@ -345,8 +341,9 @@ func (r *Reconciler) patchStatus(ctx context.Context, orig, nc *clusterv1beta1.N
 }
 
 // applyShared creates or updates the Services, the PodDisruptionBudget and
-// the NetworkPolicy, refusing any nc does not control, and deletes the
-// gateway Service and NetworkPolicy plan does not render.
+// the NetworkPolicy, refusing any nc does not control, deletes the gateway
+// Service and NetworkPolicy plan does not render, and returns the refusals
+// as one error.
 func (r *Reconciler) applyShared(ctx context.Context, nc *clusterv1beta1.NatsCluster, plan *Plan) error {
 	services := []*corev1.Service{plan.HeadlessService, plan.ClientService}
 	if plan.GatewayService != nil {

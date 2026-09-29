@@ -100,7 +100,10 @@ type NatsUserStatus struct {
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	// Conditions describe the user's state.
+	// Conditions: Ready, ReferencesResolved, and Distributed, only ever
+	// False, reason NoSystemConnection. Ready is False, reason
+	// PublicKeyInUse, while another NatsUser of the account holds
+	// spec.publicKey.
 	// +optional
 	// +listType=map
 	// +listMapKey=type

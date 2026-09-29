@@ -71,9 +71,8 @@ func TestExporters(t *testing.T) {
 	}
 }
 
-// TestStart pins that Start leaves the global noop providers in place for
-// a signal left off, installs the SDK's for one turned on, and routes the
-// SDK's errors to the logger it is given.
+// TestStart pins that Start installs the SDK's provider for a signal turned
+// on and no other, and routes the SDK's errors to its logger.
 func TestStart(t *testing.T) {
 	mp, tp, handler := otel.GetMeterProvider(), otel.GetTracerProvider(), otel.GetErrorHandler()
 	t.Cleanup(func() {

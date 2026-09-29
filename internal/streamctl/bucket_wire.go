@@ -203,9 +203,9 @@ func mirrorSource(s sourceWire) sourceWire {
 }
 
 // bucketSource is a source of bucket in the form nats.go builds it from: a
-// source with the subject transform nats.go adds, or none where it adds
-// none, is named by its bucket without the transform; any other source is
-// left as it is, since nats.go passes it through.
+// source with no subject transform, or with the one nats.go adds, is named
+// by its bucket without the transform; one with any other transform is left
+// as it is, since nats.go passes it through.
 func bucketSource(s sourceWire, bucket string) sourceWire {
 	from := strings.TrimPrefix(s.Name, kvStreamPrefix)
 	var added []transformWire

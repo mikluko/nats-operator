@@ -32,8 +32,8 @@ func (w *warmup) Warmup(context.Context) error { return w.err }
 func (w *warmup) NeedLeaderElection() bool     { return w.elected }
 
 // TestWarming pins that a warming manager is warmed up once every runnable
-// with a warmup added to it has warmed up without error, keeping each one's
-// leader election.
+// with a warmup has warmed up without error, keeping each one's leader
+// election.
 func TestWarming(t *testing.T) {
 	inner := &adding{}
 	m := &warming{Manager: inner}

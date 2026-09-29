@@ -31,6 +31,9 @@ spec:
         - podSelector:
             matchLabels:
               {{- include "nats-operator.selectorLabels" $ctx | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              {{- include "nats-operator.selectorLabels" (dict "root" $ "name" (printf "%s-test" $name)) | nindent 14 }}
       ports:
         - protocol: TCP
           port: 8081

@@ -231,11 +231,8 @@ func startRenderedWith(t *testing.T, nc *clusterv1beta1.NatsCluster, in Inputs, 
 	return eps, srvs, fmt.Sprintf("nats://127.0.0.1:%d", client[0]), files
 }
 
-// TestRenderedConfigRunsCluster pins that story 1's rendered config is one
-// nats-server 2.15.0 accepts: the servers route to each other over
-// self-signed TLS, JetStream takes the derived limits, each reports its
-// config revision, and the NATS cluster is observed Settled without an auth
-// plane.
+// TestRenderedConfigRunsCluster pins that nats-server 2.15.0 runs story 1's
+// rendered config as a NATS cluster observed Settled.
 func TestRenderedConfigRunsCluster(t *testing.T) {
 	nc := storyCluster(t)
 	nc.Spec.JetStream.Limits = &clusterv1beta1.JetStreamLimits{MaxMemoryStore: quantity("256Mi"), MaxFileStore: quantity("1Gi")}

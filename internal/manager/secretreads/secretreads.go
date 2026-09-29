@@ -70,7 +70,7 @@ func (r *Reads) record(req *http.Request) {
 }
 
 // secretCollection reports whether path addresses the Secrets of the
-// cluster or of a namespace rather than one Secret.
+// Kubernetes cluster or of a namespace rather than one Secret.
 func secretCollection(path string) bool {
 	segs := strings.Split(strings.Trim(path, "/"), "/")
 	switch {

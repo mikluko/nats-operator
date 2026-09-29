@@ -1,11 +1,10 @@
 # Identical in every Kubernetes cluster of the supercluster, replicated by
 # GitOps.
 #
-# Trust roots, public and signed, in the literal form: copied from
-# the home cluster's NatsOperator status at bootstrap and on rotation. Every
-# NATS cluster preloads the system account JWT from here, so it boots before
-# its gateways are up. Each member names it in `auth.trustRef`, as a leaf
-# does (story 10).
+# Trust roots, public and signed, in the literal form: copied from the home
+# Kubernetes cluster's NatsOperator status at bootstrap and on rotation. Every
+# NATS cluster preloads the system account JWT from here. Each member names it
+# in `auth.trustRef`, as a leaf does (story 10).
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsOperatorTrust
 metadata:

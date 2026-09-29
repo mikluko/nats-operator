@@ -1,5 +1,5 @@
 # What the orders services do once ORDERS exists: two durable consumers and
-# 300MB of orders, so the move to west takes long enough to watch.
+# 300MB of orders.
 apiVersion: batch/v1
 kind: Job
 metadata:

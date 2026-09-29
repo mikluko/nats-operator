@@ -52,8 +52,7 @@ func bucketStream(ctx context.Context, api *lifecycle.API, prefix, bucket string
 	return info, &w, nil
 }
 
-// withConfig returns info carrying cfg, a bucket config read from info's
-// stream config, in its place.
+// withConfig returns a copy of info whose Config is v.
 func withConfig(info *lifecycle.Info, v any) (*lifecycle.Info, error) {
 	cfg, err := lifecycle.ToConfig(v)
 	if err != nil {

@@ -189,7 +189,11 @@ spec:
             description: NatsUserStatus is the observed state of a user.
             properties:
               conditions:
-                description: Conditions describe the user's state.
+                description: |-
+                  Conditions: Ready, ReferencesResolved, and Distributed, only ever
+                  False, reason NoSystemConnection. Ready is False, reason
+                  PublicKeyInUse, while another NatsUser of the account holds
+                  spec.publicKey.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

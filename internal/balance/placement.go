@@ -17,8 +17,8 @@ type PlacementMove struct {
 	Unsure bool
 }
 
-// Target is how many copies each of servers should hold of copies: the floor
-// of the share, with the remainder at the ceiling one apiece.
+// Target splits copies over servers: each holds floor, and atCeiling of them
+// hold ceiling.
 func Target(copies, servers int) (floor, ceiling, atCeiling int) {
 	if servers <= 0 {
 		return 0, 0, 0

@@ -15,8 +15,8 @@ var (
 	// server answering on it.
 	ErrUnreachable = errors.New("no server reachable")
 
-	// ErrStaleJWT is returned by Push for a JWT issued before one already
-	// pushed, or held by a server, for the same account.
+	// ErrStaleJWT is returned by Push for a JWT issued before one a server
+	// acknowledged or holds for the same account.
 	ErrStaleJWT = errors.New("a newer JWT for the account exists")
 )
 
@@ -24,12 +24,14 @@ var (
 // resolvers of the NATS clusters that trust a NATS operator. Its methods
 // are called concurrently from several reconcilers.
 type Distributor interface {
-	// Push sends accountJWT to every server trusting operator, unless a JWT
-	// issued after it was already pushed or is held for the same account.
+	// Push sends accountJWT to every server trusting operator, unless a
+	// server acknowledged or holds a JWT for the same account issued after
+	// it.
 	Push(ctx context.Context, operator types.NamespacedName, accountJWT string) error
 
 	// Current returns how many servers trust operator, how many of them
-	// hold accountJWT, and when its account was last pushed, if it was.
+	// hold accountJWT, and when a server last acknowledged a push for its
+	// account, if one did.
 	Current(ctx context.Context, operator types.NamespacedName, accountJWT string) (authv1beta1.Distribution, error)
 
 	// Lookup returns the newest JWT for account that a server trusting

@@ -118,8 +118,8 @@ func TestEnsureSelfSignedRouteSecret(t *testing.T) {
 }
 
 // routeServer starts a server whose route listener serves and verifies
-// against the files of routes, as a cluster tls block configures it,
-// routing to urls.
+// against the files of routes, as a NATS config's cluster tls block
+// configures it, routing to urls.
 func routeServer(t *testing.T, name string, routes *corev1.Secret, urls ...string) *server.Server {
 	t.Helper()
 	dir := t.TempDir()

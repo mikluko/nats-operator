@@ -16,7 +16,7 @@ Every kind is namespaced, and a reference crosses into another namespace only wh
 - A namespace granted `NatsUser`s to a `NatsAccount` can claim and revoke any user key of that account, keys issued outside the auth controller included.
 - Whoever may write a `NatsOperator`, `NatsAccount` or `NatsSystemAccount` can sign with any seed stored in a Secret of its namespace, without permission to read Secrets: `keys.identity` and `keys.signing` may name any Secret there.
 - Whoever may write a `NatsCluster` runs pods in its namespace with any privilege that namespace admits: `spec.podTemplate` is merged over the rendered pod.
-- Each controller's ServiceAccount may list and watch Secrets in every namespace it watches, every namespace without `watchNamespaces`, which reads their data; the controllers' metadata-only watch limits what they cache, not what they are permitted.
+- Each controller's ServiceAccount may get, list and watch every Secret in the namespaces it watches (all without `watchNamespaces`), data included; the auth and cluster controllers may also create, update and delete them. The controllers' metadata-only watch limits what they cache, not what they are permitted.
 - The chart's `watchNamespaces` confines every controller, and its RBAC, to the namespaces it names; it is the install for a Kubernetes cluster shared between tenants.
 
 ## Verifying a release

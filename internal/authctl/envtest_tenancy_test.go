@@ -30,9 +30,10 @@ func notReady(ct *assert.CollectT, conds []metav1.Condition, reason string) {
 	assert.Equal(ct, reason, cond.Reason, cond.Message)
 }
 
-// testLostSeed deletes the generated identity Secrets of an account, a
-// system account and a NatsOperator already signed: each reads Ready False,
-// SeedLost, keeps its public key, and no Secret is generated in its place.
+// testLostSeed pins that an account, a system account and a NatsOperator
+// already signed whose generated identity Secret is deleted each read Ready
+// False, SeedLost, keep their public key, and get no Secret generated in its
+// place.
 func (e *env) testLostSeed(t *testing.T) {
 	e.apply(t, `
 apiVersion: auth.nats.mikluko.io/v1beta1
@@ -87,9 +88,9 @@ spec:
 	}
 }
 
-// testSeedsOutliveOwner deletes a signed NatsOperator, NatsSystemAccount
-// and NatsAccount and applies them again: the generated seed Secrets carry
-// no owner reference, stay, and the objects come back under the same keys.
+// testSeedsOutliveOwner pins that the generated seed Secrets of a
+// NatsOperator, a NatsSystemAccount and a NatsAccount outlive them, and that
+// the objects applied again come back under the same keys.
 func (e *env) testSeedsOutliveOwner(t *testing.T) {
 	manifest := `
 apiVersion: auth.nats.mikluko.io/v1beta1
@@ -144,11 +145,11 @@ spec:
 	require.Equal(t, acc.Status.PublicKey, acc2.Status.PublicKey)
 }
 
-// testAccountKeyHeld has a namespace granted the NatsOperator declare
-// NatsAccounts with the public keys of an account and of the system
-// account already signed under it: each is refused, Ready False,
-// PublicKeyInUse naming the holder, records no key, and nothing signed
-// with its signing key is pushed.
+// testAccountKeyHeld pins that a granted namespace's NatsAccount declaring
+// the public key of an account or of the system account already signed under
+// the NatsOperator is refused, Ready False, PublicKeyInUse naming the
+// holder, records no key, and has nothing signed with its signing key
+// pushed.
 func (e *env) testAccountKeyHeld(t *testing.T) {
 	e.apply(t, `
 apiVersion: auth.nats.mikluko.io/v1beta1
@@ -225,11 +226,10 @@ spec:
 	require.Equal(t, victimJWT, victim.Status.JWT)
 }
 
-// testAccountKeySquatted has a namespace no grant admits declare a
-// NatsAccount under the NatsOperator, and a granted one declare a
-// NatsSystemAccount naming it that the NatsOperator does not reference,
-// each with the public key of an account about to be adopted: neither
-// records the key, and the adopted accounts are signed.
+// testAccountKeySquatted pins that neither a NatsAccount no grant admits nor
+// a NatsSystemAccount the NatsOperator does not reference records the public
+// key of an account about to be adopted, and that the adopted accounts are
+// signed.
 func (e *env) testAccountKeySquatted(t *testing.T) {
 	restored, fresh := accountPub(t), accountPub(t)
 	e.seedSecret(t, "squat", "squat-signing", nkeys.PrefixByteAccount)
@@ -284,11 +284,10 @@ spec:
 	}
 }
 
-// testSystemKeyUnrecorded has a granted namespace declare NatsAccounts with
-// the identity of a NatsSystemAccount whose status records no key yet:
-// one declared after it is refused and nothing it signs is pushed, and one
-// declared before it is refused once the NatsSystemAccount's identity
-// Secret changes to that key.
+// testSystemKeyUnrecorded pins that a NatsAccount with the identity of a
+// NatsSystemAccount whose status records no key yet is refused: declared
+// after it, with nothing it signs pushed; declared before it, once the
+// NatsSystemAccount's identity Secret changes to that key.
 func (e *env) testSystemKeyUnrecorded(t *testing.T) {
 	first := e.seedSecret(t, "adopt", "sys-first", nkeys.PrefixByteAccount)
 	adopted := e.seedSecret(t, "adopt", "sys-adopted", nkeys.PrefixByteAccount)
@@ -388,9 +387,9 @@ func accountPub(t *testing.T) string {
 	return pub
 }
 
-// testUserKeyHeld has a user granted an account set publicKey to the key
-// of another user of it: it is refused, Ready False, PublicKeyInUse naming
-// the holder, records no key, and deleting it revokes nothing.
+// testUserKeyHeld pins that a user whose publicKey another user of the
+// account holds is refused, Ready False, PublicKeyInUse naming the holder,
+// records no key, and revokes nothing when deleted.
 func (e *env) testUserKeyHeld(t *testing.T) {
 	e.apply(t, `
 apiVersion: auth.nats.mikluko.io/v1beta1
@@ -442,9 +441,9 @@ spec:
 	require.Equal(t, metav1.ConditionTrue, meta.FindStatusCondition(alice.Status.Conditions, authctl.ConditionReady).Status)
 }
 
-// testReplacedUserKey changes a user's publicKey and deletes another's
-// creds Secret: each previous key is revoked in the account JWT, and the
-// user's replacedKeys empties once it is.
+// testReplacedUserKey pins that a user's previous key, left by a publicKey
+// change or a deleted creds Secret, is revoked in the account JWT, and that
+// replacedKeys empties once it is.
 func (e *env) testReplacedUserKey(t *testing.T) {
 	k1, k2 := userPub(t), userPub(t)
 	e.apply(t, fmt.Sprintf(`
@@ -484,9 +483,9 @@ spec:
 	})
 }
 
-// testReplacedKeyRefused changes a signed user's publicKey to a key that
-// is not a user key, then to one another user holds: each change is
-// refused, and the key it held is revoked all the same.
+// testReplacedKeyRefused pins that a signed user's publicKey change to a key
+// that is not a user key, or to one another user holds, is refused, and that
+// the key it held is revoked all the same.
 func (e *env) testReplacedKeyRefused(t *testing.T) {
 	k1 := userPub(t)
 	e.apply(t, fmt.Sprintf(`

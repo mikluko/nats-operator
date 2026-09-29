@@ -323,7 +323,11 @@ spec:
             description: NatsAccountStatus is the observed state of an account.
             properties:
               conditions:
-                description: Conditions describe the account's state.
+                description: |-
+                  Conditions: Ready, ReferencesResolved, Distributed, and where it
+                  applies RevocationsUnrecovered. Ready is False, reason PublicKeyInUse,
+                  while the NatsOperator's NatsSystemAccount or another NatsAccount under
+                  it holds the account's public key.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

@@ -220,7 +220,7 @@ func (r *Reconciler) reloadExpired(cm *corev1.ConfigMap) bool {
 }
 
 // writeForReload writes server s's rendered config into cm, marked for a
-// reload to revision from now.
+// reload to revision since r.now().
 func (r *Reconciler) writeForReload(ctx context.Context, cm *corev1.ConfigMap, s Server, revision string) error {
 	orig := cm.DeepCopy()
 	cm.Data = s.ConfigMap.Data

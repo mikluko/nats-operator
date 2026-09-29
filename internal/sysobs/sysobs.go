@@ -57,8 +57,9 @@ func WithGateways() Option {
 
 // New returns a SystemClient of the NATS cluster named cluster over nc, which
 // must be authenticated as a user of the system account. Its requests reach
-// only servers whose cluster name is exactly cluster, save the one to the meta
-// leader, which reaches it in whichever NATS cluster it runs.
+// only servers whose cluster name is exactly cluster, every server where
+// cluster is empty, save the one to the meta leader, which reaches it in
+// whichever NATS cluster it runs.
 func New(nc *nats.Conn, cluster string, opts ...Option) *SystemClient {
 	o := &SystemClient{nc: nc, cluster: cluster, wait: 2 * time.Second}
 	for _, opt := range opts {
@@ -73,8 +74,8 @@ func (o *SystemClient) filter() wireFilter {
 
 // Roster returns the servers of the NATS cluster that answer STATSZ, sorted
 // by name. It waits until every server named by another's routes has
-// answered, or for the SystemClient's wait; a server that is down and routed to
-// by nobody is absent.
+// answered, or for the SystemClient's wait; a server that has not answered
+// by then is absent, and none answering is ErrNoServers.
 func (o *SystemClient) Roster(ctx context.Context) ([]Server, error) {
 	seen := map[string]Server{}
 	routed := map[string]bool{}

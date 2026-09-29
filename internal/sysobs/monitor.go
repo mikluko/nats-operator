@@ -12,7 +12,7 @@ import (
 )
 
 // Endpoint is one server's HTTP monitoring endpoint: the server_name it is
-// expected to report and the base URL of its /varz and /jsz.
+// expected to report and the base URL of its /varz, /gatewayz and /jsz.
 type Endpoint struct {
 	Name string
 	URL  string

@@ -17,10 +17,8 @@ import (
 )
 
 // TestLameDuckFitsTerminationGrace pins that the preStop signals lame-duck
-// mode to the rendered pid file, and that the lame-duck mode the rendered
-// config sets ends inside the pod's termination grace period, with room
-// for the second it waits after stepping leaders down and for JetStream to
-// shut down.
+// mode, and that lame-duck mode ends inside the pod's termination grace
+// period.
 func TestLameDuckFitsTerminationGrace(t *testing.T) {
 	nc := storyCluster(t)
 	nc.Spec.Routes = &clusterv1beta1.Routes{TLS: &clusterv1beta1.RoutesTLS{Enabled: ptr.To(false)}}

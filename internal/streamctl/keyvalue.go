@@ -77,8 +77,8 @@ func (o *keyValueObject) manager() (jetstream.KeyValueManager, error) {
 
 func (o *keyValueObject) Describe() string { return "key-value bucket " + o.bucket() }
 
-// Fetch treats a stream KV_<bucket> that keeps no history per subject as no
-// bucket, and as Terminal.
+// Fetch returns a TerminalError where stream KV_<bucket> keeps no history per
+// subject.
 func (o *keyValueObject) Fetch(ctx context.Context) (*lifecycle.Info, error) {
 	info, s, err := bucketStream(ctx, o.api, kvStreamPrefix, o.bucket())
 	if err != nil || info == nil {

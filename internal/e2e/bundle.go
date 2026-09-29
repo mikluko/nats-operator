@@ -44,8 +44,8 @@ type Bundle struct {
 	Clusters []Placement
 	// Substitutions are merged into the bundle's files as they load.
 	Substitutions []Substitution
-	// Waits are the steps that wait longer than the run's default for
-	// their expectations, by step number.
+	// Waits set, by step number, how long a step waits for its
+	// expectations in place of the run's default.
 	Waits map[int]StepWait
 	Steps []Step
 

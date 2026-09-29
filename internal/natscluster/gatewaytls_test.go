@@ -69,8 +69,7 @@ func reconcileOnce(t *testing.T, c client.Client, nc *clusterv1beta1.NatsCluster
 }
 
 // TestReconcile_GatewayWithoutTLS pins that a NatsCluster whose gateway has
-// no tls is refused, Ready and Progressing False with reason
-// GatewayWithoutTLS and a message naming the flag, rendering nothing, unless
+// no tls is refused with reason GatewayWithoutTLS, rendering nothing, unless
 // the reconciler allows it.
 func TestReconcile_GatewayWithoutTLS(t *testing.T) {
 	t.Run("refused", func(t *testing.T) {

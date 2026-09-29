@@ -212,7 +212,7 @@ type Inputs struct {
 	// Certs are the TLS Secrets the servers mount.
 	Certs Certs
 	// MonitorNamespace is the namespace the NetworkPolicy admits to the
-	// monitoring and metrics ports.
+	// monitoring port, and to the metrics port while the exporter runs.
 	MonitorNamespace string
 }
 
@@ -279,9 +279,9 @@ func serverConfig(nc *clusterv1beta1.NatsCluster, in Inputs, server string, l La
 	return c
 }
 
-// gatewayConfig renders the gateway of the NATS cluster named name,
-// verifying peers both ways against ca.crt, without which nats-server
-// accepts any public root.
+// gatewayConfig renders the gateway of the NATS cluster named name; with
+// g.TLS set it verifies peers both ways against ca.crt, without which
+// nats-server accepts any public root.
 func gatewayConfig(name string, g *clusterv1beta1.Gateway, l Layout) *GatewayConfig {
 	gc := &GatewayConfig{
 		Name:          name,

@@ -27,8 +27,9 @@ type Operator struct {
 // one from o that lists every signing key, never expires, and leaves strict
 // signing-key usage off so adopted accounts keep user JWTs their identity
 // keys signed. With an offline JWT it returns that JWT unchanged, or an error
-// wrapping ErrOfflineOperatorMismatch unless the JWT is self-signed, names
-// SystemAccount and lists every signing key not retiring.
+// wrapping ErrOfflineOperatorMismatch unless the JWT is self-signed, its
+// subject is the spec's public key where one is set, it names SystemAccount
+// and it lists every signing key not retiring.
 func SignOperator(o Operator) (string, error) {
 	if !nkeys.IsValidPublicAccountKey(o.SystemAccount) {
 		return "", fmt.Errorf("%w: system account %q is not an account public key", ErrWrongKeyType, o.SystemAccount)

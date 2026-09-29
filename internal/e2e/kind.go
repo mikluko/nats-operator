@@ -21,8 +21,7 @@ import (
 	"sigs.k8s.io/kind/pkg/log"
 )
 
-// KindNodeImage is every kind cluster's node image, the newest kind v0.33.0
-// publishes within the Kubernetes minor envtest runs.
+// KindNodeImage is every kind cluster's node image.
 const KindNodeImage = "kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed"
 
 // KindNetwork is the podman network kind puts every cluster's nodes on.

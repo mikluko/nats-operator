@@ -16,7 +16,7 @@ spec:
   # The one system account the NATS operator JWT names; NATS allows exactly one.
   # Other NatsSystemAccounts may exist unreferenced: they are not signed and
   # their users get no creds. Flipping this ref is how a system account is
-  # rotated, and `system_account` is restart-only, so every server in the
-  # supercluster restarts.
+  # rotated, and `system_account` is restart-only, so every server trusting
+  # this NATS operator restarts.
   systemAccountRef:
     name: sys

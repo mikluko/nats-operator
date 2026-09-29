@@ -15,8 +15,7 @@ spec:
 ---
 # Account JWTs come only through a remote bound to the system account:
 # without it the leaf cannot fetch an account it has not cached. The creds are
-# a hub user in the system account; the hub recognises the account by the
-# JWT's issuer, not by name.
+# a hub user in the system account.
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:
@@ -82,8 +81,6 @@ metadata:
 spec:
   publicKey: ATELEMETRY...
   # Preloaded, so the account's clients authenticate while the leaf link is
-  # down or before it first connects. It is a copy: a fetch never replaces
-  # it, only the Full resolver's sync with the hub or a claims push does,
-  # and it expires with the account's jwtTTL (48h by default) unless the
-  # NatsAccount sets `jwtTTL: 0`, as one copied here should.
+  # down or before it first connects. It expires with the account's jwtTTL
+  # (48h by default) unless the NatsAccount sets `jwtTTL: 0`.
   jwt: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...

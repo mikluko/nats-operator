@@ -174,11 +174,9 @@ func (rc *removalCluster) step(t require.TestingT, st rolloutState, log *[]strin
 	return d
 }
 
-// TestScaleDown_InProcess pins scale-down against nats-server 2.15.0: from
-// five servers to three, a stream with five replicas blocks it; without
-// it, each surplus server is evacuated, removed from the meta group and
-// stopped in turn, and an R3 and an R1 stream end on the three that stay
-// with every message.
+// TestScaleDown_InProcess pins that scaling five nats-server 2.15.0 servers
+// down to three is blocked by an R5 stream, and otherwise loses no message
+// of an R3 or an R1 stream.
 func TestScaleDown_InProcess(t *testing.T) {
 	rc := startRemovalCluster(t, 3)
 	rc.addStream(t, "ORDERS", 3, 100)

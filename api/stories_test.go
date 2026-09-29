@@ -51,22 +51,22 @@ func apiScheme(t *testing.T) *runtime.Scheme {
 	return s
 }
 
-// storyFiles returns the story status files and the manifest files, skipping
+// storyFiles returns the story manifest files and the status files, skipping
 // delete files and fixtures.
 func storyFiles(t *testing.T) (manifests, statuses []string) {
 	t.Helper()
 	return walkStories(t, false)
 }
 
-// fixtureFiles returns the status files and the manifest files of every
+// fixtureFiles returns the manifest files and the status files of every
 // story's fixture directory, skipping delete files.
 func fixtureFiles(t *testing.T) (manifests, statuses []string) {
 	t.Helper()
 	return walkStories(t, true)
 }
 
-// walkStories returns the status and manifest files under storiesDir that
-// are inside a fixture directory, or that are not.
+// walkStories returns the manifest and status files under storiesDir inside
+// a fixture directory where fixtures is set, and outside one where it is not.
 func walkStories(t *testing.T, fixtures bool) (manifests, statuses []string) {
 	t.Helper()
 	err := filepath.WalkDir(storiesDir, func(path string, d fs.DirEntry, err error) error {
