@@ -112,8 +112,9 @@ func TestRelease_FailOnAndCIName(t *testing.T) {
 	require.Equal(t, []string{ci.Name}, release.On.WorkflowRun.Workflows)
 }
 
-// TestE2E_Nightly pins that e2e runs two Kubernetes clusters on its schedule,
-// the number a manual run asks for, and one otherwise.
+// TestE2E_Nightly pins that e2e runs two Kubernetes clusters on its daily
+// schedule, three on its weekly one, the number a manual run asks for, and
+// one otherwise.
 func TestE2E_Nightly(t *testing.T) {
 	var e2eWorkflow struct {
 		On struct {
@@ -134,8 +135,14 @@ func TestE2E_Nightly(t *testing.T) {
 	b, err := os.ReadFile("../.github/workflows/e2e.yml")
 	require.NoError(t, err)
 	require.NoError(t, yamlv3.Unmarshal(b, &e2eWorkflow))
-	require.Len(t, e2eWorkflow.On.Schedule, 1)
-	require.Len(t, strings.Fields(e2eWorkflow.On.Schedule[0].Cron), 5, "a five-field cron")
+	require.Len(t, e2eWorkflow.On.Schedule, 2)
+	daily, weekly := e2eWorkflow.On.Schedule[0].Cron, e2eWorkflow.On.Schedule[1].Cron
+	for _, cron := range []string{daily, weekly} {
+		require.Len(t, strings.Fields(cron), 5, "a five-field cron: %q", cron)
+	}
+	require.Equal(t, []string{"*", "*", "*"}, strings.Fields(daily)[2:], "daily: %q", daily)
+	require.Equal(t, []string{"*", "*"}, strings.Fields(weekly)[2:4], "weekly: %q", weekly)
+	require.NotEqual(t, "*", strings.Fields(weekly)[4], "weekly: %q", weekly)
 	clusters := e2eWorkflow.On.WorkflowDispatch.Inputs.Clusters
 	require.Equal(t, "choice", clusters.Type)
 	require.Equal(t, []string{"1", "2", "3"}, clusters.Options)
@@ -147,7 +154,7 @@ func TestE2E_Nightly(t *testing.T) {
 			run = s
 		}
 	}
-	require.Equal(t, "${{ github.event_name == 'schedule' && '2' || inputs.clusters || '1' }}", run.Env["E2E_CLUSTERS"])
+	require.Equal(t, "${{ github.event_name == 'schedule' && (github.event.schedule == '"+weekly+"' && '3' || '2') || inputs.clusters || '1' }}", run.Env["E2E_CLUSTERS"])
 	require.Equal(t, "${{ inputs.stories }}", run.Env["E2E_STORIES"])
 	require.Equal(t, "${{ inputs.watch-namespaces }}", run.Env["E2E_WATCH_NAMESPACES"])
 }

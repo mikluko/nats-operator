@@ -64,7 +64,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `tolerations` | `[]` | Tolerations of every controller's pod. |
 | `priorityClassName` | `""` | Priority class of every controller's pod. |
 | `topologySpreadConstraints` | `[]` | Topology spread constraints of every controller's pod; a constraint's `labelSelector` is not filled in. |
-| `extraArgs` | `[]` | Flags appended to every controller's, after the chart's own; of a flag given twice, the last wins. The lease name is fixed by the chart: an entry setting `--leader-election-id` fails the render. |
+| `extraArgs` | `[]` | Flags appended to every controller's, after the chart's own; of a flag given twice, the last wins. The chart fixes leader election and the lease name: an entry setting `--leader-elect` or `--leader-election-id` fails the render. |
 | `env` | `[]` | Environment of every controller's container. |
 | `cluster.enabled` | `true` | Installs the cluster controller. |
 | `cluster.replicas` | `1` | Replicas of its Deployment. |
@@ -222,7 +222,7 @@ helm upgrade nats-operator oci://ghcr.io/mikluko/nats-operator/charts/nats-opera
   --version <version> --namespace nats-operator --reset-then-reuse-values
 ```
 
-A cluster controller release that renders a NATS server's config or StatefulSet differently, a new default exporter image among them, restarts every NATS server, one at a time behind the rollout's gate; `spec.rollout.paused` on a `NatsCluster` holds its restarts before the next server until it is unset.
+A cluster controller release that renders a NATS server's StatefulSet differently, a new default exporter image among them, or changes its config under a key nats-server does not reload, restarts every NATS server, one at a time behind the rollout's gate; every other config change reloads every server in the same reconcile. A server restarts behind the gate instead where its `NatsCluster` sets no `auth.systemCredentials` or its reload fails. `spec.rollout.paused` on a `NatsCluster` holds its restarts before the next server until it is unset.
 
 ## Uninstall
 

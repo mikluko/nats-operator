@@ -179,6 +179,31 @@ tests:
     asserts:
       - failedTemplate:
           errorMessage: 'extraArgs entry "-leader-election-id" sets the lease name, which the chart fixes as rel-cluster.nats.mikluko.io'
+  - it: refuses an extraArgs entry setting --leader-elect=false
+    set:
+      cluster.replicas: 2
+      extraArgs: [--leader-elect=false]
+    asserts:
+      - failedTemplate:
+          errorMessage: 'extraArgs entry "--leader-elect=false" sets leader election, which the chart sets from leaderElection.enabled'
+  - it: refuses a controller's extraArgs entry setting -leader-elect
+    set:
+      cluster.extraArgs: [-leader-elect]
+    asserts:
+      - failedTemplate:
+          errorMessage: 'extraArgs entry "-leader-elect" sets leader election, which the chart sets from leaderElection.enabled'
+  - it: refuses an extraArgs entry setting --leader-elect
+    set:
+      extraArgs: [--leader-elect]
+    asserts:
+      - failedTemplate:
+          errorMessage: 'extraArgs entry "--leader-elect" sets leader election, which the chart sets from leaderElection.enabled'
+  - it: refuses an extraArgs entry setting -leader-elect=0
+    set:
+      extraArgs: [-leader-elect=0]
+    asserts:
+      - failedTemplate:
+          errorMessage: 'extraArgs entry "-leader-elect=0" sets leader election, which the chart sets from leaderElection.enabled'
   - it: renders an extraArgs entry that only starts like --leader-election-id
     set:
       extraArgs: [--leader-election-idle=1]

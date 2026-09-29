@@ -34,4 +34,6 @@ Before a story runs, its namespaces are deleted and made again, one at a time. T
 
 With `E2E_WATCH_NAMESPACES=true` the chart is installed with `watchNamespaces` listing the namespaces the stories run in, plus the namespace of the auth controller's system connection where the auth controller is installed, so the controllers reconcile under their Roles alone; each story's fresh namespaces get their Roles back from a `helm upgrade` before its first step.
 
+The `e2e` workflow runs every story on two clusters nightly, and on three weekly, the one scheduled run in which story 9 does not skip.
+
 The clusters stay for the next run; `just e2e-down` deletes them. `hack/e2e` lists the `E2E_*` variables it reads, such as `E2E_STORIES`, the story numbers to run.
