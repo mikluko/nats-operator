@@ -16,6 +16,10 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	"github.com/mikluko/nats-operator/internal/sysobs"
@@ -210,4 +214,89 @@ func TestChangeRestartReasonDigest(t *testing.T) {
 	s := Server{StatefulSet: &appsv1.StatefulSet{}}
 	s.StatefulSet.Annotations = map[string]string{AnnotationSpecDigest: "new"}
 	require.Equal(t, "version 2.14.1 -> 2.15.0 is restart-only", changeRestartReason(nc, cur, &corev1.ConfigMap{}, s))
+}
+
+// TestApplyConfigRevertDuringPendingReload pins that a server whose config
+// returns to its StatefulSet's revision while its reload to another is
+// unconfirmed gets that revision written back to its ConfigMap and reloaded.
+func TestApplyConfigRevertDuringPendingReload(t *testing.T) {
+	ctx := t.Context()
+	nc := storyCluster(t)
+	nc.UID = "demo-uid"
+	a, err := Render(nc, Inputs{})
+	require.NoError(t, err)
+	retagged := nc.DeepCopy()
+	retagged.Spec.ServerTags = map[string]string{"az": "b"}
+	b, err := Render(retagged, Inputs{})
+	require.NoError(t, err)
+	require.NotEqual(t, a.Revision, b.Revision)
+
+	c := fake.NewClientBuilder().WithScheme(leafScheme(t)).Build()
+	snap := &sysobs.Snapshot{}
+	var names []string
+	for _, s := range a.Servers {
+		for _, obj := range []client.Object{s.StatefulSet.DeepCopy(), s.ConfigMap.DeepCopy()} {
+			require.NoError(t, controllerutil.SetControllerReference(nc, obj, c.Scheme()))
+			require.NoError(t, c.Create(ctx, obj))
+		}
+		snap.Servers = append(snap.Servers, sysobs.Server{Name: s.Name, ID: s.Name})
+		names = append(names, s.Name)
+	}
+	server := &fakeReloader{c: c, lag: true}
+	server.reset(nc.Namespace)
+	clock := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	r := &Reconciler{Client: c, Now: func() time.Time { return clock },
+		Reloader: func(context.Context, *clusterv1beta1.NatsCluster) (ServerReloader, error) { return server, nil }}
+	apply := func(t *testing.T, plan *Plan) configApply {
+		t.Helper()
+		sts := map[string]*appsv1.StatefulSet{}
+		for _, name := range names {
+			sts[name] = &appsv1.StatefulSet{}
+			require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: nc.Namespace, Name: name}, sts[name]))
+		}
+		got, err := r.applyConfig(ctx, nc, plan, sts, snap)
+		require.NoError(t, err)
+		return got
+	}
+	configMap := func(t *testing.T, name string) *corev1.ConfigMap {
+		t.Helper()
+		cm := &corev1.ConfigMap{}
+		require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: nc.Namespace, Name: configMapName(name)}, cm))
+		return cm
+	}
+
+	require.ElementsMatch(t, names, apply(t, b).Reloading)
+	for _, name := range names {
+		require.Equal(t, b.Revision, configMap(t, name).Annotations[AnnotationConfigRevision])
+	}
+
+	calls := len(server.reloaded())
+	got := apply(t, a)
+	require.ElementsMatch(t, names, got.Reloading)
+	require.Empty(t, got.Restart)
+	require.Len(t, server.reloaded(), calls+len(names), "the reverted revision was not reloaded")
+	for _, s := range a.Servers {
+		cm := configMap(t, s.Name)
+		require.Equal(t, a.Revision, cm.Annotations[AnnotationConfigRevision], s.Name)
+		require.Equal(t, s.ConfigMap.Data, cm.Data, s.Name)
+	}
+
+	server.lag = false
+	got = apply(t, a)
+	require.ElementsMatch(t, names, got.Reloaded)
+	require.Empty(t, got.Reloading)
+	for _, s := range a.Servers {
+		want, err := configDigest([]byte(s.ConfigMap.Data[configFile]))
+		require.NoError(t, err)
+		state, err := server.Config(ctx, s.Name)
+		require.NoError(t, err)
+		require.Equal(t, want, state.Digest, s.Name)
+		sts := &appsv1.StatefulSet{}
+		require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(s.StatefulSet), sts))
+		require.Equal(t, a.Revision, sts.Annotations[AnnotationConfigRevision], s.Name)
+	}
+
+	calls = len(server.reloaded())
+	require.Empty(t, apply(t, a))
+	require.Len(t, server.reloaded(), calls, "a confirmed revision was reloaded again")
 }

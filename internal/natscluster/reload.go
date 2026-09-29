@@ -53,9 +53,9 @@ func (a *configApply) restart(server, reason string) {
 	a.Restart[server] = reason
 }
 
-// applyConfig reloads every server not on plan's revision whose change
-// reloads, and reports the rest, and any reload not confirmed within
-// reloadWindow, as needing a restart.
+// applyConfig reloads every server whose StatefulSet or ConfigMap is not on
+// plan's revision and whose change reloads, and reports the rest, and any
+// reload not confirmed within reloadWindow, as needing a restart.
 func (r *Reconciler) applyConfig(ctx context.Context, nc *clusterv1beta1.NatsCluster, plan *Plan, sts map[string]*appsv1.StatefulSet, snap *sysobs.Snapshot) (configApply, error) {
 	var a configApply
 	var rl ServerReloader
@@ -73,20 +73,31 @@ func (r *Reconciler) applyConfig(ctx context.Context, nc *clusterv1beta1.NatsClu
 
 	for _, s := range plan.Servers {
 		cur := sts[s.Name]
-		if cur == nil || cur.Annotations[AnnotationConfigRevision] == plan.Revision {
+		if cur == nil {
 			continue
 		}
+		onTarget := cur.Annotations[AnnotationConfigRevision] == plan.Revision
 		cm := &corev1.ConfigMap{}
 		err := r.Client.Get(ctx, client.ObjectKeyFromObject(s.ConfigMap), cm)
 		if apierrors.IsNotFound(err) {
-			a.restart(s.Name, fmt.Sprintf("ConfigMap %s does not exist", s.ConfigMap.Name))
+			if !onTarget {
+				a.restart(s.Name, fmt.Sprintf("ConfigMap %s does not exist", s.ConfigMap.Name))
+			}
 			continue
 		}
 		if err != nil {
 			return a, fmt.Errorf("get configmap %s: %w", s.ConfigMap.Name, err)
 		}
+		if onTarget && cm.Annotations[AnnotationConfigRevision] == plan.Revision {
+			continue
+		}
 		if !metav1.IsControlledBy(cm, nc) {
 			return a, r.notControlled(cm)
+		}
+		if onTarget {
+			if err := r.markRevision(ctx, cur, cm.Annotations[AnnotationConfigRevision]); err != nil {
+				return a, err
+			}
 		}
 
 		if cm.Annotations[AnnotationConfigRevision] != plan.Revision {
@@ -125,7 +136,7 @@ func (r *Reconciler) applyConfig(ctx context.Context, nc *clusterv1beta1.NatsClu
 			}
 			a.restart(s.Name, reason)
 		case applied:
-			if err := r.markReloaded(ctx, cur, plan.Revision); err != nil {
+			if err := r.markRevision(ctx, cur, plan.Revision); err != nil {
 				return a, err
 			}
 			a.Reloaded = append(a.Reloaded, s.Name)
@@ -249,9 +260,9 @@ func (r *Reconciler) markRestart(ctx context.Context, cm *corev1.ConfigMap, reas
 	return nil
 }
 
-// markReloaded annotates sts with the revision its server reloaded to; its
-// pod template is left alone, so nothing restarts.
-func (r *Reconciler) markReloaded(ctx context.Context, sts *appsv1.StatefulSet, revision string) error {
+// markRevision annotates sts with the revision its server runs, or may run;
+// its pod template is left alone, so nothing restarts.
+func (r *Reconciler) markRevision(ctx context.Context, sts *appsv1.StatefulSet, revision string) error {
 	orig := sts.DeepCopy()
 	sts.Annotations = merged(sts.Annotations, map[string]string{AnnotationConfigRevision: revision})
 	if err := r.Client.Patch(ctx, sts, client.MergeFrom(orig)); err != nil {
