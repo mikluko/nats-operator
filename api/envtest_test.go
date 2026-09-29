@@ -100,6 +100,7 @@ var statusSpecs = map[string]string{
 	"NatsOperator":          "{systemAccountRef: {name: sys}}",
 	"NatsAccount":           "{operatorRef: {name: o}}",
 	"NatsUser":              "{accountRef: {kind: NatsAccount, name: a}}",
+	"NatsConnection":        "{servers: [nats://c:4222]}",
 	"NatsStream":            "{connectionRef: {name: c}}",
 	"NatsBalancer":          "{connectionRef: {name: c}}",
 	"NatsSystemBalancer":    "{connectionRef: {name: c}}",
