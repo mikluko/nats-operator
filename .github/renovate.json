@@ -50,11 +50,12 @@
     },
     {
       "customType": "regex",
-      "description": "golangci-lint, wherever golangci-lint-action runs it",
-      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/"],
-      "matchStrings": ["uses: golangci/golangci-lint-action@\\S+ # \\S+\\s+with:\\s+version: (?<currentValue>v\\S+)"],
+      "description": "golangci-lint; the PR fails ci until the Justfile's checksums are the new release's",
+      "managerFilePatterns": ["/^Justfile$/"],
+      "matchStrings": ["golangci_lint_version := \"(?<currentValue>[^\"]+)\""],
       "depNameTemplate": "golangci/golangci-lint",
-      "datasourceTemplate": "github-releases"
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
     },
     {
       "customType": "regex",

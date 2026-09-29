@@ -13,6 +13,11 @@ on:
         description: Install the chart scoped to the stories' namespaces.
         type: boolean
         default: false
+      clusters:
+        description: Kubernetes clusters; the two-cluster stories skip on 1.
+        type: choice
+        options: ["1", "2"]
+        default: "1"
   workflow_call:
     inputs:
       stories:
@@ -55,7 +60,7 @@ jobs:
           sudo test -S /run/podman/podman.sock
       - name: Stories
         env:
-          E2E_CLUSTERS: ${{ github.event_name == 'schedule' && '2' || '1' }}
+          E2E_CLUSTERS: ${{ github.event_name == 'schedule' && '2' || inputs.clusters || '1' }}
           E2E_STORIES: ${{ inputs.stories }}
           E2E_WATCH_NAMESPACES: ${{ inputs.watch-namespaces }}
         run: sudo --preserve-env=E2E_CLUSTERS,E2E_STORIES,E2E_WATCH_NAMESPACES,HOME,GOPATH,GOMODCACHE,GOCACHE env "PATH=$PATH" just e2e

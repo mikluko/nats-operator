@@ -12,7 +12,7 @@ Three Kubernetes controllers that deploy NATS clusters, own their auth plane, an
 
 ## Releases
 
-The changelog decides the version. Cutting one is renaming `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and opening a fresh `[Unreleased]` above it; `mikluko/action-changelog` validates the file on every pull request, and the release workflow, once ci passes on a push to `main`, tags and publishes the newest entry that is not yet tagged; run by hand on a ref whose newest version is untagged, it builds without publishing. Nothing else sets a version. The first release leaves its ghcr packages private, the default for a personal account's new packages, until each is made public, and the documentation site needs the repository's Pages source set to GitHub Actions before its first deploy.
+The changelog decides the version. Cutting one is renaming `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and opening a fresh `[Unreleased]` above it; `mikluko/action-changelog` validates the file on every pull request, and the release workflow, once ci passes on a push to `main`, tags and publishes the newest entry that is neither tagged nor has its chart in the registry; run by hand on a ref whose newest version is neither, it builds without publishing. Nothing else sets a version. The first release leaves its ghcr packages private, the default for a personal account's new packages, until each is made public, and the documentation site needs the repository's Pages source set to GitHub Actions before its first deploy.
 
 ## Fenced acts
 

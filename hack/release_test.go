@@ -110,15 +110,23 @@ func TestRelease_FailOnAndCIName(t *testing.T) {
 	require.Equal(t, []string{ci.Name}, release.On.WorkflowRun.Workflows)
 }
 
-// TestE2E_Nightly pins that e2e runs on a schedule on two Kubernetes clusters,
-// and otherwise on one, its stories and watch-namespaces left empty so that
-// every story runs cluster-wide.
+// TestE2E_Nightly pins that e2e runs two Kubernetes clusters on its schedule,
+// the number a manual run asks for, and one otherwise.
 func TestE2E_Nightly(t *testing.T) {
 	var e2eWorkflow struct {
 		On struct {
 			Schedule []struct {
 				Cron string `yaml:"cron"`
 			} `yaml:"schedule"`
+			WorkflowDispatch struct {
+				Inputs struct {
+					Clusters struct {
+						Type    string   `yaml:"type"`
+						Options []string `yaml:"options"`
+						Default string   `yaml:"default"`
+					} `yaml:"clusters"`
+				} `yaml:"inputs"`
+			} `yaml:"workflow_dispatch"`
 		} `yaml:"on"`
 	}
 	b, err := os.ReadFile("../.github/workflows/e2e.yml")
@@ -126,6 +134,10 @@ func TestE2E_Nightly(t *testing.T) {
 	require.NoError(t, yamlv3.Unmarshal(b, &e2eWorkflow))
 	require.Len(t, e2eWorkflow.On.Schedule, 1)
 	require.Len(t, strings.Fields(e2eWorkflow.On.Schedule[0].Cron), 5, "a five-field cron")
+	clusters := e2eWorkflow.On.WorkflowDispatch.Inputs.Clusters
+	require.Equal(t, "choice", clusters.Type)
+	require.Equal(t, []string{"1", "2"}, clusters.Options)
+	require.Equal(t, "1", clusters.Default)
 
 	var run step
 	for _, s := range readWorkflow(t, "e2e.yml").Jobs["stories"].Steps {
@@ -133,7 +145,7 @@ func TestE2E_Nightly(t *testing.T) {
 			run = s
 		}
 	}
-	require.Equal(t, "${{ github.event_name == 'schedule' && '2' || '1' }}", run.Env["E2E_CLUSTERS"])
+	require.Equal(t, "${{ github.event_name == 'schedule' && '2' || inputs.clusters || '1' }}", run.Env["E2E_CLUSTERS"])
 	require.Equal(t, "${{ inputs.stories }}", run.Env["E2E_STORIES"])
 	require.Equal(t, "${{ inputs.watch-namespaces }}", run.Env["E2E_WATCH_NAMESPACES"])
 }
@@ -407,6 +419,50 @@ func TestRelease_AttestsBeforeRelease(t *testing.T) {
 	}
 }
 
+// TestRelease_DueUntilChartPushed pins that a version is due only while it is
+// untagged and its chart is absent from the registry, and that every
+// publishing job waits on that.
+func TestRelease_DueUntilChartPushed(t *testing.T) {
+	wf := readWorkflow(t, "release.yml")
+	plan := wf.Jobs["plan"]
+	require.Equal(t, "${{ steps.due.outputs.due }}", plan.Outputs["due"])
+	require.Equal(t, "${{ steps.due.outputs.reason }}", plan.Outputs["reason"])
+	require.Equal(t, "read", plan.Permissions["packages"])
+
+	due := stepByID(t, plan.Steps, "due")
+	require.Empty(t, due.If)
+	require.Equal(t, "${{ steps.changelog.outputs.version }}", due.Env["VERSION"])
+	require.Equal(t, "${{ steps.changelog.outputs['already-tagged'] }}", due.Env["TAGGED"])
+	require.Contains(t, due.Run, "${CHART_REPOSITORY#oci://ghcr.io/}/nats-operator")
+	require.Contains(t, due.Run, `"https://ghcr.io/v2/$repository/manifests/$VERSION"`)
+	require.Equal(t, "oci://ghcr.io/mikluko/nats-operator/charts", wf.Env["CHART_REPOSITORY"])
+
+	for _, job := range []string{"images", "chart"} {
+		require.Contains(t, wf.Jobs[job].Needs, "plan", job)
+		require.Equal(t, "needs.plan.outputs.due == 'true'", wf.Jobs[job].If, job)
+	}
+}
+
+// TestCI_LintsWithJustfilePin pins that ci lints through the Justfile's
+// golangci-lint, the one pin of its version.
+func TestCI_LintsWithJustfilePin(t *testing.T) {
+	var lints int
+	files, err := filepath.Glob("../.github/workflows/*.yml")
+	require.NoError(t, err)
+	for _, f := range files {
+		for job, j := range readWorkflow(t, filepath.Base(f)).Jobs {
+			for _, s := range j.Steps {
+				require.False(t, strings.HasPrefix(s.Uses, "golangci/golangci-lint-action@"), "%s job %s", f, job)
+				require.NotContains(t, s.Run, "golangci-lint ", "%s job %s", f, job)
+				if s.Run == "just lint" {
+					lints++
+				}
+			}
+		}
+	}
+	require.Equal(t, 1, lints)
+}
+
 // renovateConfig is the part of .github/renovate.json its regex managers
 // are read from.
 type renovateConfig struct {
@@ -468,7 +524,6 @@ func TestRenovate_WatchesToolPins(t *testing.T) {
 	inputs := []struct{ prefix, input, dep string }{
 		{"azure/setup-helm@", "version", "helm/helm"},
 		{"ko-build/setup-ko@", "version", "ko-build/ko"},
-		{"golangci/golangci-lint-action@", "version", "golangci/golangci-lint"},
 		{"extractions/setup-just@", "just-version", "casey/just"},
 		{"zizmorcore/zizmor-action@", "version", "zizmorcore/zizmor"},
 		{"helm/chart-testing-action@", "version", "helm/chart-testing"},
@@ -499,6 +554,7 @@ func TestRenovate_WatchesToolPins(t *testing.T) {
 		"helm-unittest/helm-unittest",
 		"gohugoio/hugo",
 		"lycheeverse/lychee",
+		"golangci/golangci-lint",
 		"cgr.dev/chainguard/static",
 		"natsio/prometheus-nats-exporter",
 		"golang.org/x/vuln",
