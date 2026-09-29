@@ -49,6 +49,9 @@ type Server struct {
 // Start starts a server from the config file conf, with each of configure
 // applied to the parsed options, and returns once it has bound every
 // listener conf names. The server shuts down when t ends.
+// A server with leaf remotes gets its random cluster and gateway ports
+// chosen here: nats-server 2.15.0 solicits the remotes while its accept
+// loops still write the resolved ports they read, a data race.
 func Start(t testing.TB, conf string, configure ...func(*server.Options)) *Server {
 	t.Helper()
 	o, err := server.ProcessConfigFile(conf)
@@ -56,6 +59,13 @@ func Start(t testing.TB, conf string, configure ...func(*server.Options)) *Serve
 	o.NoLog, o.NoSigs = true, true
 	for _, f := range configure {
 		f(o)
+	}
+	if len(o.LeafNode.Remotes) > 0 {
+		for _, port := range []*int{&o.Cluster.Port, &o.Gateway.Port} {
+			if *port == server.RANDOM_PORT {
+				*port = freePort(t)
+			}
+		}
 	}
 	monitored := o.HTTPPort != 0
 	s, err := server.NewServer(o)
@@ -67,6 +77,17 @@ func Start(t testing.TB, conf string, configure ...func(*server.Options)) *Serve
 		require.Eventually(t, func() bool { return s.MonitorAddr() != nil }, 15*time.Second, 10*time.Millisecond, "%s is not monitored", conf)
 	}
 	return &Server{Server: s, Conf: conf, configure: configure}
+}
+
+// freePort returns a loopback port the kernel handed out and that nothing
+// holds; another bind may take it before the caller does.
+func freePort(t testing.TB) int {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	port := l.Addr().(*net.TCPAddr).Port
+	require.NoError(t, l.Close())
+	return port
 }
 
 // Restart starts a new server from s's config file with s's option
