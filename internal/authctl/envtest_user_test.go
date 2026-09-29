@@ -156,7 +156,7 @@ func (e *env) testUserCreds(t *testing.T) {
 // testUsersUnderGrant pins that story 4's users in the payments namespace
 // attach to the payments account in nats-system through a grant, that a user
 // no grant covers is refused, and that deleting the grant revokes the users
-// it admitted until it is restored.
+// it admitted and deletes their creds Secrets until it is restored.
 func (e *env) testUsersUnderGrant(t *testing.T) {
 	for _, f := range []string{"04-team-self-service/01-platform.yaml", "04-team-self-service/01-team.yaml"} {
 		raw, err := os.ReadFile(filepath.Join(storiesDir, f))
@@ -222,18 +222,22 @@ spec:
 	require.NoError(t, e.c.Get(t.Context(), grantKey, &g))
 	require.NoError(t, e.c.Delete(t.Context(), &g))
 	pub := api.Status.PublicKey
+	revoked, _, _ := e.creds(t, key("payments", "payments-api-creds"))
 	e.eventually(t, func(ct *assert.CollectT) {
 		e.get(ct, key("payments", "payments-api"), api)
+		notReady(ct, api.Status.Conditions, grant.ReasonReferenceNotPermitted)
 		cond := meta.FindStatusCondition(api.Status.Conditions, grant.ConditionReferencesResolved)
 		if assert.NotNil(ct, cond) {
 			assert.Equal(ct, grant.ReasonNoGrant, cond.Reason)
 		}
+		assert.True(ct, apierrors.IsNotFound(e.c.Get(e.ctx, key("payments", "payments-api-creds"), &corev1.Secret{})),
+			"the creds Secret of a user whose grant is gone is deleted")
 		e.get(ct, key("nats-system", "payments"), &payments)
-		token, _, _ := e.creds(ct, key("payments", "payments-api-creds"))
+		assert.True(ct, e.d.pushed(demo, payments.Status.JWT))
 		ac, err := jwt.DecodeAccountClaims(payments.Status.JWT)
-		uc, uerr := jwt.DecodeUserClaims(token)
+		uc, uerr := jwt.DecodeUserClaims(revoked)
 		if assert.NoError(ct, err) && assert.NoError(ct, uerr) {
-			assert.True(ct, ac.IsClaimRevoked(uc), "the account JWT revokes a user whose grant is gone")
+			assert.True(ct, ac.IsClaimRevoked(uc), "the account JWT pushed revokes a user whose grant is gone")
 		}
 	})
 
@@ -243,12 +247,16 @@ spec:
 		e.get(ct, key("payments", "payments-api"), api)
 		ready(ct, api.Status.Conditions, api.Generation, authctl.ReasonSigned)
 		e.get(ct, key("nats-system", "payments"), &payments)
+		assert.True(ct, e.d.pushed(demo, payments.Status.JWT))
 		token, _, _ := e.creds(ct, key("payments", "payments-api-creds"))
 		ac, err := jwt.DecodeAccountClaims(payments.Status.JWT)
 		uc, uerr := jwt.DecodeUserClaims(token)
-		if assert.NoError(ct, err) && assert.NoError(ct, uerr) {
-			assert.Equal(ct, pub, uc.Subject, "the key is kept")
-			assert.False(ct, ac.IsClaimRevoked(uc), "re-admitted, the user is re-signed past its revocation")
+		old, oerr := jwt.DecodeUserClaims(revoked)
+		if assert.NoError(ct, err) && assert.NoError(ct, uerr) && assert.NoError(ct, oerr) {
+			assert.NotEqual(ct, pub, uc.Subject, "a fresh creds Secret carries a fresh key")
+			assert.Equal(ct, uc.Subject, api.Status.PublicKey)
+			assert.False(ct, ac.IsClaimRevoked(uc), "re-admitted, the user is signed again")
+			assert.True(ct, ac.IsClaimRevoked(old), "the key the grant admitted stays revoked")
 		}
 	})
 }

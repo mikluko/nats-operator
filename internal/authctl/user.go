@@ -83,7 +83,8 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req reconcile.Request) (
 }
 
 // reconcile signs u. A JWT signed within the second its key was revoked is
-// revoked with it, and is re-signed a second later.
+// revoked with it, and is re-signed a second later. A user no grant admits
+// to its account loses the creds Secret it owns.
 func (r *UserReconciler) reconcile(ctx context.Context, u *authv1beta1.NatsUser) (reconcile.Result, error) {
 	st := &u.Status
 	notReady := func(reason, msg string) {
@@ -95,6 +96,9 @@ func (r *UserReconciler) reconcile(ctx context.Context, u *authv1beta1.NatsUser)
 	}
 	if !ok {
 		st.JWT = ""
+		if meta.IsStatusConditionFalse(st.Conditions, grant.ConditionReferencesResolved) {
+			return reconcile.Result{}, r.deleteCreds(ctx, u)
+		}
 		return reconcile.Result{}, nil
 	}
 	keys, err := resolveKeys(ctx, r.Client, acc.keys, false)
@@ -471,6 +475,7 @@ func (r *UserReconciler) drain(ctx context.Context, u *authv1beta1.NatsUser) (bo
 	return true, reconcile.Result{}, nil
 }
 
+// deleteCreds deletes u's creds Secret where u owns it.
 func (r *UserReconciler) deleteCreds(ctx context.Context, u *authv1beta1.NatsUser) error {
 	if u.Spec.PublicKey != "" {
 		return nil
