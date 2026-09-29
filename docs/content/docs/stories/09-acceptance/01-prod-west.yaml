@@ -41,7 +41,7 @@ spec:
     tls:
       certManager:
         issuerRef:
-          kind: ClusterIssuer
+          kind: Issuer
           name: nats-gateway-ca
     service:
       type: LoadBalancer

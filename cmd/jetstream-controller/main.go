@@ -43,9 +43,8 @@ var schemes = []func(*runtime.Scheme) error{natsv1beta1.AddToScheme, jetstreamv1
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections,verbs=get;list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections/status,verbs=patch
 
-// setup registers the JetStream controller's instruments and adds its
-// connection pool and reconcilers to mgr, comparing each JetStream resource to
-// its server object every resync.
+// setup adds the JetStream controller to mgr, comparing each JetStream
+// resource to its server object every resync.
 func setup(ctx context.Context, mgr ctrl.Manager, resync time.Duration) error {
 	metrics, err := telemetry.RegisterJetStream(otel.Meter(telemetry.JetStreamController), mgr.GetClient())
 	if err != nil {

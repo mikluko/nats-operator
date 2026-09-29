@@ -1,9 +1,12 @@
 package natscluster
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -18,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/yaml"
@@ -165,6 +169,40 @@ func TestGatewayHosts(t *testing.T) {
 			require.Equal(t, tt.want, gatewayHosts(nc))
 		})
 	}
+}
+
+// TestStories_GatewayIssuer pins that no story issues gateway certificates
+// from a ClusterIssuer, which issues to whoever may write a NatsCluster.
+func TestStories_GatewayIssuer(t *testing.T) {
+	files, err := filepath.Glob("../../docs/content/docs/stories/*/*.yaml")
+	require.NoError(t, err)
+	var seen int
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		require.NoError(t, err)
+		dec := utilyaml.NewYAMLOrJSONDecoder(bytes.NewReader(b), 4096)
+		for {
+			var doc struct {
+				Kind     string            `json:"kind"`
+				Metadata metav1.ObjectMeta `json:"metadata"`
+				Spec     struct {
+					Gateway *clusterv1beta1.Gateway `json:"gateway"`
+				} `json:"spec"`
+			}
+			err := dec.Decode(&doc)
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			require.NoError(t, err, f)
+			g := doc.Spec.Gateway
+			if doc.Kind != "NatsCluster" || g == nil || g.TLS == nil || g.TLS.CertManager == nil {
+				continue
+			}
+			seen++
+			assert.Contains(t, []string{"", "Issuer"}, g.TLS.CertManager.IssuerRef.Kind, "%s: NatsCluster %s", f, doc.Metadata.Name)
+		}
+	}
+	require.Equal(t, 8, seen, "gateway certificates from cert-manager across stories 6, 9, 10 and 11")
 }
 
 func TestGatewayCertificate(t *testing.T) {
