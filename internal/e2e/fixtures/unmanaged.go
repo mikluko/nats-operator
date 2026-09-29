@@ -90,15 +90,15 @@ func unmanaged(dir string) error {
 		return err
 	}
 	f.Creds = string(creds)
-	if f.CA, f.Cert, f.Key, err = certificates(); err != nil {
+	if f.CA, f.Cert, f.Key, err = certificates("messaging-nats-ca", []string{"nats.messaging.svc", "nats.messaging.svc.cluster.local"}); err != nil {
 		return err
 	}
 	return writeTemplate(dir, "00-messaging.yaml", unmanagedTemplate, f)
 }
 
-// certificates returns a CA and a server certificate and key it signs, for
-// the client Service's names, valid for a hundred years.
-func certificates() (ca, cert, key string, err error) {
+// certificates returns a CA named caName and a server certificate and key it
+// signs for dnsNames, the first its common name, valid for a hundred years.
+func certificates(caName string, dnsNames []string) (ca, cert, key string, err error) {
 	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return "", "", "", err
@@ -106,7 +106,7 @@ func certificates() (ca, cert, key string, err error) {
 	now := time.Now()
 	caTmpl := &x509.Certificate{
 		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "messaging-nats-ca"},
+		Subject:               pkix.Name{CommonName: caName},
 		NotBefore:             now.Add(-time.Hour),
 		NotAfter:              now.AddDate(100, 0, 0),
 		IsCA:                  true,
@@ -123,8 +123,8 @@ func certificates() (ca, cert, key string, err error) {
 	}
 	srvTmpl := &x509.Certificate{
 		SerialNumber: big.NewInt(2),
-		Subject:      pkix.Name{CommonName: "nats.messaging.svc"},
-		DNSNames:     []string{"nats.messaging.svc", "nats.messaging.svc.cluster.local"},
+		Subject:      pkix.Name{CommonName: dnsNames[0]},
+		DNSNames:     dnsNames,
 		NotBefore:    now.Add(-time.Hour),
 		NotAfter:     now.AddDate(100, 0, 0),
 		KeyUsage:     x509.KeyUsageDigitalSignature,

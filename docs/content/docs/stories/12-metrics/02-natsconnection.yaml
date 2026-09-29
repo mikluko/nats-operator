@@ -1,0 +1,7 @@
+apiVersion: nats.mikluko.io/v1beta1
+kind: NatsConnection
+metadata:
+  name: demo
+  namespace: nats-system
+spec:
+  servers: ["nats://demo.nats-system.svc:4222"]

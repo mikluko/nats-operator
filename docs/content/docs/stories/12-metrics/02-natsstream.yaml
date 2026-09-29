@@ -1,0 +1,12 @@
+apiVersion: jetstream.nats.mikluko.io/v1beta1
+kind: NatsStream
+metadata:
+  name: events
+  namespace: nats-system
+spec:
+  connectionRef:
+    name: demo
+  name: EVENTS
+  subjects: ["events.>"]
+  storage: File
+  replicas: 3

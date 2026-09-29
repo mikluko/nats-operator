@@ -26,14 +26,17 @@ const (
 	report       = 15 * time.Second
 )
 
-// generateFixtures writes the stories' generated fixtures afresh under
-// work/fixtures, and returns that directory.
+// generateFixtures writes the stories' generated fixtures, and the metrics
+// fixtures, afresh under work/fixtures, and returns that directory.
 func generateFixtures(work string) (string, error) {
 	dir := filepath.Join(work, "fixtures")
 	if err := os.RemoveAll(dir); err != nil {
 		return "", err
 	}
-	return dir, fixtures.Generate(dir)
+	if err := fixtures.Generate(dir); err != nil {
+		return "", err
+	}
+	return dir, generateMetricsFixtures(dir)
 }
 
 // selectBundles returns the story bundles under root, with the fixtures
@@ -62,17 +65,17 @@ func selectBundles(root, generated, only string) ([]*e2e.Bundle, error) {
 }
 
 // runStories runs bundles through clients, each step waiting wait unless
-// its story sets its own, fresh running as Runner.Fresh, and prints the
-// result table.
-func runStories(ctx context.Context, clients []client.Client, bundles []*e2e.Bundle, wait time.Duration, fresh func(context.Context, int) error) error {
+// its story sets its own, each story under the chart ci installs for it and
+// checked by it once passed, and prints the result table.
+func runStories(ctx context.Context, clients []client.Client, bundles []*e2e.Bundle, wait time.Duration, ci *chartInstall) error {
 	r := &e2e.Runner{
 		Clients: clients, Timeout: wait, Teardown: teardown, Release: releaseAfter, Interval: 2 * time.Second, Report: report,
-		Namespaces: []string{releaseNS}, Log: os.Stderr, Publish: e2e.PublishHosts, Fresh: fresh,
+		Namespaces: []string{releaseNS}, Log: os.Stderr, Publish: e2e.PublishHosts,
 	}
 	var results []e2e.Result
 	failed := false
 	for _, b := range bundles {
-		res := r.Run(ctx, b)
+		res := runStory(ctx, r, clients[0], b, ci)
 		failed = failed || res.Outcome == e2e.Fail
 		results = append(results, res)
 	}
@@ -84,6 +87,26 @@ func runStories(ctx context.Context, clients []client.Client, bundles []*e2e.Bun
 		return errors.New("stories failed")
 	}
 	return nil
+}
+
+// runStory runs b through r under the chart ci installs for it, and fails
+// it where ci's check after it fails; home reaches the home cluster.
+func runStory(ctx context.Context, r *e2e.Runner, home client.Client, b *e2e.Bundle, ci *chartInstall) e2e.Result {
+	start := time.Now()
+	fresh, err := ci.before(ctx, b)
+	if err != nil {
+		return e2e.Result{Story: b.Name, Outcome: e2e.Fail, Elapsed: time.Since(start).Round(time.Second), Detail: fmt.Sprintf("chart: %v", err)}
+	}
+	r.Fresh = fresh
+	res := r.Run(ctx, b)
+	if res.Outcome != e2e.Pass {
+		return res
+	}
+	if err := ci.after(ctx, home, b); err != nil {
+		res.Outcome, res.Detail = e2e.Fail, err.Error()
+	}
+	res.Elapsed = time.Since(start).Round(time.Second)
+	return res
 }
 
 func parseNumbers(s string) (map[int]bool, error) {

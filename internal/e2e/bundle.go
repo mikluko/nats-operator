@@ -48,7 +48,11 @@ type Bundle struct {
 	// Waits set, by step number, how long a step waits for its
 	// expectations in place of the run's default.
 	Waits map[int]StepWait
-	Steps []Step
+	// ScrapeMetrics has the harness run the story under the chart's metrics
+	// certificate and egress policy, and scrape every controller once its
+	// steps pass.
+	ScrapeMetrics bool
+	Steps         []Step
 
 	files []bundleFile
 }
@@ -512,8 +516,8 @@ func (p Part) Target(step int, e Expectation) (*unstructured.Unstructured, error
 	return target(p.Steps, step, e)
 }
 
-// readFrontMatter sets b's After, Skip, Clusters, Substitutions and Waits
-// from the YAML front matter opening path, if path exists and has any.
+// readFrontMatter sets b's After, Skip, Clusters, Substitutions, Waits and
+// ScrapeMetrics from the YAML front matter opening path, if path exists and has any.
 func readFrontMatter(path string, b *Bundle) error {
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -538,6 +542,7 @@ func readFrontMatter(path string, b *Bundle) error {
 						Clusters      []Placement    `json:"clusters"`
 						Substitutions []Substitution `json:"substitutions"`
 						Waits         []StepWait     `json:"waits"`
+						ScrapeMetrics bool           `json:"scrapeMetrics"`
 					} `json:"e2e"`
 				} `json:"params"`
 			}
@@ -545,7 +550,7 @@ func readFrontMatter(path string, b *Bundle) error {
 				return fmt.Errorf("%s: front matter: %w", path, err)
 			}
 			e := fm.Params.E2E
-			b.After, b.Skip, b.Clusters, b.Substitutions = e.After, e.Skip, e.Clusters, e.Substitutions
+			b.After, b.Skip, b.Clusters, b.Substitutions, b.ScrapeMetrics = e.After, e.Skip, e.Clusters, e.Substitutions, e.ScrapeMetrics
 			for _, w := range e.Waits {
 				if b.Waits == nil {
 					b.Waits = map[int]StepWait{}

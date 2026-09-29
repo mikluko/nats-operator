@@ -1,0 +1,7 @@
+status:
+  replicas: 3
+  readyReplicas: 3
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: AllServersReady

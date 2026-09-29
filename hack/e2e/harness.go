@@ -16,7 +16,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -117,15 +119,150 @@ func harness(ctx context.Context, cfg config, root, imagesFile string, down bool
 			return err
 		}
 	}
-	var fresh func(context.Context, int) error
-	if len(chart.watch) > 0 {
-		fresh = func(ctx context.Context, i int) error {
-			logf("chart %s into %s/%s again, for its Roles", release, names[i], releaseNS)
-			return upgradeChart(ctx, root, kubeconfig, names[i], enabled(i), images, chart)
+	ci := &chartInstall{
+		root: root, work: work, kubeconfig: kubeconfig, names: names, enabled: enabled, images: images,
+		base: chart, installed: slices.Repeat([]chartValues{chart}, len(names)),
+	}
+	if slices.ContainsFunc(stories, func(b *e2e.Bundle) bool { return b.ScrapeMetrics }) {
+		if ci.home, err = restConfig(kc, names[0]); err != nil {
+			return err
+		}
+		if err := ci.prepareMetrics(ctx, clients[0], generated); err != nil {
+			return fmt.Errorf("%s: %w", names[0], err)
 		}
 	}
 	logf("stories %s", orAll(cfg.stories))
-	return runStories(ctx, clients, stories, cfg.wait, fresh)
+	return runStories(ctx, clients, stories, cfg.wait, ci)
+}
+
+// chartInstall is the chart as installed in each Kubernetes cluster of the
+// run, and what installing it again takes.
+type chartInstall struct {
+	root, work, kubeconfig string
+	names                  []string
+	enabled                func(int) []string
+	images                 []image
+	// base is what every story runs under that asks for nothing more.
+	base chartValues
+	// installed is, by cluster, what the chart was last installed with.
+	installed []chartValues
+	// home reaches the home cluster; set where a story scrapes metrics.
+	home *rest.Config
+	// api and otherCA are what a story scraping metrics runs under and
+	// fails to verify with.
+	api     apiServer
+	otherCA []byte
+}
+
+// prepareMetrics applies the generated metrics Secret through c, reads the
+// API server's addresses, and keeps the CA that did not sign it.
+func (ci *chartInstall) prepareMetrics(ctx context.Context, c client.Client, generated string) error {
+	raw, err := os.ReadFile(filepath.Join(generated, metricsFixture))
+	if err != nil {
+		return err
+	}
+	objs, err := e2e.DecodeObjects(raw)
+	if err != nil {
+		return err
+	}
+	logf("Secret %s/%s", releaseNS, metricsSecret)
+	if err := e2e.ApplyObjects(ctx, c, objs); err != nil {
+		return err
+	}
+	if ci.api, err = findAPIServer(ctx, c); err != nil {
+		return err
+	}
+	raw, err = os.ReadFile(filepath.Join(generated, otherMetricsFixture))
+	if err != nil {
+		return err
+	}
+	if objs, err = e2e.DecodeObjects(raw); err != nil {
+		return err
+	}
+	ca, _, err := unstructured.NestedString(objs[0].Object, "stringData", "ca.crt")
+	if err != nil || ca == "" {
+		return fmt.Errorf("%s holds no ca.crt", otherMetricsFixture)
+	}
+	ci.otherCA = []byte(ca)
+	return nil
+}
+
+// valuesFor returns what b runs under in cluster i: base, with, in the home
+// cluster of a story that scrapes metrics, metricsValues for its
+// namespaces written beside the run's other files.
+func (ci *chartInstall) valuesFor(b *e2e.Bundle, i int) (chartValues, error) {
+	vals := ci.base
+	if i > 0 || !b.ScrapeMetrics {
+		return vals, nil
+	}
+	vals.values = filepath.Join(ci.work, b.Name+"-values.yaml")
+	return vals, writeValues(vals.values, metricsValues(ci.api, b.Namespaces()))
+}
+
+// upgrade installs the chart in cluster i with vals.
+func (ci *chartInstall) upgrade(ctx context.Context, i int, vals chartValues) error {
+	if err := upgradeChart(ctx, ci.root, ci.kubeconfig, ci.names[i], ci.enabled(i), ci.images, vals); err != nil {
+		return err
+	}
+	ci.installed[i] = vals
+	return nil
+}
+
+// before readies every cluster for b: where the chart watches the stories'
+// namespaces, it returns the Runner.Fresh that installs it again, for their
+// Roles, with what b runs under; otherwise it installs it again now where
+// that differs from what it was last installed with.
+func (ci *chartInstall) before(ctx context.Context, b *e2e.Bundle) (func(context.Context, int) error, error) {
+	if len(ci.base.watch) > 0 {
+		return func(ctx context.Context, i int) error {
+			vals, err := ci.valuesFor(b, i)
+			if err != nil {
+				return err
+			}
+			logf("chart %s into %s/%s again, for its Roles", release, ci.names[i], releaseNS)
+			return ci.upgrade(ctx, i, vals)
+		}, nil
+	}
+	for i := range ci.names {
+		vals, err := ci.valuesFor(b, i)
+		if err != nil {
+			return nil, err
+		}
+		if vals.values == ci.installed[i].values {
+			continue
+		}
+		logf("chart %s into %s/%s again, for %s: %s", release, ci.names[i], releaseNS, b.Name, orNone(vals.values))
+		if err := ci.upgrade(ctx, i, vals); err != nil {
+			return nil, err
+		}
+	}
+	return nil, nil
+}
+
+// after scrapes the home cluster's metrics where b asks for it.
+func (ci *chartInstall) after(ctx context.Context, c client.Client, b *e2e.Bundle) error {
+	if !b.ScrapeMetrics {
+		return nil
+	}
+	logf("%s: scrape metrics", b.Name)
+	args := chartSets(ci.enabled(0), ci.images, ci.installed[0])
+	return scrapeMetrics(ctx, ci.home, c, ci.root, args, ci.otherCA)
+}
+
+func orNone(s string) string {
+	if s == "" {
+		return "default values"
+	}
+	return s
+}
+
+// restConfig returns the config reaching context name of kc.
+func restConfig(kc *clientcmdapi.Config, name string) (*rest.Config, error) {
+	rc, err := clientcmd.NewDefaultClientConfig(*kc, &clientcmd.ConfigOverrides{CurrentContext: name}).ClientConfig()
+	if err != nil {
+		return nil, fmt.Errorf("context %s: %w", name, err)
+	}
+	return rc, nil
 }
 
 // watchedNamespaces are the namespaces the chart watches under
@@ -165,9 +302,9 @@ func orAll(s string) string {
 func newClients(kc *clientcmdapi.Config, names []string) ([]client.Client, error) {
 	clients := make([]client.Client, len(names))
 	for i, n := range names {
-		rc, err := clientcmd.NewDefaultClientConfig(*kc, &clientcmd.ConfigOverrides{CurrentContext: n}).ClientConfig()
+		rc, err := restConfig(kc, n)
 		if err != nil {
-			return nil, fmt.Errorf("context %s: %w", n, err)
+			return nil, err
 		}
 		if clients[i], err = client.New(rc, client.Options{Scheme: scheme.Scheme}); err != nil {
 			return nil, fmt.Errorf("context %s: %w", n, err)
@@ -259,9 +396,12 @@ type chartValues struct {
 	// allowGatewayWithoutTLS sets cluster.allowGatewayWithoutTLS, for a
 	// story whose substitutions remove a gateway's tls.
 	allowGatewayWithoutTLS bool
+	// values is a values file, setting no value the fields above set; ""
+	// is none.
+	values string
 }
 
-// chartSets are the --set flags that switch on the controllers in enabled,
+// chartSets are the helm flags that switch on the controllers in enabled,
 // and no other, deploy each controller from its image without pulling, and
 // set vals.
 func chartSets(enabled []string, images []image, vals chartValues) []string {
@@ -281,6 +421,9 @@ func chartSets(enabled []string, images []image, vals chartValues) []string {
 	}
 	if vals.allowGatewayWithoutTLS {
 		sets = append(sets, "--set", "cluster.allowGatewayWithoutTLS=true")
+	}
+	if vals.values != "" {
+		sets = append(sets, "--values", vals.values)
 	}
 	return sets
 }

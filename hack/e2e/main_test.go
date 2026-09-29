@@ -83,6 +83,7 @@ func TestChartSets(t *testing.T) {
 	}, chartSets([]string{"cluster"}, images, chartValues{}))
 	require.Equal(t, []string{"--set", "watchNamespaces={a,nats-system}", "--set", "cluster.allowGatewayWithoutTLS=true"},
 		chartSets(nil, nil, chartValues{watch: []string{"a", "nats-system"}, allowGatewayWithoutTLS: true})[8:])
+	require.Equal(t, []string{"--values", "v.yaml"}, chartSets(nil, nil, chartValues{values: "v.yaml"})[8:])
 }
 
 // TestStoriesDropGatewayTLS pins the stories whose substitutions, or those

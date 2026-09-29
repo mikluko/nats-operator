@@ -25,11 +25,12 @@ func generated(t *testing.T) string {
 func TestLoadBundles_Stories(t *testing.T) {
 	bundles, err := LoadBundles(storiesDir, generated(t))
 	require.NoError(t, err)
-	require.Len(t, bundles, 11)
+	require.Len(t, bundles, 12)
 	skipped := map[string]string{}
 	for i, b := range bundles {
 		require.Equal(t, i+1, b.Number, b.Name)
 		require.NotEmpty(t, b.Steps, b.Name)
+		require.Equal(t, b.Name == "12-metrics", b.ScrapeMetrics, b.Name)
 		for _, s := range b.Steps {
 			for _, e := range s.Expectations {
 				_, err := b.Target(s.Number, e)
