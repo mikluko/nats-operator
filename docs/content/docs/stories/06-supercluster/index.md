@@ -49,7 +49,6 @@ spec:
     secretName: nats-gateway-ca   # in cert-manager's own namespace
 ```
 
-
 ## The home cluster
 
 There is no supercluster resource: each NatsCluster lists the gateways it joins, the same list in every member. The external Service is rendered from a template.

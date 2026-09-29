@@ -64,7 +64,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `tolerations` | `[]` | Tolerations of every controller's pod. |
 | `priorityClassName` | `""` | Priority class of every controller's pod. |
 | `topologySpreadConstraints` | `[]` | Topology spread constraints of every controller's pod; a constraint's `labelSelector` is not filled in. |
-| `extraArgs` | `[]` | Flags appended to every controller's, after the chart's own; of a flag given twice, the last wins. |
+| `extraArgs` | `[]` | Flags appended to every controller's, after the chart's own; of a flag given twice, the last wins. The lease name is fixed by the chart: an entry setting `--leader-election-id` fails the render. |
 | `env` | `[]` | Environment of every controller's container. |
 | `cluster.enabled` | `true` | Installs the cluster controller. |
 | `cluster.replicas` | `1` | Replicas of its Deployment. |
@@ -156,7 +156,7 @@ Port `8080` serves controller-runtime's metrics only. The controllers' own instr
 
 ## RBAC
 
-Each controller's ClusterRole is named `<release>-<controller>`, for example `nats-operator-cluster-controller`, and is bound to the ServiceAccount of the same name in the release namespace. No controller can write another controller's API group. While `leaderElection.enabled` is on, each also gets the Role `<release>-<controller>-leader-election` in the release namespace: `get`, `list`, `watch`, `create`, `update`, `patch` and `delete` on `coordination.k8s.io` `leases`, and `create` and `patch` on `""` `events`.
+Each controller's ClusterRole is named `<release>-<controller>`, for example `nats-operator-cluster-controller`, and is bound to the ServiceAccount of the same name in the release namespace. No controller can write another controller's API group. While `leaderElection.enabled` is on, each also gets the Role `<release>-<controller>-leader-election` in the release namespace: `create` on `coordination.k8s.io` `leases`, `get`, `update` and `patch` on its own lease `<release>-<API group>`, and `create` and `patch` on `""` `events`.
 
 While `watchNamespaces` is set, each controller's ClusterRole holds only `create` on `authentication.k8s.io` `tokenreviews` and `authorization.k8s.io` `subjectaccessreviews`, which its metrics endpoint needs, and every other rule in the tables below goes to a Role `<release>-<controller>`, with a RoleBinding of the same name, in each namespace `watchNamespaces` names.
 
@@ -221,6 +221,8 @@ kubectl apply --server-side --force-conflicts -f nats-operator/crds
 helm upgrade nats-operator oci://ghcr.io/mikluko/nats-operator/charts/nats-operator \
   --version <version> --namespace nats-operator --reset-then-reuse-values
 ```
+
+A cluster controller release that renders a NATS server's config or StatefulSet differently, a new default exporter image among them, restarts every NATS server, one at a time behind the rollout's gate; `spec.rollout.paused` on a `NatsCluster` holds its restarts before the next server until it is unset.
 
 ## Uninstall
 

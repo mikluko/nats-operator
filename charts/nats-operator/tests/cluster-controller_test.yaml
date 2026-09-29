@@ -167,6 +167,26 @@ tests:
     asserts:
       - failedTemplate:
           errorMessage: "cluster.replicas is 2: more than one replica needs leaderElection.enabled"
+  - it: refuses an extraArgs entry setting --leader-election-id
+    set:
+      extraArgs: [--leader-election-id=other]
+    asserts:
+      - failedTemplate:
+          errorMessage: 'extraArgs entry "--leader-election-id=other" sets the lease name, which the chart fixes as rel-cluster.nats.mikluko.io'
+  - it: refuses a controller's extraArgs entry setting -leader-election-id, its value apart
+    set:
+      cluster.extraArgs: [-leader-election-id, other]
+    asserts:
+      - failedTemplate:
+          errorMessage: 'extraArgs entry "-leader-election-id" sets the lease name, which the chart fixes as rel-cluster.nats.mikluko.io'
+  - it: renders an extraArgs entry that only starts like --leader-election-id
+    set:
+      extraArgs: [--leader-election-idle=1]
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --leader-election-idle=1
   - it: renders more than one replica while leaderElection.enabled is set
     set:
       cluster.replicas: 2

@@ -105,7 +105,8 @@ generates for it.
 With watchNamespaces set, the ClusterRole holds only the rules of
 files/rbac/<name>-cluster-scoped.yaml, and each namespace named gets a Role
 and RoleBinding of those of files/rbac/<name>-namespaced.yaml. It fails with
-more than one replica while leaderElection.enabled is false.
+more than one replica while leaderElection.enabled is false, and on an
+extraArgs entry setting --leader-election-id.
 */}}
 {{- define "nats-operator.controller" -}}
 {{- $fullname := include "nats-operator.fullname" . -}}
@@ -127,6 +128,12 @@ more than one replica while leaderElection.enabled is false.
 {{- end -}}
 {{- if and (not .root.Values.leaderElection.enabled) (gt (int .values.replicas) 1) -}}
 {{- fail (printf "%s.replicas is %d: more than one replica needs leaderElection.enabled" (trimSuffix "-controller" .name) (int .values.replicas)) -}}
+{{- end -}}
+{{- range concat .root.Values.extraArgs .values.extraArgs -}}
+{{- $flag := trimPrefix "-" (trimPrefix "-" .) -}}
+{{- if or (eq $flag "leader-election-id") (hasPrefix "leader-election-id=" $flag) -}}
+{{- fail (printf "extraArgs entry %q sets the lease name, which the chart fixes as %s" . $lease) -}}
+{{- end -}}
 {{- end -}}
 apiVersion: v1
 kind: ServiceAccount

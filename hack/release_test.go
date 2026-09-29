@@ -136,7 +136,7 @@ func TestE2E_Nightly(t *testing.T) {
 	require.Len(t, strings.Fields(e2eWorkflow.On.Schedule[0].Cron), 5, "a five-field cron")
 	clusters := e2eWorkflow.On.WorkflowDispatch.Inputs.Clusters
 	require.Equal(t, "choice", clusters.Type)
-	require.Equal(t, []string{"1", "2"}, clusters.Options)
+	require.Equal(t, []string{"1", "2", "3"}, clusters.Options)
 	require.Equal(t, "1", clusters.Default)
 
 	var run step

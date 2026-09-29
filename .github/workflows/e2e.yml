@@ -14,9 +14,9 @@ on:
         type: boolean
         default: false
       clusters:
-        description: Kubernetes clusters; the two-cluster stories skip on 1.
+        description: Kubernetes clusters; a story spanning more skips, story 9 below 3.
         type: choice
-        options: ["1", "2"]
+        options: ["1", "2", "3"]
         default: "1"
   workflow_call:
     inputs:

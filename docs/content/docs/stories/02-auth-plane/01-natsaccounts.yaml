@@ -8,8 +8,6 @@ spec:
   operatorRef:
     name: demo
 ---
-# The auth controller stops at JWT claims: these limits are signed into the
-# account JWT and nothing else about JetStream is configured here.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsAccount
 metadata:

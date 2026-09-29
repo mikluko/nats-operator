@@ -1,6 +1,4 @@
-# Every movable stream has moved; two resources pin prod-east in their own
-# spec, so the evacuation never becomes Ready until their owners change
-# placement.cluster. Balancers skip streams an evacuation is moving.
+# Balancers skip streams an evacuation is moving.
 status:
   observedGeneration: 1
   conditions:
@@ -20,9 +18,6 @@ status:
     - kind: NatsKeyValue
       namespace: payments
       name: sessions
-  # Moved, but no resource owns it and its config still names prod-east:
-  # while prod-east exists, an update that changes its placement returns it
-  # there. Nothing rewrites that config.
   stalePlacement:
     - account: !any ADTWXTPEOI65FGIGO36XGZBDFOYDDPV6XZPRQWDIRXIYCAJD6TBP76JN
       name: audit
