@@ -1,6 +1,3 @@
-# How the JetStream controller reaches a NATS cluster, managed or not: it
-# reads no other API group. For a managed NATS cluster the URL is the one
-# NatsCluster.status.endpoints.client reports.
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:

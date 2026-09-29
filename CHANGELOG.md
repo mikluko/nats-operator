@@ -10,7 +10,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Deleting the `NatsReferenceGrant` that admits a `NatsAccount` to its `NatsOperator` deletes the account's JWT from the servers and empties its `status.jwt`, and its `NatsUser`s read `Ready` False, reason `AccountNotAdmitted`, and are not signed; restoring the grant signs both again.
-- Deleting the `NatsReferenceGrant` that admits a `NatsUser` to a `NatsAccount` in another namespace deletes the creds Secret the user owns, beside revoking its key in the account JWT; restoring the grant signs the user under a fresh key.
 - Licensed under Apache-2.0; the chart carries `artifacthub.io/license: Apache-2.0`.
 - `SECURITY.md` states how to report a vulnerability through the repository's GitHub private vulnerability reporting, the acknowledgement time for a report, the supported versions, the trust boundaries between namespaces, and how to verify a release's signatures and provenance.
 - Each release's controller images and chart are signed keylessly with cosign and carry a GitHub build provenance attestation.
@@ -95,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `NatsOperator` condition `RetiringKeysInUse` says when a `retiring` signing key can be removed.
 - The auth controller signs `NatsUser`s into creds Secrets, or into `status.jwt` for a user with `publicKey`.
 - `NatsUser` `spec.accountRef` cannot change once set.
-- A `NatsUser` whose `NatsReferenceGrant` is deleted is revoked.
+- A `NatsUser` whose `NatsReferenceGrant` is deleted is revoked and loses the creds Secret it owns; restoring the grant signs it under a fresh key.
 - Deleting a `NatsUser` revokes it and, with `--system-connection` set, closes its connections before its creds Secret is removed, unless its account or the account's `NatsOperator` no longer exists.
 - `--system-connection` on the auth controller pushes account JWTs to the servers, and `status.distribution` reports how many hold the current one.
 - Deleting a `NatsAccount` deletes it from the servers' resolvers, also on servers that join later.
@@ -124,7 +123,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A generated identity Secret lost after `status.publicKey` recorded its key reads `Ready` False, reason `SeedLost`, and no new identity is minted.
 - A key a `NatsUser` stops holding is revoked in its account and listed in `status.replacedKeys` until the account JWT carries the revocation.
 - A `NatsUser` whose `publicKey` changes to a key it is refused revokes the key it held.
-- A `NatsAccount` no `NatsReferenceGrant` admits to its `NatsOperator` records no `status.publicKey`, and only the `NatsSystemAccount` a `NatsOperator` references holds a key against its accounts.
+- A `NatsAccount` no `NatsReferenceGrant` has yet admitted to its `NatsOperator` records no `status.publicKey`, and only the `NatsSystemAccount` a `NatsOperator` references holds a key against its accounts.
 - Revocation recovery reads the servers' JWT only when every server of the roster answers.
 - A server stays in the auth controller's roster until it misses three STATSZ polls in a row, counted in `status.distribution` and awaited by revocation recovery and user deletion.
 - A `NatsAccount`, `NatsSystemAccount` or `NatsUser` reads `Distributed` False, reason `NoSystemConnection`, while the auth controller runs without `--system-connection`.

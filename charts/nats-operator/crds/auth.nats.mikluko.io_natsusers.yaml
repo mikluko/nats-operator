@@ -94,7 +94,8 @@ spec:
               credentials:
                 description: |-
                   Credentials is where the user's creds are written, in the shape a
-                  NatsConnection reads.
+                  NatsConnection reads; deleted while no grant admits the user to its
+                  account.
                 properties:
                   secretKeyRef:
                     description: SecretKeyRef selects the creds file.

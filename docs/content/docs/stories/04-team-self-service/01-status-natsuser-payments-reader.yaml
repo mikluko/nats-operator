@@ -1,6 +1,4 @@
-# payments-reader, with no grant covering it. Grants are checked on every
-# reconcile, so deleting one later turns an admitted user into this one and
-# revokes its JWT.
+# payments-reader, with no grant covering it.
 status:
   observedGeneration: 1
   conditions:

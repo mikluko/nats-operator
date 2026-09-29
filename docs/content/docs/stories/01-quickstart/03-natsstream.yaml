@@ -1,4 +1,3 @@
-# Story 1, continued: the same engineer wants one stream on that NATS cluster.
 apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata:

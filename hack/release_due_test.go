@@ -10,10 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// stubCurl is a curl that answers a request for a /token URL with
-// $STUB/token.status and $STUB/token.json and any other with
-// $STUB/manifest.status and $STUB/manifest.json, and appends its arguments to
-// $STUB/args and its config from stdin to $STUB/config.
+// stubCurl is a curl answering from files under $STUB and recording how it
+// was called.
 const stubCurl = `#!/usr/bin/env bash
 cat >>"$STUB/config"
 echo "$*" >>"$STUB/args"

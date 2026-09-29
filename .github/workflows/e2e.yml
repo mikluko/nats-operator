@@ -15,7 +15,7 @@ on:
         type: boolean
         default: false
       clusters:
-        description: Kubernetes clusters; a story spanning more skips, story 9 below 3.
+        description: Kubernetes clusters; a story spanning more skips.
         type: choice
         options: ["1", "2", "3"]
         default: "1"

@@ -67,7 +67,8 @@ type NatsUserSpec struct {
 	PublicKey string `json:"publicKey,omitempty"`
 
 	// Credentials is where the user's creds are written, in the shape a
-	// NatsConnection reads.
+	// NatsConnection reads; deleted while no grant admits the user to its
+	// account.
 	// +optional
 	Credentials *natsv1beta1.Credentials `json:"credentials,omitempty"`
 }

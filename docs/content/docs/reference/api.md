@@ -287,7 +287,7 @@ Appears on: [NatsUser](#NatsUser).
 | `connectionTypes` | [{{< type "[]ConnectionType" >}}](#ConnectionType) | No | ConnectionTypes restricts how the user may connect; empty allows any. |
 | `preset` | [{{< type "UserPreset" >}}](#UserPreset) | No | Preset is a named permission set in place of Permissions and ConnectionTypes. |
 | `publicKey` | {{< type "string" >}} | No | PublicKey is a key whose seed the client holds; the user then gets a signed JWT in status and no creds Secret. |
-| `credentials` | [{{< type "Credentials" >}}](#Credentials) | No | Credentials is where the user's creds are written, in the shape a NatsConnection reads. |
+| `credentials` | [{{< type "Credentials" >}}](#Credentials) | No | Credentials is where the user's creds are written, in the shape a NatsConnection reads; deleted while no grant admits the user to its account. |
 
 ### NatsUserStatus {#NatsUserStatus}
 NatsUserStatus is the observed state of a user.\

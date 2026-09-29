@@ -1,5 +1,3 @@
-# Story 1: a platform engineer wants a three-server NATS cluster with JetStream
-# in one Kubernetes cluster, and nothing else.
 apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:
@@ -36,7 +34,3 @@ spec:
   # No `tls` block: clients connect in the clear. `tls.secretRef` or
   # `tls.certManager.issuerRef` put the client listener under TLS, and
   # clients then dial `tls://`.
-
-
-  # No `auth` block: servers run with no accounts and no client auth, every
-  # client lands in the global account. Story 2 adds the auth plane.

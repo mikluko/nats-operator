@@ -12,7 +12,7 @@ Three Kubernetes controllers that deploy NATS clusters, own their auth plane, an
 
 ## Releases
 
-The changelog decides the version. Cutting one is renaming `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and opening a fresh `[Unreleased]` above it; `mikluko/action-changelog` validates the file on every pull request, and the release workflow, once ci passes on a push to `main`, tags and publishes the newest entry neither tagged nor with its chart in the registry; run by hand on such a ref, it builds without publishing. Nothing else sets a version.
+The changelog decides the version. Cutting one is renaming `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and opening a fresh `[Unreleased]` above it; `mikluko/action-changelog` validates the file on every pull request, and the release workflow, once ci passes on a push to `main`, tags and publishes the newest entry neither tagged nor with its chart in the registry, and fails on one whose chart is in the registry but untagged; run by hand on such a ref, it builds without publishing. Nothing else sets a version.
 
 Before the first release is announced, a human:
 
