@@ -196,6 +196,53 @@ func TestShipTree(t *testing.T) {
 	require.Equal(t, int64(0o644), modes["go.mod"])
 }
 
+// TestPipeTar pins that pipeTar returns, with extract's error, when extract
+// stops reading before the archive ends, and that an archive read to its end
+// holds every file.
+func TestPipeTar(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "a.txt"), []byte("a"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "b.txt"), []byte("b"), 0o644))
+	files := []string{"a.txt", "b.txt"}
+
+	t.Run("extract ends early", func(t *testing.T) {
+		exited := errors.New("tar exited")
+		done := make(chan error, 1)
+		go func() {
+			done <- pipeTar(root, files, func(r io.Reader) error {
+				if _, err := tar.NewReader(r).Next(); err != nil {
+					return err
+				}
+				return exited
+			})
+		}()
+		select {
+		case err := <-done:
+			require.ErrorIs(t, err, exited)
+		case <-time.After(10 * time.Second):
+			require.FailNow(t, "pipeTar is still writing the archive")
+		}
+	})
+
+	t.Run("extract reads it all", func(t *testing.T) {
+		var names []string
+		require.NoError(t, pipeTar(root, files, func(r io.Reader) error {
+			tr := tar.NewReader(r)
+			for {
+				h, err := tr.Next()
+				if errors.Is(err, io.EOF) {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				names = append(names, h.Name)
+			}
+		}))
+		require.Equal(t, files, names)
+	})
+}
+
 // TestMachineVersions pins the helm version machine.sh installs to the helm
 // CI runs the chart with.
 func TestMachineVersions(t *testing.T) {

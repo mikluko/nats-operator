@@ -201,8 +201,9 @@ func TestResolvers_Current(t *testing.T) {
 	c.start(2)
 	require.Equal(t, v1, c.held(2, pub), "server 2 was down for the push")
 	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	go func() { _ = r.Start(ctx) }()
+	done := make(chan error, 1)
+	go func() { done <- r.Start(ctx) }()
+	defer func() { cancel(); require.NoError(t, <-done) }()
 	require.EventuallyWithT(t, func(ct *assert.CollectT) {
 		d, err := r.Current(t.Context(), testOperator, v2)
 		assert.NoError(ct, err)
@@ -296,8 +297,9 @@ func TestResolvers_DeleteResentOnRejoin(t *testing.T) {
 	nc.Close()
 
 	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	go func() { _ = r.Start(ctx) }()
+	done := make(chan error, 1)
+	go func() { done <- r.Start(ctx) }()
+	defer func() { cancel(); require.NoError(t, <-done) }()
 	require.Eventually(t, func() bool { return c.held(2, pub) == "" }, 10*time.Second, 50*time.Millisecond,
 		"the delete is sent again once server 2 is in the roster")
 	_, err = nats.Connect(c.srvs[2].ClientURL(), userCreds(t, keys), nats.NoReconnect())

@@ -23,21 +23,23 @@ func startNoAuthCluster(t *testing.T, c *testCluster) (map[string]*testServer, [
 	srvs := map[string]*testServer{}
 	var eps []Endpoint
 	for i := range c.size {
-		httpPort := freePort(t)
 		conf := fmt.Sprintf(`server_name: %s
-listen: 127.0.0.1:%d
-http: 127.0.0.1:%d
+listen: %q
+http: %q
 server_metadata { rev: %s }
 jetstream { store_dir: %q }
-cluster { name: %s, listen: 127.0.0.1:%d, routes: [%s] }
-`, c.serverName(i), c.clientPort[i], httpPort, c.serverName(i), filepath.Join(t.TempDir(), "js"), c.name, c.routePort[i], urls(c.routePort))
+cluster { name: %s, listen: %q, routes: [%s] }
+`, c.serverName(i), listen(0), listen(0), c.serverName(i), c.storeDir[i], c.name, listen(0), routes(c.routePort))
 		f := filepath.Join(t.TempDir(), "s.conf")
 		require.NoError(t, os.WriteFile(f, []byte(conf), 0o600))
-		srvs[c.serverName(i)] = startServer(t, f, c.clientPort[i])
-		eps = append(eps, Endpoint{Name: c.serverName(i), URL: fmt.Sprintf("http://127.0.0.1:%d", httpPort)})
+		s := startServer(t, f)
+		c.peered(t, i, s, false)
+		srvs[c.serverName(i)] = s
 	}
-	for name, s := range srvs {
-		require.True(t, s.ReadyForConnections(15*time.Second), "%s not ready", name)
+	for i := range c.size {
+		s := srvs[c.serverName(i)]
+		c.ready(t, i, s)
+		eps = append(eps, Endpoint{Name: c.serverName(i), URL: "http://" + s.MonitorAddr().String()})
 	}
 	return srvs, eps
 }

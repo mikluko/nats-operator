@@ -181,9 +181,28 @@ func ship(ctx context.Context, machine, root string, files []string) error {
 	if err := machineRun(ctx, machine, strings.NewReader(clear), io.Discard, os.Stderr, "sh", "-s"); err != nil {
 		return err
 	}
+	return pipeTar(root, files, func(r io.Reader) error {
+		return machineRun(ctx, machine, r, io.Discard, os.Stderr, "tar", "-x", "-f", "-", "-C", machineTree)
+	})
+}
+
+// pipeTar runs extract on a tar archive of files, relative to root, and
+// returns once both have ended, even where extract stops reading early. It
+// returns extract's error, or else the error writing the archive.
+func pipeTar(root string, files []string, extract func(io.Reader) error) error {
 	pr, pw := io.Pipe()
-	go func() { pw.CloseWithError(writeTar(pw, root, files)) }()
-	return machineRun(ctx, machine, pr, io.Discard, os.Stderr, "tar", "-x", "-f", "-", "-C", machineTree)
+	written := make(chan error, 1)
+	go func() {
+		err := writeTar(pw, root, files)
+		pw.CloseWithError(err)
+		written <- err
+	}()
+	err := extract(pr)
+	_ = pr.Close()
+	if werr := <-written; err == nil {
+		err = werr
+	}
+	return err
 }
 
 // writeTar writes files, relative to root, to w as a tar archive; symbolic

@@ -56,7 +56,7 @@ func TestObserve_RemoteMetaLeaderListsItsPeers(t *testing.T) {
 	opts, err := server.ProcessConfigFile(x.conf)
 	require.NoError(t, err)
 	require.NoError(t, os.RemoveAll(opts.StoreDir))
-	x = startServer(t, x.conf, x.port)
+	x = startServer(t, x.conf)
 	require.True(t, x.ReadyForConnections(15*time.Second))
 	require.Eventually(t, func() bool {
 		jsz, err := x.Jsz(&server.JSzOptions{})

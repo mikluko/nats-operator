@@ -158,7 +158,9 @@ func startManager(t *testing.T, cfg *rest.Config) {
 	require.NoError(t, (&ConsumerReconciler{Client: mgr.GetClient(), Dialer: dialer, Syncer: syncer}).SetupWithManager(t.Context(), mgr))
 	require.NoError(t, (&KeyValueReconciler{Client: mgr.GetClient(), Dialer: dialer, Syncer: syncer}).SetupWithManager(t.Context(), mgr))
 	require.NoError(t, (&ObjectStoreReconciler{Client: mgr.GetClient(), Dialer: dialer, Syncer: syncer}).SetupWithManager(t.Context(), mgr))
-	go func() { _ = mgr.Start(t.Context()) }()
+	done := make(chan error, 1)
+	go func() { done <- mgr.Start(t.Context()) }()
+	t.Cleanup(func() { require.NoError(t, <-done) })
 }
 
 func testStory1(t *testing.T, c client.Client, n *testNATS) {

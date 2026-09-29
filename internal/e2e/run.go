@@ -376,7 +376,7 @@ func retainJetStream(ctx context.Context, c client.Client, ns string) error {
 		err := c.List(ctx, list, client.InNamespace(ns))
 		switch {
 		case meta.IsNoMatchError(err):
-			return nil
+			continue
 		case err != nil:
 			return fmt.Errorf("list %ss in %s: %w", kind, ns, err)
 		}

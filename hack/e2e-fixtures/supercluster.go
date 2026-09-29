@@ -58,24 +58,8 @@ func supercluster(dir string, out io.Writer) error {
 	return err
 }
 
-var home = template.Must(template.New("home").Parse(generated + `apiVersion: v1
-kind: Secret
-metadata:
-  name: acme-operator-keys
-  namespace: nats-system
-stringData:
-  identity: {{.OperatorIdentity}}
-  signing-1: {{.OperatorSigning}}
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: sys-keys
-  namespace: nats-system
-stringData:
-  identity: {{.SystemIdentity}}
-  signing-1: {{.SystemSigning}}
----
+var home = parseFixture("home", `{{template "keys" (dict "name" "acme-operator" "identity" .OperatorIdentity "signing" .OperatorSigning)}}---
+{{template "keys" (dict "name" "sys" "identity" .SystemIdentity "signing" .SystemSigning)}}---
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsOperator
 metadata:
@@ -84,56 +68,10 @@ metadata:
 spec:
   systemAccountRef:
     name: sys
-  keys:
-    identity:
-      secretKeyRef: {name: acme-operator-keys, key: identity}
-    signing:
-      - name: signing-1
-        secretKeyRef: {name: acme-operator-keys, key: signing-1}
----
-apiVersion: auth.nats.mikluko.io/v1beta1
-kind: NatsSystemAccount
-metadata:
-  name: sys
-  namespace: nats-system
-spec:
-  operatorRef:
-    name: acme
-  keys:
-    identity:
-      secretKeyRef: {name: sys-keys, key: identity}
-    signing:
-      - name: signing-1
-        secretKeyRef: {name: sys-keys, key: signing-1}
----
-apiVersion: auth.nats.mikluko.io/v1beta1
-kind: NatsUser
-metadata:
-  name: cluster-controller
-  namespace: nats-system
-spec:
-  accountRef:
-    kind: NatsSystemAccount
-    name: sys
-  preset: cluster-controller
-  credentials:
-    secretKeyRef:
-      name: cluster-controller-creds
----
-apiVersion: auth.nats.mikluko.io/v1beta1
-kind: NatsUser
-metadata:
-  name: auth-controller
-  namespace: nats-system
-spec:
-  accountRef:
-    kind: NatsSystemAccount
-    name: sys
-  preset: auth-controller
-  credentials:
-    secretKeyRef:
-      name: auth-controller-creds
----
+{{template "adopt" "acme-operator"}}---
+{{template "systemAccount"}}---
+{{template "sysuser" "cluster-controller"}}---
+{{template "sysuser" "auth-controller"}}---
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:
@@ -144,6 +82,6 @@ spec:
   credentials:
     secretKeyRef:
       name: auth-controller-creds
-`))
+`)
 
 var west = template.Must(template.New("west").Parse(generated + credsSecret))

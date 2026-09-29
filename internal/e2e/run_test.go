@@ -12,12 +12,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+
+	jsv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 )
 
 func TestPoll_RetriesErrors(t *testing.T) {
@@ -238,4 +242,26 @@ func TestRunner_Plan(t *testing.T) {
 			require.Equal(t, tt.wheres, pl.wheres)
 		})
 	}
+}
+
+// TestRetainJetStream_MissingKind pins that a JetStream kind the API server
+// does not serve leaves the kinds after it retained.
+func TestRetainJetStream_MissingKind(t *testing.T) {
+	s := runtime.NewScheme()
+	require.NoError(t, jsv1beta1.AddToScheme(s))
+	consumer := &jsv1beta1.NatsConsumer{ObjectMeta: metav1.ObjectMeta{Namespace: "guarded", Name: "audit"}}
+	consumer.Spec.DeletionPolicy = jsv1beta1.DeletionDelete
+	c := fake.NewClientBuilder().WithScheme(s).WithObjects(consumer).
+		WithInterceptorFuncs(interceptor.Funcs{List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+			if gvk := list.GetObjectKind().GroupVersionKind(); gvk.Kind == jetStreamKinds[0]+"List" {
+				return &meta.NoKindMatchError{GroupKind: gvk.GroupKind(), SearchedVersions: []string{gvk.Version}}
+			}
+			return c.List(ctx, list, opts...)
+		}}).
+		Build()
+	require.Equal(t, "NatsStream", jetStreamKinds[0])
+
+	require.NoError(t, retainJetStream(t.Context(), c, "guarded"))
+	require.NoError(t, c.Get(t.Context(), client.ObjectKeyFromObject(consumer), consumer))
+	require.Equal(t, jsv1beta1.DeletionRetain, consumer.Spec.DeletionPolicy)
 }

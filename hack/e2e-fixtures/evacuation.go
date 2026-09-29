@@ -54,34 +54,7 @@ type evac struct {
 	orders, payments                  jwtplane.Keys
 }
 
-var evacuationAuth = template.Must(template.New("auth").Funcs(funcs).Parse(generated + `{{define "keys"}}apiVersion: v1
-kind: Secret
-metadata:
-  name: {{.name}}-keys
-  namespace: nats-system
-stringData:
-  identity: {{.identity}}
-  signing-1: {{.signing}}
-{{end}}{{define "adopt"}}  keys:
-    identity:
-      secretKeyRef: {name: {{.}}-keys, key: identity}
-    signing:
-      - name: signing-1
-        secretKeyRef: {name: {{.}}-keys, key: signing-1}
-{{end}}{{define "sysuser"}}apiVersion: auth.nats.mikluko.io/v1beta1
-kind: NatsUser
-metadata:
-  name: {{.}}
-  namespace: nats-system
-spec:
-  accountRef:
-    kind: NatsSystemAccount
-    name: sys
-  preset: {{.}}
-  credentials:
-    secretKeyRef:
-      name: {{.}}-creds
-{{end}}{{define "account"}}apiVersion: auth.nats.mikluko.io/v1beta1
+var evacuationAuth = parseFixture("auth", `{{define "account"}}apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsAccount
 metadata:
   name: {{.}}
@@ -116,15 +89,7 @@ spec:
   systemAccountRef:
     name: sys
 {{template "adopt" "acme"}}---
-apiVersion: auth.nats.mikluko.io/v1beta1
-kind: NatsSystemAccount
-metadata:
-  name: sys
-  namespace: nats-system
-spec:
-  operatorRef:
-    name: acme
-{{template "adopt" "sys"}}---
+{{template "systemAccount"}}---
 {{template "account" "orders"}}---
 {{template "account" "payments"}}---
 apiVersion: nats.mikluko.io/v1beta1
@@ -164,7 +129,7 @@ spec:
 {{template "secret" (secret "orders-creds" "orders" .OrdersCreds)}}---
 {{template "secret" (secret "payments-creds" "payments" .PaymentsCreds)}}---
 {{template "connection" "orders"}}---
-{{template "connection" "payments"}}{{define "secret"}}` + credsSecret + `{{end}}`))
+{{template "connection" "payments"}}`)
 
 var evacuationWorkload = template.Must(template.New("workload").Parse(generated + `apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream

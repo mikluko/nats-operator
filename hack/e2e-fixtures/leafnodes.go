@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"text/template"
 	"time"
 
 	"github.com/nats-io/jwt/v2"
@@ -91,37 +90,12 @@ type hub struct {
 	TelemetryIdentity, TelemetrySigning string
 }
 
-var edgeTemplate = template.Must(template.New("edge").Parse(generated +
-	`{{range $i, $s := .}}{{if $i}}---
-{{end}}{{template "secret" $s}}{{end}}{{define "secret"}}` + credsSecret + `{{end}}`))
+var edgeTemplate = parseFixture("edge", `{{range $i, $s := .}}{{if $i}}---
+{{end}}{{template "secret" $s}}{{end}}`)
 
-var hubTemplate = template.Must(template.New("hub").Parse(generated + `apiVersion: v1
-kind: Secret
-metadata:
-  name: acme-operator-keys
-  namespace: nats-system
-stringData:
-  identity: {{.OperatorIdentity}}
-  signing-1: {{.OperatorSigning}}
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: sys-keys
-  namespace: nats-system
-stringData:
-  identity: {{.SystemIdentity}}
-  signing-1: {{.SystemSigning}}
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: telemetry-keys
-  namespace: nats-system
-stringData:
-  identity: {{.TelemetryIdentity}}
-  signing-1: {{.TelemetrySigning}}
----
+var hubTemplate = parseFixture("hub", `{{template "keys" (dict "name" "acme-operator" "identity" .OperatorIdentity "signing" .OperatorSigning)}}---
+{{template "keys" (dict "name" "sys" "identity" .SystemIdentity "signing" .SystemSigning)}}---
+{{template "keys" (dict "name" "telemetry" "identity" .TelemetryIdentity "signing" .TelemetrySigning)}}---
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsOperator
 metadata:
@@ -130,28 +104,8 @@ metadata:
 spec:
   systemAccountRef:
     name: sys
-  keys:
-    identity:
-      secretKeyRef: {name: acme-operator-keys, key: identity}
-    signing:
-      - name: signing-1
-        secretKeyRef: {name: acme-operator-keys, key: signing-1}
----
-apiVersion: auth.nats.mikluko.io/v1beta1
-kind: NatsSystemAccount
-metadata:
-  name: sys
-  namespace: nats-system
-spec:
-  operatorRef:
-    name: acme
-  keys:
-    identity:
-      secretKeyRef: {name: sys-keys, key: identity}
-    signing:
-      - name: signing-1
-        secretKeyRef: {name: sys-keys, key: signing-1}
----
+{{template "adopt" "acme-operator"}}---
+{{template "systemAccount"}}---
 # The edge preloads this account's JWT, which therefore never expires.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsAccount
@@ -162,13 +116,7 @@ spec:
   operatorRef:
     name: acme
   jwtTTL: 0s
-  keys:
-    identity:
-      secretKeyRef: {name: telemetry-keys, key: identity}
-    signing:
-      - name: signing-1
-        secretKeyRef: {name: telemetry-keys, key: signing-1}
----
+{{template "adopt" "telemetry"}}---
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsOperatorTrust
 metadata:
@@ -178,34 +126,8 @@ spec:
   operatorRef:
     name: acme
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
-kind: NatsUser
-metadata:
-  name: cluster-controller
-  namespace: nats-system
-spec:
-  accountRef:
-    kind: NatsSystemAccount
-    name: sys
-  preset: cluster-controller
-  credentials:
-    secretKeyRef:
-      name: cluster-controller-creds
----
-apiVersion: auth.nats.mikluko.io/v1beta1
-kind: NatsUser
-metadata:
-  name: auth-controller
-  namespace: nats-system
-spec:
-  accountRef:
-    kind: NatsSystemAccount
-    name: sys
-  preset: auth-controller
-  credentials:
-    secretKeyRef:
-      name: auth-controller-creds
----
+{{template "sysuser" "cluster-controller"}}---
+{{template "sysuser" "auth-controller"}}---
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:
@@ -216,4 +138,4 @@ spec:
   credentials:
     secretKeyRef:
       name: auth-controller-creds
-`))
+`)

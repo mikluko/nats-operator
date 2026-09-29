@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/mikluko/nats-operator/internal/manager/secretreads"
@@ -104,7 +105,9 @@ func TestEnvtestCache(t *testing.T) {
 	ready := cacheSynced(mgr.GetCache().WaitForCacheSync)
 	probe := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	require.Error(t, ready(probe), "ready before the cache started")
-	go func() { _ = mgr.Start(t.Context()) }()
+	done := make(chan error, 1)
+	go func() { done <- mgr.Start(t.Context()) }()
+	t.Cleanup(func() { require.NoError(t, <-done) })
 	require.True(t, mgr.GetCache().WaitForCacheSync(t.Context()))
 	require.NoError(t, ready(probe))
 
@@ -154,13 +157,22 @@ func TestEnvtestMetrics(t *testing.T) {
 	cfg := startEnvtest(t).Config
 	scheme, err := NewScheme()
 	require.NoError(t, err)
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+	opts, err := managerOptions(&Options{MetricsAddr: "127.0.0.1:0", ProbeAddr: "0"}, scheme, Owned{})
 	require.NoError(t, err)
-	addr := l.Addr().String()
-	require.NoError(t, l.Close())
-	mgr, err := New(cfg, &Options{MetricsAddr: addr, ProbeAddr: "0"}, scheme, Owned{})
+	metrics := opts.Metrics
+	opts.Metrics.BindAddress = "0"
+	mgr, err := newManager(cfg, opts)
 	require.NoError(t, err)
-	go func() { _ = mgr.Start(t.Context()) }()
+	srv, err := metricsserver.NewServer(metrics, cfg, mgr.GetHTTPClient())
+	require.NoError(t, err)
+	require.NoError(t, mgr.Add(srv))
+	done := make(chan error, 1)
+	go func() { done <- mgr.Start(t.Context()) }()
+	t.Cleanup(func() { require.NoError(t, <-done) })
+	bound, ok := srv.(interface{ GetBindAddr() string })
+	require.True(t, ok, "controller-runtime's metrics server reports no address")
+	var addr string
+	require.Eventually(t, func() bool { addr = bound.GetBindAddr(); return addr != "" }, 10*time.Second, 20*time.Millisecond)
 
 	c, err := client.New(cfg, client.Options{Scheme: scheme})
 	require.NoError(t, err)
@@ -280,7 +292,9 @@ func TestEnvtestReadyUnelected(t *testing.T) {
 		_ = resp.Body.Close()
 		return resp.StatusCode == http.StatusOK
 	}
-	go func() { _ = mgr.Start(t.Context()) }()
+	done := make(chan error, 1)
+	go func() { done <- mgr.Start(t.Context()) }()
+	t.Cleanup(func() { require.NoError(t, <-done) })
 
 	require.Never(t, ready, 5*time.Second, 20*time.Millisecond, "ready without list and watch on ConfigMaps")
 	grant("configmaps", rbacv1.PolicyRule{APIGroups: []string{""}, Resources: []string{"configmaps"}, Verbs: []string{"list", "watch"}})

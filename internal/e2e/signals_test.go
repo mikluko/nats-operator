@@ -92,6 +92,8 @@ func TestConditionSignal(t *testing.T) {
 		{name: "placeholders in the expectation", live: live(cond("Ready", "False", "Rejected")),
 			want: want(map[string]any{"type": "Ready", "status": "True", "lastTransitionTime": placeholder{}}),
 			sig:  "NatsStream nats-system/orders: Ready=False Rejected: m"},
+		{name: "a placeholder status", live: live(cond("Ready", "False", "Terminal"), cond("Terminal", "True", "Rejected")),
+			want: want(map[string]any{"type": "Ready", "status": placeholder{}}, map[string]any{"type": "Terminal", "status": placeholder{}})},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			require.Equal(t, tt.sig, conditionSignal(tt.live, tt.want))

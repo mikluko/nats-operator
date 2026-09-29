@@ -66,14 +66,13 @@ func jobSignal(jobs []batchv1.Job) string {
 // conditionSignal returns why live, whose expectation is want, will not
 // reach it, or "": its Terminal condition is True, or its Ready condition is
 // False for a reason in terminalReasons. A condition want itself holds at
-// that status is no signal.
+// that status, or at a placeholder status, is no signal.
 func conditionSignal(live *unstructured.Unstructured, want map[string]any) string {
-	wanted := map[string]string{}
+	wanted := map[string]any{}
 	for _, w := range conditionsOf(want) {
 		if m, ok := w.(map[string]any); ok {
 			t, _ := m["type"].(string)
-			s, _ := m["status"].(string)
-			wanted[t] = s
+			wanted[t] = m["status"]
 		}
 	}
 	for _, c := range conditionsOf(live.Object) {
@@ -87,7 +86,7 @@ func conditionSignal(live *unstructured.Unstructured, want map[string]any) strin
 		msg, _ := m["message"].(string)
 		terminal := (t == lifecycle.ConditionTerminal && s == string(metav1.ConditionTrue)) ||
 			(t == lifecycle.ConditionReady && s == string(metav1.ConditionFalse) && slices.Contains(terminalReasons, reason))
-		if terminal && wanted[t] != s {
+		if _, anyStatus := wanted[t].(placeholder); terminal && !anyStatus && wanted[t] != s {
 			return fmt.Sprintf("%s %s: %s=%s %s: %s", live.GetKind(), key(live), t, s, reason, msg)
 		}
 	}

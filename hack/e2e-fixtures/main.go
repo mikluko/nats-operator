@@ -140,3 +140,51 @@ stringData:
   user.creds: |
 {{range $line := .Lines}}{{if $line}}    {{$line}}{{end}}
 {{end}}`
+
+// partials are the templates every fixture may call: keys renders the
+// Secret <name>-keys holding an identity and signing-1 seed, adopt the keys
+// block of a kind adopting <.>-keys, systemAccount the NatsSystemAccount
+// sys under the NATS operator acme adopting sys-keys, sysuser the NatsUser
+// of the system account carrying preset <.>, and secret a credsSecret.
+const partials = `{{define "keys"}}apiVersion: v1
+kind: Secret
+metadata:
+  name: {{.name}}-keys
+  namespace: nats-system
+stringData:
+  identity: {{.identity}}
+  signing-1: {{.signing}}
+{{end}}{{define "adopt"}}  keys:
+    identity:
+      secretKeyRef: {name: {{.}}-keys, key: identity}
+    signing:
+      - name: signing-1
+        secretKeyRef: {name: {{.}}-keys, key: signing-1}
+{{end}}{{define "systemAccount"}}apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsSystemAccount
+metadata:
+  name: sys
+  namespace: nats-system
+spec:
+  operatorRef:
+    name: acme
+{{template "adopt" "sys"}}{{end}}{{define "sysuser"}}apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsUser
+metadata:
+  name: {{.}}
+  namespace: nats-system
+spec:
+  accountRef:
+    kind: NatsSystemAccount
+    name: sys
+  preset: {{.}}
+  credentials:
+    secretKeyRef:
+      name: {{.}}-creds
+{{end}}{{define "secret"}}` + credsSecret + `{{end}}`
+
+// parseFixture parses body, headed by generated, as the template name with funcs
+// and partials.
+func parseFixture(name, body string) *template.Template {
+	return template.Must(template.Must(template.New(name).Funcs(funcs).Parse(generated + body)).Parse(partials))
+}

@@ -76,8 +76,8 @@ func TestEnqueueReferrers(t *testing.T) {
 			h.Update(t.Context(), event.UpdateEvent{ObjectOld: withFrom("payments", "orders"), ObjectNew: withFrom("orders")}, q)
 		}, []reconcile.Request{req("payments", "api"), req("payments", "jetstream"), req("orders", "api")}},
 		{"generic", func(q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-			h.Generic(t.Context(), event.GenericEvent{Object: withFrom()}, q)
-		}, nil},
+			h.Generic(t.Context(), event.GenericEvent{Object: withFrom("billing")}, q)
+		}, []reconcile.Request{req("billing", "api")}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

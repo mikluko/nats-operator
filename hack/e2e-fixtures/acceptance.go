@@ -73,28 +73,7 @@ func acceptance(dir string, out io.Writer) error {
 	return err
 }
 
-var acceptanceHome = template.Must(template.New("home").Funcs(funcs).Parse(generated + `{{define "keys"}}apiVersion: v1
-kind: Secret
-metadata:
-  name: {{.name}}-keys
-  namespace: nats-system
-stringData:
-  identity: {{.identity}}
-  signing-1: {{.signing}}
-{{end}}{{define "sysuser"}}apiVersion: auth.nats.mikluko.io/v1beta1
-kind: NatsUser
-metadata:
-  name: {{.}}
-  namespace: nats-system
-spec:
-  accountRef:
-    kind: NatsSystemAccount
-    name: sys
-  preset: {{.}}
-  credentials:
-    secretKeyRef:
-      name: {{.}}-creds
-{{end}}{{template "keys" (dict "name" "acme" "identity" .OperatorIdentity "signing" .OperatorSigning)}}---
+var acceptanceHome = parseFixture("home", `{{template "keys" (dict "name" "acme" "identity" .OperatorIdentity "signing" .OperatorSigning)}}---
 {{template "keys" (dict "name" "sys" "identity" .SystemIdentity "signing" .SystemSigning)}}---
 {{template "keys" (dict "name" "monitoring-prod" "identity" .MonitoringIdentity "signing" .MonitoringSigning)}}---
 {{template "sysuser" "cluster-controller"}}---
@@ -111,7 +90,7 @@ spec:
     secretKeyRef:
       name: auth-controller-creds
 ---
-{{template "secret" (secret "monitoring-runtime-creds" "monitoring" .RuntimeCreds)}}{{define "secret"}}` + credsSecret + `{{end}}`))
+{{template "secret" (secret "monitoring-runtime-creds" "monitoring" .RuntimeCreds)}}`)
 
 var acceptanceRuntime = template.Must(template.New("runtime").Parse(generated + `apiVersion: batch/v1
 kind: Job
