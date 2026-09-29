@@ -122,7 +122,7 @@ func (lr *LeafRemote) fileStem() string {
 	return lr.Connection.Namespace + "_" + lr.Connection.Name
 }
 
-// leafRemotesSecretName is the Secret holding every remote's creds and CA.
+// leafRemotesSecretName is the Secret holding the admitted remotes' creds and CAs.
 func leafRemotesSecretName(nc *clusterv1beta1.NatsCluster) string { return nc.Name + "-leaf-remotes" }
 
 func leafnodesServiceName(nc *clusterv1beta1.NatsCluster) string { return nc.Name + "-leafnodes" }
@@ -132,7 +132,7 @@ func leafnodesCertSecretName(nc *clusterv1beta1.NatsCluster) string {
 }
 
 // leafnodesConfig renders nc's leafnode listener and remotes under layout
-// l, or nil when nc has neither.
+// l, or nil when nc has neither a listener nor an admitted remote.
 func leafnodesConfig(nc *clusterv1beta1.NatsCluster, remotes []LeafRemote, l Layout) *LeafnodesConfig {
 	ln := nc.Spec.Leafnodes
 	remotes = admitted(remotes)
@@ -472,7 +472,7 @@ func leafnodesIssuer(nc *clusterv1beta1.NatsCluster) *clusterv1beta1.IssuerRefer
 }
 
 // applyLeafnodes makes the leafnode Service and the leaf remotes Secret
-// exist, each deleted once spec no longer asks for it.
+// exist, each deleted once nothing is rendered into it.
 func (r *Reconciler) applyLeafnodes(ctx context.Context, nc *clusterv1beta1.NatsCluster, plan *Plan) error {
 	var remotes, svc client.Object
 	if s := leafRemotesSecret(nc, plan.LeafRemotes); s != nil {

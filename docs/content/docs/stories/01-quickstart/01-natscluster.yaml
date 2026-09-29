@@ -28,8 +28,8 @@ spec:
 
   # No `routes` block: route TLS is on by default, and with no certificate
   # named the controller self-signs one. `routes.tls.secretRef` or
-  # `routes.tls.certManager.issuerRef` name a real one instead, and
-  # `routes.tls.enabled: false` turns it off.
+  # `routes.tls.certManager.issuerRef` name a route certificate;
+  # `routes.tls.enabled: false` turns route TLS off.
 
   # No `tls` block: clients connect in the clear. `tls.secretRef` or
   # `tls.certManager.issuerRef` put the client listener under TLS, and

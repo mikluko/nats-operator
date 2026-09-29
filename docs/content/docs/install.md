@@ -81,7 +81,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `cluster.tolerations` | `[]` | Its pod's tolerations; set, they replace `tolerations` whole. |
 | `cluster.priorityClassName` | `""` | Its pod's priority class; set, it replaces `priorityClassName`. |
 | `cluster.topologySpreadConstraints` | `[]` | Its pod's topology spread constraints; set, they replace `topologySpreadConstraints` whole. |
-| `cluster.extraArgs` | `[]` | Flags appended to its own after `extraArgs`. |
+| `cluster.extraArgs` | `[]` | Flags appended to its own after `extraArgs`; the same entries fail the render. |
 | `cluster.env` | `[]` | Its container's environment, an entry replacing the one of the same name under `env`. |
 | `auth.enabled` | `true` | Installs the auth controller. |
 | `auth.replicas` | `1` | Replicas of its Deployment. |
@@ -98,7 +98,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `auth.tolerations` | `[]` | Its pod's tolerations; set, they replace `tolerations` whole. |
 | `auth.priorityClassName` | `""` | Its pod's priority class; set, it replaces `priorityClassName`. |
 | `auth.topologySpreadConstraints` | `[]` | Its pod's topology spread constraints; set, they replace `topologySpreadConstraints` whole. |
-| `auth.extraArgs` | `[]` | Flags appended to its own after `extraArgs`. |
+| `auth.extraArgs` | `[]` | Flags appended to its own after `extraArgs`; the same entries fail the render. |
 | `auth.env` | `[]` | Its container's environment, an entry replacing the one of the same name under `env`. |
 | `jetstream.enabled` | `true` | Installs the JetStream controller. |
 | `jetstream.replicas` | `1` | Replicas of its Deployment. |
@@ -114,7 +114,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `jetstream.tolerations` | `[]` | Its pod's tolerations; set, they replace `tolerations` whole. |
 | `jetstream.priorityClassName` | `""` | Its pod's priority class; set, it replaces `priorityClassName`. |
 | `jetstream.topologySpreadConstraints` | `[]` | Its pod's topology spread constraints; set, they replace `topologySpreadConstraints` whole. |
-| `jetstream.extraArgs` | `[]` | Flags appended to its own after `extraArgs`. |
+| `jetstream.extraArgs` | `[]` | Flags appended to its own after `extraArgs`; the same entries fail the render. |
 | `jetstream.env` | `[]` | Its container's environment, an entry replacing the one of the same name under `env`. |
 | `metrics.scraper.serviceAccount` | `""` | A ServiceAccount, as `namespace/name`, granted the controllers' metrics under [RBAC](#rbac); empty, the chart grants them to no one. |
 | `metrics.service.enabled` | `false` | A Service `<release>-<controller>-metrics` per enabled controller, port `metrics` (`8080`) onto its metrics endpoint. |
@@ -222,7 +222,7 @@ helm upgrade nats-operator oci://ghcr.io/mikluko/nats-operator/charts/nats-opera
   --version <version> --namespace nats-operator --reset-then-reuse-values
 ```
 
-A cluster controller release that renders a NATS server's StatefulSet differently, a new default exporter image among them, or changes its config under a key nats-server does not reload, restarts every NATS server, one at a time behind the rollout's gate; every other config change reloads every server in the same reconcile. A server restarts behind the gate instead where its `NatsCluster` sets no `auth.systemCredentials` or its reload fails. `spec.rollout.paused` on a `NatsCluster` holds its restarts before the next server until it is unset.
+A cluster controller release that renders a NATS server's StatefulSet differently, a new default exporter image among them, or changes its config under a key nats-server does not reload, restarts every NATS server, one at a time behind the rollout's gate; every other config change reloads every server at once, without the gate. A server restarts behind the gate instead where its `NatsCluster` sets no `auth.systemCredentials` or its reload fails. `spec.rollout.paused` on a `NatsCluster` holds its restarts before the next server until it is unset.
 
 ## Uninstall
 

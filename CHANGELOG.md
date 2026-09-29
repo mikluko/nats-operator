@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The chart refuses to render a controller with more than one replica while `leaderElection.enabled` is false.
 - The chart sets each controller's `GOMEMLIMIT` to its memory limit, where one is set, unless `env` names it.
 - The chart names each controller's leader election lease `<release>-<API group>`.
+- The chart refuses an `extraArgs` entry, global or per controller, setting `--leader-elect` or `--leader-election-id`.
 - Each controller's leader election Role grants creating Leases, and getting, updating and patching only its own lease.
 - The chart refuses to render a Service whose name is longer than 63 characters.
 - The chart refuses a value key it does not know, checked against `values.schema.json`.

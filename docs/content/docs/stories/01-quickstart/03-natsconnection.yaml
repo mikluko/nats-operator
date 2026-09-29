@@ -5,6 +5,4 @@ metadata:
   namespace: nats-system
 spec:
   servers: ["nats://demo.nats-system.svc:4222"]
-  # No credentials: this NATS cluster has no auth plane, so the connection lands
-  # in the global account. Story 2 adds `credentials`.
-  # The route certificate is self-signed; client TLS is not configured here.
+  # No credentials; story 2 adds `credentials`.
