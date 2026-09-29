@@ -5,9 +5,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -299,4 +303,90 @@ func TestApplyConfigRevertDuringPendingReload(t *testing.T) {
 	calls = len(server.reloaded())
 	require.Empty(t, apply(t, a))
 	require.Len(t, server.reloaded(), calls, "a confirmed revision was reloaded again")
+}
+
+// TestRestartServerToTemplateRevision pins that a restart fallback for a
+// reload back to the revision the pod template already names still changes
+// the template, and that the gate holds until the server reports that
+// revision.
+func TestRestartServerToTemplateRevision(t *testing.T) {
+	ctx := t.Context()
+	nc := storyCluster(t)
+	nc.UID = "demo-uid"
+	a, err := Render(nc, Inputs{})
+	require.NoError(t, err)
+	retagged := nc.DeepCopy()
+	retagged.Spec.ServerTags = map[string]string{"az": "b"}
+	b, err := Render(retagged, Inputs{})
+	require.NoError(t, err)
+
+	c := fake.NewClientBuilder().WithScheme(leafScheme(t)).Build()
+	snap := &sysobs.Snapshot{}
+	var names []string
+	for _, s := range a.Servers {
+		for _, obj := range []client.Object{s.StatefulSet.DeepCopy(), s.ConfigMap.DeepCopy()} {
+			require.NoError(t, controllerutil.SetControllerReference(nc, obj, c.Scheme()))
+			require.NoError(t, c.Create(ctx, obj))
+		}
+		snap.Servers = append(snap.Servers, sysobs.Server{Name: s.Name, ID: s.Name, Metadata: map[string]string{}})
+		names = append(names, s.Name)
+	}
+	server := &fakeReloader{c: c}
+	server.reset(nc.Namespace)
+	r := &Reconciler{Client: c, Now: func() time.Time { return time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC) },
+		Reloader: func(context.Context, *clusterv1beta1.NatsCluster) (ServerReloader, error) { return server, nil }}
+	statefulSets := func(t *testing.T) map[string]*appsv1.StatefulSet {
+		t.Helper()
+		sts := map[string]*appsv1.StatefulSet{}
+		for _, name := range names {
+			sts[name] = &appsv1.StatefulSet{}
+			require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: nc.Namespace, Name: name}, sts[name]))
+		}
+		return sts
+	}
+	apply := func(t *testing.T, plan *Plan) configApply {
+		t.Helper()
+		got, err := r.applyConfig(ctx, nc, plan, statefulSets(t), snap)
+		require.NoError(t, err)
+		return got
+	}
+	report := func(revision string) {
+		for i := range snap.Servers {
+			snap.Servers[i].Metadata[MetadataConfigRevision] = revision
+		}
+	}
+
+	require.ElementsMatch(t, names, apply(t, b).Reloaded)
+	report(b.Revision)
+
+	server.reject = errors.New("refused")
+	back := apply(t, a)
+	require.ElementsMatch(t, names, slices.Collect(maps.Keys(back.Restart)))
+
+	step := a.Servers[0]
+	cur := statefulSets(t)[step.Name]
+	require.Equal(t, a.Revision, cur.Spec.Template.Annotations[AnnotationConfigRevision], "the pod template left revision A")
+	for gen := 1; gen <= 2; gen++ {
+		was := cur.Spec.Template.DeepCopy()
+		_, err := r.restartServer(ctx, nc, step, cur, back.Restart[step.Name])
+		require.NoError(t, err)
+		cur = statefulSets(t)[step.Name]
+		require.NotEqual(t, was, &cur.Spec.Template, "the restart left the pod template unchanged")
+		require.Equal(t, strconv.Itoa(gen), cur.Spec.Template.Annotations[AnnotationRestartGeneration])
+	}
+
+	gate := func(t *testing.T) gateState {
+		t.Helper()
+		sets := statefulSets(t)
+		for _, sts := range sets {
+			sts.Status = appsv1.StatefulSetStatus{ObservedGeneration: sts.Generation, UpdatedReplicas: 1, ReadyReplicas: 1}
+		}
+		return judgeGate(r.rolloutState(nc, a, Observed{StatefulSets: sets, Snapshot: snap, Apply: apply(t, a)}))
+	}
+	g := gate(t)
+	require.Equal(t, GateTargetRevision, g.waitingFor)
+	require.Contains(t, g.detail, step.Name)
+
+	report(a.Revision)
+	require.True(t, gate(t).open())
 }

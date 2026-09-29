@@ -13,9 +13,13 @@ const (
 
 	// AnnotationConfigRevision on a server's StatefulSet and ConfigMap names
 	// the config revision they were rendered at; on its pod template, the
-	// revision its pod was last restarted for, so that every restart changes
-	// the template.
+	// revision its pod was last restarted for.
 	AnnotationConfigRevision = "cluster.nats.mikluko.io/config-revision"
+
+	// AnnotationRestartGeneration on a server's pod template counts the
+	// restarts for the revision the template already names, so that every
+	// restart changes the template.
+	AnnotationRestartGeneration = "cluster.nats.mikluko.io/restart-generation"
 
 	// AnnotationSpecDigest on a server's StatefulSet is a digest of the
 	// spec it was rendered with; a change to it restarts the server.

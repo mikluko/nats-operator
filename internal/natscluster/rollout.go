@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -423,7 +424,8 @@ func (r *Reconciler) clearAnnotation(ctx context.Context, nc *clusterv1beta1.Nat
 
 // restartServer writes server s's rendered ConfigMap, marked for a restart
 // for reason, then its rendered pod template into cur. The template names
-// the revision, so writing it restarts the pod.
+// the revision, and a restart generation above cur's when cur's already
+// names it, so writing it restarts the pod.
 func (r *Reconciler) restartServer(ctx context.Context, nc *clusterv1beta1.NatsCluster, s Server, cur *appsv1.StatefulSet, reason string) (*appsv1.StatefulSet, error) {
 	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: s.ConfigMap.Name, Namespace: s.ConfigMap.Namespace}}
 	if err := r.createOrUpdate(ctx, nc, cm, func() {
@@ -441,6 +443,10 @@ func (r *Reconciler) restartServer(ctx context.Context, nc *clusterv1beta1.NatsC
 	sts.Annotations = merged(sts.Annotations, s.StatefulSet.Annotations)
 	sts.Annotations[AnnotationVolumeDigest] = cur.Annotations[AnnotationVolumeDigest]
 	sts.Spec.Template = *s.StatefulSet.Spec.Template.DeepCopy()
+	if was := cur.Spec.Template.Annotations; was[AnnotationConfigRevision] == sts.Spec.Template.Annotations[AnnotationConfigRevision] {
+		n, _ := strconv.Atoi(was[AnnotationRestartGeneration])
+		sts.Spec.Template.Annotations[AnnotationRestartGeneration] = strconv.Itoa(n + 1)
+	}
 	if err := r.Client.Update(ctx, sts); err != nil {
 		return nil, fmt.Errorf("restart statefulset %s: %w", sts.Name, err)
 	}
