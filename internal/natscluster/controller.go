@@ -429,7 +429,7 @@ func (r *Reconciler) statefulSets(ctx context.Context, nc *clusterv1beta1.NatsCl
 // StatefulSet, then the StatefulSet, restoring only the labels of one nc
 // already controls.
 func (r *Reconciler) createServer(ctx context.Context, nc *clusterv1beta1.NatsCluster, s Server) (*appsv1.StatefulSet, error) {
-	if _, err := r.applyServerConfigMap(ctx, nc, s, true); err != nil {
+	if _, err := r.applyServerConfigMap(ctx, nc, s, true, nil); err != nil {
 		return nil, err
 	}
 	sts := &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: s.StatefulSet.Name, Namespace: s.StatefulSet.Namespace}}
@@ -445,15 +445,19 @@ func (r *Reconciler) createServer(ctx context.Context, nc *clusterv1beta1.NatsCl
 	return sts, nil
 }
 
-// applyServerConfigMap creates or updates server s's rendered ConfigMap;
-// without withRevision it carries no revision, so the server reloads.
-func (r *Reconciler) applyServerConfigMap(ctx context.Context, nc *clusterv1beta1.NatsCluster, s Server, withRevision bool) (*corev1.ConfigMap, error) {
+// applyServerConfigMap creates or updates server s's rendered ConfigMap,
+// dropping its revision unless withRevision, then applies annotate, where
+// set, to its annotations.
+func (r *Reconciler) applyServerConfigMap(ctx context.Context, nc *clusterv1beta1.NatsCluster, s Server, withRevision bool, annotate func(map[string]string)) (*corev1.ConfigMap, error) {
 	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: s.ConfigMap.Name, Namespace: s.ConfigMap.Namespace}}
 	if err := r.createOrUpdate(ctx, nc, cm, func() {
-		cm.Labels = s.ConfigMap.Labels
+		cm.Labels = merged(cm.Labels, s.ConfigMap.Labels)
 		cm.Annotations = merged(cm.Annotations, s.ConfigMap.Annotations)
 		if !withRevision {
 			delete(cm.Annotations, AnnotationConfigRevision)
+		}
+		if annotate != nil {
+			annotate(cm.Annotations)
 		}
 		cm.Data = s.ConfigMap.Data
 	}); err != nil {

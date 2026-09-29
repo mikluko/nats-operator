@@ -23,8 +23,8 @@ import (
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 	jetstreamv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	fixtures "github.com/mikluko/nats-operator/hack/e2e-fixtures"
 	"github.com/mikluko/nats-operator/internal/e2e"
+	"github.com/mikluko/nats-operator/internal/e2e/fixtures"
 	"github.com/mikluko/nats-operator/internal/e2e/placeholders"
 )
 
@@ -67,14 +67,14 @@ func fixtureFiles(t *testing.T) (manifests, statuses []string) {
 }
 
 // walkStories returns the manifest and status files under storiesDir inside
-// a fixture directory where fixtures is set, and outside one where it is not.
-func walkStories(t *testing.T, fixtures bool) (manifests, statuses []string) {
+// a fixture directory where inFixtureDir is set, and outside one where it is not.
+func walkStories(t *testing.T, inFixtureDir bool) (manifests, statuses []string) {
 	t.Helper()
 	err := filepath.WalkDir(storiesDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || filepath.Ext(path) != ".yaml" {
 			return err
 		}
-		if (filepath.Base(filepath.Dir(path)) == e2e.FixtureDir) != fixtures {
+		if (filepath.Base(filepath.Dir(path)) == e2e.FixtureDir) != inFixtureDir {
 			return nil
 		}
 		name, err := e2e.ParseFileName(d.Name())
@@ -147,7 +147,7 @@ func TestStoryManifestsDecodeStrictly(t *testing.T) {
 
 // TestStoryFixturesDecodeStrictly pins every field of every manifest and
 // status in a story's fixture directory, and of every fixture
-// hack/e2e-fixtures generates, to a field of the Go types, of the four groups
+// fixtures.Generate writes, to a field of the Go types, of the four groups
 // or of Kubernetes.
 func TestStoryFixturesDecodeStrictly(t *testing.T) {
 	s := apiScheme(t)

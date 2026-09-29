@@ -16,6 +16,7 @@ import (
 	"github.com/nats-io/nkeys"
 )
 
+// fixture is what manifests renders.
 type fixture struct {
 	OperatorJWT, SystemPub, SystemJWT, AccountPub, AccountJWT string
 	Creds, CA, Cert, Key                                      string
@@ -41,10 +42,20 @@ func unmanaged(dir string) error {
 	if err != nil {
 		return err
 	}
-	opPub, _ := op.PublicKey()
-	f.SystemPub, _ = sys.PublicKey()
-	f.AccountPub, _ = acct.PublicKey()
-	userPub, _ := user.PublicKey()
+	opPub, err := op.PublicKey()
+	if err != nil {
+		return err
+	}
+	if f.SystemPub, err = sys.PublicKey(); err != nil {
+		return err
+	}
+	if f.AccountPub, err = acct.PublicKey(); err != nil {
+		return err
+	}
+	userPub, err := user.PublicKey()
+	if err != nil {
+		return err
+	}
 
 	oc := jwt.NewOperatorClaims(opPub)
 	oc.Name = "messaging"
@@ -70,7 +81,10 @@ func unmanaged(dir string) error {
 	if err != nil {
 		return err
 	}
-	seed, _ := user.Seed()
+	seed, err := user.Seed()
+	if err != nil {
+		return err
+	}
 	creds, err := jwt.FormatUserConfig(userJWT, seed)
 	if err != nil {
 		return err

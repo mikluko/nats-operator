@@ -416,3 +416,55 @@ func TestRestartServerToTemplateRevision(t *testing.T) {
 	report(a.Revision)
 	require.True(t, gate(t).open())
 }
+
+// TestServerConfigMapWrites pins what each write of a server's ConfigMap
+// leaves on it: the rendered labels over any it did not render, and the
+// revision and apply annotations its caller asks for.
+func TestServerConfigMapWrites(t *testing.T) {
+	nc := storyCluster(t)
+	nc.UID = "demo-uid"
+	a, err := Render(nc, Inputs{})
+	require.NoError(t, err)
+	s := a.Servers[0]
+
+	for _, tt := range []struct {
+		name      string
+		write     func(e *reloadEnv) error
+		wantApply string
+		wantRev   string
+	}{
+		{name: "create", wantRev: a.Revision, write: func(e *reloadEnv) error {
+			_, err := e.r.applyServerConfigMap(t.Context(), nc, s, true, nil)
+			return err
+		}},
+		{name: "recreate for reload", write: func(e *reloadEnv) error {
+			_, err := e.r.applyServerConfigMap(t.Context(), nc, s, false, nil)
+			return err
+		}},
+		{name: "restart", wantApply: string(clusterv1beta1.ConfigAppliedByRestart), wantRev: a.Revision, write: func(e *reloadEnv) error {
+			_, err := e.r.restartServer(t.Context(), nc, s, e.statefulSets(t)[s.Name], "tls changed")
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			e := reloadFixture(t, nc, a)
+			cm := e.configMap(t, s.Name)
+			cm.Labels["backup.example.com/skip"] = "true"
+			cm.Labels[LabelServer] = "stale"
+			cm.Annotations[AnnotationReloadSince] = "2026-09-29T11:00:00Z"
+			require.NoError(t, e.c.Update(t.Context(), cm))
+
+			require.NoError(t, tt.write(e))
+			cm = e.configMap(t, s.Name)
+			require.Equal(t, "true", cm.Labels["backup.example.com/skip"])
+			require.Equal(t, s.Name, cm.Labels[LabelServer])
+			require.Equal(t, s.ConfigMap.Data, cm.Data)
+			require.Equal(t, tt.wantRev, cm.Annotations[AnnotationConfigRevision])
+			require.Equal(t, tt.wantApply, cm.Annotations[AnnotationConfigApply])
+			if tt.wantApply != "" {
+				require.Equal(t, "tls changed", cm.Annotations[AnnotationRestartReason])
+				require.NotContains(t, cm.Annotations, AnnotationReloadSince)
+			}
+		})
+	}
+}

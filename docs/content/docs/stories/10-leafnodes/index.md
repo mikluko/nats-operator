@@ -13,11 +13,11 @@ params:
     substitutions:
       - files: [01-edge-operator.yaml]
         kind: NatsOperatorTrust
-        reason: the JWTs of the NATS operator and system account e2e/00-hub.yaml adopts, from hack/e2e-fixtures
+        reason: the JWTs of the NATS operator and system account e2e/00-hub.yaml adopts, from internal/e2e/fixtures
         patchFile: e2e/natsoperatortrust.json
       - files: [01-edge-operator.yaml]
         kind: NatsAccountTrust
-        reason: the key and JWT of the telemetry account e2e/00-hub.yaml adopts, from hack/e2e-fixtures
+        reason: the key and JWT of the telemetry account e2e/00-hub.yaml adopts, from internal/e2e/fixtures
         patchFile: e2e/natsaccounttrust.json
       - files: [01-hub.yaml, 01-edge.yaml, 01-edge-operator.yaml]
         kind: NatsCluster

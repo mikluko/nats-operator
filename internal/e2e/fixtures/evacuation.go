@@ -1,8 +1,6 @@
 package fixtures
 
 import (
-	"text/template"
-
 	"github.com/nats-io/nkeys"
 
 	"github.com/mikluko/nats-operator/internal/jwtplane"
@@ -37,10 +35,7 @@ func evacuation(dir string) error {
 	if e.PaymentsCreds, err = userCreds(jwtplane.User{Name: "payments"}, e.payments); err != nil {
 		return err
 	}
-	if err := writeTemplate(dir, "00-auth.yaml", evacuationAuth, e); err != nil {
-		return err
-	}
-	return writeTemplate(dir, "01-workload.yaml", evacuationWorkload, nil)
+	return writeTemplate(dir, "00-auth.yaml", evacuationAuth, e)
 }
 
 // evac is what evacuationAuth renders.
@@ -129,61 +124,3 @@ spec:
 {{template "secret" (secret "payments-creds" "payments" .PaymentsCreds)}}---
 {{template "connection" "orders"}}---
 {{template "connection" "payments"}}`)
-
-var evacuationWorkload = template.Must(template.New("workload").Parse(generated + `apiVersion: jetstream.nats.mikluko.io/v1beta1
-kind: NatsStream
-metadata:
-  name: orders
-  namespace: orders
-spec:
-  connectionRef:
-    name: orders
-  name: ORDERS
-  subjects: ["orders.>"]
-  replicas: 3
-  placement:
-    cluster: prod-east
----
-apiVersion: jetstream.nats.mikluko.io/v1beta1
-kind: NatsKeyValue
-metadata:
-  name: sessions
-  namespace: payments
-spec:
-  connectionRef:
-    name: payments
-  name: sessions
-  replicas: 3
-  placement:
-    cluster: prod-east
----
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: runtime-streams
-  namespace: orders
-spec:
-  backoffLimit: 20
-  template:
-    spec:
-      restartPolicy: OnFailure
-      containers:
-        - name: nats
-          image: natsio/nats-box:0.20.0
-          env:
-            - {name: NATS_URL, value: "nats://prod-east.nats-system.svc:4222"}
-            - {name: NATS_CREDS, value: /creds/user.creds}
-          command:
-            - sh
-            - -ec
-            - |
-              nats stream info audit >/dev/null 2>&1 ||
-                nats stream add audit --subjects 'audit.>' --storage file --replicas 3 --cluster prod-east --defaults
-              nats stream info EVENTS >/dev/null 2>&1 ||
-                nats stream add EVENTS --subjects 'events.>' --storage file --replicas 3 --defaults
-          volumeMounts:
-            - {name: creds, mountPath: /creds}
-      volumes:
-        - name: creds
-          secret: {secretName: orders-creds}
-`))

@@ -1,8 +1,6 @@
 package fixtures
 
 import (
-	"text/template"
-
 	"github.com/nats-io/nkeys"
 
 	"github.com/mikluko/nats-operator/internal/jwtplane"
@@ -60,12 +58,9 @@ func acceptance(dir string) error {
 		if err != nil {
 			return err
 		}
-		if err := writeTemplate(dir, "00-"+remote+".yaml", west, secret{Name: remote + "-cluster-controller-creds", Namespace: "nats-system", Lines: lines}); err != nil {
+		if err := writeTemplate(dir, "00-"+remote+".yaml", credsSecretTemplate, secret{Name: remote + "-cluster-controller-creds", Namespace: "nats-system", Lines: lines}); err != nil {
 			return err
 		}
-	}
-	if err := writeTemplate(dir, "01-runtime-streams.yaml", acceptanceRuntime, nil); err != nil {
-		return err
 	}
 	return writePatch(dir, "natsoperatortrust.json", map[string]string{"operatorJWT": operatorJWT, "systemAccountJWT": systemJWT})
 }
@@ -88,36 +83,3 @@ spec:
       name: auth-controller-creds
 ---
 {{template "secret" (secret "monitoring-runtime-creds" "monitoring" .RuntimeCreds)}}`)
-
-var acceptanceRuntime = template.Must(template.New("runtime").Parse(generated + `apiVersion: batch/v1
-kind: Job
-metadata:
-  name: runtime-streams
-  namespace: monitoring
-spec:
-  backoffLimit: 20
-  template:
-    spec:
-      restartPolicy: OnFailure
-      containers:
-        - name: nats
-          image: natsio/nats-box:0.20.0
-          env:
-            - {name: NATS_URL, value: "nats://prod-east.nats-system.svc:4222"}
-            - {name: NATS_CREDS, value: /creds/user.creds}
-          command:
-            - sh
-            - -ec
-            - |
-              for s in REQUESTS RESPONSES; do
-                until nats stream info "$s" >/dev/null 2>&1 ||
-                  nats stream add "$s" --subjects "$(echo "$s" | tr A-Z a-z).>" --storage file --replicas 3 --defaults; do
-                  sleep 5
-                done
-              done
-          volumeMounts:
-            - {name: creds, mountPath: /creds}
-      volumes:
-        - name: creds
-          secret: {secretName: monitoring-runtime-creds}
-`))

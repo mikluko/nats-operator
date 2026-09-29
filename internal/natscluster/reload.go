@@ -84,7 +84,7 @@ func (r *Reconciler) applyConfig(ctx context.Context, nc *clusterv1beta1.NatsClu
 				a.restart(s.Name, fmt.Sprintf("ConfigMap %s does not exist", s.ConfigMap.Name))
 				continue
 			}
-			if cm, err = r.applyServerConfigMap(ctx, nc, s, false); err != nil {
+			if cm, err = r.applyServerConfigMap(ctx, nc, s, false, nil); err != nil {
 				return a, err
 			}
 		} else if err != nil {

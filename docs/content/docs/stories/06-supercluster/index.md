@@ -12,7 +12,7 @@ params:
         files: [e2e/00-west.yaml, 01-natsoperatortrust.yaml, 01-west.yaml, 01-status-natscluster-west.yaml]
     substitutions:
       - files: [01-natsoperatortrust.yaml]
-        reason: the JWTs of the NATS operator and system account e2e/00-home.yaml adopts, from hack/e2e-fixtures
+        reason: the JWTs of the NATS operator and system account e2e/00-home.yaml adopts, from internal/e2e/fixtures
         patchFile: e2e/natsoperatortrust.json
       - files: [01-east.yaml, 01-west.yaml]
         reason: >-

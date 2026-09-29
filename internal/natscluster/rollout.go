@@ -9,7 +9,6 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -427,16 +426,12 @@ func (r *Reconciler) clearAnnotation(ctx context.Context, nc *clusterv1beta1.Nat
 // the revision, and a restart generation above cur's when cur's already
 // names it, so writing it restarts the pod.
 func (r *Reconciler) restartServer(ctx context.Context, nc *clusterv1beta1.NatsCluster, s Server, cur *appsv1.StatefulSet, reason string) (*appsv1.StatefulSet, error) {
-	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: s.ConfigMap.Name, Namespace: s.ConfigMap.Namespace}}
-	if err := r.createOrUpdate(ctx, nc, cm, func() {
-		cm.Labels = merged(cm.Labels, s.ConfigMap.Labels)
-		cm.Data = s.ConfigMap.Data
-		cm.Annotations = merged(cm.Annotations, s.ConfigMap.Annotations)
-		cm.Annotations[AnnotationConfigApply] = string(clusterv1beta1.ConfigAppliedByRestart)
-		cm.Annotations[AnnotationRestartReason] = reason
-		delete(cm.Annotations, AnnotationReloadSince)
+	if _, err := r.applyServerConfigMap(ctx, nc, s, true, func(a map[string]string) {
+		a[AnnotationConfigApply] = string(clusterv1beta1.ConfigAppliedByRestart)
+		a[AnnotationRestartReason] = reason
+		delete(a, AnnotationReloadSince)
 	}); err != nil {
-		return nil, fmt.Errorf("write configmap %s for restart: %w", cm.Name, err)
+		return nil, err
 	}
 	sts := cur.DeepCopy()
 	sts.Labels = merged(sts.Labels, s.StatefulSet.Labels)

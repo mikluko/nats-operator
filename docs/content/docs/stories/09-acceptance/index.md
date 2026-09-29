@@ -17,7 +17,7 @@ params:
         files: [e2e/00-prod-west.yaml, 01-natsoperatortrust.yaml, 01-prod-west.yaml, 01-status-natscluster-prod-west.yaml]
     substitutions:
       - files: [01-natsoperatortrust.yaml]
-        reason: the JWTs of the NATS operator and system account whose keys e2e/00-home.yaml holds, from hack/e2e-fixtures
+        reason: the JWTs of the NATS operator and system account whose keys e2e/00-home.yaml holds, from internal/e2e/fixtures
         patchFile: e2e/natsoperatortrust.json
       - files: [01-auth.yaml]
         kind: NatsOperator

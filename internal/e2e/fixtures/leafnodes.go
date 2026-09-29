@@ -84,7 +84,7 @@ func leafnodes(dir string) error {
 	return writePatch(dir, "natsaccounttrust.json", map[string]string{"publicKey": telPub, "jwt": telemetryJWT})
 }
 
-// hub is what hubTemplate renders: seeds.
+// hub is what hubTemplate renders.
 type hub struct {
 	OperatorIdentity, OperatorSigning   string
 	SystemIdentity, SystemSigning       string

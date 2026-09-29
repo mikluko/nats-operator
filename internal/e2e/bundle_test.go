@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	fixtures "github.com/mikluko/nats-operator/hack/e2e-fixtures"
+	"github.com/mikluko/nats-operator/internal/e2e/fixtures"
 )
 
 const storiesDir = "../../docs/content/docs/stories"
@@ -427,8 +427,8 @@ func TestLoadBundles_Fixtures(t *testing.T) {
 
 // TestLoadBundles_Generated pins the generated root laid over the stories:
 // its fixtures load as the bundle's own e2e/ files and a patchFile resolves
-// there, while a fixture in both places, a patchFile beside a patch, or a
-// patchFile found in neither fails.
+// there, while a fixture in both places, a patchFile beside a patch, a
+// patchFile found in neither, or a generated directory naming no story fails.
 func TestLoadBundles_Generated(t *testing.T) {
 	const (
 		index = "---\nparams:\n  e2e:\n    clusters:\n      - {name: east, files: [01-a.yaml, e2e/00-fixture.yaml]}\n" +
@@ -484,6 +484,15 @@ func TestLoadBundles_Generated(t *testing.T) {
 			require.ErrorContains(t, err, tt.wantErr)
 		})
 	}
+
+	t.Run("orphan", func(t *testing.T) {
+		root := writeBundle(t, map[string]string{"01-a.yaml": cm, "index.md": index})
+		gen := t.TempDir()
+		write(t, gen, generatedFiles)
+		require.NoError(t, os.MkdirAll(filepath.Join(gen, "02-gone", FixtureDir), 0o755))
+		_, err := LoadBundles(root, gen)
+		require.ErrorContains(t, err, "02-gone: generated fixtures for no story")
+	})
 }
 
 func TestBundle_DropsGatewayTLS(t *testing.T) {

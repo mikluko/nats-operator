@@ -196,8 +196,8 @@ type Expectation struct {
 // LoadBundles reads every story directory under dir, ordered by story number,
 // with generated, unless empty, laid over dir: a file at
 // generated/<story>/e2e/<name> is read as the story's e2e/<name>, and one
-// in both is an error. A directory whose name does not start with a number
-// is not a story.
+// in both is an error, as is a directory under generated naming no story. A
+// directory whose name does not start with a number is not a story.
 func LoadBundles(dir, generated string) ([]*Bundle, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -224,6 +224,9 @@ func LoadBundles(dir, generated string) ([]*Bundle, error) {
 		b.Name, b.Number = e.Name(), n
 		bundles = append(bundles, b)
 	}
+	if err := checkGenerated(generated, bundles); err != nil {
+		return nil, err
+	}
 	slices.SortFunc(bundles, func(a, b *Bundle) int { return a.Number - b.Number })
 	for _, b := range bundles {
 		if b.After == 0 {
@@ -238,8 +241,25 @@ func LoadBundles(dir, generated string) ([]*Bundle, error) {
 	return bundles, nil
 }
 
-// loadBundle reads the story in dir, with the story's directory under the
-// generated root, gen, laid over it where gen is not empty.
+// checkGenerated fails on a directory under generated, unless empty, that
+// names none of bundles.
+func checkGenerated(generated string, bundles []*Bundle) error {
+	if generated == "" {
+		return nil
+	}
+	entries, err := os.ReadDir(generated)
+	if err != nil {
+		return fmt.Errorf("read generated fixtures: %w", err)
+	}
+	for _, e := range entries {
+		if e.IsDir() && !slices.ContainsFunc(bundles, func(b *Bundle) bool { return b.Name == e.Name() }) {
+			return fmt.Errorf("%s: generated fixtures for no story", filepath.Join(generated, e.Name()))
+		}
+	}
+	return nil
+}
+
+// loadBundle reads the story in dir, with gen laid over it.
 func loadBundle(dir, gen string) (*Bundle, error) {
 	b := &Bundle{}
 	if err := readFrontMatter(filepath.Join(dir, "index.md"), b); err != nil {
@@ -429,9 +449,8 @@ func addFile(steps []Step, f bundleFile) []Step {
 	return steps
 }
 
-// checkPlacement fails when a placement names a file the bundle lacks, or
-// leaves one of its files, paths keyed by their path from the bundle, in no
-// Kubernetes cluster.
+// checkPlacement fails when a placement names a file not in paths, or leaves
+// one of paths in no Kubernetes cluster.
 func checkPlacement(dir string, paths map[string]string, clusters []Placement) error {
 	if len(clusters) == 0 {
 		return nil

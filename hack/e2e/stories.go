@@ -12,8 +12,8 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	fixtures "github.com/mikluko/nats-operator/hack/e2e-fixtures"
 	"github.com/mikluko/nats-operator/internal/e2e"
+	"github.com/mikluko/nats-operator/internal/e2e/fixtures"
 )
 
 // Runner timings besides the per-step wait: how long a previous story's
