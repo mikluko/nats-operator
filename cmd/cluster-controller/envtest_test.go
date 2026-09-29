@@ -31,11 +31,6 @@ const (
 	envtestTick = 100 * time.Millisecond
 )
 
-// setup is setupWith refusing gateways without tls.
-func setup(ctx context.Context, mgr ctrl.Manager) error {
-	return setupWith(ctx, mgr, false)
-}
-
 // TestEnvtestOwnedCache pins that setup, in a manager scoped to owned and to
 // story 1's namespace, brings story 1's NatsCluster up to date through that
 // cache, labels every owned object it renders, never reconciles a
@@ -60,7 +55,7 @@ func TestEnvtestOwnedCache(t *testing.T) {
 	recorded, reads := secretreads.Record(cfg)
 	mgr, err := manager.New(recorded, opts, scheme, owned)
 	require.NoError(t, err)
-	require.NoError(t, setup(t.Context(), mgr))
+	require.NoError(t, setup(t.Context(), mgr, false))
 	go func() { _ = mgr.Start(t.Context()) }()
 
 	c, err := client.New(cfg, client.Options{Scheme: scheme})
@@ -129,5 +124,8 @@ func TestEnvtestOwnedCache(t *testing.T) {
 func TestEnvtestReadyUnderRoles(t *testing.T) {
 	scheme, err := manager.NewScheme(schemes...)
 	require.NoError(t, err)
-	managertest.ReadyUnderRoles(t, scheme, owned, setup, "../../config/rbac/cluster-controller", "../../config/crd")
+	withoutGatewayTLS := func(ctx context.Context, mgr ctrl.Manager) error {
+		return setup(ctx, mgr, false)
+	}
+	managertest.ReadyUnderRoles(t, scheme, owned, withoutGatewayTLS, "../../config/rbac/cluster-controller", "../../config/crd")
 }

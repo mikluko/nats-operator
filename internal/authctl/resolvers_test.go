@@ -348,19 +348,31 @@ func TestResolvers_RosterMemory(t *testing.T) {
 	c.stop(2)
 	for miss := 1; miss < authctl.RosterMisses; miss++ {
 		require.NoError(t, r.PollOperator(t.Context(), testOperator))
-		d, err := r.Current(t.Context(), testOperator, token)
-		require.NoError(t, err)
-		require.Equal(t, [2]int32{3, 2}, [2]int32{d.Servers, d.Current}, "server 2 missed %d polls and is still counted", miss)
-		_, err = r.Lookup(t.Context(), testOperator, pub)
+		requireDistribution(t, r, token, 3, 2, "server 2 missed %d polls and is still counted", miss)
+		_, err := r.Lookup(t.Context(), testOperator, pub)
 		require.ErrorIs(t, err, authctl.ErrUnreachable, "server 2 may hold a newer JWT")
 	}
 	require.NoError(t, r.PollOperator(t.Context(), testOperator))
-	d, err := r.Current(t.Context(), testOperator, token)
-	require.NoError(t, err)
-	require.Equal(t, [2]int32{2, 2}, [2]int32{d.Servers, d.Current}, "server 2 left the roster")
-	got, err := r.Lookup(t.Context(), testOperator, pub)
-	require.NoError(t, err)
-	require.Equal(t, token, got)
+	requireDistribution(t, r, token, 2, 2, "server 2 left the roster")
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
+		got, err := r.Lookup(t.Context(), testOperator, pub)
+		if assert.NoError(ct, err) {
+			assert.Equal(ct, token, got)
+		}
+	}, 10*time.Second, 50*time.Millisecond)
+}
+
+// requireDistribution requires that r's Current of token reports servers
+// and current; it retries, as a reply that misses Wait counts as not current
+// and a retry leaves the roster as it is.
+func requireDistribution(t *testing.T, r *authctl.Resolvers, token string, servers, current int32, msgAndArgs ...any) {
+	t.Helper()
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
+		d, err := r.Current(t.Context(), testOperator, token)
+		if assert.NoError(ct, err) {
+			assert.Equal(ct, [2]int32{servers, current}, [2]int32{d.Servers, d.Current})
+		}
+	}, 10*time.Second, 50*time.Millisecond, msgAndArgs...)
 }
 
 // userCreds signs a new user of the account with keys.

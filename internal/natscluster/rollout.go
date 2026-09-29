@@ -443,7 +443,7 @@ func (r *Reconciler) restartServer(ctx context.Context, nc *clusterv1beta1.NatsC
 		sts.Spec.Template.Annotations[AnnotationRestartGeneration] = strconv.Itoa(n + 1)
 	}
 	if err := r.Client.Update(ctx, sts); err != nil {
-		return nil, fmt.Errorf("restart statefulset %s: %w", sts.Name, err)
+		return nil, fmt.Errorf("restart server %s: %w", s.Name, err)
 	}
 	return sts, nil
 }

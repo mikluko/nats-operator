@@ -5,12 +5,14 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"io"
 	"maps"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/nats-io/jwt/v2"
@@ -19,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -44,7 +47,7 @@ func fixtureScheme(t *testing.T) *runtime.Scheme {
 	return scheme
 }
 
-// decoded is what decodeDir returns: the Secrets and ConfigMaps by name.
+// decoded holds a directory's Secrets and ConfigMaps by name.
 type decoded struct {
 	secrets    map[string]*corev1.Secret
 	configMaps map[string]*corev1.ConfigMap
@@ -205,16 +208,22 @@ func checkUnmanaged(t *testing.T, dir string) {
 	cfg, err := conf.Parse(cm.Data["nats.conf"])
 	require.NoError(t, err)
 
-	oc, err := jwt.DecodeOperatorClaims(cfg["operator"].(string))
+	operator, ok := cfg["operator"].(string)
+	require.True(t, ok, "operator is a string")
+	oc, err := jwt.DecodeOperatorClaims(operator)
 	require.NoError(t, err)
 	require.Equal(t, oc.Subject, oc.Issuer)
-	system := cfg["system_account"].(string)
+	system, ok := cfg["system_account"].(string)
+	require.True(t, ok, "system_account is a string")
 	require.Equal(t, system, oc.SystemAccount)
-	preload := cfg["resolver_preload"].(map[string]any)
+	preload, ok := cfg["resolver_preload"].(map[string]any)
+	require.True(t, ok, "resolver_preload is a map")
 	require.Len(t, preload, 2)
 	var account string
-	for pub, token := range preload {
-		ac, err := jwt.DecodeAccountClaims(token.(string))
+	for pub, value := range preload {
+		token, ok := value.(string)
+		require.True(t, ok, "resolver_preload %s is a string", pub)
+		ac, err := jwt.DecodeAccountClaims(token)
 		require.NoError(t, err)
 		require.Equal(t, pub, ac.Subject)
 		require.Equal(t, oc.Subject, ac.Issuer)
@@ -270,6 +279,50 @@ func TestChains(t *testing.T) {
 			dir := t.TempDir()
 			require.NoError(t, generators[story](dir))
 			check(t, dir)
+		})
+	}
+}
+
+// TestGenerate pins every story's generated files: each is readable by its
+// owner alone, and each patch file, named for the kind it targets, decodes
+// strictly into that kind.
+func TestGenerate(t *testing.T) {
+	scheme := fixtureScheme(t)
+	kinds := map[string]schema.GroupVersionKind{}
+	for gvk := range scheme.AllKnownTypes() {
+		if gvk.Group == natsv1beta1.GroupVersion.Group {
+			kinds[strings.ToLower(gvk.Kind)] = gvk
+		}
+	}
+	root := t.TempDir()
+	require.NoError(t, Generate(root))
+	stories, err := os.ReadDir(root)
+	require.NoError(t, err)
+	require.Len(t, stories, len(generators))
+	for _, story := range stories {
+		t.Run(story.Name(), func(t *testing.T) {
+			dir := filepath.Join(root, story.Name(), "e2e")
+			files, err := os.ReadDir(dir)
+			require.NoError(t, err)
+			for _, f := range files {
+				info, err := f.Info()
+				require.NoError(t, err)
+				require.Equal(t, os.FileMode(0o600), info.Mode(), f.Name())
+			}
+			patches, err := filepath.Glob(filepath.Join(dir, "*.json"))
+			require.NoError(t, err)
+			for _, path := range patches {
+				gvk, ok := kinds[strings.TrimSuffix(filepath.Base(path), ".json")]
+				require.True(t, ok, "%s names no kind of %s", path, natsv1beta1.GroupVersion.Group)
+				raw, err := os.ReadFile(path)
+				require.NoError(t, err)
+				var patch map[string]any
+				require.NoError(t, json.Unmarshal(raw, &patch))
+				require.Equal(t, []string{"spec"}, slices.Sorted(maps.Keys(patch)), path)
+				obj, err := scheme.New(gvk)
+				require.NoError(t, err)
+				require.NoError(t, yaml.UnmarshalStrict(raw, obj), path)
+			}
 		})
 	}
 }

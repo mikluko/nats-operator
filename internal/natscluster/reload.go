@@ -84,9 +84,7 @@ func (r *Reconciler) applyConfig(ctx context.Context, nc *clusterv1beta1.NatsClu
 				a.restart(s.Name, fmt.Sprintf("ConfigMap %s does not exist", s.ConfigMap.Name))
 				continue
 			}
-			if cm, err = r.applyServerConfigMap(ctx, nc, s, func(a map[string]string) {
-				delete(a, AnnotationConfigRevision)
-			}); err != nil {
+			if cm, err = r.applyServerConfigMap(ctx, nc, s, dropRevision); err != nil {
 				return a, err
 			}
 		} else if err != nil {
@@ -232,6 +230,12 @@ func serverID(snap *sysobs.Snapshot, name string) string {
 func (r *Reconciler) reloadExpired(cm *corev1.ConfigMap) bool {
 	since, err := time.Parse(time.RFC3339, cm.Annotations[AnnotationReloadSince])
 	return err != nil || r.now().Sub(since) > reloadWindow
+}
+
+// dropRevision removes the config revision from a server ConfigMap's
+// annotations, so no StatefulSet reads the ConfigMap as on its revision.
+func dropRevision(a map[string]string) {
+	delete(a, AnnotationConfigRevision)
 }
 
 // writeForReload writes server s's rendered config into cm, marked for a

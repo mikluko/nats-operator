@@ -10,6 +10,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strconv"
 	"testing"
@@ -24,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
@@ -274,6 +276,40 @@ func (e *reloadEnv) configMap(t *testing.T, name string) *corev1.ConfigMap {
 	return cm
 }
 
+// TestRestartServerErrors pins that restartServer names the server it
+// restarts on a failed ConfigMap write and a failed StatefulSet write alike.
+func TestRestartServerErrors(t *testing.T) {
+	nc := storyCluster(t)
+	nc.UID = "demo-uid"
+	a, err := Render(nc, Inputs{})
+	require.NoError(t, err)
+	s := a.Servers[0]
+	refused := errors.New("refused")
+	for _, tt := range []struct {
+		name string
+		fail client.Object
+	}{
+		{name: "configmap", fail: &corev1.ConfigMap{}},
+		{name: "statefulset", fail: &appsv1.StatefulSet{}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			e := reloadFixture(t, nc, a)
+			cur := e.statefulSets(t)[s.Name]
+			e.r.Client = interceptor.NewClient(e.c.(client.WithWatch), interceptor.Funcs{
+				Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+					if reflect.TypeOf(obj) == reflect.TypeOf(tt.fail) {
+						return refused
+					}
+					return c.Update(ctx, obj, opts...)
+				},
+			})
+			_, err := e.r.restartServer(t.Context(), nc, s, cur, "tls changed")
+			require.ErrorIs(t, err, refused)
+			require.ErrorContains(t, err, "restart server "+s.Name+": ")
+		})
+	}
+}
+
 // TestApplyConfigRevertDuringPendingReload pins that a server whose config
 // returns to its StatefulSet's revision while its reload to another is
 // unconfirmed gets that revision written back to its ConfigMap and reloaded.
@@ -433,9 +469,7 @@ func TestServerConfigMapWrites(t *testing.T) {
 		return err
 	}
 	recreate := func(e *reloadEnv) error {
-		_, err := e.r.applyServerConfigMap(t.Context(), nc, s, func(a map[string]string) {
-			delete(a, AnnotationConfigRevision)
-		})
+		_, err := e.r.applyServerConfigMap(t.Context(), nc, s, dropRevision)
 		return err
 	}
 	restart := func(e *reloadEnv) error {

@@ -38,7 +38,7 @@ func main() {
 		AddToScheme: schemes,
 		Owned:       owned,
 		Setup: func(ctx context.Context, mgr ctrl.Manager) error {
-			return setupWith(ctx, mgr, *allowGatewayWithoutTLS)
+			return setup(ctx, mgr, *allowGatewayWithoutTLS)
 		},
 	}); err != nil {
 		os.Exit(1)
@@ -61,10 +61,10 @@ var owned = manager.Owned{
 
 var schemes = []func(*runtime.Scheme) error{natsv1beta1.AddToScheme, clusterv1beta1.AddToScheme}
 
-// setupWith registers the cluster controller's instruments and adds the
+// setup registers the cluster controller's instruments and adds the
 // NatsCluster reconciler to mgr, rendering gateways without tls when
 // allowGatewayWithoutTLS is set.
-func setupWith(ctx context.Context, mgr ctrl.Manager, allowGatewayWithoutTLS bool) error {
+func setup(ctx context.Context, mgr ctrl.Manager, allowGatewayWithoutTLS bool) error {
 	if err := telemetry.RegisterCluster(otel.Meter(telemetry.ClusterController), mgr.GetClient()); err != nil {
 		return fmt.Errorf("register instruments: %w", err)
 	}
