@@ -90,13 +90,13 @@ func (r *UserReconciler) reconcile(ctx context.Context, u *authv1beta1.NatsUser)
 	notReady := func(reason, msg string) {
 		conditions.Set(&st.Conditions, u.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: reason, Message: msg})
 	}
-	acc, ok, err := r.account(ctx, u, notReady)
+	acc, refused, err := r.account(ctx, u, notReady)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	if !ok {
+	if acc == nil {
 		st.JWT = ""
-		if meta.IsStatusConditionFalse(st.Conditions, grant.ConditionReferencesResolved) {
+		if refused {
 			return reconcile.Result{}, r.deleteCreds(ctx, u)
 		}
 		return reconcile.Result{}, nil
@@ -339,37 +339,38 @@ type userAccount struct {
 	distribution *authv1beta1.Distribution
 }
 
-// account returns the account u belongs to. ok is false where u may not
-// use it yet, with Ready and ReferencesResolved set to say why.
-func (r *UserReconciler) account(ctx context.Context, u *authv1beta1.NatsUser, notReady func(reason, msg string)) (userAccount, bool, error) {
+// account returns the account u belongs to, or nil where u may not use it
+// yet, with Ready and ReferencesResolved set to say why. refused is true
+// where no grant admits u to the account.
+func (r *UserReconciler) account(ctx context.Context, u *authv1beta1.NatsUser, notReady func(reason, msg string)) (acc *userAccount, refused bool, err error) {
 	ref := u.Spec.AccountRef
 	key := ref.ObjectKey(u.Namespace)
 	cond, err := admit(ctx, r.Client, authGroup, "NatsUser", u, string(ref.Kind), key)
 	if err != nil {
-		return userAccount{}, false, err
+		return nil, false, err
 	}
 	if !referenceAdmitted(&u.Status.Conditions, u.Generation, cond, notReady) {
-		return userAccount{}, false, nil
+		return nil, true, nil
 	}
-	acc, found, err := r.lookupAccount(ctx, ref.Kind, key)
+	a, found, err := r.lookupAccount(ctx, ref.Kind, key)
 	if err != nil {
-		return userAccount{}, false, err
+		return nil, false, err
 	}
 	if !found {
 		notReady(ReasonNotFound, fmt.Sprintf("%s %s does not exist", ref.Kind, key))
-		return userAccount{}, false, nil
+		return nil, false, nil
 	}
 	if ref.Kind == authv1beta1.AccountKindAccount {
-		cond, err := admitAccount(ctx, r.Client, key.Namespace, acc.operator)
+		cond, err := admitAccount(ctx, r.Client, key.Namespace, a.operator)
 		if err != nil {
-			return userAccount{}, false, err
+			return nil, false, err
 		}
 		if cond != nil {
 			notReady(ReasonAccountNotAdmitted, fmt.Sprintf("NatsAccount %s: %s", key, cond.Message))
-			return userAccount{}, false, nil
+			return nil, false, nil
 		}
 	}
-	return acc, true, nil
+	return &a, false, nil
 }
 
 func (r *UserReconciler) lookupAccount(ctx context.Context, kind authv1beta1.AccountKind, key types.NamespacedName) (userAccount, bool, error) {

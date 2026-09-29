@@ -62,7 +62,9 @@ func TestRelease_DueUntilChartPushed(t *testing.T) {
 	bash, err := exec.LookPath("bash")
 	require.NoError(t, err)
 	jq, err := exec.LookPath("jq")
-	require.NoError(t, err)
+	if err != nil {
+		t.Skip("jq is not on PATH")
+	}
 
 	wf := readWorkflow(t, "release.yml")
 	plan := wf.Jobs["plan"]

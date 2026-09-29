@@ -24,8 +24,7 @@ import (
 // siteBase is the base URL the site is built under in tests.
 const siteBase = "https://site.test/base/"
 
-// siteRemote is the host hugo fetches the hudocs theme module from when its
-// module cache lacks it, module.proxy being direct.
+// siteRemote is the host hugo fetches the hudocs theme module from.
 const siteRemote = "github.com:443"
 
 // buildSite renders docs/ under siteBase and returns the output directory.

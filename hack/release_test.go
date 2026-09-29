@@ -358,6 +358,10 @@ func TestGoToolchainOnce(t *testing.T) {
 					setups++
 					require.Equal(t, "go.mod", s.With["go-version-file"], "%s job %s", f, job)
 					require.Empty(t, s.With["go-version"], "%s job %s", f, job)
+					if filepath.Base(f) == "ci.yml" {
+						require.Equal(t, []string{"go.sum", filepath.Join(filepath.Dir(toolsModfile), "go.sum")},
+							strings.Fields(s.With["cache-dependency-path"]), "%s job %s", f, job)
+					}
 				}
 			}
 		}
@@ -428,8 +432,7 @@ func TestRelease_AttestsBeforeRelease(t *testing.T) {
 	}
 }
 
-// toolsModfile pins golangci-lint in a module graph apart from the
-// controllers'.
+// toolsModfile is the go.mod that pins golangci-lint.
 const toolsModfile = "hack/tools/go.mod"
 
 // TestCI_LintsWithToolsPin pins that ci lints through `just lint`, which runs
