@@ -186,9 +186,6 @@ func TestMerge_LeaderlessGroupListsHolders(t *testing.T) {
 	require.Equal(t, map[string]Load{"s1": {}, "s2": {}}, snap.Load())
 }
 
-// TestMerge_RemoteMetaLeader pins that a meta group whose leader did not
-// answer is FromFollowers and lists every server that did, and that the
-// leader's own view keeps only its replicas among the roster.
 func TestMerge_RemoteMetaLeader(t *testing.T) {
 	snap := merge(roster("s1", "s2", "s3"), map[string]*wireJSInfo{
 		"s1": info(&wireMeta{Leader: "x0"}),

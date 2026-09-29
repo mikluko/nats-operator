@@ -32,11 +32,11 @@ func Target(copies, servers int) (floor, ceiling, atCeiling int) {
 	return floor, ceiling, atCeiling
 }
 
-// Landings is every server of roster that could take a copy of g in a move
-// within cluster: not already holding one, and carrying every tag g's placement
-// declares, and empty for a stream whose declared cluster is another. A
-// placement move is requested only where it is not empty: with no eligible
-// server, nats-server moves the stream out of its NATS cluster.
+// Landings is every server of roster that holds no copy of g and carries
+// every tag g's placement declares, and is empty where that placement
+// declares a NATS cluster other than cluster. A caller requests a placement move only where
+// it is not empty: with no eligible server, nats-server moves the stream out
+// of its NATS cluster.
 func Landings(g Group, roster []Server, cluster string) []string {
 	var tags []string
 	if p := g.Placement; p != nil {

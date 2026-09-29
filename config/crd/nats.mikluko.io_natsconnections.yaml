@@ -59,8 +59,7 @@ spec:
                     properties:
                       key:
                         default: user.creds
-                        description: Key within the Secret, the key a NatsUser writes
-                          by default.
+                        description: Key within the Secret.
                         minLength: 1
                         type: string
                       name:
@@ -90,8 +89,7 @@ spec:
                         properties:
                           key:
                             default: ca.crt
-                            description: Key within the Secret, the key cert-manager
-                              writes by default.
+                            description: Key within the Secret.
                             minLength: 1
                             type: string
                           name:

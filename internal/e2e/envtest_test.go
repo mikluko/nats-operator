@@ -122,9 +122,6 @@ spec: {servers: ["nats://demo:4222"]}
 	})
 }
 
-// TestEnvtest_Chained pins that a story with after runs its base story's
-// steps first, in namespaces of both made fresh before either runs, and
-// then its own.
 func TestEnvtest_Chained(t *testing.T) {
 	c := startAPIServer(t)
 	cm := func(ns, name string) string {
@@ -165,9 +162,6 @@ func TestEnvtest_Chained(t *testing.T) {
 	require.NoError(t, c.Get(t.Context(), client.ObjectKey{Namespace: "chain-next", Name: "next"}, &corev1.ConfigMap{}))
 }
 
-// TestEnvtest_CrashLoopFailsFast pins that a story whose pod crash-loops
-// fails its step within seconds, naming the pod, rather than at the step's
-// wait, which its front matter sets.
 func TestEnvtest_CrashLoopFailsFast(t *testing.T) {
 	c := startAPIServer(t)
 	root := writeBundle(t, map[string]string{
@@ -210,9 +204,6 @@ func crashLoopWhenPresent(ctx context.Context, c client.WithWatch, ns, name stri
 	})
 }
 
-// TestEnvtest_ReleaseGuards pins that a namespace's NatsClusters are
-// annotated to pass their deletion guard, and its JetStream resources set to
-// retain their server objects, before the runner deletes it.
 func TestEnvtest_ReleaseGuards(t *testing.T) {
 	c := startAPIServer(t)
 	require.NoError(t, c.Create(t.Context(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "guarded"}}))
@@ -243,10 +234,6 @@ func TestEnvtest_ReleaseGuards(t *testing.T) {
 	require.NoError(t, releaseGuards(t.Context(), c, "empty"))
 }
 
-// TestEnvtest_ReleaseFinalizers pins that a story's namespace whose objects
-// still hold the controllers' finalizers goes once it has no Pod left, the
-// runner removing those finalizers, and that none is removed while a Pod
-// remains.
 func TestEnvtest_ReleaseFinalizers(t *testing.T) {
 	c := startAPIServer(t)
 	const ns = "stuck"
@@ -348,11 +335,6 @@ func playNamespaceController(ctx context.Context, c client.Client, ns string) {
 	}
 }
 
-// TestEnvtest_TwoClusters pins, against two API servers, that a placed story
-// applies each file only to its own Kubernetes cluster and reads each status
-// from there, that it is skipped when the run reaches fewer Kubernetes
-// clusters than it places files in, and that PublishHosts carries one's
-// LoadBalancer hostnames to both.
 func TestEnvtest_TwoClusters(t *testing.T) {
 	east, west := startAPIServer(t), startAPIServer(t)
 	root := writeBundle(t, map[string]string{

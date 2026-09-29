@@ -192,9 +192,6 @@ func TestPageAnchorsResolve(t *testing.T) {
 	}
 }
 
-// TestPageCoversEveryType pins the page to the types: a section per kind
-// and per type a kind reaches, a row per field in declaration order, and a
-// row per value for a string type with constants.
 func TestPageCoversEveryType(t *testing.T) {
 	sections := readPage(t).sections
 	kinds, types := apiTypes(t)
@@ -260,8 +257,6 @@ func undocumented(typ string, f *ast.Field) bool {
 	return slices.Contains([]string{"ObjectMeta", "ListMeta", "Metadata", "Spec", "Status", "Items"}, f.Names[0].Name)
 }
 
-// TestEveryTypeAndFieldDocumented pins that the page has prose for every
-// type and field: an undocumented one renders as an empty cell.
 func TestEveryTypeAndFieldDocumented(t *testing.T) {
 	var missing []string
 	for _, g := range decls(t) {
@@ -297,8 +292,6 @@ func TestEveryTypeAndFieldDocumented(t *testing.T) {
 	require.Empty(t, missing, "types and fields without a doc")
 }
 
-// TestEnumValuesAreConstants pins that a string type's enum marker and its
-// constants name the same values, since the page lists the constants.
 func TestEnumValuesAreConstants(t *testing.T) {
 	const marker = "+kubebuilder:validation:Enum="
 	enums := map[string][]string{}

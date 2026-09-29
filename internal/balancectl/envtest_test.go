@@ -31,9 +31,6 @@ import (
 
 const storiesDir = "../../docs/content/docs/stories"
 
-// TestEnvtest runs the reconciler in a manager against a real API server
-// over story 7's system balancer, pointed at C1 of a two-cluster
-// supercluster.
 func TestEnvtest(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")

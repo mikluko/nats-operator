@@ -119,9 +119,6 @@ func dial(t *testing.T, url string, u jwtplane.User, keys jwtplane.Keys) (*nats.
 // authInbox is the inbox prefix the auth-controller preset grants.
 var authInbox = nats.CustomInboxPrefix(jwtplane.InboxPrefix(jwtplane.PresetAuthController))
 
-// TestConnSessions_Kick pins a kick pass against two routed
-// servers: the auth-controller preset suffices, only the named user's
-// connections close, on every server, and the next pass finds none.
 func TestConnSessions_Kick(t *testing.T) {
 	p := newPlane(t)
 	srvs := startServers(t, p, 2)

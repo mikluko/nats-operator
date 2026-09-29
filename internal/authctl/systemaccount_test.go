@@ -19,9 +19,6 @@ import (
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
 
-// TestSystemAccountReconciler_Push pins that a NatsSystemAccount records a
-// LastPushTime for a newly signed JWT only where its push reached a server,
-// and pushes nothing while its NatsOperator's RevocationsUnrecovered is True.
 func TestSystemAccountReconciler_Push(t *testing.T) {
 	pair := func(prefix nkeys.PrefixByte) nkeys.KeyPair {
 		kp, err := nkeys.CreatePair(prefix)

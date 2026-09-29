@@ -27,7 +27,7 @@ import (
 
 // ReconciledKinds returns, in registration order, the kind each controller
 // setup traces its reconciles under, failing the test for a controller that
-// records no span. It never runs in parallel, since it replaces the
+// records no span. Callers must not run it in parallel: it replaces the
 // global tracer provider. Its controllers skip controller-runtime's
 // process-wide name check, so another manager in the test binary may
 // register the same names.

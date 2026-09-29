@@ -113,12 +113,10 @@ func (o *SystemClient) Roster(ctx context.Context) ([]Server, error) {
 	return out, nil
 }
 
-// Observe reads the roster, every roster server's gateways under
-// WithGateways, and every roster server's JSZ with its accounts, streams and
-// consumers, and merges them into a Snapshot. A meta leader in another NATS
-// cluster of the supercluster is asked for its peers, and the meta group's
-// members are the roster servers among them; if it does not answer, the
-// meta group is FromFollowers.
+// Observe merges the roster and each roster server's JSZ, and its gateways
+// under WithGateways, into a Snapshot. A meta group led from another NATS
+// cluster has the roster servers among its leader's peers as members, or is
+// FromFollowers when that leader does not answer.
 func (o *SystemClient) Observe(ctx context.Context) (*Snapshot, error) {
 	roster, err := o.Roster(ctx)
 	if err != nil {

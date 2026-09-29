@@ -231,9 +231,8 @@ func (r *EvacuationReconciler) evacuate(ctx context.Context, e *js.NatsClusterEv
 	return after, nil
 }
 
-// finalize cancels the moves e has in flight and releases e. A connection
-// that cannot be resolved, or a source no server of which answers, leaves
-// nothing to cancel.
+// finalize cancels the moves e has in flight unless e is Ready, then removes
+// its finalizer; a connection that fails to dial holds it.
 func (r *EvacuationReconciler) finalize(ctx context.Context, e *js.NatsClusterEvacuation) error {
 	if !controllerutil.ContainsFinalizer(e, lifecycle.Finalizer) {
 		return nil

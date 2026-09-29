@@ -22,9 +22,6 @@ func TestEmit(t *testing.T) {
 	require.NotPanics(t, func() { Emit(nil, &corev1.ConfigMap{}, UserKicked, "") })
 }
 
-// TestEventsEmitted pins Events, which the telemetry page lists, to the
-// code: every Emit outside this package passes one of them by name, and
-// each of them is passed somewhere.
 func TestEventsEmitted(t *testing.T) {
 	listed := eventsListed(t)
 	var emitted []string

@@ -39,10 +39,6 @@ const storiesDir = "../../docs/content/docs/stories"
 // envResync is the resync period the envtest manager runs with.
 const envResync = 2 * time.Second
 
-// TestEnvtest runs the jetstream-controller's reconcilers in a manager
-// against a real API server over the manifests of stories 1, 3 and 8, each
-// against in-process NATS clusters. Only the NatsConnections' servers are
-// rewritten to reach them.
 func TestEnvtest(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")

@@ -205,8 +205,6 @@ func TestSecretNames(t *testing.T) {
 	}
 }
 
-// TestConnectionsReading pins the Secret watch mapping: a Secret enqueues
-// the NatsConnections in its own namespace that read it.
 func TestConnectionsReading(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(testScheme(t)).
 		WithIndex(&natsv1beta1.NatsConnection{}, SecretField, func(o client.Object) []string {

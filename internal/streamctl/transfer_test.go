@@ -114,11 +114,6 @@ func TestDecodeConsumerPage(t *testing.T) {
 	}
 }
 
-// TestStreamMove edits a NatsStream's placement.cluster on a two-cluster
-// supercluster and follows the move the server makes, held in flight by
-// stopping two of its three new replicas: the transfer block and Synced False with
-// ReasonMoving while it is, rechecked on MovingRecheck, then neither once
-// the stream serves from the new NATS cluster.
 func TestStreamMove(t *testing.T) {
 	sc := startSupercluster(t, "east", "west")
 	f := newFixtureOn(t, sc["east"])

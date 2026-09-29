@@ -49,7 +49,7 @@ const DefaultRetryAfter = 30 * time.Second
 // resolving.
 type Reconciler struct {
 	// Client reads Secrets from the API server, as manager.ClientOptions
-	// sets, since the reconciler watches only their metadata.
+	// sets.
 	Client     client.Client
 	Pool       *Pool
 	RetryAfter time.Duration

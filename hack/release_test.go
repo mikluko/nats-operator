@@ -64,8 +64,6 @@ func readWorkflow(t *testing.T, name string) workflow {
 	return wf
 }
 
-// TestRelease_FailOnAndCIName pins the plan job's changelog step to failing
-// on an invalid CHANGELOG.md, and release.yml's trigger to ci.yml's name.
 func TestRelease_FailOnAndCIName(t *testing.T) {
 	changelog := stepByID(t, readWorkflow(t, "release.yml").Jobs["plan"].Steps, "changelog")
 	require.True(t, strings.HasPrefix(changelog.Uses, "mikluko/action-changelog@"), changelog.Uses)
@@ -126,9 +124,6 @@ func controllers(t *testing.T) []string {
 	return names
 }
 
-// TestRelease_PublishesWhatTheChartPulls holds the release's images, one per
-// controller under cmd/, to the chart's image repositories, and the chart's
-// destination to their registry.
 func TestRelease_PublishesWhatTheChartPulls(t *testing.T) {
 	wf := readWorkflow(t, "release.yml")
 
@@ -191,8 +186,6 @@ func TestRelease_ChartPinsImageDigests(t *testing.T) {
 	}
 }
 
-// TestRelease_OneDigestList holds signing and provenance to the list the
-// images job's digests step builds, and to no other.
 func TestRelease_OneDigestList(t *testing.T) {
 	wf := readWorkflow(t, "release.yml")
 	images := wf.Jobs["images"]
@@ -233,7 +226,6 @@ func TestDocs_BuildJob(t *testing.T) {
 	require.Equal(t, "github.event_name != 'pull_request'", hugo[1].If)
 }
 
-// TestControllerList pins the Justfile's controller list to cmd/.
 func TestControllerList(t *testing.T) {
 	just, err := exec.LookPath("just")
 	if err != nil {
@@ -246,8 +238,6 @@ func TestControllerList(t *testing.T) {
 
 const setupHugo = "./.github/actions/setup-hugo"
 
-// TestHugoInstalledOnce holds the workflows that build the site to the
-// setup-hugo action's pinned and checksummed Hugo.
 func TestHugoInstalledOnce(t *testing.T) {
 	b, err := os.ReadFile("../.github/actions/setup-hugo/action.yml")
 	require.NoError(t, err)
@@ -282,8 +272,6 @@ func TestHugoInstalledOnce(t *testing.T) {
 	}
 }
 
-// TestGoToolchainOnce holds every workflow's Go to go.mod's toolchain line:
-// each setup-go reads go.mod, and none names a version of its own.
 func TestGoToolchainOnce(t *testing.T) {
 	out, err := exec.Command("go", "mod", "edit", "-json", "../go.mod").Output()
 	require.NoError(t, err)
@@ -328,14 +316,12 @@ func TestHelmVersionOnce(t *testing.T) {
 	require.Len(t, versions, 1, "%v", versions)
 }
 
-// TestMachineBasePinned holds the e2e machine's base image to a digest.
 func TestMachineBasePinned(t *testing.T) {
 	b, err := os.ReadFile("machine.Containerfile")
 	require.NoError(t, err)
 	require.Regexp(t, `(?m)^FROM \S+@sha256:[0-9a-f]{64}$`, string(b))
 }
 
-// TestKoBasePinned holds the controller images' base to a digest.
 func TestKoBasePinned(t *testing.T) {
 	b, err := os.ReadFile("../.ko.yaml")
 	require.NoError(t, err)
@@ -346,8 +332,6 @@ func TestKoBasePinned(t *testing.T) {
 	require.Regexp(t, `^\S+@sha256:[0-9a-f]{64}$`, ko.DefaultBaseImage)
 }
 
-// TestRelease_AttestsBeforeRelease holds the tag and the GitHub release to
-// the build provenance of the images and the chart.
 func TestRelease_AttestsBeforeRelease(t *testing.T) {
 	wf := readWorkflow(t, "release.yml")
 	require.Subset(t, wf.Jobs["release"].Needs, []string{"images", "provenance", "chart"})
@@ -411,8 +395,6 @@ func renovateMatches(t *testing.T, cfg renovateConfig) map[string]int {
 	return found
 }
 
-// TestRenovate_WatchesToolPins holds every tool version an action input pins
-// to a Renovate regex manager that finds it.
 func TestRenovate_WatchesToolPins(t *testing.T) {
 	b, err := os.ReadFile("../.github/renovate.json")
 	require.NoError(t, err)
@@ -465,8 +447,6 @@ func TestRenovate_WatchesToolPins(t *testing.T) {
 	require.Equal(t, 2, found["busybox"], "values.yaml and install.md")
 }
 
-// TestRenovate_OwnsActionsAndGomod holds GitHub Actions and Go modules to
-// Renovate's own managers, with no second update bot.
 func TestRenovate_OwnsActionsAndGomod(t *testing.T) {
 	b, err := os.ReadFile("../.github/renovate.json")
 	require.NoError(t, err)

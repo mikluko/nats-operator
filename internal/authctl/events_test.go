@@ -35,8 +35,6 @@ func drained(rec *events.FakeRecorder) []string {
 	}
 }
 
-// TestRecordHeld pins that JWTHeld is recorded as an account's revocations
-// first fail to be recovered, and not again while Ready still says so.
 func TestRecordHeld(t *testing.T) {
 	unreachable := errors.New("no server answered")
 	tests := []struct {
@@ -65,8 +63,6 @@ func (k kicker) Kick(context.Context, types.NamespacedName, string, string) (int
 	return k.n, nil
 }
 
-// TestUserKicked pins that a deleted user's kick pass records UserKicked
-// when it closes connections, and nothing when it finds none.
 func TestUserKicked(t *testing.T) {
 	op, err := nkeys.CreateOperator()
 	require.NoError(t, err)

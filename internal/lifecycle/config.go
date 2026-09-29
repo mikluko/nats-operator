@@ -12,7 +12,6 @@ import (
 
 // Config is a server object's config as the JetStream API carries it in
 // JSON, numbers kept as json.Number so 64-bit values survive a round trip.
-// Keys a kind does not model are carried through untouched.
 type Config map[string]any
 
 // metadataKey is the config key of the metadata map in every JetStream

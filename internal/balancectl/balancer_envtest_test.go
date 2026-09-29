@@ -26,9 +26,6 @@ import (
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
-// TestBalancerEnvtest runs the reconciler in a manager against a real API
-// server over story 7's account balancer, yielding to a NatsSystemBalancer's
-// pending placement move.
 func TestBalancerEnvtest(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")

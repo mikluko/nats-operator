@@ -67,9 +67,6 @@ func accountCondition(ct assert.TestingT, b *js.NatsBalancer, typ string, status
 	}
 }
 
-// TestBalancer_Pools runs the reconciler against a NATS cluster under a NATS
-// operator, on a connection of account A, whose streams in three pools, one of
-// them the default, all start led by C1-0.
 func TestBalancer_Pools(t *testing.T) {
 	t.Parallel()
 	p := newPlane(t)
@@ -251,10 +248,6 @@ func stepToFirst(t *testing.T, ctx context.Context, j jetstream.JetStream, strea
 	}, time.Minute, 300*time.Millisecond, "%s did not move to %s", stream, server)
 }
 
-// TestBalancers_OneMoveAtATime runs a NatsSystemBalancer, which can move
-// only account A's leaders, beside a NatsBalancer of account B, on one NATS
-// cluster whose every leader starts on C1-0: each moves only while the
-// other has no move in flight.
 func TestBalancers_OneMoveAtATime(t *testing.T) {
 	t.Parallel()
 	p := newPlane(t)

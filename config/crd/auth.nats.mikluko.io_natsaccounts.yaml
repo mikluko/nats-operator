@@ -176,8 +176,8 @@ spec:
               jwtTTL:
                 default: 48h
                 description: |-
-                  JWTTTL is the account JWT's lifetime, re-signed at half of it; 0 signs
-                  a JWT that never expires.
+                  JWTTTL is the account JWT's lifetime, and the JWT is re-signed at half
+                  of it; 0 signs a JWT that never expires.
                 type: string
               keys:
                 description: Keys adopts existing seeds.

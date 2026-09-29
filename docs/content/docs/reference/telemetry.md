@@ -33,7 +33,7 @@ A variable with `METRICS` or `TRACES` in its name applies to that signal alone a
 
 ## The OpenTelemetry Operator
 
-The chart sets none of the variables above but the two `metrics.prometheus.enabled` sets. The [OpenTelemetry Operator](https://opentelemetry.io/docs/platforms/kubernetes/operator/) sets them from an `Instrumentation` in the release namespace:
+Of the variables above, the chart sets only `OTEL_METRICS_EXPORTER` and `OTEL_EXPORTER_PROMETHEUS_HOST`, and only under `metrics.prometheus.enabled`. The [OpenTelemetry Operator](https://opentelemetry.io/docs/platforms/kubernetes/operator/) sets them from an `Instrumentation` in the release namespace:
 
 ```yaml
 apiVersion: opentelemetry.io/v1alpha1

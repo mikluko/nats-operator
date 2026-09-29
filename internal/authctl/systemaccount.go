@@ -47,8 +47,7 @@ var _ reconcile.Reconciler = (*SystemAccountReconciler)(nil)
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create
 
-// Reconcile keeps the keys, revocations and distribution of the
-// NatsSystemAccount req names.
+// Reconcile implements reconcile.Reconciler.
 func (r *SystemAccountReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	var sys authv1beta1.NatsSystemAccount
 	if err := r.Get(ctx, req.NamespacedName, &sys); err != nil {

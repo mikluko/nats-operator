@@ -194,10 +194,6 @@ func TestReload(t *testing.T) {
 	}
 }
 
-// TestObserve_Gateways pins what each server reports of its gateway
-// connections: an outbound connection to every other NATS cluster, and one
-// inbound connection per server of the other NATS cluster, spread over the
-// observed one's servers.
 func TestObserve_Gateways(t *testing.T) {
 	c1 := newTestCluster(t, "C1", 3)
 	c2 := newTestCluster(t, "C2", 2)

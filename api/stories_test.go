@@ -139,8 +139,6 @@ func manifestDocs(t *testing.T, files []string) []storyDoc {
 	return docs
 }
 
-// TestStoryManifestsDecodeStrictly pins every field of every story manifest
-// to a field of the Go types.
 func TestStoryManifestsDecodeStrictly(t *testing.T) {
 	decodeDocs(t, apiScheme(t), storyManifests(t))
 }

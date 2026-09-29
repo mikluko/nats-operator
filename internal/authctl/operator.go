@@ -50,8 +50,7 @@ var _ reconcile.Reconciler = (*OperatorReconciler)(nil)
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create
 
-// Reconcile signs the JWTs of the NatsOperator req names and of its system
-// account.
+// Reconcile implements reconcile.Reconciler.
 func (r *OperatorReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	var op authv1beta1.NatsOperator
 	if err := r.Get(ctx, req.NamespacedName, &op); err != nil {
@@ -343,9 +342,8 @@ func (r *OperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(telemetry.Traced("NatsOperator", r))
 }
 
-// accountSignedChange passes a NatsAccount update only when what the
-// OperatorReconciler reads of it changed: its generation, its deletion,
-// or its public key or JWT in status. Every other event passes.
+// accountSignedChange passes a NatsAccount update only when its generation,
+// its deletion, or its public key or JWT in status changed.
 var accountSignedChange = predicate.Funcs{UpdateFunc: func(e event.UpdateEvent) bool {
 	o, okOld := e.ObjectOld.(*authv1beta1.NatsAccount)
 	n, okNew := e.ObjectNew.(*authv1beta1.NatsAccount)

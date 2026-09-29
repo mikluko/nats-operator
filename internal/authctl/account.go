@@ -34,7 +34,6 @@ import (
 
 // AccountReconciler signs a NatsAccount's JWT with its NatsOperator's active
 // signing key and writes it to status, generating the keys spec omits.
-// A jwtTTL of zero signs a JWT that never expires.
 type AccountReconciler struct {
 	client.Client
 	// Distributor receives every newly signed account JWT; nil pushes
@@ -61,7 +60,7 @@ const AccountFinalizer = "auth.nats.mikluko.io/delete"
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create
 
-// Reconcile signs and distributes the JWT of the NatsAccount req names.
+// Reconcile implements reconcile.Reconciler.
 func (r *AccountReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	var acc authv1beta1.NatsAccount
 	if err := r.Get(ctx, req.NamespacedName, &acc); err != nil {

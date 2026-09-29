@@ -27,9 +27,6 @@ import (
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
-// TestEvacuationEnvtest runs the reconciler in a manager against a real API
-// server over story 11's evacuation of prod-east into prod-east-2, NATS
-// clusters of one in-process supercluster.
 func TestEvacuationEnvtest(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")

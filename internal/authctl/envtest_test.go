@@ -142,8 +142,6 @@ type env struct {
 	sys atomic.Pointer[nats.Conn]
 }
 
-// TestEnvtest runs the reconcilers against a real API server, one subtest per
-// behaviour.
 func TestEnvtest(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")

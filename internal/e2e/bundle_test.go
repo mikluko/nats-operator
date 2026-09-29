@@ -12,8 +12,6 @@ import (
 
 const storiesDir = "../../docs/content/docs/stories"
 
-// TestLoadBundles_Stories pins the story bundles to the harness: every
-// expectation names an object its bundle declares, and no story is skipped.
 func TestLoadBundles_Stories(t *testing.T) {
 	bundles, err := LoadBundles(storiesDir)
 	require.NoError(t, err)
@@ -365,9 +363,6 @@ func TestLoadBundles_SubstitutionErrors(t *testing.T) {
 	}
 }
 
-// TestLoadBundles_Waits pins that a story's front matter raises the wait
-// of the steps it names, and that a wait without a reason, a positive
-// duration or a step of the story fails loading.
 func TestLoadBundles_Waits(t *testing.T) {
 	const cm = "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x, namespace: a}\n"
 	load := func(waits string) (*Bundle, error) {

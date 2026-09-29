@@ -25,7 +25,7 @@ spec:
     schema:
       openAPIV3Schema:
         description: |-
-          NatsSystemAccount is a system account; signed only while a NatsOperator
+          NatsSystemAccount is a system account, signed only while a NatsOperator
           references it.
         properties:
           apiVersion:

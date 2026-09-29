@@ -35,12 +35,9 @@ func networkPolicyEnabled(spec *clusterv1beta1.NatsClusterSpec) bool {
 	return spec.Monitor == nil || spec.Monitor.NetworkPolicy == nil || *spec.Monitor.NetworkPolicy
 }
 
-// networkPolicy is the NetworkPolicy over nc's pods, or nil when
-// monitor.networkPolicy is false. It admits the route port only from nc's
-// pods, the monitoring port only from monitorNamespace, the metrics port
-// from monitorNamespace and exporter.from, and every other port the servers
-// listen on from anywhere; with neither monitorNamespace nor exporter.from,
-// the monitoring and metrics ports are admitted from nowhere.
+// networkPolicy is the NetworkPolicy monitor.networkPolicy describes over
+// nc's pods, or nil when that is false; with neither monitorNamespace nor
+// exporter.from, the monitoring and metrics ports are admitted from nowhere.
 func networkPolicy(nc *clusterv1beta1.NatsCluster, monitorNamespace string) *networkingv1.NetworkPolicy {
 	if !networkPolicyEnabled(&nc.Spec) {
 		return nil

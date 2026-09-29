@@ -39,16 +39,12 @@ type reloadKey struct {
 }
 
 // reloadAllowLists are the reloadable config keys by nats-server
-// major.minor, read off that version's diffOptions in server/reload.go. A
-// key absent from a version's list restarts: diffOptions rejects it, or
-// silently keeps the old value. resolver is absent although diffOptions
-// accepts it: 2.15's reload replaces the running resolver with one it
-// never starts, which keeps answering claim updates into the old directory
-// while lookups read the new one. resolver_preload is a value a reload
-// keeps, and reloads only for the system account: its re-signed JWT reaches
-// running servers as a claims update, and the preload matters only at the
-// next start. Another account's preload is replaced by nothing but a
-// restart.
+// major.minor, read off that version's diffOptions in server/reload.go; any
+// other key restarts, as diffOptions rejects it or silently keeps the old
+// value. resolver is absent although diffOptions accepts it:
+// 2.15's reload swaps in a resolver it never starts. resolver_preload
+// reloads only for the system account, whose re-signed JWT reaches running
+// servers as a claims update.
 var reloadAllowLists = map[string][]reloadKey{
 	"2.15": {
 		{Path: "pid_file", Case: "pidfile", Rule: reloadAlways},

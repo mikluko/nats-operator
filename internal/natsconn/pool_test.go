@@ -161,8 +161,6 @@ func TestPoolOnChange(t *testing.T) {
 	}
 }
 
-// TestPoolGetContext pins that a dial, and a wait on another dial for the
-// same key, end with the caller's context rather than the connect timeout.
 func TestPoolGetContext(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)

@@ -34,10 +34,6 @@ import (
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
-// TestEnvtestDistribution runs the reconcilers with Resolvers over the
-// SystemConnection cmd/auth-controller wires, against three routed
-// nats-servers with full resolvers booted from the NatsOperator the auth
-// controller signed.
 func TestEnvtestDistribution(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")

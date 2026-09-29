@@ -28,8 +28,7 @@ const (
 
 	// AnnotationConfigApply on a server's ConfigMap is how the revision it
 	// holds is applied: Reload while the cluster controller reloads it,
-	// Restart once the reload failed. A ConfigMap written for a restart
-	// carries Restart or nothing; only Reload is ever reloaded.
+	// Restart once the reload failed.
 	AnnotationConfigApply = "cluster.nats.mikluko.io/config-apply"
 
 	// AnnotationRestartReason on a server's ConfigMap names what made its

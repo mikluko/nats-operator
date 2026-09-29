@@ -10,8 +10,6 @@ import (
 	"github.com/mikluko/nats-operator/internal/natscluster"
 )
 
-// TestControllerFinalizers pins the runner's finalizer names to the ones the
-// controllers add.
 func TestControllerFinalizers(t *testing.T) {
 	byKind := map[string]string{}
 	for _, h := range controllerFinalizers {

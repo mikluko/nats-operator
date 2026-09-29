@@ -12,7 +12,7 @@ Package v1beta1 is the auth.nats.mikluko.io API group, owned by the auth control
 | :--- | :---------- |
 | [NatsAccount](#NatsAccount) | NatsAccount is an account, its limits, and its exports and imports. |
 | [NatsOperator](#NatsOperator) | NatsOperator is a NATS operator the auth controller signs for. |
-| [NatsSystemAccount](#NatsSystemAccount) | NatsSystemAccount is a system account; signed only while a NatsOperator references it. |
+| [NatsSystemAccount](#NatsSystemAccount) | NatsSystemAccount is a system account, signed only while a NatsOperator references it. |
 | [NatsUser](#NatsUser) | NatsUser is a user of an account. |
 
 ### AccountJetStreamLimits {#AccountJetStreamLimits}
@@ -184,7 +184,7 @@ Appears on: [NatsAccount](#NatsAccount).
 | `operatorRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | OperatorRef names the NatsOperator that signs this account. |
 | `keys` | [{{< type "Keys" >}}](#Keys) | No | Keys adopts existing seeds. |
 | `publicKey` | {{< type "string" >}} | No | PublicKey is the account's identity, keeping its identity key offline. |
-| `jwtTTL` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No | JWTTTL is the account JWT's lifetime, re-signed at half of it; 0 signs a JWT that never expires. Default: `48h`. |
+| `jwtTTL` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No | JWTTTL is the account JWT's lifetime, and the JWT is re-signed at half of it; 0 signs a JWT that never expires. Default: `48h`. |
 | `limits` | [{{< type "AccountLimits" >}}](#AccountLimits) | No | Limits are signed into the account JWT; an omitted limit is unlimited. |
 | `exports` | [{{< type "[]Export" >}}](#Export) | No | Exports are what other accounts may import from this one. |
 | `imports` | [{{< type "[]Import" >}}](#Import) | No | Imports are exports of other accounts this one takes. |
@@ -237,7 +237,7 @@ Appears on: [NatsOperator](#NatsOperator).
 | `deletedAccounts` | [{{< type "[]DeletedAccount" >}}](#DeletedAccount) | No | DeletedAccounts are the accounts deleted while a server may still hold a valid JWT for one; the delete is re-sent to every server that joins, until that JWT would have expired. |
 
 ### NatsSystemAccount {#NatsSystemAccount}
-NatsSystemAccount is a system account; signed only while a NatsOperator references it.
+NatsSystemAccount is a system account, signed only while a NatsOperator references it.
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `apiVersion` | {{< type "string" >}} | Yes | `auth.nats.mikluko.io/v1beta1` |
@@ -594,7 +594,7 @@ Monitor configures access to the monitoring port.\
 Appears on: [NatsClusterSpec](#NatsClusterSpec).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `networkPolicy` | {{< type "bool" >}} | No | NetworkPolicy renders a NetworkPolicy over the servers' pods that admits the route port only from those pods, the monitoring port only from the cluster controller's namespace, the metrics port from there and exporter.from, and from anywhere the other ports the cluster controller renders; a port podTemplate adds is not admitted. Default: `true`. |
+| `networkPolicy` | {{< type "bool" >}} | No | NetworkPolicy renders a NetworkPolicy over the servers' pods that admits the route port only from those pods, the monitoring port only from the cluster controller's namespace, the metrics port from there and exporter.from, and the other rendered ports from anywhere; a port podTemplate adds is not admitted. Default: `true`. |
 
 ### NatsCluster {#NatsCluster}
 NatsCluster is a NATS cluster the cluster controller deploys, one StatefulSet per server.
@@ -1016,7 +1016,7 @@ Appears on: [NatsClusterEvacuation](#NatsClusterEvacuation).
 | `requested` | [{{< type "[]RequestedMove" >}}](#RequestedMove) | No | Requested are the moves requested that the source NATS cluster has not yet seen complete; deleting the evacuation cancels them. |
 | `remaining` | {{< type "int32" >}} | No | Remaining is the number of streams still to leave the source NATS cluster: in flight, waiting for a slot, or refused by the server in the last pass. Pinned streams and streams left for their owners are not counted. |
 | `pinned` | [{{< type "[]PinnedObject" >}}](#PinnedObject) | No | Pinned are the resources left in place; the evacuation is not Ready while any remains. |
-| `stalePlacement` | [{{< type "[]ServerStream" >}}](#ServerStream) | No | StalePlacement are the streams moved that no resource owns and whose config still names the source NATS cluster: while it exists, an update that changes their placement returns them to it. |
+| `stalePlacement` | [{{< type "[]ServerStream" >}}](#ServerStream) | No | StalePlacement are the streams moved that no resource owns and whose config still names the source NATS cluster, so an update that changes their placement returns them to it. |
 
 ### NatsConsumer {#NatsConsumer}
 NatsConsumer is a JetStream consumer.
@@ -1029,7 +1029,7 @@ NatsConsumer is a JetStream consumer.
 | `status` | [{{< type "NatsConsumerStatus" >}}](#NatsConsumerStatus) | No |  |
 
 ### NatsConsumerSpec {#NatsConsumerSpec}
-NatsConsumerSpec is the desired state of a consumer. deliverPolicy, ackPolicy, replayPolicy, optStartSeq, optStartTime, heartbeat, flowControl and maxWaiting are immutable unless recreateOnImmutableChange is set. The fields of the inlined ConsumerConfig mirror nats.go's jetstream.ConsumerConfig, the config as clients see it, and mean what their like-named fields there mean, described here or not: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#ConsumerConfig.\
+NatsConsumerSpec is the desired state of a consumer. deliverPolicy, ackPolicy, replayPolicy, optStartSeq, optStartTime, heartbeat, flowControl and maxWaiting are immutable unless recreateOnImmutableChange is set. The fields of the inlined ConsumerConfig mirror nats.go's jetstream.ConsumerConfig, the config as clients see it, and mean what their like-named fields there mean: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#ConsumerConfig.\
 Appears on: [NatsConsumer](#NatsConsumer).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
@@ -1096,7 +1096,7 @@ NatsKeyValue is a JetStream key-value bucket.
 | `status` | [{{< type "NatsKeyValueStatus" >}}](#NatsKeyValueStatus) | No |  |
 
 ### NatsKeyValueSpec {#NatsKeyValueSpec}
-NatsKeyValueSpec is the desired state of a key-value bucket. The fields of the inlined KeyValueConfig mirror nats.go's jetstream.KeyValueConfig, the config as clients see it, and mean what their like-named fields there mean, described here or not: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#KeyValueConfig.\
+NatsKeyValueSpec is the desired state of a key-value bucket. The fields of the inlined KeyValueConfig mirror nats.go's jetstream.KeyValueConfig, the config as clients see it, and mean what their like-named fields there mean: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#KeyValueConfig.\
 Appears on: [NatsKeyValue](#NatsKeyValue).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
@@ -1143,7 +1143,7 @@ NatsObjectStore is a JetStream object store.
 | `status` | [{{< type "NatsObjectStoreStatus" >}}](#NatsObjectStoreStatus) | No |  |
 
 ### NatsObjectStoreSpec {#NatsObjectStoreSpec}
-NatsObjectStoreSpec is the desired state of an object store. The fields of the inlined ObjectStoreConfig mirror nats.go's jetstream.ObjectStoreConfig, the config as clients see it, and mean what their like-named fields there mean, described here or not: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#ObjectStoreConfig.\
+NatsObjectStoreSpec is the desired state of an object store. The fields of the inlined ObjectStoreConfig mirror nats.go's jetstream.ObjectStoreConfig, the config as clients see it, and mean what their like-named fields there mean: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#ObjectStoreConfig.\
 Appears on: [NatsObjectStore](#NatsObjectStore).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
@@ -1184,7 +1184,7 @@ NatsStream is a JetStream stream.
 | `status` | [{{< type "NatsStreamStatus" >}}](#NatsStreamStatus) | No |  |
 
 ### NatsStreamSpec {#NatsStreamSpec}
-NatsStreamSpec is the desired state of a stream. The fields of the inlined StreamConfig mirror nats.go's jetstream.StreamConfig, the config as clients see it, and mean what their like-named fields there mean, described here or not: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#StreamConfig.\
+NatsStreamSpec is the desired state of a stream. The fields of the inlined StreamConfig mirror nats.go's jetstream.StreamConfig, the config as clients see it, and mean what their like-named fields there mean: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#StreamConfig.\
 Appears on: [NatsStream](#NatsStream).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
@@ -1613,7 +1613,7 @@ Appears on: [CA](#CA).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `name` | {{< type "string" >}} | Yes | Name of a Secret in the referrer's namespace. |
-| `key` | {{< type "string" >}} | No | Key within the Secret, the key cert-manager writes by default. Default: `ca.crt`. |
+| `key` | {{< type "string" >}} | No | Key within the Secret. Default: `ca.crt`. |
 
 ### ConnectionTLS {#ConnectionTLS}
 ConnectionTLS is the client side of TLS toward NATS servers.\
@@ -1635,7 +1635,7 @@ Appears on: [Credentials](#Credentials).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `name` | {{< type "string" >}} | Yes | Name of a Secret in the referrer's namespace. |
-| `key` | {{< type "string" >}} | No | Key within the Secret, the key a NatsUser writes by default. Default: `user.creds`. |
+| `key` | {{< type "string" >}} | No | Key within the Secret. Default: `user.creds`. |
 
 ### NatsAccountTrust {#NatsAccountTrust}
 NatsAccountTrust is an account a leaf binds a remote to.

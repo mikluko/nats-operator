@@ -6,9 +6,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestMergeRoster pins the roster's memory: a server stays in it until it
-// has missed rosterMisses polls in a row, and answering again clears its
-// misses.
 func TestMergeRoster(t *testing.T) {
 	answered := func(ids ...string) map[string]bool {
 		out := map[string]bool{}

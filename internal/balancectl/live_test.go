@@ -88,10 +88,6 @@ func condition(ct *assert.CollectT, b *js.NatsSystemBalancer, typ string, status
 	}
 }
 
-// TestSystemBalancer_Supercluster runs the reconciler against a two-cluster
-// supercluster under a NATS operator, where account A carries the
-// jetstream-stepdown export and B does not, and every stream leader in C1
-// starts on C1-0.
 func TestSystemBalancer_Supercluster(t *testing.T) {
 	t.Parallel()
 	p := newPlane(t)
@@ -219,9 +215,6 @@ func TestSystemBalancer_Supercluster(t *testing.T) {
 	})
 }
 
-// TestSystemBalancer_ProbeFailsAfterMove moves a leader of account A in a
-// pass whose stepdown probe of account B times out, and finds the move
-// recorded beside the failure.
 func TestSystemBalancer_ProbeFailsAfterMove(t *testing.T) {
 	t.Parallel()
 	p := newPlane(t)
@@ -287,9 +280,9 @@ func streamLeader(t *testing.T, ctx context.Context, j jetstream.JetStream, name
 	return s.CachedInfo().Cluster.Leader
 }
 
-// TestReconcile_APIErrorNoRequeue fails a list each balancer reconciler makes
-// once connected, and finds the error returned with no RequeueAfter, which
-// controller-runtime would ignore beside it.
+// TestReconcile_APIErrorNoRequeue pins that a balancer reconciler's API error
+// is returned with no RequeueAfter, which controller-runtime ignores beside
+// an error.
 func TestReconcile_APIErrorNoRequeue(t *testing.T) {
 	t.Parallel()
 	p := newPlane(t)

@@ -69,7 +69,7 @@ type KeyValueConfig struct {
 // NatsKeyValueSpec is the desired state of a key-value bucket. The fields of
 // the inlined KeyValueConfig mirror nats.go's jetstream.KeyValueConfig, the
 // config as clients see it, and mean what their like-named fields there
-// mean, described here or not: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#KeyValueConfig.
+// mean: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#KeyValueConfig.
 type NatsKeyValueSpec struct {
 	// ConnectionRef names the NatsConnection whose credentials decide the
 	// account.

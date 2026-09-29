@@ -74,10 +74,9 @@ func (n *NoConn) Apply(conds *[]metav1.Condition, generation int64) {
 }
 
 // Released reports whether a resource being deleted without a connection
-// drops its finalizer without running its deletion policy: the
-// NatsConnection does not exist or no grant admits it, so nothing will reach
-// the server object through it. A connection that exists and fails holds
-// the finalizer, as does a nil n.
+// drops its finalizer without running its deletion policy: true when the
+// NatsConnection does not exist or no grant admits it, false when it exists
+// and fails or n is nil.
 func (n *NoConn) Released() bool {
 	return n != nil && (n.Reason == ReasonConnectionNotFound || n.Reason == grant.ReasonReferenceNotPermitted)
 }

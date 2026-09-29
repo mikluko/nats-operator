@@ -119,9 +119,6 @@ func consumerIn(ctx context.Context, j jetstream.JetStream, stream, consumer str
 	return cluster
 }
 
-// TestEvacuation_Supercluster empties C1 of a two-cluster supercluster under
-// one NATS operator into C2 while a system balancer and an account balancer of C1
-// run beside the evacuation.
 func TestEvacuation_Supercluster(t *testing.T) {
 	t.Parallel()
 	p := newPlane(t)
@@ -384,9 +381,9 @@ func requestedStreams(list []js.RequestedMove) []string {
 	return out
 }
 
-// TestEvacuation_ServerDown evacuates C1 while the server holding an R1
-// stream of it is stopped: the stream is in no snapshot of C1, and the
-// evacuation holds rather than reading C1 as empty.
+// TestEvacuation_ServerDown pins that an evacuation holds, rather than
+// reading its source NATS cluster as empty, while the server holding an R1
+// stream of it is down.
 func TestEvacuation_ServerDown(t *testing.T) {
 	t.Parallel()
 	p := newPlane(t)

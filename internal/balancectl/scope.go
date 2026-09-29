@@ -118,12 +118,10 @@ func plural(n int, one, many string) string {
 	return many
 }
 
-// evacuationOf names a NatsClusterEvacuation, not yet Ready, that empties the
-// NATS cluster nc is connected to, and is "" where none does. One empties it
-// where its source is nc's NATS cluster by name and the server nc is connected to
-// answers the evacuation's own connection; one whose connection cannot be
-// dialed or asked is taken to empty it. The error is one the Kubernetes API
-// server returned.
+// evacuationOf names a NatsClusterEvacuation, not yet Ready, whose source is
+// nc's NATS cluster and whose own connection reaches nc's server, or one
+// whose connection cannot be dialed or asked; "" where none is. The error is
+// one the Kubernetes API server returned.
 func evacuationOf(ctx context.Context, c client.Reader, d *natsconn.Dialer, nc *nats.Conn) (string, error) {
 	cluster := nc.ConnectedClusterName()
 	var list js.NatsClusterEvacuationList

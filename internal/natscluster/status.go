@@ -235,9 +235,8 @@ func gatewaysCondition(gateways []clusterv1beta1.GatewayStatus, o Observed) meta
 }
 
 // configStatus reports how plan's revision is applied: by restart when any
-// server needs one, naming each distinct reason, by reload when servers
-// reload to it, and otherwise as prev reported it for the same revision. A
-// revision the servers were created at is applied by restart.
+// server needs one, naming each distinct reason; by reload while servers
+// reload to it; otherwise as prev reported that revision, or by restart.
 func configStatus(prev *clusterv1beta1.ConfigStatus, plan *Plan, a configApply) *clusterv1beta1.ConfigStatus {
 	cs := &clusterv1beta1.ConfigStatus{Revision: plan.Revision, AppliedBy: clusterv1beta1.ConfigAppliedByRestart}
 	switch {

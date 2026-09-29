@@ -206,8 +206,6 @@ func registered(t *testing.T) map[string]collected {
 	return out
 }
 
-// TestInstruments pins each instrument's value, read from the fixtures'
-// status, through an in-memory reader.
 func TestInstruments(t *testing.T) {
 	got := registered(t)
 	tests := []struct {
@@ -249,9 +247,6 @@ func TestInstruments(t *testing.T) {
 		attrKey(map[string]string{"kind": "NatsCluster", "namespace": "ns", "name": "idle", "waiting_for": ""}))
 }
 
-// TestInstrumentsListed pins Instruments, which the telemetry page lists,
-// to what each controller registers: the same names, types and units, and
-// no attribute an instrument's entry does not name.
 func TestInstrumentsListed(t *testing.T) {
 	got := registered(t)
 	for _, controller := range controllers {

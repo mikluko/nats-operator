@@ -149,8 +149,8 @@ func changeRestartReason(nc *clusterv1beta1.NatsCluster, cur *appsv1.StatefulSet
 	return restartReason(nc.Spec.Version, []byte(cm.Data[configFile]), []byte(s.ConfigMap.Data[configFile]))
 }
 
-// runningVersion is the image tag of sts's nats container, or "" for an
-// image without a tag.
+// runningVersion is the image tag of sts's nats container, or "" when the
+// image has no tag or does not parse.
 func runningVersion(sts *appsv1.StatefulSet) string {
 	for _, c := range sts.Spec.Template.Spec.Containers {
 		if c.Name != "nats" {

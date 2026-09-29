@@ -6,7 +6,8 @@
 //
 // Where the story's substitutions take generated values, it prints them as
 // a substitution's patch. nsc cannot stand in: it writes keys and JWTs to its
-// own store, not the Secret manifests a story applies.
+// own store, not the Secret manifests a story applies, and does not expand
+// jwtplane's presets into claims.
 package main
 
 import (

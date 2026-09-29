@@ -20,8 +20,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
-// TestPoll_RetriesErrors pins that an API error during a round is retried
-// rather than failing the step, and is reported when the deadline passes.
 func TestPoll_RetriesErrors(t *testing.T) {
 	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "x"}, Data: map[string]string{"v": "1"}}
 	target := &unstructured.Unstructured{}
@@ -60,9 +58,6 @@ func TestPoll_RetriesErrors(t *testing.T) {
 	}
 }
 
-// TestPoll_Publish pins that Publish runs with the runner's clients before
-// every round, that its error is retried as an API error is, and that a
-// runner without it reads nothing but the step's targets.
 func TestPoll_Publish(t *testing.T) {
 	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "x"}, Data: map[string]string{"v": "1"}}
 	target := &unstructured.Unstructured{}
@@ -132,9 +127,6 @@ func writeStories(t *testing.T, stories map[string]map[string]string) string {
 	return root
 }
 
-// TestRunner_Plan pins, without an API server, the stages a bundle runs in,
-// the namespaces made fresh in each Kubernetes cluster, and why a bundle is
-// skipped or fails before anything is applied.
 func TestRunner_Plan(t *testing.T) {
 	cm := func(ns, name string) string {
 		return "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: " + name + ", namespace: " + ns + "}\ndata: {v: \"1\"}\n"

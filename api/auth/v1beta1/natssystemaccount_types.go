@@ -61,7 +61,7 @@ type NatsSystemAccountStatus struct {
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
-// NatsSystemAccount is a system account; signed only while a NatsOperator
+// NatsSystemAccount is a system account, signed only while a NatsOperator
 // references it.
 type NatsSystemAccount struct {
 	metav1.TypeMeta   `json:",inline"`

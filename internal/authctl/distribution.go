@@ -83,8 +83,7 @@ func repushStale(ctx context.Context, d Distributor, operator types.NamespacedNa
 	return errors.Is(d.Push(ctx, operator, token), ErrStaleJWT)
 }
 
-// ignoreUnreachable is err less ErrUnreachable: what no server can be
-// asked to take now is sent once one can.
+// ignoreUnreachable is err, or nil when err is ErrUnreachable.
 func ignoreUnreachable(err error) error {
 	if errors.Is(err, ErrUnreachable) {
 		return nil

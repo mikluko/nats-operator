@@ -36,8 +36,7 @@ var _ reconcile.Reconciler = (*OperatorTrustReconciler)(nil)
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
 
-// Reconcile mirrors into the status of the NatsOperatorTrust req names the
-// JWTs of the NatsOperator it references.
+// Reconcile implements reconcile.Reconciler.
 func (r *OperatorTrustReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	var t natsv1beta1.NatsOperatorTrust
 	if err := r.Get(ctx, req.NamespacedName, &t); err != nil {
@@ -110,8 +109,7 @@ var _ reconcile.Reconciler = (*AccountTrustReconciler)(nil)
 // +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts,verbs=get;list;watch
 // +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
 
-// Reconcile mirrors into the status of the NatsAccountTrust req names the
-// public key and JWT of the NatsAccount it references.
+// Reconcile implements reconcile.Reconciler.
 func (r *AccountTrustReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	var t natsv1beta1.NatsAccountTrust
 	if err := r.Get(ctx, req.NamespacedName, &t); err != nil {

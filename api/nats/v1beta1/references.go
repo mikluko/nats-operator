@@ -39,7 +39,7 @@ type CredentialsSecretKeySelector struct {
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
-	// Key within the Secret, the key a NatsUser writes by default.
+	// Key within the Secret.
 	// +optional
 	// +kubebuilder:default=user.creds
 	// +kubebuilder:validation:MinLength=1
@@ -54,7 +54,7 @@ type CASecretKeySelector struct {
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
-	// Key within the Secret, the key cert-manager writes by default.
+	// Key within the Secret.
 	// +optional
 	// +kubebuilder:default=ca.crt
 	// +kubebuilder:validation:MinLength=1

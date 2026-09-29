@@ -162,7 +162,7 @@ func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) err
 }
 
 // specChanged passes a NatsCluster update that changes its generation, its
-// annotations or its deletion timestamp, and drops a status-only write.
+// annotations or its deletion timestamp.
 var specChanged = predicate.Or(
 	predicate.GenerationChangedPredicate{},
 	predicate.AnnotationChangedPredicate{},
@@ -342,8 +342,8 @@ func (r *Reconciler) patchStatus(ctx context.Context, orig, nc *clusterv1beta1.N
 }
 
 // applyShared creates or updates the Services, the PodDisruptionBudget and
-// the NetworkPolicy, past any it refuses to write, and deletes the gateway Service once gateway.service is
-// unset and the NetworkPolicy once monitor.networkPolicy is false.
+// the NetworkPolicy, skipping any nc does not control, and deletes the ones
+// plan does not render.
 func (r *Reconciler) applyShared(ctx context.Context, nc *clusterv1beta1.NatsCluster, plan *Plan) error {
 	services := []*corev1.Service{plan.HeadlessService, plan.ClientService}
 	if plan.GatewayService != nil {

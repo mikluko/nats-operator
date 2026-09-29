@@ -13,9 +13,6 @@ import (
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
-// TestWithPreset_JetStreamControllerUser pins that a NatsConnection dialed
-// from a pool under the jetstream-controller preset takes replies as a user
-// of the system account holding that preset.
 func TestWithPreset_JetStreamControllerUser(t *testing.T) {
 	p := newPlane(t)
 	opts := &server.Options{Host: "127.0.0.1", Port: -1, NoLog: true, NoSigs: true}

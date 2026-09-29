@@ -21,9 +21,6 @@ import (
 	"github.com/mikluko/nats-operator/internal/grant"
 )
 
-// TestEnvtest pins story 4 against a real API server and an informer cache:
-// the grant admits payments and not orders, a grant event requeues the
-// payments users through the cache's index, and deleting the grant revokes.
 func TestEnvtest(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")

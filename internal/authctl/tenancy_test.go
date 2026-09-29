@@ -50,9 +50,6 @@ func TestKeyHolder(t *testing.T) {
 	}
 }
 
-// TestIsSystemKey pins that a NatsSystemAccount holds the key its status
-// records, and the one its spec or identity seed Secret resolves to before
-// status records any.
 func TestIsSystemKey(t *testing.T) {
 	kp, err := nkeys.CreateAccount()
 	require.NoError(t, err)
@@ -91,8 +88,6 @@ func TestIsSystemKey(t *testing.T) {
 	}
 }
 
-// TestSystemAccountAccounts pins that a NatsSystemAccount maps to every
-// NatsAccount under the NatsOperator it names, and to no other.
 func TestSystemAccountAccounts(t *testing.T) {
 	account := func(namespace, name string, op natsv1beta1.ObjectReference) *authv1beta1.NatsAccount {
 		return &authv1beta1.NatsAccount{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name}, Spec: authv1beta1.NatsAccountSpec{OperatorRef: op}}

@@ -32,8 +32,7 @@ type Balancer struct {
 
 	// tried is, per pool, the streams spent on an unsure placement move since
 	// the pool's unevenness last fell, and uneven the least unevenness each
-	// pool has been read at: the least, because a stream mid-move reads more
-	// uneven than it was.
+	// pool has been read at.
 	tried  map[string]map[StreamID]bool
 	uneven map[string]int
 }

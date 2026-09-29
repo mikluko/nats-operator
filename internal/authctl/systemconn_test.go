@@ -20,10 +20,6 @@ import (
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
-// TestSystemConnection_Conn pins which NatsOperators the one system connection
-// serves: those whose system account issued the user its creds carry, and
-// no other; and that a connection from NewPool takes replies as an
-// auth-controller preset user.
 func TestSystemConnection_Conn(t *testing.T) {
 	p := newPlane(t)
 	srv := startServers(t, p, 1)[0]

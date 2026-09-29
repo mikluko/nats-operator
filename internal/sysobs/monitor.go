@@ -45,11 +45,10 @@ type wireMonitorVarz struct {
 	} `json:"jetstream"`
 }
 
-// Observe reads every endpoint's /varz, /gatewayz and /jsz with accounts,
-// streams and consumers, and merges them into a Snapshot. Every endpoint is
-// on the roster, by its Name when it did not answer; one that fails any
-// request, or reports a server_name other than its Name, is Silent. It
-// returns ErrNoServers when none answers.
+// Observe merges every endpoint's /varz, /gatewayz and /jsz into a Snapshot
+// whose roster holds every endpoint; one that fails any request, or reports
+// a server_name other than its Name, is Silent. It returns ErrNoServers when
+// none answers.
 func (m *MonitorObserver) Observe(ctx context.Context, endpoints []Endpoint) (*Snapshot, error) {
 	type answer struct {
 		server Server

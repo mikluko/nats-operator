@@ -17,9 +17,6 @@ import (
 	"github.com/mikluko/nats-operator/internal/natsconn"
 )
 
-// TestSync_ResolveResult pins that a failed Resolve returns its error with no
-// requeue, and a Resolve without a server object requeues after
-// natsconn.DefaultRetryAfter.
 func TestSync_ResolveResult(t *testing.T) {
 	failed := errors.New("no responders")
 	tests := []struct {
@@ -45,9 +42,6 @@ func TestSync_ResolveResult(t *testing.T) {
 	}
 }
 
-// TestSync_ObserveResult pins that an Observe error on a synced object
-// returns that error with no requeue and turns Ready False naming it, and
-// that a nil Observe error leaves Ready True with the resync requeue.
 func TestSync_ObserveResult(t *testing.T) {
 	const owner = types.UID("5b1e0c4a")
 	const resync = time.Hour

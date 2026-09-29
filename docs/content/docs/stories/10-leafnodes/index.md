@@ -64,6 +64,6 @@ A leaf is a NatsCluster that dials out through a NatsConnection, the same kind t
 
 ## A leaf that enforces the hub's accounts
 
-A second site trusts the hub's NATS operator, so its clients authenticate against the hub's accounts locally. It reads the same trust roots the supercluster members do, and resolves accounts over a second remote bound to the system account; without that remote it cannot fetch an account it has not cached. It preloads the telemetry account so that its clients authenticate while the link is down. A preload is a copy that no fetch replaces, so this leaf runs a `Full` resolver on its JetStream volume, whose sync with the hub keeps the copy current, and the copy expires with the account's `jwtTTL` unless the `NatsAccount` sets `jwtTTL: 0`.
+A second site trusts the hub's NATS operator, so its clients authenticate against the hub's accounts locally. It reads the same trust roots the supercluster members do, and resolves accounts over a second remote bound to the system account; without that remote it cannot fetch an account it has not cached.
 
 {{< manifest "01-edge-operator.yaml" >}}

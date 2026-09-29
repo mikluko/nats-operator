@@ -107,9 +107,6 @@ func toAny(ms []map[string]any) []any {
 	return out
 }
 
-// TestPoll_Signals pins that a step stops waiting within a round of a
-// stuck pod in its story's namespaces or the runner's own, and that a step
-// still waiting logs its diff every Report.
 func TestPoll_Signals(t *testing.T) {
 	target := &unstructured.Unstructured{}
 	target.SetAPIVersion("v1")

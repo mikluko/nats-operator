@@ -91,8 +91,8 @@ type NatsClusterEvacuationStatus struct {
 	Pinned []PinnedObject `json:"pinned,omitempty"`
 
 	// StalePlacement are the streams moved that no resource owns and whose
-	// config still names the source NATS cluster: while it exists, an update
-	// that changes their placement returns them to it.
+	// config still names the source NATS cluster, so an update that changes
+	// their placement returns them to it.
 	// +optional
 	StalePlacement []ServerStream `json:"stalePlacement,omitempty"`
 }

@@ -21,9 +21,6 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 )
 
-// TestReconcileError pins that a reconcile failing with an error no other
-// reason names turns a Ready True False, reason ReconcileError, and leaves
-// status.observedGeneration at the generation last reconciled in full.
 func TestReconcileError(t *testing.T) {
 	s := testScheme(t)
 	require.NoError(t, natsv1beta1.AddToScheme(s))
@@ -127,8 +124,6 @@ func TestReconcileError(t *testing.T) {
 	}
 }
 
-// TestObserve pins that a Ready False already set at the generation keeps
-// its reason through an error, and that a conflict sets no condition.
 func TestObserve(t *testing.T) {
 	failing := errors.New("boom")
 	conflict := fmt.Errorf("update Secret: %w", apierrors.NewConflict(schema.GroupResource{Resource: "secrets"}, "x", failing))

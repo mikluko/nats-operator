@@ -161,9 +161,6 @@ func resolversOn(t *testing.T, c *fullCluster, operator types.NamespacedName) *a
 
 var testOperator = types.NamespacedName{Namespace: "ns", Name: "op"}
 
-// TestResolvers_PushCrossesRoutes pins that one push into one server lands
-// in the resolver of every routed server, and that a user of the account
-// can then connect to any of them.
 func TestResolvers_PushCrossesRoutes(t *testing.T) {
 	p := newPlane(t)
 	c := startFullCluster(t, p, 3)
@@ -181,10 +178,7 @@ func TestResolvers_PushCrossesRoutes(t *testing.T) {
 	}
 }
 
-// TestResolvers_Current pins the count behind status.distribution: the
-// servers answering STATSZ, and those among them whose CLAIMS.LOOKUP reply
-// is the JWT, one holding an older JWT or none not counted, until a push
-// brings it current.
+// TestResolvers_Current pins the count behind status.distribution.
 func TestResolvers_Current(t *testing.T) {
 	p := newPlane(t)
 	c := startFullCluster(t, p, 3)
@@ -221,10 +215,7 @@ func TestResolvers_Current(t *testing.T) {
 	require.Equal(t, [2]int32{3, 3}, [2]int32{d.Servers, d.Current})
 }
 
-// TestResolvers_Lookup pins the answer revocations are recovered from:
-// "" only when every server says it holds no JWT, the newest JWT where
-// servers disagree, and ErrUnreachable where any server of the roster
-// cannot be asked.
+// TestResolvers_Lookup pins the answer revocations are recovered from.
 func TestResolvers_Lookup(t *testing.T) {
 	p := newPlane(t)
 	c := startFullCluster(t, p, 3)
@@ -260,9 +251,6 @@ func TestResolvers_Lookup(t *testing.T) {
 	require.ErrorIs(t, err, authctl.ErrUnreachable)
 }
 
-// TestResolvers_NeverPushesOlder pins that a JWT issued before one already
-// pushed, or before one a server holds when nothing was pushed since a
-// restart, is refused and never sent.
 func TestResolvers_NeverPushesOlder(t *testing.T) {
 	p := newPlane(t)
 	c := startFullCluster(t, p, 2)
@@ -281,10 +269,8 @@ func TestResolvers_NeverPushesOlder(t *testing.T) {
 	}
 }
 
-// TestResolvers_DeleteResentOnRejoin pins that a server down across a
-// delete, which comes back still serving the account since resolver sync
-// never carries a delete, is sent the delete again once it answers STATSZ
-// under a new server ID.
+// TestResolvers_DeleteResentOnRejoin pins that a server down across a delete
+// is sent it again once it rejoins, as resolver sync never carries a delete.
 func TestResolvers_DeleteResentOnRejoin(t *testing.T) {
 	p := newPlane(t)
 	c := startFullCluster(t, p, 3)
@@ -318,9 +304,6 @@ func TestResolvers_DeleteResentOnRejoin(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestResolvers_RosterMemory pins that a server silent at a roster poll
-// stays in the roster, counted as not current and failing Lookup, until
-// it has missed RosterMisses polls in a row.
 func TestResolvers_RosterMemory(t *testing.T) {
 	p := newPlane(t)
 	c := startFullCluster(t, p, 3)

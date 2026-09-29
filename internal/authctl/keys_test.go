@@ -43,8 +43,6 @@ func testScheme(t *testing.T) *runtime.Scheme {
 	return s
 }
 
-// TestGeneratedSeed_Ownership pins that a generated seed Secret is read
-// only where it is annotated as generated for its owner.
 func TestGeneratedSeed_Ownership(t *testing.T) {
 	s := testScheme(t)
 	acc := &authv1beta1.NatsAccount{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "a", UID: types.UID("a")}}
@@ -86,9 +84,8 @@ func TestGeneratedSeed_Ownership(t *testing.T) {
 	}
 }
 
-// TestGeneratedSeed_Created pins that a generated seed Secret is annotated
-// as generated for its owner and carries no owner reference, so it outlives
-// the owner.
+// TestGeneratedSeed_Created pins that a generated seed Secret carries no
+// owner reference, so it outlives its owner.
 func TestGeneratedSeed_Created(t *testing.T) {
 	s := testScheme(t)
 	acc := &authv1beta1.NatsAccount{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "a", UID: types.UID("a")}}

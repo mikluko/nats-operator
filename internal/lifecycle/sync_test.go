@@ -27,10 +27,6 @@ func (o fetchOnly) Update(context.Context, *Info, Config) (*Info, error) { retur
 func (o fetchOnly) Delete(context.Context) error                         { return nil }
 func (o fetchOnly) WriteSpec(context.Context, Config, bool) error        { return nil }
 
-// TestSync_SettlingRecheck pins that a synced object whose Raft group is
-// moving is read again after MovingRecheck, one whose group is not settled
-// after SettlingRecheck, and a settled one, or one with no group, after the
-// resync period.
 func TestSync_SettlingRecheck(t *testing.T) {
 	const owner = types.UID("5b1e0c4a")
 	const resync = time.Hour

@@ -424,8 +424,8 @@ type Monitor struct {
 	// NetworkPolicy renders a NetworkPolicy over the servers' pods that
 	// admits the route port only from those pods, the monitoring port only
 	// from the cluster controller's namespace, the metrics port from there
-	// and exporter.from, and from anywhere the other ports the cluster
-	// controller renders; a port podTemplate adds is not admitted.
+	// and exporter.from, and the other rendered ports from anywhere; a port
+	// podTemplate adds is not admitted.
 	// +optional
 	// +kubebuilder:default=true
 	NetworkPolicy *bool `json:"networkPolicy,omitempty"`

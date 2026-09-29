@@ -56,7 +56,7 @@ spec:
               and maxWaiting are immutable unless recreateOnImmutableChange is set. The
               fields of the inlined ConsumerConfig mirror nats.go's
               jetstream.ConsumerConfig, the config as clients see it, and mean what
-              their like-named fields there mean, described here or not: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#ConsumerConfig.
+              their like-named fields there mean: https://pkg.go.dev/github.com/nats-io/nats.go/jetstream#ConsumerConfig.
             properties:
               ackPolicy:
                 description: AckPolicy is how a consumer's messages are acknowledged.

@@ -199,9 +199,6 @@ func TestCovers(t *testing.T) {
 	}
 }
 
-// TestCallsMatchCode pins that every subject the scanned packages send to is
-// a call the page lists under that package, and that every call the page
-// lists under a package is one its code sends to.
 func TestCallsMatchCode(t *testing.T) {
 	for _, dir := range scanned {
 		t.Run(dir, func(t *testing.T) {
@@ -231,8 +228,6 @@ func TestCallsMatchCode(t *testing.T) {
 	}
 }
 
-// TestPresetsGrantCalls pins that the preset the page names for each
-// identity lets it publish every call and read its replies.
 func TestPresetsGrantCalls(t *testing.T) {
 	for _, id := range identities {
 		if id.Preset == "" {
@@ -251,9 +246,6 @@ func TestPresetsGrantCalls(t *testing.T) {
 	}
 }
 
-// TestPresetsGrantNoMore pins that each preset the page names for an
-// identity publishes to nothing but the calls of the identities naming it,
-// and subscribes to nothing but its inbox.
 func TestPresetsGrantNoMore(t *testing.T) {
 	calls := map[jwtplane.UserPreset][]string{}
 	for _, id := range identities {
@@ -276,8 +268,6 @@ func TestPresetsGrantNoMore(t *testing.T) {
 	}
 }
 
-// TestStepdownCallsAreImports pins that the prefixed stepdown calls are the
-// system account's imports of the jetstream-stepdown export preset.
 func TestStepdownCallsAreImports(t *testing.T) {
 	var local []string
 	for _, i := range jwtplane.StepdownImports("*") {

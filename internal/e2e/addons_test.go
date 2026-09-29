@@ -83,8 +83,6 @@ func kindCoreDNS() []client.Object {
 	}
 }
 
-// TestServeHosts pins that CoreDNS is given the Corefile reading HostsKey
-// and every key of its ConfigMap, and that a second call writes nothing.
 func TestServeHosts(t *testing.T) {
 	updates := 0
 	c := fake.NewClientBuilder().WithScheme(scheme.Scheme).WithObjects(kindCoreDNS()...).

@@ -121,9 +121,6 @@ func TestDistribute(t *testing.T) {
 	})
 }
 
-// TestUserReconciler_NoSystemConnection pins that a reconciled user reads
-// Distributed False, reason NoSystemConnection, while no Sessions reach
-// the servers, and carries no Distributed condition once one does.
 func TestUserReconciler_NoSystemConnection(t *testing.T) {
 	scheme := runtime.NewScheme()
 	require.NoError(t, authv1beta1.AddToScheme(scheme))

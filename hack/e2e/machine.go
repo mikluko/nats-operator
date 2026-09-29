@@ -79,11 +79,10 @@ func viaMachine(ctx context.Context, cfg config, root string, down bool) error {
 // lockFree exits 0 when no run holds machineLock.
 var lockFree = fmt.Sprintf("mkdir -p %s && exec flock -n %s true\n", shellQuote(filepath.Dir(machineLock)), shellQuote(machineLock))
 
-// machineUp creates the machine from hack/machine.Containerfile when it
-// does not exist, and runs machineScript in it with the resolver set to
-// cfg.dns. A new machine is stopped once created: the first `container
-// machine run` after create fails and stops it. The gateway resolver Apple
-// container hands out does not answer on every host.
+// machineUp stops a machine it has just created, as the first `container
+// machine run` after create fails and stops it, and sets its resolver to
+// cfg.dns, as the gateway resolver Apple container hands out does not answer
+// on every host.
 func machineUp(ctx context.Context, cfg config, root string) error {
 	if exec.CommandContext(ctx, "container", "machine", "inspect", cfg.machine).Run() != nil {
 		if err := quietly(exec.CommandContext(ctx, "container", "build", "--dns", cfg.dns, "-t", machineImage,

@@ -12,8 +12,7 @@ import (
 const (
 	ConditionReady = "Ready"
 	// ConditionRetiringKeysInUse is True on a NatsOperator while an account
-	// JWT it manages is still signed by a signing key marked retiring, so
-	// removing that key would invalidate it.
+	// JWT it manages is still signed by a signing key marked retiring.
 	ConditionRetiringKeysInUse = "RetiringKeysInUse"
 	// ConditionDistributed is True on an account while every server
 	// trusting its NATS operator holds its current JWT. On a user it is only
