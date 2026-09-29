@@ -1,6 +1,6 @@
 // Command pindigests pins the chart's controller images to the digests a
 // release built, rewriting only the digest values of the values file named by
-// its argument and leaving every other byte of it as it was.
+// its argument.
 //
 // It reads from stdin the JSON list the release workflow's images job
 // outputs, [{"name": "<repository>", "digest": "sha256:<hex>"}], and fills in

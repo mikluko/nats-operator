@@ -38,5 +38,8 @@ cosign verify "ghcr.io/mikluko/nats-operator/charts/nats-operator:<version>" \
 Each also carries a GitHub build provenance attestation:
 
 ```sh
-gh attestation verify "oci://ghcr.io/mikluko/nats-operator/cluster-controller:<version>" --repo mikluko/nats-operator
+gh attestation verify "oci://ghcr.io/mikluko/nats-operator/cluster-controller:<version>" \
+  --repo mikluko/nats-operator \
+  --signer-workflow mikluko/nats-operator/.github/workflows/release.yml \
+  --source-ref refs/heads/main
 ```

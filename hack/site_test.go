@@ -2,12 +2,15 @@ package hack_test
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"io/fs"
 	"net/url"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -133,8 +136,45 @@ func resolves(root string, base, from *url.URL, link string) bool {
 	return err == nil
 }
 
+// The site's icon set is meteor-icons' exports/icons.json at this version,
+// vendored under docs/assets.
+const (
+	meteorIconsVersion = "4.5.0"
+	meteorIconsSHA256  = "afde42dcd2f33bd33e64598dc7386bf1af6daa1597525aa3cf8d3ed44497cd3c"
+)
+
 func TestSite(t *testing.T) {
-	require.Empty(t, siteProblems(t, buildSite(t), siteBase))
+	out := buildSite(t)
+	require.Empty(t, siteProblems(t, out, siteBase))
+	index, err := os.ReadFile(filepath.Join(out, "index.html"))
+	require.NoError(t, err)
+	doc, err := html.Parse(bytes.NewReader(index))
+	require.NoError(t, err)
+	require.True(t, drawsIcon(doc, "book-open"), "the header's logo icon is not drawn")
+}
+
+// drawsIcon reports whether doc holds the theme's svg for the named icon with
+// at least one shape in it.
+func drawsIcon(doc *html.Node, name string) bool {
+	for n := range doc.Descendants() {
+		if n.Type != html.ElementNode || n.Data != "svg" {
+			continue
+		}
+		for _, a := range n.Attr {
+			if a.Key == "class" && slices.Contains(strings.Fields(a.Val), "i-"+name) && n.FirstChild != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func TestSiteIconSet(t *testing.T) {
+	b, err := os.ReadFile("../docs/assets/meteor-icons/icons.json")
+	require.NoError(t, err)
+	sum := sha256.Sum256(b)
+	require.Equal(t, meteorIconsSHA256, hex.EncodeToString(sum[:]),
+		"docs/assets/meteor-icons/icons.json is not meteor-icons@%s exports/icons.json", meteorIconsVersion)
 }
 
 func TestSiteProblems(t *testing.T) {

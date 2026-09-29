@@ -4,6 +4,7 @@
 /docs/public/
 /docs/resources/
 /docs/.hugo_build.lock
+/docs/assets/jsconfig.json
 *.test
 coverage.out
 hack/e2e-fixtures/e2e-fixtures

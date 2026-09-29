@@ -544,8 +544,7 @@ func TestKindPinnedOnce(t *testing.T) {
 }
 
 // TestCI_HelmUnittestPinned holds ci's one helm-unittest install to a release
-// asset checked against a pinned sha256, rather than a plugin source Helm
-// verifies nothing of.
+// asset checked against a pinned sha256.
 func TestCI_HelmUnittestPinned(t *testing.T) {
 	var installs []step
 	for _, s := range readWorkflow(t, "ci.yml").Jobs["go"].Steps {

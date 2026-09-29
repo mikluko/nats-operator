@@ -109,6 +109,7 @@ more than one replica while leaderElection.enabled is false.
 */}}
 {{- define "nats-operator.controller" -}}
 {{- $fullname := include "nats-operator.fullname" . -}}
+{{- $lease := printf "%s-%s" .root.Release.Name .group -}}
 {{- $namespaces := .root.Values.watchNamespaces -}}
 {{- $role := printf "files/rbac/%s.yaml" .name -}}
 {{- if $namespaces -}}
@@ -202,7 +203,11 @@ metadata:
 rules:
   - apiGroups: [coordination.k8s.io]
     resources: [leases]
-    verbs: [get, list, watch, create, update, patch, delete]
+    verbs: [create]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    resourceNames: [{{ $lease }}]
+    verbs: [get, update, patch]
   - apiGroups: [""]
     resources: [events]
     verbs: [create, patch]
@@ -283,7 +288,7 @@ spec:
           imagePullPolicy: {{ .values.image.pullPolicy }}
           args:
             - --leader-elect={{ .root.Values.leaderElection.enabled }}
-            - --leader-election-id={{ .root.Release.Name }}-{{ .group }}
+            - --leader-election-id={{ $lease }}
             - --metrics-bind-address=:8080
             - --health-probe-bind-address=:8081
             {{- with $namespaces }}

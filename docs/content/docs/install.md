@@ -55,7 +55,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | Value | Default | What it sets |
 |---|---|---|
 | `imagePullSecrets` | `[]` | Pull secrets of every controller's pod. |
-| `leaderElection.enabled` | `true` | `--leader-elect` on every controller, and a Role on Leases in the release namespace. Off, the chart refuses to render a controller whose `replicas` is above `1`. |
+| `leaderElection.enabled` | `true` | `--leader-elect` on every controller, and a Role in the release namespace to create Leases and to get, update and patch the controller's own, `<release>-<API group>`. Off, the chart refuses to render a controller whose `replicas` is above `1`. |
 | `watchNamespaces` | `[]` | Namespaces every controller watches and reconciles in, passed as `--watch-namespaces`, with RBAC granted in them alone; see [RBAC](#rbac). Empty, every namespace. The namespace of `auth.systemConnection` must be among them. |
 | `nodeSelector` | `{}` | Node selector of every controller's pod. |
 | `annotations` | `{}` | Annotations of every controller's Deployment. |
