@@ -61,11 +61,6 @@ var owned = manager.Owned{
 
 var schemes = []func(*runtime.Scheme) error{natsv1beta1.AddToScheme, clusterv1beta1.AddToScheme}
 
-// setup is setupWith refusing gateways without tls.
-func setup(ctx context.Context, mgr ctrl.Manager) error {
-	return setupWith(ctx, mgr, false)
-}
-
 // setupWith registers the cluster controller's instruments and adds the
 // NatsCluster reconciler to mgr, rendering gateways without tls when
 // allowGatewayWithoutTLS is set.

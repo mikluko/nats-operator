@@ -418,8 +418,9 @@ func TestRestartServerToTemplateRevision(t *testing.T) {
 }
 
 // TestServerConfigMapWrites pins what each write of a server's ConfigMap
-// leaves on it: the rendered labels over any it did not render, and the
-// revision and apply annotations its caller asks for.
+// leaves on it, whether or not the ConfigMap exists: the rendered labels over
+// any it did not render, and the revision and apply annotations its caller
+// asks for.
 func TestServerConfigMapWrites(t *testing.T) {
 	nc := storyCluster(t)
 	nc.UID = "demo-uid"
@@ -427,36 +428,51 @@ func TestServerConfigMapWrites(t *testing.T) {
 	require.NoError(t, err)
 	s := a.Servers[0]
 
+	create := func(e *reloadEnv) error {
+		_, err := e.r.createServer(t.Context(), nc, s)
+		return err
+	}
+	recreate := func(e *reloadEnv) error {
+		_, err := e.r.applyServerConfigMap(t.Context(), nc, s, func(a map[string]string) {
+			delete(a, AnnotationConfigRevision)
+		})
+		return err
+	}
+	restart := func(e *reloadEnv) error {
+		_, err := e.r.restartServer(t.Context(), nc, s, e.statefulSets(t)[s.Name], "tls changed")
+		return err
+	}
 	for _, tt := range []struct {
 		name      string
+		missing   bool
 		write     func(e *reloadEnv) error
 		wantApply string
 		wantRev   string
 	}{
-		{name: "create", wantRev: a.Revision, write: func(e *reloadEnv) error {
-			_, err := e.r.applyServerConfigMap(t.Context(), nc, s, true, nil)
-			return err
-		}},
-		{name: "recreate for reload", write: func(e *reloadEnv) error {
-			_, err := e.r.applyServerConfigMap(t.Context(), nc, s, false, nil)
-			return err
-		}},
-		{name: "restart", wantApply: string(clusterv1beta1.ConfigAppliedByRestart), wantRev: a.Revision, write: func(e *reloadEnv) error {
-			_, err := e.r.restartServer(t.Context(), nc, s, e.statefulSets(t)[s.Name], "tls changed")
-			return err
-		}},
+		{name: "create", missing: true, wantRev: a.Revision, write: create},
+		{name: "create over a leftover", wantRev: a.Revision, write: create},
+		{name: "recreate for reload", missing: true, write: recreate},
+		{name: "restart", wantApply: string(clusterv1beta1.ConfigAppliedByRestart), wantRev: a.Revision, write: restart},
+		{name: "restart without a configmap", missing: true, wantApply: string(clusterv1beta1.ConfigAppliedByRestart), wantRev: a.Revision, write: restart},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			e := reloadFixture(t, nc, a)
 			cm := e.configMap(t, s.Name)
-			cm.Labels["backup.example.com/skip"] = "true"
-			cm.Labels[LabelServer] = "stale"
-			cm.Annotations[AnnotationReloadSince] = "2026-09-29T11:00:00Z"
-			require.NoError(t, e.c.Update(t.Context(), cm))
+			if tt.missing {
+				require.NoError(t, e.c.Delete(t.Context(), cm))
+			} else {
+				cm.Labels["backup.example.com/skip"] = "true"
+				cm.Labels[LabelServer] = "stale"
+				cm.Annotations[AnnotationReloadSince] = "2026-09-29T11:00:00Z"
+				require.NoError(t, e.c.Update(t.Context(), cm))
+			}
 
 			require.NoError(t, tt.write(e))
 			cm = e.configMap(t, s.Name)
-			require.Equal(t, "true", cm.Labels["backup.example.com/skip"])
+			require.True(t, metav1.IsControlledBy(cm, nc))
+			if !tt.missing {
+				require.Equal(t, "true", cm.Labels["backup.example.com/skip"])
+			}
 			require.Equal(t, s.Name, cm.Labels[LabelServer])
 			require.Equal(t, s.ConfigMap.Data, cm.Data)
 			require.Equal(t, tt.wantRev, cm.Annotations[AnnotationConfigRevision])

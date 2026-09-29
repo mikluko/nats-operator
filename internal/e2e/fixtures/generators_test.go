@@ -16,8 +16,9 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 )
 
-// TestGenerate pins every story's generated patch files: each, named for the
-// kind it targets, decodes strictly into that kind.
+// TestGenerate pins every story's generated files: each is readable by its
+// owner alone, and each patch file, named for the kind it targets, decodes
+// strictly into that kind.
 func TestGenerate(t *testing.T) {
 	scheme := fixtureScheme(t)
 	kinds := map[string]schema.GroupVersionKind{}
@@ -34,6 +35,13 @@ func TestGenerate(t *testing.T) {
 	for _, story := range stories {
 		t.Run(story.Name(), func(t *testing.T) {
 			dir := filepath.Join(root, story.Name(), "e2e")
+			files, err := os.ReadDir(dir)
+			require.NoError(t, err)
+			for _, f := range files {
+				info, err := f.Info()
+				require.NoError(t, err)
+				require.Equal(t, os.FileMode(0o600), info.Mode(), f.Name())
+			}
 			patches, err := filepath.Glob(filepath.Join(dir, "*.json"))
 			require.NoError(t, err)
 			for _, path := range patches {

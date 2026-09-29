@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -28,6 +30,11 @@ const (
 	envtestWait = 30 * time.Second
 	envtestTick = 100 * time.Millisecond
 )
+
+// setup is setupWith refusing gateways without tls.
+func setup(ctx context.Context, mgr ctrl.Manager) error {
+	return setupWith(ctx, mgr, false)
+}
 
 // TestEnvtestOwnedCache pins that setup, in a manager scoped to owned and to
 // story 1's namespace, brings story 1's NatsCluster up to date through that

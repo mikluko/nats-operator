@@ -16,8 +16,8 @@ import (
 	"github.com/nats-io/nkeys"
 )
 
-// fixture is what manifests renders.
-type fixture struct {
+// unmanagedData is what unmanagedTemplate renders.
+type unmanagedData struct {
 	OperatorJWT, SystemPub, SystemJWT, AccountPub, AccountJWT string
 	Creds, CA, Cert, Key                                      string
 }
@@ -25,7 +25,7 @@ type fixture struct {
 // unmanaged writes story 3's fixture into dir: a NATS cluster none of the
 // controllers deployed.
 func unmanaged(dir string) error {
-	var f fixture
+	var f unmanagedData
 	op, err := nkeys.CreateOperator()
 	if err != nil {
 		return err
@@ -93,7 +93,7 @@ func unmanaged(dir string) error {
 	if f.CA, f.Cert, f.Key, err = certificates(); err != nil {
 		return err
 	}
-	return writeTemplate(dir, "00-messaging.yaml", manifests, f)
+	return writeTemplate(dir, "00-messaging.yaml", unmanagedTemplate, f)
 }
 
 // certificates returns a CA and a server certificate and key it signs, for
@@ -146,7 +146,7 @@ func certificates() (ca, cert, key string, err error) {
 	return enc("CERTIFICATE", caDER), enc("CERTIFICATE", srvDER), enc("EC PRIVATE KEY", keyDER), nil
 }
 
-var manifests = template.Must(template.New("").Funcs(template.FuncMap{"indent": indent}).Parse(generated + `apiVersion: v1
+var unmanagedTemplate = template.Must(template.New("unmanaged").Funcs(template.FuncMap{"indent": indent}).Parse(generated + `apiVersion: v1
 kind: ConfigMap
 metadata:
   name: nats-config

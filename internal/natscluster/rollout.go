@@ -426,12 +426,12 @@ func (r *Reconciler) clearAnnotation(ctx context.Context, nc *clusterv1beta1.Nat
 // the revision, and a restart generation above cur's when cur's already
 // names it, so writing it restarts the pod.
 func (r *Reconciler) restartServer(ctx context.Context, nc *clusterv1beta1.NatsCluster, s Server, cur *appsv1.StatefulSet, reason string) (*appsv1.StatefulSet, error) {
-	if _, err := r.applyServerConfigMap(ctx, nc, s, true, func(a map[string]string) {
+	if _, err := r.applyServerConfigMap(ctx, nc, s, func(a map[string]string) {
 		a[AnnotationConfigApply] = string(clusterv1beta1.ConfigAppliedByRestart)
 		a[AnnotationRestartReason] = reason
 		delete(a, AnnotationReloadSince)
 	}); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("restart server %s: %w", s.Name, err)
 	}
 	sts := cur.DeepCopy()
 	sts.Labels = merged(sts.Labels, s.StatefulSet.Labels)

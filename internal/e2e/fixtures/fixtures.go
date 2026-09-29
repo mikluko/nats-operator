@@ -1,7 +1,7 @@
 // Package fixtures generates the files of a story's e2e/ directory that hold
-// keys, every key generated afresh and guarding nothing but the run. nsc cannot stand in: it writes keys and JWTs
-// to its own store, not the Secret manifests a story applies, and does not
-// expand jwtplane's presets into claims.
+// keys, each generated afresh and guarding nothing but the run. nsc cannot
+// stand in: it writes keys and JWTs to its own store, not Secret manifests,
+// and does not expand jwtplane's presets.
 package fixtures
 
 import (
@@ -57,9 +57,10 @@ var funcs = template.FuncMap{
 	},
 }
 
-// writeTemplate writes t executed on data to dir/name.
+// writeTemplate writes t executed on data to dir/name, readable by its owner
+// alone.
 func writeTemplate(dir, name string, t *template.Template, data any) error {
-	f, err := os.Create(filepath.Join(dir, name))
+	f, err := os.OpenFile(filepath.Join(dir, name), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}
@@ -180,8 +181,8 @@ spec:
       name: {{.}}-creds
 {{end}}{{define "secret"}}` + credsSecret + `{{end}}`
 
-// parseFixture parses body, headed by generated, as the template name with funcs
-// and partials.
+// parseFixture parses body, headed by generated, as the template name with
+// funcs and partials.
 func parseFixture(name, body string) *template.Template {
 	return template.Must(template.Must(template.New(name).Funcs(funcs).Parse(generated + body)).Parse(partials))
 }

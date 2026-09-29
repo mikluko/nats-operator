@@ -8,8 +8,8 @@ import (
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
 
-// seeds is what superclusterHome renders.
-type seeds struct {
+// superclusterData is what superclusterTemplate renders.
+type superclusterData struct {
 	OperatorIdentity, OperatorSigning, SystemIdentity, SystemSigning string
 	// WestCredsLines is the west creds file, line by line.
 	WestCredsLines []string
@@ -19,7 +19,7 @@ type seeds struct {
 // and system account JWTs its NatsOperatorTrust takes as the patch file
 // natsoperatortrust.json.
 func supercluster(dir string) error {
-	var s seeds
+	var s superclusterData
 	op, opSeed, err := keys(nkeys.PrefixByteOperator)
 	if err != nil {
 		return err
@@ -47,7 +47,7 @@ func supercluster(dir string) error {
 	}, sys); err != nil {
 		return err
 	}
-	if err := writeTemplate(dir, "00-home.yaml", superclusterHome, s); err != nil {
+	if err := writeTemplate(dir, "00-home.yaml", superclusterTemplate, s); err != nil {
 		return err
 	}
 	if err := writeTemplate(dir, "00-west.yaml", credsSecretTemplate, secret{Name: "west-cluster-controller-creds", Namespace: "nats-system", Lines: s.WestCredsLines}); err != nil {
@@ -56,7 +56,7 @@ func supercluster(dir string) error {
 	return writePatch(dir, "natsoperatortrust.json", map[string]string{"operatorJWT": operatorJWT, "systemAccountJWT": systemJWT})
 }
 
-var superclusterHome = parseFixture("home", `{{template "keys" (dict "name" "acme-operator" "identity" .OperatorIdentity "signing" .OperatorSigning)}}---
+var superclusterTemplate = parseFixture("supercluster", `{{template "keys" (dict "name" "acme-operator" "identity" .OperatorIdentity "signing" .OperatorSigning)}}---
 {{template "keys" (dict "name" "sys" "identity" .SystemIdentity "signing" .SystemSigning)}}---
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsOperator

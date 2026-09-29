@@ -14,7 +14,7 @@ import (
 // NatsOperatorTrust and NatsAccountTrust take as the patch files
 // natsoperatortrust.json and natsaccounttrust.json.
 func leafnodes(dir string) error {
-	var h hub
+	var h leafnodesData
 	op, opSeeds, err := keys(nkeys.PrefixByteOperator)
 	if err != nil {
 		return err
@@ -51,7 +51,7 @@ func leafnodes(dir string) error {
 	if err != nil {
 		return err
 	}
-	if err := writeTemplate(dir, "00-hub.yaml", hubTemplate, h); err != nil {
+	if err := writeTemplate(dir, "00-hub.yaml", leafnodesHubTemplate, h); err != nil {
 		return err
 	}
 	leaf := []string{jwt.ConnectionTypeLeafnode}
@@ -75,7 +75,7 @@ func leafnodes(dir string) error {
 		}
 		edge = append(edge, secret{Name: c.secret, Namespace: "nats-system", Lines: lines})
 	}
-	if err := writeTemplate(dir, "00-edge.yaml", edgeTemplate, edge); err != nil {
+	if err := writeTemplate(dir, "00-edge.yaml", leafnodesEdgeTemplate, edge); err != nil {
 		return err
 	}
 	if err := writePatch(dir, "natsoperatortrust.json", map[string]string{"operatorJWT": operatorJWT, "systemAccountJWT": systemJWT}); err != nil {
@@ -84,17 +84,17 @@ func leafnodes(dir string) error {
 	return writePatch(dir, "natsaccounttrust.json", map[string]string{"publicKey": telPub, "jwt": telemetryJWT})
 }
 
-// hub is what hubTemplate renders.
-type hub struct {
+// leafnodesData is what leafnodesHubTemplate renders.
+type leafnodesData struct {
 	OperatorIdentity, OperatorSigning   string
 	SystemIdentity, SystemSigning       string
 	TelemetryIdentity, TelemetrySigning string
 }
 
-var edgeTemplate = parseFixture("edge", `{{range $i, $s := .}}{{if $i}}---
+var leafnodesEdgeTemplate = parseFixture("leafnodes-edge", `{{range $i, $s := .}}{{if $i}}---
 {{end}}{{template "secret" $s}}{{end}}`)
 
-var hubTemplate = parseFixture("hub", `{{template "keys" (dict "name" "acme-operator" "identity" .OperatorIdentity "signing" .OperatorSigning)}}---
+var leafnodesHubTemplate = parseFixture("leafnodes-hub", `{{template "keys" (dict "name" "acme-operator" "identity" .OperatorIdentity "signing" .OperatorSigning)}}---
 {{template "keys" (dict "name" "sys" "identity" .SystemIdentity "signing" .SystemSigning)}}---
 {{template "keys" (dict "name" "telemetry" "identity" .TelemetryIdentity "signing" .TelemetrySigning)}}---
 apiVersion: auth.nats.mikluko.io/v1beta1

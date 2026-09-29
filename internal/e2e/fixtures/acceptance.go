@@ -6,8 +6,8 @@ import (
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
 
-// accept is what acceptanceHome renders.
-type accept struct {
+// acceptanceData is what acceptanceTemplate renders.
+type acceptanceData struct {
 	OperatorIdentity, OperatorSigning     string
 	SystemIdentity, SystemSigning         string
 	MonitoringIdentity, MonitoringSigning string
@@ -18,7 +18,7 @@ type accept struct {
 // system account JWTs its NatsOperatorTrust takes as the patch file
 // natsoperatortrust.json.
 func acceptance(dir string) error {
-	var a accept
+	var a acceptanceData
 	var op, sys, monitoring jwtplane.Keys
 	for _, k := range []struct {
 		kind           nkeys.PrefixByte
@@ -50,7 +50,7 @@ func acceptance(dir string) error {
 	if a.RuntimeCreds, err = userCreds(jwtplane.User{Name: "monitoring-runtime"}, monitoring); err != nil {
 		return err
 	}
-	if err := writeTemplate(dir, "00-home.yaml", acceptanceHome, a); err != nil {
+	if err := writeTemplate(dir, "00-home.yaml", acceptanceTemplate, a); err != nil {
 		return err
 	}
 	for _, remote := range []string{"dev-east", "prod-west"} {
@@ -65,7 +65,7 @@ func acceptance(dir string) error {
 	return writePatch(dir, "natsoperatortrust.json", map[string]string{"operatorJWT": operatorJWT, "systemAccountJWT": systemJWT})
 }
 
-var acceptanceHome = parseFixture("home", `{{template "keys" (dict "name" "acme" "identity" .OperatorIdentity "signing" .OperatorSigning)}}---
+var acceptanceTemplate = parseFixture("acceptance", `{{template "keys" (dict "name" "acme" "identity" .OperatorIdentity "signing" .OperatorSigning)}}---
 {{template "keys" (dict "name" "sys" "identity" .SystemIdentity "signing" .SystemSigning)}}---
 {{template "keys" (dict "name" "monitoring-prod" "identity" .MonitoringIdentity "signing" .MonitoringSigning)}}---
 {{template "sysuser" "cluster-controller"}}---

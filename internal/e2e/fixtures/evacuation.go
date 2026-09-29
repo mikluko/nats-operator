@@ -8,7 +8,7 @@ import (
 
 // evacuation writes story 11's fixtures into dir.
 func evacuation(dir string) error {
-	var e evac
+	var e evacuationData
 	for _, k := range []struct {
 		kind           nkeys.PrefixByte
 		identity, sign *string
@@ -35,11 +35,11 @@ func evacuation(dir string) error {
 	if e.PaymentsCreds, err = userCreds(jwtplane.User{Name: "payments"}, e.payments); err != nil {
 		return err
 	}
-	return writeTemplate(dir, "00-auth.yaml", evacuationAuth, e)
+	return writeTemplate(dir, "00-auth.yaml", evacuationTemplate, e)
 }
 
-// evac is what evacuationAuth renders.
-type evac struct {
+// evacuationData is what evacuationTemplate renders.
+type evacuationData struct {
 	OperatorIdentity, OperatorSigning string
 	SystemIdentity, SystemSigning     string
 	OrdersIdentity, OrdersSigning     string
@@ -48,7 +48,7 @@ type evac struct {
 	orders, payments                  jwtplane.Keys
 }
 
-var evacuationAuth = parseFixture("auth", `{{define "account"}}apiVersion: auth.nats.mikluko.io/v1beta1
+var evacuationTemplate = parseFixture("evacuation", `{{define "account"}}apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsAccount
 metadata:
   name: {{.}}
