@@ -370,12 +370,33 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].env
           value: [{name: GOMEMLIMIT, value: "241591910"}]
+  - it: reads a memory limit's digits in base 10
+    set:
+      cluster.resources.limits.memory: 010Gi
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env
+          value: [{name: GOMEMLIMIT, value: "9663676416"}]
+  - it: reads a memory limit's digits in base 10 where they would be octal
+    set:
+      cluster.resources.limits.memory: 0256Mi
+    documentSelector: {path: kind, value: Deployment}
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env
+          value: [{name: GOMEMLIMIT, value: "241591910"}]
   - it: refuses a memory limit it cannot derive GOMEMLIMIT from
     set:
       cluster.resources.limits.memory: 1.5Gi
     asserts:
       - failedTemplate:
-          errorMessage: 'cluster.resources.limits.memory is "1.5Gi": GOMEMLIMIT is derived only from an integer with one of the suffixes k, M, G, T, Ki, Mi, Gi or Ti'
+          errorMessage: 'cluster.resources.limits.memory is "1.5Gi": GOMEMLIMIT is derived only from an integer, optionally suffixed with one of k, M, G, T, Ki, Mi, Gi or Ti'
+  - it: refuses a memory limit given as a fractional number of bytes
+    values: [values/fractional-memory.yaml]
+    asserts:
+      - failedTemplate:
+          errorMessage: 'cluster.resources.limits.memory is "1.5": GOMEMLIMIT is derived only from an integer, optionally suffixed with one of k, M, G, T, Ki, Mi, Gi or Ti'
   - it: sets no GOMEMLIMIT without a memory limit
     set:
       cluster.resources.limits: null

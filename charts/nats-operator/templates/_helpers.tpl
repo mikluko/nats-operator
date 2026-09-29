@@ -101,13 +101,16 @@ other than an integer, optionally suffixed with one of k, M, G, T, Ki, Mi, Gi
 or Ti.
 */}}
 {{- define "nats-operator.goMemLimit" -}}
-{{- $quantity := ternary (int64 .quantity | toString) (toString .quantity) (kindIs "float64" .quantity) -}}
+{{- $quantity := toString .quantity -}}
+{{- if and (kindIs "float64" .quantity) (eq .quantity (float64 (int64 .quantity))) -}}
+{{- $quantity = int64 .quantity | toString -}}
+{{- end -}}
 {{- if not (regexMatch "^[0-9]+(k|M|G|T|Ki|Mi|Gi|Ti)?$" $quantity) -}}
-{{- fail (printf "%s is %q: GOMEMLIMIT is derived only from an integer with one of the suffixes k, M, G, T, Ki, Mi, Gi or Ti" .key $quantity) -}}
+{{- fail (printf "%s is %q: GOMEMLIMIT is derived only from an integer, optionally suffixed with one of k, M, G, T, Ki, Mi, Gi or Ti" .key $quantity) -}}
 {{- end -}}
 {{- $suffix := regexFind "[A-Za-z]+$" $quantity -}}
 {{- $units := dict "" 1 "k" 1000 "M" 1000000 "G" 1000000000 "T" 1000000000000 "Ki" 1024 "Mi" 1048576 "Gi" 1073741824 "Ti" 1099511627776 -}}
-{{- div (mul (int64 (trimSuffix $suffix $quantity)) (get $units $suffix) 9) 10 -}}
+{{- div (mul (atoi (trimSuffix $suffix $quantity)) (get $units $suffix) 9) 10 -}}
 {{- end }}
 
 {{/*

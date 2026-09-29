@@ -136,8 +136,8 @@ func readPatch(t *testing.T, dir, name string) trustPatch {
 	return p
 }
 
-// chain is what an operator-mode story's fixtures must chain to: the names
-// of the key Secrets, without their -keys suffix.
+// chain names the key Secrets, without their -keys suffix, that a story's
+// JWTs and creds must chain to.
 type chain struct {
 	operator, system string
 	// operatorTrust is whether natsoperatortrust.json is written.
@@ -193,7 +193,7 @@ func (c chain) check(t *testing.T, dir string) {
 	}
 }
 
-// checkUnmanaged requires that story 3's operator, accounts and creds chain
+// checkUnmanaged requires that story 3's NATS operator, accounts and creds chain
 // through the server config, and that its server certificate chains to its
 // CA and matches its key.
 func checkUnmanaged(t *testing.T, dir string) {

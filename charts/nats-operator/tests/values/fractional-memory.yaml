@@ -1,0 +1,4 @@
+cluster:
+  resources:
+    limits:
+      memory: 1.5

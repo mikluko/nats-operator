@@ -36,4 +36,4 @@ With `E2E_WATCH_NAMESPACES=true` the chart is installed with `watchNamespaces` l
 
 The `e2e` workflow runs every story on two Kubernetes clusters nightly, and on three weekly, the one scheduled run in which story 9 does not skip.
 
-The clusters stay for the next run; `just e2e-down` deletes them. `hack/e2e` lists the `E2E_*` variables it reads, such as `E2E_STORIES`, the story numbers to run.
+The kind clusters stay for the next run; `just e2e-down` deletes them. `hack/e2e` lists the `E2E_*` variables it reads, such as `E2E_STORIES`, the story numbers to run.
