@@ -25,7 +25,7 @@ params:
         patch: {spec: {keys: {identity: {secretKeyRef: {name: acme-keys, key: identity}}, signing: [{name: signing-1, secretKeyRef: {name: acme-keys, key: signing-1}}]}}}
       - files: [01-auth.yaml]
         kind: NatsSystemAccount
-        reason: the keys e2e/00-home.yaml holds, which sign the trust JWTs above and the remote clusters' controller creds
+        reason: the keys e2e/00-home.yaml holds, which sign the trust JWTs above and the other Kubernetes clusters' controller creds
         patch: {spec: {keys: {identity: {secretKeyRef: {name: sys-keys, key: identity}}, signing: [{name: signing-1, secretKeyRef: {name: sys-keys, key: signing-1}}]}}}
       - files: [01-auth.yaml]
         kind: NatsAccount
