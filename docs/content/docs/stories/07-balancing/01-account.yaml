@@ -12,9 +12,9 @@ spec:
     name: demo
   # A pool selects NatsStream, NatsKeyValue and NatsObjectStore resources in
   # this namespace by label; each stream's consumers go with it. Streams in no
-  # pool, and streams with no resource, form the default pool. With no pools declared the
-  # whole account is one pool. A stream matching several pools belongs to the
-  # first in this list, and status reports Overlapping.
+  # pool, and streams with no resource, form the default pool. With no pools
+  # declared the whole account is one pool. A stream matching several pools
+  # belongs to the first in this list, and status reports Overlapping.
   pools:
     - name: requests
       selector:

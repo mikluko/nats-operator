@@ -1,8 +1,9 @@
 # Whose signatures the NATS cluster accepts. Here, in the same Kubernetes
 # cluster as the NatsOperator, it points at the live resource: the auth
 # controller writes the NATS operator and system account JWTs into this object's
-# status, and the cluster controller reads them from there. Elsewhere the
-# same kind carries the JWTs literally (story 6); `operatorRef` and the literal form are exclusive.
+# status, and the cluster controller reads them from there. Elsewhere the same
+# kind carries the JWTs literally (story 6); `operatorRef` and the literal form
+# are exclusive.
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsOperatorTrust
 metadata:

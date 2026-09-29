@@ -1,6 +1,7 @@
 # How the auth controller reaches the servers it pushes account JWTs to: the
-# chart's `auth.systemConnection` names this connection, nats-system/auth-controller.
-# Until it resolves, JWTs are signed and nothing reaches a server.
+# chart's `auth.systemConnection` names this connection,
+# nats-system/auth-controller. Until it resolves, JWTs are signed and nothing
+# reaches a server.
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:

@@ -154,11 +154,10 @@ func Flags(fs *flag.FlagSet, id string) *Options {
 
 // New builds a manager for scheme against the API server cfg reaches, with
 // health and readiness probes registered and its cache scoped to owned and
-// to o.WatchNamespaces. It fails while the API server is unreachable, since
-// scoping the cache reads its discovery. Its controllers start their watches
-// before the replica is elected, and it is ready only once every controller
-// added to it has synced them. It releases its lease as Start returns, so the
-// caller must exit then.
+// to o.WatchNamespaces. It fails while the API server is unreachable. Its
+// controllers start their watches before the replica is elected, and it is
+// ready only once every controller added to it has synced them. It releases
+// its lease as Start returns, so the caller must exit then.
 func New(cfg *rest.Config, o *Options, scheme *runtime.Scheme, owned Owned) (ctrl.Manager, error) {
 	opts, err := managerOptions(o, scheme, owned)
 	if err != nil {

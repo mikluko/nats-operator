@@ -108,7 +108,8 @@ type StreamConfig struct {
 	// +optional
 	Duplicates *metav1.Duration `json:"duplicates,omitempty"`
 
-	// Placement pins the stream; a changed cluster moves it.
+	// Placement pins the stream; changing placement.cluster moves it to that NATS
+	// cluster.
 	// +optional
 	Placement *Placement `json:"placement,omitempty"`
 

@@ -81,9 +81,9 @@ spec:
   accountRef:
     kind: NatsAccount
     name: telemetry
-  # A leaf user narrowed to some of the account's subjects names the
-  # connection type beside its permissions; `preset: leafnode` alone is a leaf connection with full
-  # account access.
+  # A leaf user narrowed to some of the account's subjects names the connection
+  # type beside its permissions; `preset: leafnode` alone is a leaf connection
+  # with full account access.
   connectionTypes: [LEAFNODE]
   permissions:
     publish:

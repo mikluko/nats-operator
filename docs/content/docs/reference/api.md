@@ -1208,7 +1208,7 @@ Appears on: [NatsStream](#NatsStream).
 | `replicas` | {{< type "int32" >}} | No |  |
 | `noAck` | {{< type "bool" >}} | No |  |
 | `duplicates` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No |  |
-| `placement` | [{{< type "Placement" >}}](#Placement) | No | Placement pins the stream; a changed cluster moves it. |
+| `placement` | [{{< type "Placement" >}}](#Placement) | No | Placement pins the stream; changing placement.cluster moves it to that NATS cluster. |
 | `mirror` | [{{< type "StreamSource" >}}](#StreamSource) | No | Mirror cannot change once set; omitting it leaves the server's mirror in place. |
 | `sources` | [{{< type "[]StreamSource" >}}](#StreamSource) | No |  |
 | `sealed` | {{< type "bool" >}} | No | Sealed cannot be unset. |
@@ -1481,7 +1481,7 @@ Appears on: [NatsStreamSpec](#NatsStreamSpec).
 | `replicas` | {{< type "int32" >}} | No |  |
 | `noAck` | {{< type "bool" >}} | No |  |
 | `duplicates` | [{{< type "Duration" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration) | No |  |
-| `placement` | [{{< type "Placement" >}}](#Placement) | No | Placement pins the stream; a changed cluster moves it. |
+| `placement` | [{{< type "Placement" >}}](#Placement) | No | Placement pins the stream; changing placement.cluster moves it to that NATS cluster. |
 | `mirror` | [{{< type "StreamSource" >}}](#StreamSource) | No | Mirror cannot change once set; omitting it leaves the server's mirror in place. |
 | `sources` | [{{< type "[]StreamSource" >}}](#StreamSource) | No |  |
 | `sealed` | {{< type "bool" >}} | No | Sealed cannot be unset. |

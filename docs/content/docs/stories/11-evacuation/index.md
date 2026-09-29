@@ -47,7 +47,7 @@ params:
               advertise: nats-prod-east-2.example.net:7222
 ---
 
-The platform team retires the NATS cluster `prod-east`: it rolls out `prod-east-2` beside it in the same supercluster, moves every stream across, and only then deletes `prod-east`.
+The platform team retires the NATS cluster `prod-east`: it rolls out `prod-east-2` beside it in the same supercluster, moves every movable stream across, and only then deletes `prod-east`.
 
 ## The evacuation
 

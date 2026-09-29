@@ -280,7 +280,9 @@ spec:
                 - message: persistMode is immutable
                   rule: self == oldSelf
               placement:
-                description: Placement pins the stream; a changed cluster moves it.
+                description: |-
+                  Placement pins the stream; changing placement.cluster moves it to that NATS
+                  cluster.
                 properties:
                   cluster:
                     description: Cluster is the NATS cluster the replicas are placed

@@ -21,9 +21,9 @@ metadata:
 spec:
   connectionRef:
     name: shared-payments
-  # Adopt if it exists, create it if not. The spec as written is applied to the server
-  # either way; the controller then writes the fields it omits into spec from
-  # the server, as field manager jetstream-controller.
+  # Adopt if it exists, create it if not. The spec as written is applied to the
+  # server either way; the controller then writes the fields it omits into spec
+  # from the server, as field manager jetstream-controller.
   adoptionPolicy: AdoptOrCreate
   name: REFUNDS
   subjects: ["refunds.>"]
