@@ -95,6 +95,22 @@ when every list is empty.
 {{- end }}
 
 {{/*
+nats-operator.goMemLimit takes a dict of key (the value's path, for the error)
+and quantity, and returns 90% of quantity in bytes. It fails on a quantity
+other than an integer, optionally suffixed with one of k, M, G, T, Ki, Mi, Gi
+or Ti.
+*/}}
+{{- define "nats-operator.goMemLimit" -}}
+{{- $quantity := ternary (int64 .quantity | toString) (toString .quantity) (kindIs "float64" .quantity) -}}
+{{- if not (regexMatch "^[0-9]+(k|M|G|T|Ki|Mi|Gi|Ti)?$" $quantity) -}}
+{{- fail (printf "%s is %q: GOMEMLIMIT is derived only from an integer with one of the suffixes k, M, G, T, Ki, Mi, Gi or Ti" .key $quantity) -}}
+{{- end -}}
+{{- $suffix := regexFind "[A-Za-z]+$" $quantity -}}
+{{- $units := dict "" 1 "k" 1000 "M" 1000000 "G" 1000000000 "T" 1000000000000 "Ki" 1024 "Mi" 1048576 "Gi" 1073741824 "Ti" 1099511627776 -}}
+{{- div (mul (int64 (trimSuffix $suffix $quantity)) (get $units $suffix) 9) 10 -}}
+{{- end }}
+
+{{/*
 nats-operator.controller renders one controller's ServiceAccount, RBAC and
 Deployment. It takes a dict of root (the chart context), name (the
 controller's, and its image's), group (its API group; its lease is
@@ -105,8 +121,9 @@ generates for it.
 With watchNamespaces set, the ClusterRole holds only the rules of
 files/rbac/<name>-cluster-scoped.yaml, and each namespace named gets a Role
 and RoleBinding of those of files/rbac/<name>-namespaced.yaml. It fails with
-more than one replica while leaderElection.enabled is false, and on an
-extraArgs entry setting --leader-elect or --leader-election-id.
+more than one replica while leaderElection.enabled is false, on an extraArgs
+entry setting --leader-elect or --leader-election-id, and where
+nats-operator.goMemLimit fails on its memory limit.
 */}}
 {{- define "nats-operator.controller" -}}
 {{- $fullname := include "nats-operator.fullname" . -}}
@@ -124,7 +141,7 @@ extraArgs entry setting --leader-elect or --leader-election-id.
 {{- end -}}
 {{- $memoryEnv := list -}}
 {{- if and .values.resources .values.resources.limits .values.resources.limits.memory -}}
-{{- $memoryEnv = list (dict "name" "GOMEMLIMIT" "valueFrom" (dict "resourceFieldRef" (dict "resource" "limits.memory"))) -}}
+{{- $memoryEnv = list (dict "name" "GOMEMLIMIT" "value" (include "nats-operator.goMemLimit" (dict "key" (printf "%s.resources.limits.memory" (trimSuffix "-controller" .name)) "quantity" .values.resources.limits.memory))) -}}
 {{- end -}}
 {{- if and (not .root.Values.leaderElection.enabled) (gt (int .values.replicas) 1) -}}
 {{- fail (printf "%s.replicas is %d: more than one replica needs leaderElection.enabled" (trimSuffix "-controller" .name) (int .values.replicas)) -}}

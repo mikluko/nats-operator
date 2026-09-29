@@ -241,8 +241,8 @@ func LoadBundles(dir, generated string) ([]*Bundle, error) {
 	return bundles, nil
 }
 
-// checkGenerated fails on a directory under generated, unless empty, that
-// names none of bundles.
+// checkGenerated fails on a directory under generated that names none of
+// bundles.
 func checkGenerated(generated string, bundles []*Bundle) error {
 	if generated == "" {
 		return nil

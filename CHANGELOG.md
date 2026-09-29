@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Helm chart `charts/nats-operator` installing the CRDs and any subset of the three controllers, each with its own ServiceAccount and a ClusterRole holding only the verbs it uses.
 - The chart requires Kubernetes 1.33 or later.
 - The chart refuses to render a controller with more than one replica while `leaderElection.enabled` is false.
-- The chart sets each controller's `GOMEMLIMIT` to its memory limit, where one is set, unless `env` names it.
+- The chart sets each controller's `GOMEMLIMIT` to 90% of its memory limit, where one is set, unless `env` names it, and refuses a memory limit other than an integer with an optional `k`, `M`, `G`, `T`, `Ki`, `Mi`, `Gi` or `Ti` suffix.
 - The chart names each controller's leader election lease `<release>-<API group>`.
 - The chart refuses an `extraArgs` entry, global or per controller, setting `--leader-elect` or `--leader-election-id`.
 - Each controller's leader election Role grants creating Leases, and getting, updating and patching only its own lease.

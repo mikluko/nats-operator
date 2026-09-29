@@ -73,7 +73,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `cluster.image.tag` | `""` | Its image tag; empty is the chart's `appVersion`. |
 | `cluster.image.digest` | the release's image digest; `""` in the source tree | `sha256:<hex>` appended to its image reference as `@<digest>`, pinning the image, while its tag is the chart's `appVersion`. |
 | `cluster.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
-| `cluster.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources; a memory limit also sets its `GOMEMLIMIT`, which an `env` entry of that name replaces. |
+| `cluster.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources; a memory limit also sets its `GOMEMLIMIT` to 90% of the limit, which an `env` entry of that name replaces. The chart refuses a memory limit other than an integer, optionally suffixed with one of `k`, `M`, `G`, `T`, `Ki`, `Mi`, `Gi` or `Ti`. |
 | `cluster.nodeSelector` | `{}` | Its pod's node selector, each key set over `nodeSelector`. |
 | `cluster.annotations` | `{}` | Its Deployment's annotations, each key set over `annotations`. |
 | `cluster.podAnnotations` | `{}` | Its pod's annotations, each key set over `podAnnotations`. |
@@ -90,7 +90,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `auth.image.tag` | `""` | Its image tag; empty is the chart's `appVersion`. |
 | `auth.image.digest` | the release's image digest; `""` in the source tree | `sha256:<hex>` appended to its image reference as `@<digest>`, pinning the image, while its tag is the chart's `appVersion`. |
 | `auth.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
-| `auth.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources; a memory limit also sets its `GOMEMLIMIT`, which an `env` entry of that name replaces. |
+| `auth.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources; a memory limit also sets its `GOMEMLIMIT` to 90% of the limit, which an `env` entry of that name replaces. The chart refuses a memory limit other than an integer, optionally suffixed with one of `k`, `M`, `G`, `T`, `Ki`, `Mi`, `Gi` or `Ti`. |
 | `auth.nodeSelector` | `{}` | Its pod's node selector, each key set over `nodeSelector`. |
 | `auth.annotations` | `{}` | Its Deployment's annotations, each key set over `annotations`. |
 | `auth.podAnnotations` | `{}` | Its pod's annotations, each key set over `podAnnotations`. |
@@ -106,7 +106,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `jetstream.image.tag` | `""` | Its image tag; empty is the chart's `appVersion`. |
 | `jetstream.image.digest` | the release's image digest; `""` in the source tree | `sha256:<hex>` appended to its image reference as `@<digest>`, pinning the image, while its tag is the chart's `appVersion`. |
 | `jetstream.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
-| `jetstream.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources; a memory limit also sets its `GOMEMLIMIT`, which an `env` entry of that name replaces. |
+| `jetstream.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources; a memory limit also sets its `GOMEMLIMIT` to 90% of the limit, which an `env` entry of that name replaces. The chart refuses a memory limit other than an integer, optionally suffixed with one of `k`, `M`, `G`, `T`, `Ki`, `Mi`, `Gi` or `Ti`. |
 | `jetstream.nodeSelector` | `{}` | Its pod's node selector, each key set over `nodeSelector`. |
 | `jetstream.annotations` | `{}` | Its Deployment's annotations, each key set over `annotations`. |
 | `jetstream.podAnnotations` | `{}` | Its pod's annotations, each key set over `podAnnotations`. |

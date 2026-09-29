@@ -88,6 +88,21 @@ tests:
               path: /metrics
               scheme: http
         documentIndex: 1
+  - it: scrapes with the scraper's token where metrics.serviceMonitor.authorization is null
+    set:
+      metrics.service.enabled: true
+      metrics.serviceMonitor.enabled: true
+      metrics.serviceMonitor.authorization: null
+      cluster.enabled: false
+      jetstream.enabled: false
+    asserts:
+      - equal:
+          path: spec.endpoints[0].bearerTokenFile
+          value: /var/run/secrets/kubernetes.io/serviceaccount/token
+        documentIndex: 1
+      - notExists:
+          path: spec.endpoints[0].authorization
+        documentIndex: 1
   - it: refuses a ServiceMonitor without the Service
     set:
       metrics.serviceMonitor.enabled: true
