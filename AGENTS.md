@@ -12,10 +12,11 @@ Three Kubernetes controllers that deploy NATS clusters, own their auth plane, an
 
 ## Releases
 
-The changelog decides the version. Cutting one is renaming `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and opening a fresh `[Unreleased]` above it; `mikluko/action-changelog` validates the file on every pull request, and the release workflow, once ci passes on a push to `main`, tags and publishes the newest entry neither tagged nor with its chart in the registry, and fails on one whose chart is in the registry but untagged; run by hand on such a ref, it builds without publishing. Nothing else sets a version.
+The changelog decides the version. Cutting one is renaming `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and opening a fresh `[Unreleased]` above it. `mikluko/action-changelog` validates the file on every pull request. Once ci passes on a push to `main`, the release workflow tags and publishes the newest entry neither tagged nor with its chart in the registry, and fails on one whose chart is in the registry but untagged; run by hand, it builds a due version without publishing. Nothing else sets a version.
 
 Before the first release is announced, a human:
 
+- runs `release` by hand on a branch whose `CHANGELOG.md` has the version cut, before cutting it on `main`; the run publishes nothing and proves the plan
 - makes the ghcr packages `nats-operator/cluster-controller`, `nats-operator/auth-controller`, `nats-operator/jetstream-controller` and `nats-operator/charts/nats-operator` public; new packages of a personal account are private
 - sets the repository's Pages source to GitHub Actions, before the release's docs job deploys
 - turns on private vulnerability reporting, which `SECURITY.md` links to

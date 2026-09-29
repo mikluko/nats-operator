@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -25,6 +26,7 @@ while [ $# -gt 0 ]; do
 done
 case "$url" in
   */token\?*) answer=token ;;
+  https://api.github.com/*) answer=package ;;
   *) answer=manifest ;;
 esac
 if [ -f "$STUB/$answer.json" ]; then cp "$STUB/$answer.json" "$out"; else : >"$out"; fi
@@ -38,10 +40,10 @@ func registryError(code, message string) string {
 }
 
 // TestRelease_DueUntilChartPushed pins that a version is due only while it is
-// untagged and the registry answers its chart's manifest with 404
-// MANIFEST_UNKNOWN or NAME_UNKNOWN, that a manifest present for an untagged
-// version or any other registry answer fails the plan, and that every
-// publishing job waits on that.
+// untagged and either the registry answers its chart's manifest with 404
+// MANIFEST_UNKNOWN or NAME_UNKNOWN, or it denies a pull token with 403 and the
+// GitHub Packages API answers the chart's package with 404; that any other
+// answer fails the plan; and that every publishing job waits on that.
 func TestRelease_DueUntilChartPushed(t *testing.T) {
 	bash, err := exec.LookPath("bash")
 	require.NoError(t, err)
@@ -76,6 +78,7 @@ func TestRelease_DueUntilChartPushed(t *testing.T) {
 		bearer   = "stub-bearer"
 		tokenURL = "https://ghcr.io/token?service=ghcr.io&scope=repository:mikluko/nats-operator/charts/nats-operator:pull"
 		manifest = "https://ghcr.io/v2/mikluko/nats-operator/charts/nats-operator/manifests/0.1.0"
+		pkgURL   = "https://api.github.com/users/mikluko/packages/container/nats-operator%2Fcharts%2Fnats-operator"
 		absent   = "v0.1.0 is untagged and its chart is not in oci://ghcr.io/mikluko/nats-operator/charts"
 		granted  = `{"token":"` + bearer + `"}`
 	)
@@ -88,10 +91,11 @@ func TestRelease_DueUntilChartPushed(t *testing.T) {
 		tokenBody      string
 		manifestStatus string
 		manifestBody   string
+		packageStatus  string
 		exit           int
 		outputs        map[string]string
 		stdout         string
-		fetched        int
+		requested      []string
 	}{
 		{
 			name:    "no version",
@@ -112,7 +116,7 @@ func TestRelease_DueUntilChartPushed(t *testing.T) {
 			tokenBody:   registryError("UNAUTHORIZED", "authentication required"),
 			exit:        1,
 			stdout:      "::error::ghcr.io answered 401 without a pull token for mikluko/nats-operator/charts/nats-operator",
-			fetched:     1,
+			requested:   []string{tokenURL},
 		},
 		{
 			name:        "token 200 without a token",
@@ -122,7 +126,39 @@ func TestRelease_DueUntilChartPushed(t *testing.T) {
 			tokenBody:   `{}`,
 			exit:        1,
 			stdout:      "::error::ghcr.io answered 200 without a pull token",
-			fetched:     1,
+			requested:   []string{tokenURL},
+		},
+		{
+			name:          "token 403, package 404",
+			version:       version,
+			tagged:        "false",
+			tokenStatus:   "403",
+			tokenBody:     registryError("DENIED", "requested access to the resource is denied"),
+			packageStatus: "404",
+			outputs:       map[string]string{"due": "true", "reason": absent},
+			requested:     []string{tokenURL, pkgURL},
+		},
+		{
+			name:          "token 403, package 200",
+			version:       version,
+			tagged:        "false",
+			tokenStatus:   "403",
+			tokenBody:     registryError("DENIED", "requested access to the resource is denied"),
+			packageStatus: "200",
+			exit:          1,
+			stdout:        "::error::ghcr.io answered 403 without a pull token for mikluko/nats-operator/charts/nats-operator, and the GitHub Packages API answered 200: the package exists but its pull was denied",
+			requested:     []string{tokenURL, pkgURL},
+		},
+		{
+			name:          "token 403, package 500",
+			version:       version,
+			tagged:        "false",
+			tokenStatus:   "403",
+			tokenBody:     registryError("DENIED", "requested access to the resource is denied"),
+			packageStatus: "500",
+			exit:          1,
+			stdout:        "::error::ghcr.io answered 403 without a pull token for mikluko/nats-operator/charts/nats-operator, and the GitHub Packages API answered 500",
+			requested:     []string{tokenURL, pkgURL},
 		},
 		{
 			name:           "200 untagged, chart pushed",
@@ -134,7 +170,7 @@ func TestRelease_DueUntilChartPushed(t *testing.T) {
 			manifestBody:   `{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json"}`,
 			exit:           1,
 			stdout:         "::error::chart 0.1.0 is in oci://ghcr.io/mikluko/nats-operator/charts but v0.1.0 is untagged; re-run the failed jobs of the release run that pushed it",
-			fetched:        2,
+			requested:      []string{tokenURL, manifest},
 		},
 		{
 			name:           "404 MANIFEST_UNKNOWN",
@@ -145,7 +181,7 @@ func TestRelease_DueUntilChartPushed(t *testing.T) {
 			manifestStatus: "404",
 			manifestBody:   registryError("MANIFEST_UNKNOWN", "manifest unknown"),
 			outputs:        map[string]string{"due": "true", "reason": absent},
-			fetched:        2,
+			requested:      []string{tokenURL, manifest},
 		},
 		{
 			name:           "404 NAME_UNKNOWN",
@@ -156,7 +192,7 @@ func TestRelease_DueUntilChartPushed(t *testing.T) {
 			manifestStatus: "404",
 			manifestBody:   registryError("NAME_UNKNOWN", "repository name not known to registry"),
 			outputs:        map[string]string{"due": "true", "reason": absent},
-			fetched:        2,
+			requested:      []string{tokenURL, manifest},
 		},
 		{
 			name:           "404 without an error body",
@@ -168,7 +204,7 @@ func TestRelease_DueUntilChartPushed(t *testing.T) {
 			manifestBody:   "404 page not found",
 			exit:           1,
 			stdout:         "::error::ghcr.io answered 404 with no error code for mikluko/nats-operator/charts/nats-operator:0.1.0",
-			fetched:        2,
+			requested:      []string{tokenURL, manifest},
 		},
 		{
 			name:           "401 UNAUTHORIZED",
@@ -180,7 +216,7 @@ func TestRelease_DueUntilChartPushed(t *testing.T) {
 			manifestBody:   registryError("UNAUTHORIZED", "authentication required"),
 			exit:           1,
 			stdout:         "::error::ghcr.io answered 401 UNAUTHORIZED for mikluko/nats-operator/charts/nats-operator:0.1.0",
-			fetched:        2,
+			requested:      []string{tokenURL, manifest},
 		},
 		{
 			name:           "403 DENIED",
@@ -192,7 +228,7 @@ func TestRelease_DueUntilChartPushed(t *testing.T) {
 			manifestBody:   registryError("DENIED", "requested access to the resource is denied"),
 			exit:           1,
 			stdout:         "::error::ghcr.io answered 403 DENIED for mikluko/nats-operator/charts/nats-operator:0.1.0",
-			fetched:        2,
+			requested:      []string{tokenURL, manifest},
 		},
 		{
 			name:           "404 DENIED",
@@ -204,7 +240,7 @@ func TestRelease_DueUntilChartPushed(t *testing.T) {
 			manifestBody:   registryError("DENIED", "requested access to the resource is denied"),
 			exit:           1,
 			stdout:         "::error::ghcr.io answered 404 DENIED",
-			fetched:        2,
+			requested:      []string{tokenURL, manifest},
 		},
 		{
 			name:           "500",
@@ -215,7 +251,7 @@ func TestRelease_DueUntilChartPushed(t *testing.T) {
 			manifestStatus: "500",
 			exit:           1,
 			stdout:         "::error::ghcr.io answered 500 with no error code",
-			fetched:        2,
+			requested:      []string{tokenURL, manifest},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -228,6 +264,7 @@ func TestRelease_DueUntilChartPushed(t *testing.T) {
 				"token.json":      tc.tokenBody,
 				"manifest.status": tc.manifestStatus,
 				"manifest.json":   tc.manifestBody,
+				"package.status":  tc.packageStatus,
 			} {
 				require.NoError(t, os.WriteFile(filepath.Join(stub, name), []byte(content), 0o644))
 			}
@@ -240,6 +277,7 @@ func TestRelease_DueUntilChartPushed(t *testing.T) {
 				"STUB=" + stub,
 				"CHART_REPOSITORY=" + wf.Env["CHART_REPOSITORY"],
 				"GITHUB_ACTOR=" + actor,
+				"GITHUB_API_URL=https://api.github.com",
 				"GITHUB_OUTPUT=" + output,
 				"RUNNER_TEMP=" + stub,
 				"VERSION=" + tc.version,
@@ -277,19 +315,19 @@ func TestRelease_DueUntilChartPushed(t *testing.T) {
 			if b, err := os.ReadFile(filepath.Join(stub, "config")); err == nil {
 				config = strings.Split(strings.TrimSuffix(string(b), "\n"), "\n")
 			}
-			require.Len(t, args, tc.fetched)
-			urls := []string{tokenURL, manifest}
-			configs := []string{
-				`user = "` + actor + `:` + token + `"`,
-				`header = "Authorization: Bearer ` + bearer + `"`,
+			require.Len(t, args, len(tc.requested))
+			configs := map[string]string{
+				tokenURL: `user = "` + actor + `:` + token + `"`,
+				manifest: `header = "Authorization: Bearer ` + bearer + `"`,
+				pkgURL:   `header = "Authorization: Bearer ` + token + `"`,
 			}
 			for i, a := range args {
-				require.True(t, strings.HasSuffix(a, " "+urls[i]), a)
+				require.True(t, strings.HasSuffix(a, " "+tc.requested[i]), a)
 				require.NotContains(t, a, token)
 				require.NotContains(t, a, bearer)
-				require.Equal(t, configs[i], config[i])
+				require.Equal(t, configs[tc.requested[i]], config[i])
 			}
-			if tc.fetched == 2 {
+			if slices.Contains(tc.requested, manifest) {
 				require.Contains(t, string(stdout), "::add-mask::"+bearer)
 			}
 		})

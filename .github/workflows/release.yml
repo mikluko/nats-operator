@@ -67,29 +67,51 @@ jobs:
             status=$(printf 'user = "%s:%s"\n' "$GITHUB_ACTOR" "$TOKEN" | curl -sS -K - -o "$RUNNER_TEMP/token.json" -w '%{http_code}' \
               "https://$host/token?service=$host&scope=repository:$package:pull")
             bearer=$(jq -r 'try .token // ""' "$RUNNER_TEMP/token.json" 2>/dev/null || true)
-            if [ "$status" != 200 ] || [ -z "$bearer" ]; then
+            if [ "$status" = 403 ]; then
+              # ghcr denies a pull token alike for a package it lacks and one it withholds, so a 403 is due only where the GitHub Packages API answers 404.
+              owner=${package%%/*}
+              name=${package#*/}
+              known=$(printf 'header = "Authorization: Bearer %s"\n' "$TOKEN" | curl -sS -K - -o "$RUNNER_TEMP/package.json" -w '%{http_code}' \
+                -H 'Accept: application/vnd.github+json' \
+                "$GITHUB_API_URL/users/$owner/packages/container/${name//\//%2F}")
+              case "$known" in
+                404)
+                  due=true
+                  reason="v$VERSION is untagged and its chart is not in $CHART_REPOSITORY"
+                  ;;
+                200)
+                  echo "::error::$host answered 403 without a pull token for $package, and the GitHub Packages API answered 200: the package exists but its pull was denied"
+                  exit 1
+                  ;;
+                *)
+                  echo "::error::$host answered 403 without a pull token for $package, and the GitHub Packages API answered $known"
+                  exit 1
+                  ;;
+              esac
+            elif [ "$status" != 200 ] || [ -z "$bearer" ]; then
               echo "::error::$host answered $status without a pull token for $package"
               exit 1
+            else
+              echo "::add-mask::$bearer"
+              status=$(printf 'header = "Authorization: Bearer %s"\n' "$bearer" | curl -sS -K - -o "$RUNNER_TEMP/manifest.json" -w '%{http_code}' \
+                -H 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json' \
+                "https://$host/v2/$package/manifests/$VERSION")
+              code=$(jq -r 'try .errors[0].code // ""' "$RUNNER_TEMP/manifest.json" 2>/dev/null || true)
+              case "$status:$code" in
+                200:*)
+                  echo "::error::chart $VERSION is in $CHART_REPOSITORY but v$VERSION is untagged; re-run the failed jobs of the release run that pushed it"
+                  exit 1
+                  ;;
+                404:MANIFEST_UNKNOWN | 404:NAME_UNKNOWN)
+                  due=true
+                  reason="v$VERSION is untagged and its chart is not in $CHART_REPOSITORY"
+                  ;;
+                *)
+                  echo "::error::$host answered $status ${code:-with no error code} for $package:$VERSION"
+                  exit 1
+                  ;;
+              esac
             fi
-            echo "::add-mask::$bearer"
-            status=$(printf 'header = "Authorization: Bearer %s"\n' "$bearer" | curl -sS -K - -o "$RUNNER_TEMP/manifest.json" -w '%{http_code}' \
-              -H 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json' \
-              "https://$host/v2/$package/manifests/$VERSION")
-            code=$(jq -r 'try .errors[0].code // ""' "$RUNNER_TEMP/manifest.json" 2>/dev/null || true)
-            case "$status:$code" in
-              200:*)
-                echo "::error::chart $VERSION is in $CHART_REPOSITORY but v$VERSION is untagged; re-run the failed jobs of the release run that pushed it"
-                exit 1
-                ;;
-              404:MANIFEST_UNKNOWN | 404:NAME_UNKNOWN)
-                due=true
-                reason="v$VERSION is untagged and its chart is not in $CHART_REPOSITORY"
-                ;;
-              *)
-                echo "::error::$host answered $status ${code:-with no error code} for $package:$VERSION"
-                exit 1
-                ;;
-            esac
           fi
           echo "::notice::$reason"
           echo "due=$due" >>"$GITHUB_OUTPUT"
