@@ -169,3 +169,40 @@ tests:
       auth.enabled: false
     asserts:
       - containsDocument: {kind: Service, apiVersion: v1, name: a-release-name-of-thirty-four-char-jetstream-controller-metrics, namespace: nats}
+  - it: verifies the metrics certificate against metrics.tls.secretName's ca.crt as the Service's DNS name while it is set
+    set:
+      metrics.tls.secretName: metrics-tls
+      metrics.service.enabled: true
+      metrics.serviceMonitor.enabled: true
+      cluster.enabled: false
+      jetstream.enabled: false
+    asserts:
+      - equal:
+          path: spec.endpoints[0].tlsConfig
+          value:
+            ca: {secret: {name: metrics-tls, key: ca.crt}}
+            serverName: rel-auth-controller-metrics.nats.svc
+        documentIndex: 1
+  - it: verifies the metrics certificate against metrics.serviceMonitor.caSecret in place of metrics.tls.secretName's ca.crt
+    set:
+      metrics.tls.secretName: metrics-tls
+      metrics.service.enabled: true
+      metrics.serviceMonitor.enabled: true
+      metrics.serviceMonitor.caSecret: {name: metrics-ca, key: root.pem}
+      cluster.enabled: false
+      jetstream.enabled: false
+    asserts:
+      - equal:
+          path: spec.endpoints[0].tlsConfig
+          value:
+            ca: {secret: {name: metrics-ca, key: root.pem}}
+            serverName: rel-auth-controller-metrics.nats.svc
+        documentIndex: 1
+  - it: refuses metrics.serviceMonitor.caSecret without metrics.tls.secretName
+    set:
+      metrics.service.enabled: true
+      metrics.serviceMonitor.enabled: true
+      metrics.serviceMonitor.caSecret: {name: metrics-ca, key: root.pem}
+    asserts:
+      - failedTemplate:
+          errorMessage: metrics.serviceMonitor.caSecret requires metrics.tls.secretName

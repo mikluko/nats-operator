@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -22,6 +23,8 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -156,22 +159,7 @@ func TestEnvtestMetrics(t *testing.T) {
 	cfg := startEnvtest(t).Config
 	scheme, err := NewScheme()
 	require.NoError(t, err)
-	opts, err := managerOptions(&Options{MetricsAddr: "127.0.0.1:0", ProbeAddr: "0"}, scheme, Owned{})
-	require.NoError(t, err)
-	metrics := opts.Metrics
-	opts.Metrics.BindAddress = "0"
-	mgr, err := newManager(cfg, opts)
-	require.NoError(t, err)
-	srv, err := metricsserver.NewServer(metrics, cfg, mgr.GetHTTPClient())
-	require.NoError(t, err)
-	require.NoError(t, mgr.Add(srv))
-	done := make(chan error, 1)
-	go func() { done <- mgr.Start(t.Context()) }()
-	t.Cleanup(func() { require.NoError(t, <-done) })
-	bound, ok := srv.(interface{ GetBindAddr() string })
-	require.True(t, ok, "controller-runtime's metrics server reports no address")
-	var addr string
-	require.Eventually(t, func() bool { addr = bound.GetBindAddr(); return addr != "" }, 10*time.Second, 20*time.Millisecond)
+	addr := serveMetrics(t, cfg, scheme, "")
 
 	c, err := client.New(cfg, client.Options{Scheme: scheme})
 	require.NoError(t, err)
@@ -228,6 +216,57 @@ func TestEnvtestMetrics(t *testing.T) {
 	require.NoError(t, c.Create(t.Context(), role))
 	require.NoError(t, c.Create(t.Context(), binding))
 	requireStatus(t, token, http.StatusOK)
+}
+
+// TestEnvtestMetricsCertificate pins that the metrics endpoint serves the
+// certificate in --metrics-cert-dir, which a client trusting only that
+// certificate verifies.
+func TestEnvtestMetricsCertificate(t *testing.T) {
+	cfg := startEnvtest(t).Config
+	scheme, err := NewScheme()
+	require.NoError(t, err)
+	const host = "nats-operator-cluster-controller-metrics.nats-system.svc"
+	dir, crt := writeKeyPair(t, host)
+	addr := serveMetrics(t, cfg, scheme, dir)
+
+	roots := x509.NewCertPool()
+	require.True(t, roots.AppendCertsFromPEM(crt))
+	httpc := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: host}}}
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://"+addr+"/metrics", nil)
+		if !assert.NoError(ct, err) {
+			return
+		}
+		resp, err := httpc.Do(req)
+		if assert.NoError(ct, err) {
+			_ = resp.Body.Close()
+			assert.Equal(ct, http.StatusUnauthorized, resp.StatusCode)
+		}
+	}, 10*time.Second, 100*time.Millisecond)
+}
+
+// serveMetrics starts a manager serving metrics on a free loopback port,
+// under the key pair in certDir or, empty, a self-signed one, and returns the
+// address it bound.
+func serveMetrics(t *testing.T, cfg *rest.Config, scheme *runtime.Scheme, certDir string) string {
+	t.Helper()
+	opts, err := managerOptions(&Options{MetricsAddr: "127.0.0.1:0", MetricsCertDir: certDir, ProbeAddr: "0"}, scheme, Owned{})
+	require.NoError(t, err)
+	metrics := opts.Metrics
+	opts.Metrics.BindAddress = "0"
+	mgr, err := newManager(cfg, opts)
+	require.NoError(t, err)
+	srv, err := metricsserver.NewServer(metrics, cfg, mgr.GetHTTPClient())
+	require.NoError(t, err)
+	require.NoError(t, mgr.Add(srv))
+	done := make(chan error, 1)
+	go func() { done <- mgr.Start(t.Context()) }()
+	t.Cleanup(func() { require.NoError(t, <-done) })
+	bound, ok := srv.(interface{ GetBindAddr() string })
+	require.True(t, ok, "controller-runtime's metrics server reports no address")
+	var addr string
+	require.Eventually(t, func() bool { addr = bound.GetBindAddr(); return addr != "" }, 10*time.Second, 20*time.Millisecond)
+	return addr
 }
 
 // TestEnvtestReadyUnelected pins that a replica another holds the lease

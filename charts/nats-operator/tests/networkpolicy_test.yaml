@@ -61,3 +61,35 @@ tests:
       - equal:
           path: spec.ingress[0].ports
           value: [{protocol: TCP, port: 8081}]
+  - it: bounds the controllers' egress to networkPolicy.egress, rendered as given, while it is set
+    set:
+      networkPolicy.enabled: true
+      networkPolicy.egress:
+        - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}}]
+          ports: [{protocol: UDP, port: 53}]
+        - to: [{ipBlock: {cidr: 10.0.0.1/32}}]
+          ports: [{protocol: TCP, port: 6443}]
+      cluster.enabled: false
+      auth.enabled: false
+    asserts:
+      - equal:
+          path: spec.policyTypes
+          value: [Ingress, Egress]
+      - equal:
+          path: spec.egress
+          value:
+            - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}}]
+              ports: [{protocol: UDP, port: 53}]
+            - to: [{ipBlock: {cidr: 10.0.0.1/32}}]
+              ports: [{protocol: TCP, port: 6443}]
+  - it: leaves egress unrestricted while networkPolicy.egress is empty
+    set:
+      networkPolicy.enabled: true
+      cluster.enabled: false
+      auth.enabled: false
+    asserts:
+      - equal:
+          path: spec.policyTypes
+          value: [Ingress]
+      - notExists:
+          path: spec.egress

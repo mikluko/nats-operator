@@ -5,6 +5,11 @@
 {{- if and $metrics.prometheus.enabled (not $metrics.service.enabled) }}
 {{- fail "metrics.prometheus.enabled requires metrics.service.enabled" }}
 {{- end }}
+{{- $tls := (default dict $metrics.tls).secretName }}
+{{- $ca := $metrics.serviceMonitor.caSecret }}
+{{- if and $ca (not $tls) }}
+{{- fail "metrics.serviceMonitor.caSecret requires metrics.tls.secretName" }}
+{{- end }}
 {{- if $metrics.service.enabled }}
 {{- range $name, $values := dict "cluster-controller" .Values.cluster "auth-controller" .Values.auth "jetstream-controller" .Values.jetstream }}
 {{- if $values.enabled }}
@@ -59,7 +64,14 @@ spec:
       bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
       {{- end }}
       tlsConfig:
+        {{- if $tls }}
+        ca:
+          secret:
+            {{- toYaml (default (dict "name" $tls "key" "ca.crt") $ca) | nindent 12 }}
+        serverName: {{ printf "%s.%s.svc" $fullname $.Release.Namespace }}
+        {{- else }}
         insecureSkipVerify: true
+        {{- end }}
       {{- with $metrics.serviceMonitor.interval }}
       interval: {{ . }}
       {{- end }}

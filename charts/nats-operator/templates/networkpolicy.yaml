@@ -17,6 +17,9 @@ spec:
       {{- include "nats-operator.selectorLabels" $ctx | nindent 6 }}
   policyTypes:
     - Ingress
+    {{- if $policy.egress }}
+    - Egress
+    {{- end }}
   ingress:
     {{- with $policy.from }}
     - from:
@@ -37,6 +40,10 @@ spec:
       ports:
         - protocol: TCP
           port: 8081
+  {{- with $policy.egress }}
+  egress:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 {{- end }}
 {{- end }}
 {{- end }}

@@ -36,6 +36,11 @@ func TestFlags(t *testing.T) {
 			want: Options{MetricsAddr: ":8080", ProbeAddr: ":8081", LeaderElectionID: "cluster.nats.mikluko.io", WatchNamespaces: []string{"a", "b", "c"}},
 		},
 		{
+			name: "metrics certificate",
+			args: []string{"-metrics-cert-dir=/var/run/secrets/metrics-tls"},
+			want: Options{MetricsAddr: ":8080", MetricsCertDir: "/var/run/secrets/metrics-tls", ProbeAddr: ":8081", LeaderElectionID: "cluster.nats.mikluko.io"},
+		},
+		{
 			name:    "watch namespaces naming none",
 			args:    []string{"-watch-namespaces=,"},
 			wantErr: true,

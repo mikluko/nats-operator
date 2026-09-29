@@ -123,8 +123,15 @@ metrics:
     # /metrics, which the controllers' metrics endpoints require of a bearer
     # token. Empty, the chart grants it to no one.
     serviceAccount: ""
+  tls:
+    # A kubernetes.io/tls Secret in the release namespace whose tls.crt and
+    # tls.key every controller's metrics endpoint serves; its certificate
+    # must name each enabled controller's metrics Service,
+    # <release>-<controller>-metrics.<namespace>.svc. Empty, each serves a
+    # self-signed certificate.
+    secretName: ""
   # A Service <release>-<controller>-metrics on each enabled controller's
-  # metrics port, which serves HTTPS under a self-signed certificate.
+  # metrics port, which serves HTTPS under metrics.tls's certificate.
   service:
     enabled: false
   # Each controller's OpenTelemetry metrics, plain HTTP and unauthenticated,
@@ -133,8 +140,9 @@ metrics:
     enabled: false
   # A prometheus-operator ServiceMonitor per enabled controller over that
   # Service, which it requires, scraping with the Prometheus pod's own token,
-  # whose ServiceAccount metrics.scraper.serviceAccount must name, and without
-  # verifying the certificate.
+  # whose ServiceAccount metrics.scraper.serviceAccount must name. With
+  # metrics.tls.secretName set, it verifies the certificate against caSecret
+  # as the Service's DNS name; empty, it does not verify it.
   serviceMonitor:
     enabled: false
     # On each ServiceMonitor, for a Prometheus that selects them by label.
@@ -145,6 +153,10 @@ metrics:
     # the bearer token the metrics endpoint is scraped with, in place of the
     # Prometheus pod's own; empty, the pod's own.
     authorization: {}
+    # A Secret key {name, key} in the release namespace holding the CA the
+    # metrics certificate is verified against; empty, the ca.crt of
+    # metrics.tls.secretName, which it requires.
+    caSecret: {}
 
 # A NetworkPolicy over each enabled controller's pods admitting ports 8080
 # and 9464 from the peers in from alone, and port 8081 from the controller's
@@ -153,6 +165,10 @@ networkPolicy:
   enabled: false
   # NetworkPolicy peers. Empty, ports 8080 and 9464 admit no one.
   from: []
+  # NetworkPolicy egress rules, {to, ports}, rendered as given; set, the
+  # controllers reach nothing they do not admit, the API server and DNS
+  # included. Empty, egress is unrestricted.
+  egress: []
 
 # The image of the `helm test` pods, which need sh and wget.
 tests:

@@ -120,7 +120,10 @@ func NewScheme(add ...func(*runtime.Scheme) error) (*runtime.Scheme, error) {
 
 // Options is what the command line sets on a manager.
 type Options struct {
-	MetricsAddr      string
+	MetricsAddr string
+	// MetricsCertDir holds the tls.crt and tls.key the metrics endpoint
+	// serves; empty, it serves a self-signed certificate.
+	MetricsCertDir   string
 	ProbeAddr        string
 	LeaderElection   bool
 	LeaderElectionID string
@@ -134,6 +137,7 @@ type Options struct {
 func Flags(fs *flag.FlagSet, id string) *Options {
 	o := &Options{}
 	fs.StringVar(&o.MetricsAddr, "metrics-bind-address", ":8080", "address the metrics endpoint serves HTTPS on, to a bearer token allowed to get /metrics; 0 disables it")
+	fs.StringVar(&o.MetricsCertDir, "metrics-cert-dir", "", "directory holding the tls.crt and tls.key the metrics endpoint serves; unset, it serves a self-signed certificate")
 	fs.StringVar(&o.ProbeAddr, "health-probe-bind-address", ":8081", "address the health and readiness probes bind to")
 	fs.BoolVar(&o.LeaderElection, "leader-elect", false, "enable leader election so only one replica reconciles")
 	fs.StringVar(&o.LeaderElectionID, "leader-election-id", id, "lease name used for leader election")
@@ -189,6 +193,10 @@ func managerOptions(o *Options, scheme *runtime.Scheme, owned Owned) (ctrl.Optio
 	if err != nil {
 		return ctrl.Options{}, err
 	}
+	metrics, err := metricsOptions(o.MetricsAddr, o.MetricsCertDir)
+	if err != nil {
+		return ctrl.Options{}, err
+	}
 	if len(o.WatchNamespaces) > 0 {
 		cacheOpts.DefaultNamespaces = map[string]cache.Config{}
 		for _, ns := range o.WatchNamespaces {
@@ -200,7 +208,7 @@ func managerOptions(o *Options, scheme *runtime.Scheme, owned Owned) (ctrl.Optio
 		Cache:                         cacheOpts,
 		Client:                        ClientOptions(),
 		Controller:                    config.Controller{EnableWarmup: ptr.To(true)},
-		Metrics:                       metricsOptions(o.MetricsAddr),
+		Metrics:                       metrics,
 		HealthProbeBindAddress:        o.ProbeAddr,
 		LeaderElection:                o.LeaderElection,
 		LeaderElectionID:              o.LeaderElectionID,

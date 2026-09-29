@@ -175,6 +175,11 @@
             "serviceAccount": {"type": "string", "pattern": "^([a-z0-9-]+/[a-z0-9.-]+)?$"}
           }
         },
+        "tls": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"secretName": {"type": "string", "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?$"}}
+        },
         "service": {
           "type": "object",
           "additionalProperties": false,
@@ -206,6 +211,15 @@
                   "required": ["name", "key"]
                 }
               }
+            },
+            "caSecret": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "name": {"type": "string", "minLength": 1},
+                "key": {"type": "string", "minLength": 1}
+              },
+              "anyOf": [{"maxProperties": 0}, {"required": ["name", "key"]}]
             }
           }
         }
@@ -226,6 +240,18 @@
               "namespaceSelector": {"type": "object"},
               "podSelector": {"type": "object"},
               "ipBlock": {"type": "object"}
+            }
+          }
+        },
+        "egress": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "to": {"type": "array", "items": {"type": "object"}},
+              "ports": {"type": "array", "items": {"type": "object"}}
             }
           }
         }

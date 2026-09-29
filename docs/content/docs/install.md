@@ -117,14 +117,17 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `jetstream.extraArgs` | `[]` | Flags appended to its own after `extraArgs`; `--leader-elect` and `--leader-election-id` fail the render here too. |
 | `jetstream.env` | `[]` | Its container's environment, an entry replacing the one of the same name under `env`. |
 | `metrics.scraper.serviceAccount` | `""` | A ServiceAccount, as `namespace/name`, granted the controllers' metrics under [RBAC](#rbac); empty, the chart grants them to no one. |
+| `metrics.tls.secretName` | `""` | A `kubernetes.io/tls` Secret in the release namespace whose `tls.crt` and `tls.key` every controller mounts and serves its metrics endpoint under, through `--metrics-cert-dir`; empty, each serves a self-signed certificate. See [Metrics](#metrics). |
 | `metrics.service.enabled` | `false` | A Service `<release>-<controller>-metrics` per enabled controller, port `metrics` (`8080`) onto its metrics endpoint. |
 | `metrics.prometheus.enabled` | `false` | Each controller's OpenTelemetry metrics served over plain HTTP on the pod IP's port `9464`, as port `otel-metrics` of its container, its metrics Service and its ServiceMonitor; sets `OTEL_METRICS_EXPORTER=prometheus` and `OTEL_EXPORTER_PROMETHEUS_HOST=0.0.0.0`, which an `env` entry of the same name replaces. Requires `metrics.service.enabled`. See [Metrics](#metrics). |
 | `metrics.serviceMonitor.enabled` | `false` | A prometheus-operator `ServiceMonitor` `<release>-<controller>-metrics` per enabled controller, over that Service; requires `metrics.service.enabled` and the `monitoring.coreos.com/v1` CRDs. See [Metrics](#metrics). |
 | `metrics.serviceMonitor.labels` | `{}` | Labels of each ServiceMonitor, for a Prometheus that selects them by label. |
 | `metrics.serviceMonitor.interval` | `""` | Scrape interval of each ServiceMonitor; empty, Prometheus's own. |
 | `metrics.serviceMonitor.authorization` | `{}` | `{credentials: {name, key}}`, as in a ServiceMonitor endpoint's `authorization`: a Secret key in the release namespace whose bearer token each ServiceMonitor scrapes port `metrics` with, in place of `bearerTokenFile`. The type is always `Bearer`. See [Metrics](#metrics). |
+| `metrics.serviceMonitor.caSecret` | `{}` | `{name, key}`, a Secret key in the release namespace holding the CA each ServiceMonitor verifies the metrics certificate against; empty, `ca.crt` of `metrics.tls.secretName`. Requires `metrics.tls.secretName`. |
 | `networkPolicy.enabled` | `false` | A NetworkPolicy `<release>-<controller>` per enabled controller over its pods, admitting ports `8080` and `9464` from `networkPolicy.from` alone, port `8081` from the controller's pods and its `helm test` pod, and nothing else inbound. |
 | `networkPolicy.from` | `[]` | NetworkPolicy peers admitted to ports `8080` and `9464`; empty, no one. |
+| `networkPolicy.egress` | `[]` | NetworkPolicy egress rules, `{to, ports}`, rendered as given into each controller's NetworkPolicy, which then admits no other egress: the API server and DNS need rules of their own. Empty, egress is unrestricted. |
 | `tests.image.repository` | `busybox` | Image of the `helm test` pods. |
 | `tests.image.tag` | `"1.37.0"` | Its image tag. |
 | `tests.image.digest` | `"sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e"` | `sha256:<hex>` appended to its image reference as `@<digest>`. |
@@ -134,12 +137,13 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 
 The chart runs every controller with `--leader-elect` set from `leaderElection.enabled`, `--leader-election-id` set to `<release>-<API group>`, such as `nats-operator-cluster.nats.mikluko.io`, metrics on `:8080` (container port `metrics`) and health probes on `:8081` (`/healthz`, `/readyz`), followed by `extraArgs` and the controller's own `extraArgs`. Two releases must watch disjoint namespaces, and a release with `watchNamespaces` empty must be the only one in the Kubernetes cluster: each release elects its own leader, so both would reconcile the same objects. It creates a Service for the metrics port only while `metrics.service.enabled` is set.
 
-The flags below are the binaries' own. Of those not named above, the chart sets only `--system-connection`, from `auth.systemConnection`, `--allow-gateway-without-tls`, from `cluster.allowGatewayWithoutTLS`, and `--watch-namespaces`, from `watchNamespaces`:
+The flags below are the binaries' own. Of those not named above, the chart sets only `--system-connection`, from `auth.systemConnection`, `--allow-gateway-without-tls`, from `cluster.allowGatewayWithoutTLS`, `--metrics-cert-dir`, from `metrics.tls.secretName`, and `--watch-namespaces`, from `watchNamespaces`:
 
 | Flag | Controller | Default | What it does |
 |---|---|---|---|
 | `--allow-gateway-without-tls` | cluster | `false` | Renders a `NatsCluster` gateway without `tls`, where any peer that reaches the gateway port joins the supercluster. Unset, such a `NatsCluster` is `Ready` `False`, reason `GatewayWithoutTLS`, and nothing is rendered for it. |
-| `--metrics-bind-address` | all | `:8080` | Address controller-runtime's Prometheus metrics are served on over HTTPS, with a self-signed certificate, at `/metrics`. A request needs a bearer token the API server authenticates, of a user allowed `get` on the non-resource URL `/metrics`; a token's identity is cached for a minute, an allow for five and a denial for thirty seconds. `0` disables it. |
+| `--metrics-bind-address` | all | `:8080` | Address controller-runtime's Prometheus metrics are served on over HTTPS, under `--metrics-cert-dir`'s certificate, at `/metrics`. A request needs a bearer token the API server authenticates, of a user allowed `get` on the non-resource URL `/metrics`; a token's identity is cached for a minute, an allow for five and a denial for thirty seconds. `0` disables it. |
+| `--metrics-cert-dir` | all | unset | Directory holding the `tls.crt` and `tls.key` the metrics endpoint serves, reloaded as they change; the controller exits at start if they do not load. Unset, a self-signed certificate generated at start. |
 | `--health-probe-bind-address` | all | `:8081` | Address of `/healthz`, which always passes, and `/readyz`, which passes once the controller has listed and watched everything it reconciles from, on every replica, elected or not. |
 | `--leader-elect` | all | `false` | Leader election, so that one replica reconciles. |
 | `--leader-election-id` | all | the controller's API group | Name of the leader election lease. |
@@ -150,9 +154,16 @@ The flags below are the binaries' own. Of those not named above, the chart sets 
 
 ## Metrics
 
-Each controller serves its metrics over HTTPS on port `8080` under a self-signed certificate it generates at start, so a scraper cannot verify it and must skip verification; what authenticates the scrape is the bearer token, which must be that of a ServiceAccount allowed `get` on `/metrics`, such as `metrics.scraper.serviceAccount`. With `metrics.serviceMonitor.enabled`, each ServiceMonitor scrapes with `scheme: https`, `tlsConfig.insecureSkipVerify: true` and the Prometheus pod's own ServiceAccount token, read from `/var/run/secrets/kubernetes.io/serviceaccount/token`; set `metrics.scraper.serviceAccount` to that ServiceAccount. A Prometheus that denies file access through ServiceMonitors (`arbitraryFSAccessThroughSMs.deny: true`) refuses `bearerTokenFile`; for it, set `metrics.serviceMonitor.authorization.credentials` to a key of a Secret in the release namespace holding that ServiceAccount's token.
+Each controller serves its metrics over HTTPS on port `8080`. What authenticates the scrape is the bearer token, which must be that of a ServiceAccount allowed `get` on `/metrics`, such as `metrics.scraper.serviceAccount`; what keeps that token from whoever answers on the Service is the certificate:
+
+- With `metrics.tls.secretName` set, every controller serves the certificate in that Secret, which must name each enabled controller's metrics Service, `<release>-<controller>-metrics.<namespace>.svc`; cert-manager's `Certificate` with those `dnsNames` writes such a Secret. Each ServiceMonitor verifies it with `tlsConfig.ca` from the Secret's `ca.crt`, or from `metrics.serviceMonitor.caSecret`, and `serverName` the Service's DNS name.
+- Unset, each controller serves a self-signed certificate it generates at start, which a scraper cannot verify, and each ServiceMonitor sets `tlsConfig.insecureSkipVerify: true`: whatever answers on the Service receives the scraper's token.
+
+With `metrics.serviceMonitor.enabled`, each ServiceMonitor scrapes with `scheme: https` and the Prometheus pod's own ServiceAccount token, read from `/var/run/secrets/kubernetes.io/serviceaccount/token`; set `metrics.scraper.serviceAccount` to that ServiceAccount. A Prometheus that denies file access through ServiceMonitors (`arbitraryFSAccessThroughSMs.deny: true`) refuses `bearerTokenFile`; for it, set `metrics.serviceMonitor.authorization.credentials` to a key of a Secret in the release namespace holding that ServiceAccount's token.
 
 Port `8080` serves controller-runtime's metrics only. The controllers' own instruments, `nats_operator.account.jwt_expiry` among them, are OpenTelemetry metrics under [Telemetry]({{< relref "/docs/reference/telemetry#metrics" >}}); with `metrics.prometheus.enabled`, each controller serves them at `/metrics` on port `9464` over plain HTTP to any client that reaches the pod, and each ServiceMonitor scrapes that port with `scheme: http` and no token. The page on port 9464 names the kind, namespace and name of every resource the controller reconciles in every namespace it watches, with the type and reason of each of its conditions; `networkPolicy.enabled` admits ports `8080` and `9464` from the peers `networkPolicy.from` names alone.
+
+`networkPolicy.egress` bounds where the controllers connect. The JetStream controller dials every address a `NatsConnection`'s `spec.servers` names, from the release namespace; egress rules admitting the NATS clusters, the API server and DNS keep it from dialling anywhere else.
 
 ## RBAC
 

@@ -45,6 +45,9 @@ tests:
       metrics.serviceMonitor.authorization: {credentials: {name: prometheus-token, key: token}}
       networkPolicy.enabled: true
       networkPolicy.from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}}]
+      networkPolicy.egress: [{to: [{ipBlock: {cidr: 10.0.0.1/32}}], ports: [{protocol: TCP, port: 6443}]}]
+      metrics.tls.secretName: metrics-tls
+      metrics.serviceMonitor.caSecret: {name: metrics-ca, key: root.pem}
     asserts:
       - notFailedTemplate: {}
   - it: refuses a misspelled top-level key
@@ -161,3 +164,21 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "at '/networkPolicy/from/0'"
+  - it: refuses a metrics.tls.secretName that is not a Secret name
+    set:
+      metrics.tls.secretName: Metrics_TLS
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/metrics/tls/secretName'"
+  - it: refuses a metrics.serviceMonitor.caSecret without its key
+    set:
+      metrics.serviceMonitor.caSecret: {name: metrics-ca}
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/metrics/serviceMonitor/caSecret'"
+  - it: refuses a networkPolicy.egress entry that is not a NetworkPolicy egress rule
+    set:
+      networkPolicy.egress: [{from: [{podSelector: {}}]}]
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/networkPolicy/egress/0'"

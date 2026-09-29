@@ -138,6 +138,7 @@ nats-operator.goMemLimit fails on its memory limit.
 {{- end -}}
 {{- $rules := required (printf "%s has no rules" $role) (.root.Files.Get $role | fromYaml).rules -}}
 {{- $prometheus := .root.Values.metrics.prometheus.enabled -}}
+{{- $metricsTLS := (default dict .root.Values.metrics.tls).secretName -}}
 {{- $prometheusEnv := list -}}
 {{- if $prometheus -}}
 {{- $prometheusEnv = list (dict "name" "OTEL_METRICS_EXPORTER" "value" "prometheus") (dict "name" "OTEL_EXPORTER_PROMETHEUS_HOST" "value" "0.0.0.0") -}}
@@ -321,6 +322,9 @@ spec:
             - --leader-election-id={{ $lease }}
             - --metrics-bind-address=:8080
             - --health-probe-bind-address=:8081
+            {{- if $metricsTLS }}
+            - --metrics-cert-dir=/var/run/secrets/nats-operator/metrics-tls
+            {{- end }}
             {{- with $namespaces }}
             - --watch-namespaces={{ join "," . }}
             {{- end }}
@@ -357,6 +361,23 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- if $metricsTLS }}
+          volumeMounts:
+            - name: metrics-tls
+              mountPath: /var/run/secrets/nats-operator/metrics-tls
+              readOnly: true
+          {{- end }}
+      {{- if $metricsTLS }}
+      volumes:
+        - name: metrics-tls
+          secret:
+            secretName: {{ $metricsTLS }}
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+      {{- end }}
 {{- end }}
 
 {{/*
