@@ -67,7 +67,7 @@ jobs:
               "https://$host/token?service=$host&scope=repository:$package:pull")
             bearer=$(jq -r 'try .token // ""' "$RUNNER_TEMP/token.json" 2>/dev/null || true)
             if [ "$status" = 403 ]; then
-              # ghcr denies a pull token alike for a package it lacks and one it withholds, so a 403 is due only where the GitHub Packages API answers 404.
+              # ghcr answers 403 alike for a package it lacks and one it withholds; the Packages API tells them apart.
               owner=${package%%/*}
               name=${package#*/}
               known=$(printf 'header = "Authorization: Bearer %s"\n' "$TOKEN" | curl -sS -K - -o "$RUNNER_TEMP/package.json" -w '%{http_code}' \

@@ -429,13 +429,8 @@ func (r *Reconciler) statefulSets(ctx context.Context, nc *clusterv1beta1.NatsCl
 // StatefulSet, then the StatefulSet, restoring only the labels of one nc
 // already controls.
 func (r *Reconciler) createServer(ctx context.Context, nc *clusterv1beta1.NatsCluster, s Server) (*appsv1.StatefulSet, error) {
-	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: s.ConfigMap.Name, Namespace: s.ConfigMap.Namespace}}
-	if err := r.createOrUpdate(ctx, nc, cm, func() {
-		cm.Labels = s.ConfigMap.Labels
-		cm.Annotations = merged(cm.Annotations, s.ConfigMap.Annotations)
-		cm.Data = s.ConfigMap.Data
-	}); err != nil {
-		return nil, fmt.Errorf("apply configmap %s: %w", cm.Name, err)
+	if _, err := r.applyServerConfigMap(ctx, nc, s, true); err != nil {
+		return nil, err
 	}
 	sts := &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: s.StatefulSet.Name, Namespace: s.StatefulSet.Namespace}}
 	if err := r.createOrUpdate(ctx, nc, sts, func() {
@@ -448,6 +443,23 @@ func (r *Reconciler) createServer(ctx context.Context, nc *clusterv1beta1.NatsCl
 		return nil, fmt.Errorf("apply statefulset %s: %w", sts.Name, err)
 	}
 	return sts, nil
+}
+
+// applyServerConfigMap creates or updates server s's rendered ConfigMap;
+// without withRevision it carries no revision, so the server reloads.
+func (r *Reconciler) applyServerConfigMap(ctx context.Context, nc *clusterv1beta1.NatsCluster, s Server, withRevision bool) (*corev1.ConfigMap, error) {
+	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: s.ConfigMap.Name, Namespace: s.ConfigMap.Namespace}}
+	if err := r.createOrUpdate(ctx, nc, cm, func() {
+		cm.Labels = s.ConfigMap.Labels
+		cm.Annotations = merged(cm.Annotations, s.ConfigMap.Annotations)
+		if !withRevision {
+			delete(cm.Annotations, AnnotationConfigRevision)
+		}
+		cm.Data = s.ConfigMap.Data
+	}); err != nil {
+		return nil, fmt.Errorf("apply configmap %s: %w", cm.Name, err)
+	}
+	return cm, nil
 }
 
 // readExisting reads obj through uncached and returns a *notControlledError
