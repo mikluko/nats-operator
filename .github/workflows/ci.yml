@@ -25,7 +25,7 @@ jobs:
         with:
           version: v4.3.0
       - name: Install helm-unittest
-        run: helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.0.3
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.0.3 --verify=false
       - uses: ./.github/actions/setup-hugo
       - run: just verify
       - run: just chart
@@ -57,6 +57,17 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - run: npx --yes --package renovate@44.117.2 -- renovate-config-validator --strict --no-global .github/renovate.json
 
   zizmor:
     runs-on: ubuntu-latest
@@ -109,6 +120,7 @@ jobs:
         env:
           KO_DOCKER_REPO: kind.local
           KIND_CLUSTER_NAME: chart-testing
+          VERSION: ci
         run: ko build --base-import-paths --tags ci ./cmd/*-controller
       - name: Create the namespaces ci/namespaced-values.yaml watches
         run: |

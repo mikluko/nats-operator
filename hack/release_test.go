@@ -2,10 +2,14 @@ package hack_test
 
 import (
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -440,6 +444,7 @@ func TestRenovate_WatchesToolPins(t *testing.T) {
 		"natsio/prometheus-nats-exporter",
 		"golang.org/x/vuln",
 		"github.com/rhysd/actionlint",
+		"renovate",
 	} {
 		require.NotZero(t, found[dep], dep)
 	}
@@ -477,4 +482,178 @@ func TestKindPinnedOnce(t *testing.T) {
 		}
 	}
 	require.NotZero(t, runs)
+}
+
+// TestCI_HelmUnittestUnverified holds ci's helm-unittest install to
+// --verify=false, without which Helm 4 refuses a plugin from a VCS source.
+func TestCI_HelmUnittestUnverified(t *testing.T) {
+	var installs int
+	for _, s := range readWorkflow(t, "ci.yml").Jobs["go"].Steps {
+		args := strings.Fields(s.Run)
+		if len(args) < 4 || args[0] != "helm" || args[1] != "plugin" || args[2] != "install" {
+			continue
+		}
+		installs++
+		require.Equal(t, "https://github.com/helm-unittest/helm-unittest", args[3])
+		require.Contains(t, args, "--verify=false")
+	}
+	require.Equal(t, 1, installs)
+}
+
+// versionPkg and versionVar name the variable .ko.yaml's ldflags set to the
+// release.
+const (
+	versionPkg = "github.com/mikluko/nats-operator/internal/manager"
+	versionVar = "Version"
+)
+
+// TestKo_LdflagsSetVersion holds every controller's ko build to one ldflag
+// setting versionVar, a string variable of versionPkg, to VERSION.
+func TestKo_LdflagsSetVersion(t *testing.T) {
+	b, err := os.ReadFile("../.ko.yaml")
+	require.NoError(t, err)
+	var ko struct {
+		DefaultBaseImage string `json:"defaultBaseImage"`
+		Builds           []struct {
+			ID      string   `json:"id"`
+			Main    string   `json:"main"`
+			Ldflags []string `json:"ldflags"`
+		} `json:"builds"`
+	}
+	require.NoError(t, yaml.UnmarshalStrict(b, &ko))
+	flags := map[string][]string{}
+	for _, build := range ko.Builds {
+		require.Equal(t, "./cmd/"+build.ID, build.Main)
+		flags[build.ID] = build.Ldflags
+	}
+	want := map[string][]string{}
+	for _, c := range controllers(t) {
+		want[c] = []string{"-X " + versionPkg + "." + versionVar + "={{.Env.VERSION}}"}
+	}
+	require.Equal(t, want, flags)
+
+	out, err := exec.Command("go", "list", "-f", "{{.Dir}}", versionPkg).Output()
+	require.NoError(t, err)
+	require.True(t, stringVar(t, strings.TrimSpace(string(out)), versionVar), "%s.%s is not a string variable", versionPkg, versionVar)
+}
+
+// stringVar reports whether the package in dir declares name as a
+// package-level variable initialised to a string literal, which is what
+// the linker's -X sets.
+func stringVar(t *testing.T, dir, name string) bool {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	require.NoError(t, err)
+	fset := token.NewFileSet()
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, f, nil, parser.SkipObjectResolution)
+		require.NoError(t, err)
+		for _, decl := range file.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok || gen.Tok != token.VAR {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				v := spec.(*ast.ValueSpec)
+				for i, n := range v.Names {
+					if n.Name != name || i >= len(v.Values) {
+						continue
+					}
+					lit, ok := v.Values[i].(*ast.BasicLit)
+					return ok && lit.Kind == token.STRING
+				}
+			}
+		}
+	}
+	return false
+}
+
+// TestKo_BuildsSetVersion holds every ko build ci, release and the Justfile
+// run to setting VERSION, which .ko.yaml's ldflags read.
+func TestKo_BuildsSetVersion(t *testing.T) {
+	files, err := filepath.Glob("../.github/workflows/*.yml")
+	require.NoError(t, err)
+	var builds int
+	for _, f := range files {
+		for job, j := range readWorkflow(t, filepath.Base(f)).Jobs {
+			for _, s := range j.Steps {
+				if strings.Contains(s.Run, "ko build") {
+					builds++
+					require.NotEmpty(t, s.Env["VERSION"], "%s job %s", f, job)
+				}
+			}
+		}
+	}
+	require.NotZero(t, builds)
+	require.Equal(t, "${{ needs.plan.outputs.version }}", stepByName(t, readWorkflow(t, "release.yml").Jobs["images"].Steps, "Build").Env["VERSION"])
+
+	just, err := exec.LookPath("just")
+	if err != nil {
+		t.Skip("just is not on PATH")
+	}
+	out, err := exec.Command(just, "--justfile", "../Justfile", "--dump", "--dump-format", "json").Output()
+	require.NoError(t, err)
+	var dump struct {
+		Recipes map[string]struct {
+			Body [][]json.RawMessage `json:"body"`
+		} `json:"recipes"`
+	}
+	require.NoError(t, json.Unmarshal(out, &dump))
+	var koLines int
+	for _, line := range dump.Recipes["image"].Body {
+		var text strings.Builder
+		for _, fragment := range line {
+			var s string
+			if json.Unmarshal(fragment, &s) == nil {
+				text.WriteString(s)
+			}
+		}
+		if strings.Contains(text.String(), "ko build") {
+			koLines++
+			require.Contains(t, text.String(), `VERSION="${VERSION:-dev}" `)
+		}
+	}
+	require.Equal(t, 1, koLines)
+}
+
+func stepByName(t *testing.T, steps []step, name string) step {
+	t.Helper()
+	for _, s := range steps {
+		if s.Name == name {
+			return s
+		}
+	}
+	require.Failf(t, "no step", "name %s", name)
+	return step{}
+}
+
+// renovateVersion is a pinned Renovate release, as npx names its package.
+var renovateVersion = regexp.MustCompile(`^renovate@\d+\.\d+\.\d+$`)
+
+// TestCI_ValidatesRenovateConfig holds ci to running Renovate's own validator,
+// strict and at a pinned release, over .github/renovate.json as a repository
+// config.
+func TestCI_ValidatesRenovateConfig(t *testing.T) {
+	var runs int
+	for job, j := range readWorkflow(t, "ci.yml").Jobs {
+		for _, s := range j.Steps {
+			args := strings.Fields(s.Run)
+			if !slices.Contains(args, "renovate-config-validator") {
+				continue
+			}
+			runs++
+			require.Equal(t, []string{"npx", "--yes", "--package"}, args[:3], job)
+			require.Regexp(t, renovateVersion, args[3], job)
+			require.Equal(t, []string{"--", "renovate-config-validator", "--strict", "--no-global", ".github/renovate.json"}, args[4:], job)
+			var node bool
+			for _, prior := range j.Steps {
+				node = node || strings.HasPrefix(prior.Uses, "actions/setup-node@")
+			}
+			require.True(t, node, "job %s runs npx without setup-node", job)
+		}
+	}
+	require.Equal(t, 1, runs)
 }

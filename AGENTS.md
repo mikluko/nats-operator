@@ -16,7 +16,7 @@ The changelog decides the version. Cutting one is renaming `## [Unreleased]` to 
 
 ## Fenced acts
 
-These are performed only by an attended session, or on a ticket carrying `attendance:afk`; everything else is prepared and left for a human:
+These are performed only by an attended session, or by an unattended run the maintainer has released a ticket to; everything else is prepared and left for a human:
 
 - merging into `main`
 - cutting a version in `CHANGELOG.md`, and tagging a release

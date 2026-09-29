@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -25,6 +26,10 @@ import (
 )
 
 const readyWait = time.Second
+
+// Version is the release the controller was built as, set by the linker
+// through .ko.yaml's ldflags.
+var Version = "dev"
 
 // Controller is one controller binary, as Run starts it.
 type Controller struct {
@@ -49,20 +54,22 @@ func Run(c Controller) error {
 	zapOpts.BindFlags(flag.CommandLine)
 	flag.Parse()
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
+	log := ctrl.Log.WithName(c.Name)
 	cfg, err := ctrl.GetConfig()
 	if err == nil {
-		err = start(ctrl.SetupSignalHandler(), cfg, opts, c)
+		err = start(ctrl.SetupSignalHandler(), cfg, opts, c, log)
 	} else {
 		err = fmt.Errorf("load kubeconfig: %w", err)
 	}
 	if err != nil {
-		ctrl.Log.WithName(c.Name).Error(err, "exit")
+		log.Error(err, "exit")
 	}
 	return err
 }
 
-// start runs c's manager against cfg until ctx ends.
-func start(ctx context.Context, cfg *rest.Config, o *Options, c Controller) error {
+// start logs Version to log and runs c's manager against cfg until ctx ends.
+func start(ctx context.Context, cfg *rest.Config, o *Options, c Controller, log logr.Logger) error {
+	log.Info("starting", "version", Version)
 	scheme, err := NewScheme(c.AddToScheme...)
 	if err != nil {
 		return fmt.Errorf("build scheme: %w", err)
@@ -71,7 +78,7 @@ func start(ctx context.Context, cfg *rest.Config, o *Options, c Controller) erro
 	if err != nil {
 		return err
 	}
-	if err := telemetry.Install(ctx, mgr, c.Name); err != nil {
+	if err := telemetry.Install(ctx, mgr, c.Name, Version); err != nil {
 		return fmt.Errorf("set up telemetry: %w", err)
 	}
 	if err := c.Setup(ctx, mgr); err != nil {

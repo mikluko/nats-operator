@@ -1,2 +1,16 @@
 # The controller images' base: ko's own default, pinned by digest.
 defaultBaseImage: cgr.dev/chainguard/static@sha256:41e17ed83c594a64a9396b6ab96dd26d5ddc290dacf4c177464712ff21ad534f
+# ko refuses to build with VERSION unset.
+builds:
+  - id: cluster-controller
+    main: ./cmd/cluster-controller
+    ldflags:
+      - -X github.com/mikluko/nats-operator/internal/manager.Version={{.Env.VERSION}}
+  - id: auth-controller
+    main: ./cmd/auth-controller
+    ldflags:
+      - -X github.com/mikluko/nats-operator/internal/manager.Version={{.Env.VERSION}}
+  - id: jetstream-controller
+    main: ./cmd/jetstream-controller
+    ldflags:
+      - -X github.com/mikluko/nats-operator/internal/manager.Version={{.Env.VERSION}}

@@ -17,7 +17,7 @@ A `NatsCluster` runs its client listener, port 4222, in the clear unless `spec.t
 
 ## Install
 
-Each release publishes the chart at `oci://ghcr.io/mikluko/nats-operator/charts/nats-operator`, with the release's version as both its `version` and `appVersion`, and the three images at `ghcr.io/mikluko/nats-operator/<controller>:<version>`, which the published chart pins by digest.
+Each release publishes the chart at `oci://ghcr.io/mikluko/nats-operator/charts/nats-operator`, with the release's version as both its `version` and `appVersion`, and the three images at `ghcr.io/mikluko/nats-operator/<controller>:<version>`, which the published chart pins by digest; a controller's `image.tag` set to another tag pulls that tag, unpinned.
 
 ```sh
 helm install nats-operator oci://ghcr.io/mikluko/nats-operator/charts/nats-operator \
@@ -69,7 +69,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `cluster.allowGatewayWithoutTLS` | `false` | `--allow-gateway-without-tls` on the cluster controller; false, the flag is not passed and a `NatsCluster` with a gateway without `tls` is refused. |
 | `cluster.image.repository` | `ghcr.io/mikluko/nats-operator/cluster-controller` | Its image. |
 | `cluster.image.tag` | `""` | Its image tag; empty is the chart's `appVersion`. |
-| `cluster.image.digest` | the release's image digest; `""` in the source tree | `sha256:<hex>` appended to its image reference as `@<digest>`, pinning the image. |
+| `cluster.image.digest` | the release's image digest; `""` in the source tree | `sha256:<hex>` appended to its image reference as `@<digest>`, pinning the image, while its tag is the chart's `appVersion`. |
 | `cluster.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
 | `cluster.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources. |
 | `cluster.nodeSelector` | `{}` | Its pod's node selector, each key set over `nodeSelector`. |
@@ -86,7 +86,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `auth.systemConnection` | `""` | `--system-connection` of the auth controller, as `namespace/name`; empty, the flag is not passed, no server receives an account JWT and a deleted `NatsUser` keeps its connections; accounts and users then read `Distributed` `False`, reason `NoSystemConnection`. |
 | `auth.image.repository` | `ghcr.io/mikluko/nats-operator/auth-controller` | Its image. |
 | `auth.image.tag` | `""` | Its image tag; empty is the chart's `appVersion`. |
-| `auth.image.digest` | the release's image digest; `""` in the source tree | `sha256:<hex>` appended to its image reference as `@<digest>`, pinning the image. |
+| `auth.image.digest` | the release's image digest; `""` in the source tree | `sha256:<hex>` appended to its image reference as `@<digest>`, pinning the image, while its tag is the chart's `appVersion`. |
 | `auth.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
 | `auth.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources. |
 | `auth.nodeSelector` | `{}` | Its pod's node selector, each key set over `nodeSelector`. |
@@ -102,7 +102,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `jetstream.replicas` | `1` | Replicas of its Deployment. |
 | `jetstream.image.repository` | `ghcr.io/mikluko/nats-operator/jetstream-controller` | Its image. |
 | `jetstream.image.tag` | `""` | Its image tag; empty is the chart's `appVersion`. |
-| `jetstream.image.digest` | the release's image digest; `""` in the source tree | `sha256:<hex>` appended to its image reference as `@<digest>`, pinning the image. |
+| `jetstream.image.digest` | the release's image digest; `""` in the source tree | `sha256:<hex>` appended to its image reference as `@<digest>`, pinning the image, while its tag is the chart's `appVersion`. |
 | `jetstream.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
 | `jetstream.resources` | `{requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 256Mi}}` | Its container's resources. |
 | `jetstream.nodeSelector` | `{}` | Its pod's node selector, each key set over `nodeSelector`. |

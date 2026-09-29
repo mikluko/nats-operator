@@ -13,6 +13,11 @@
       "schedule": ["* * * * 1"]
     },
     {
+      "description": "Renovate itself, weekly",
+      "matchPackageNames": ["renovate"],
+      "schedule": ["* * * * 1"]
+    },
+    {
       "description": "A kind node image is built for one kind release",
       "matchPackageNames": ["sigs.k8s.io/kind", "kubernetes-sigs/kind", "kindest/node"],
       "groupName": "kind"
@@ -74,6 +79,13 @@
       "depNameTemplate": "zizmorcore/zizmor",
       "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Renovate, wherever a workflow runs its config validator",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/"],
+      "matchStrings": ["npx --yes --package (?<depName>renovate)@(?<currentValue>\\S+) "],
+      "datasourceTemplate": "npm"
     },
     {
       "customType": "regex",

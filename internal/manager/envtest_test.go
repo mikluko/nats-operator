@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr/funcr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	authnv1 "k8s.io/api/authentication/v1"
@@ -43,10 +45,17 @@ func startEnvtest(t *testing.T) *envtest.Environment {
 	return env
 }
 
-// TestEnvtestStart pins that start runs what Setup adds and returns nil once
-// its context ends.
+// TestEnvtestStart pins that start logs Version, runs what Setup adds and
+// returns nil once its context ends.
 func TestEnvtestStart(t *testing.T) {
 	cfg := startEnvtest(t).Config
+	var mu sync.Mutex
+	var logged []string
+	log := funcr.New(func(_, args string) {
+		mu.Lock()
+		defer mu.Unlock()
+		logged = append(logged, args)
+	}, funcr.Options{})
 	ran := make(chan struct{})
 	c := Controller{
 		Name:  "test-controller",
@@ -61,7 +70,7 @@ func TestEnvtestStart(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
-	go func() { done <- start(ctx, cfg, &Options{MetricsAddr: "0", ProbeAddr: "0"}, c) }()
+	go func() { done <- start(ctx, cfg, &Options{MetricsAddr: "0", ProbeAddr: "0"}, c, log) }()
 	select {
 	case <-ran:
 	case err := <-done:
@@ -71,6 +80,9 @@ func TestEnvtestStart(t *testing.T) {
 	}
 	cancel()
 	require.NoError(t, <-done)
+	mu.Lock()
+	defer mu.Unlock()
+	require.Contains(t, logged, `"level"=0 "msg"="starting" "version"="dev"`)
 }
 
 // TestEnvtestCache pins that New's cache holds only labelled objects of an

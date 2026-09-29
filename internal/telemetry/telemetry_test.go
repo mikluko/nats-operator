@@ -86,7 +86,7 @@ func TestStart(t *testing.T) {
 		clearSignalVars(t)
 		var logged []string
 		log := funcr.New(func(prefix, args string) { logged = append(logged, args) }, funcr.Options{})
-		stop, err := Start(t.Context(), ClusterController, log)
+		stop, err := Start(t.Context(), ClusterController, "1.2.3", log)
 		require.NoError(t, err)
 		_, isSDKMeter := otel.GetMeterProvider().(*sdkmetric.MeterProvider)
 		_, isSDKTracer := otel.GetTracerProvider().(*sdktrace.TracerProvider)
@@ -101,7 +101,7 @@ func TestStart(t *testing.T) {
 	t.Run("metrics on", func(t *testing.T) {
 		clearSignalVars(t)
 		t.Setenv("OTEL_METRICS_EXPORTER", "none")
-		stop, err := Start(t.Context(), ClusterController, funcr.New(func(string, string) {}, funcr.Options{}))
+		stop, err := Start(t.Context(), ClusterController, "1.2.3", funcr.New(func(string, string) {}, funcr.Options{}))
 		require.NoError(t, err)
 		_, isSDKMeter := otel.GetMeterProvider().(*sdkmetric.MeterProvider)
 		_, isSDKTracer := otel.GetTracerProvider().(*sdktrace.TracerProvider)
@@ -120,13 +120,13 @@ func TestNewResource(t *testing.T) {
 		want map[string]string
 	}{
 		{
-			name: "the controller's name and host",
-			want: map[string]string{"service.name": "auth-controller", "service.instance.id": host, "telemetry.sdk.language": "go"},
+			name: "the controller's name, version and host",
+			want: map[string]string{"service.name": "auth-controller", "service.version": "1.2.3", "service.instance.id": host, "telemetry.sdk.language": "go"},
 		},
 		{
 			name: "overridden",
-			env:  map[string]string{"OTEL_SERVICE_NAME": "auth", "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment=prod,service.instance.id=auth-0"},
-			want: map[string]string{"service.name": "auth", "deployment.environment": "prod", "service.instance.id": "auth-0"},
+			env:  map[string]string{"OTEL_SERVICE_NAME": "auth", "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment=prod,service.instance.id=auth-0,service.version=9"},
+			want: map[string]string{"service.name": "auth", "deployment.environment": "prod", "service.instance.id": "auth-0", "service.version": "9"},
 		},
 	}
 	for _, tt := range tests {
@@ -136,7 +136,7 @@ func TestNewResource(t *testing.T) {
 			for k, v := range tt.env {
 				t.Setenv(k, v)
 			}
-			res, err := newResource(t.Context(), AuthController)
+			res, err := newResource(t.Context(), AuthController, "1.2.3")
 			require.NoError(t, err)
 			for k, v := range tt.want {
 				got, ok := res.Set().Value(attribute.Key(k))

@@ -52,12 +52,12 @@ func (s Shutdown) Start(ctx context.Context) error {
 func (Shutdown) NeedLeaderElection() bool { return false }
 
 // Start installs the global meter and tracer providers of the controller
-// named service for each signal exporters turns on, the SDK logging to log;
-// a signal left off keeps the global noop provider.
-func Start(ctx context.Context, service string, log logr.Logger) (Shutdown, error) {
+// named service at version for each signal exporters turns on, the SDK
+// logging to log; a signal left off keeps the global noop provider.
+func Start(ctx context.Context, service, version string, log logr.Logger) (Shutdown, error) {
 	otel.SetLogger(log)
 	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) { log.Error(err, "opentelemetry") }))
-	res, err := newResource(ctx, service)
+	res, err := newResource(ctx, service, version)
 	if err != nil {
 		return nil, err
 	}
@@ -132,15 +132,20 @@ func signalOn(signal string) bool {
 }
 
 // newResource is the SDK's own attributes and those of OTEL_RESOURCE_ATTRIBUTES
-// and OTEL_SERVICE_NAME, over service as service.name and the host name as
-// service.instance.id; an attribute the environment malforms is left out.
-func newResource(ctx context.Context, service string) (*resource.Resource, error) {
+// and OTEL_SERVICE_NAME, over service as service.name, version as
+// service.version and the host name as service.instance.id; an attribute the
+// environment malforms is left out.
+func newResource(ctx context.Context, service, version string) (*resource.Resource, error) {
 	host, err := os.Hostname()
 	if err != nil {
 		return nil, fmt.Errorf("resource: host name: %w", err)
 	}
 	res, err := resource.New(ctx,
-		resource.WithAttributes(attribute.String("service.name", service), attribute.String("service.instance.id", host)),
+		resource.WithAttributes(
+			attribute.String("service.name", service),
+			attribute.String("service.version", version),
+			attribute.String("service.instance.id", host),
+		),
 		resource.WithTelemetrySDK(),
 		resource.WithFromEnv(),
 	)
@@ -154,9 +159,9 @@ func newResource(ctx context.Context, service string) (*resource.Resource, error
 	return res, nil
 }
 
-// Install starts telemetry for service and adds its shutdown to mgr.
-func Install(ctx context.Context, mgr manager.Manager, service string) error {
-	stop, err := Start(ctx, service, mgr.GetLogger().WithName("opentelemetry"))
+// Install starts telemetry for service at version and adds its shutdown to mgr.
+func Install(ctx context.Context, mgr manager.Manager, service, version string) error {
+	stop, err := Start(ctx, service, version, mgr.GetLogger().WithName("opentelemetry"))
 	if err != nil {
 		return fmt.Errorf("start telemetry: %w", err)
 	}

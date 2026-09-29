@@ -20,11 +20,22 @@ app.kubernetes.io/component: {{ .name }}
 {{- end }}
 
 {{/*
-nats-operator.image takes a dict of image (a block of image values) and tag,
-and returns repository:tag, followed by @digest where the block sets one.
+nats-operator.image takes a dict of repository, tag and digest, and returns
+repository:tag, followed by @digest where digest is set.
 */}}
 {{- define "nats-operator.image" -}}
-{{ printf "%s:%s" .image.repository .tag }}{{ with .image.digest }}@{{ . }}{{ end }}
+{{ printf "%s:%s" .repository .tag }}{{ with .digest }}@{{ . }}{{ end }}
+{{- end }}
+
+{{/*
+nats-operator.controllerImage takes the chart context and a controller's image
+values, and returns its image tagged image.tag, or appVersion where that is
+empty, pinned to image.digest only while the tag is appVersion.
+*/}}
+{{- define "nats-operator.controllerImage" -}}
+{{- $tag := .image.tag | default .root.Chart.AppVersion -}}
+{{- $digest := ternary .image.digest "" (eq $tag .root.Chart.AppVersion) -}}
+{{ include "nats-operator.image" (dict "repository" .image.repository "tag" $tag "digest" $digest) }}
 {{- end }}
 
 {{/*
@@ -246,7 +257,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: {{ .name }}
-          image: {{ include "nats-operator.image" (dict "image" .values.image "tag" (.values.image.tag | default .root.Chart.AppVersion)) | quote }}
+          image: {{ include "nats-operator.controllerImage" (dict "root" .root "image" .values.image) | quote }}
           imagePullPolicy: {{ .values.image.pullPolicy }}
           args:
             - --leader-elect={{ .root.Values.leaderElection.enabled }}
@@ -342,7 +353,7 @@ spec:
       type: RuntimeDefault
   containers:
     - name: check
-      image: {{ include "nats-operator.image" (dict "image" $image "tag" $image.tag) | quote }}
+      image: {{ include "nats-operator.image" (dict "repository" $image.repository "tag" $image.tag "digest" $image.digest) | quote }}
       imagePullPolicy: {{ $image.pullPolicy }}
       command:
         - sh

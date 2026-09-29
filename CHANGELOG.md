@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The cluster controller caches only the StatefulSets, ConfigMaps, Services, PersistentVolumeClaims, PodDisruptionBudgets and NetworkPolicies labelled `cluster.nats.mikluko.io/cluster`; every controller lists and watches only the metadata of Secrets and reads their data from the API server.
 - A controller's `/readyz` passes once it has listed and watched everything it reconciles from, on every replica, elected or not.
 - Every controller's OpenTelemetry resource carries its host name as `service.instance.id`, unless `OTEL_RESOURCE_ATTRIBUTES` sets one.
+- Every controller logs its release version at startup and carries it as `service.version` of its OpenTelemetry resource.
 - Every controller serves its Prometheus metrics over HTTPS, to a bearer token of a user allowed `get` on the non-resource URL `/metrics`; an allow is cached for five minutes and a denial for thirty seconds.
 - Chart value `metrics.scraper.serviceAccount`, the `namespace/name` of a ServiceAccount granted `get` on `/metrics`.
 - Chart value `metrics.prometheus.enabled` serves each controller's OpenTelemetry metrics on port `9464` over plain HTTP, through the metrics Service and ServiceMonitor.
@@ -37,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `NatsCluster` with a gateway without `tls` is `Ready` `False`, reason `GatewayWithoutTLS`, and nothing is rendered for it, unless the cluster controller runs with `--allow-gateway-without-tls`.
 - Chart value `cluster.allowGatewayWithoutTLS`, off by default, passes `--allow-gateway-without-tls` to the cluster controller.
 - Every controller's `--watch-namespaces` confines it to the namespaces named; chart value `watchNamespaces` passes it and grants each controller a Role in each of those namespaces, its ClusterRole keeping only `tokenreviews` and `subjectaccessreviews`.
-- Chart values `cluster.image.digest`, `auth.image.digest`, `jetstream.image.digest` and `tests.image.digest` pin an image by digest after its tag.
+- Chart values `cluster.image.digest`, `auth.image.digest` and `jetstream.image.digest` pin a controller's image by digest after its tag while that tag is the chart's `appVersion`; `tests.image.digest` pins the `helm test` image after its tag.
 - Chart value `tests.image.digest` defaults to the digest of `busybox:1.37.0`.
 - Each release's chart sets `cluster.image.digest`, `auth.image.digest` and `jetstream.image.digest` to the digests of the images released with it.
 - `NatsCluster` `spec.image` takes `repository` and `digest`, and `spec.exporter.image` takes `repository`, `tag` and `digest`; a digest is rendered after the tag.

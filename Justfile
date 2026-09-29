@@ -19,10 +19,9 @@ image platform=("linux/" + if arch() == "aarch64" { "arm64" } else { "amd64" }):
     for c in {{ controllers }}; do
         set -- "$@" "./cmd/$c"
     done
-    KO_DOCKER_REPO=ghcr.io/mikluko/nats-operator ko build --push=false -B --platform "{{ platform }}" "$@"
+    VERSION="${VERSION:-dev}" KO_DOCKER_REPO=ghcr.io/mikluko/nats-operator ko build --push=false -B --platform "{{ platform }}" "$@"
 
-# OperatorReload skips under -race, so it runs again without; `just envtest`
-# runs the API-server-backed tests.
+# OperatorReload skips under -race, so it runs again without.
 test:
     env -u KUBEBUILDER_ASSETS go test -race ./...
     env -u KUBEBUILDER_ASSETS go test -run OperatorReload ./internal/natscluster

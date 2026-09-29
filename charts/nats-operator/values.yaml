@@ -39,7 +39,8 @@ cluster:
     repository: ghcr.io/mikluko/nats-operator/cluster-controller
     # Defaults to the chart's appVersion.
     tag: ""
-    # sha256:<hex>, appended to the tag to pin the image.
+    # sha256:<hex>, appended to the tag to pin the image while the tag is
+    # the chart's appVersion.
     digest: ""
     pullPolicy: IfNotPresent
   resources:
@@ -68,7 +69,8 @@ auth:
     repository: ghcr.io/mikluko/nats-operator/auth-controller
     # Defaults to the chart's appVersion.
     tag: ""
-    # sha256:<hex>, appended to the tag to pin the image.
+    # sha256:<hex>, appended to the tag to pin the image while the tag is
+    # the chart's appVersion.
     digest: ""
     pullPolicy: IfNotPresent
   resources:
@@ -94,7 +96,8 @@ jetstream:
     repository: ghcr.io/mikluko/nats-operator/jetstream-controller
     # Defaults to the chart's appVersion.
     tag: ""
-    # sha256:<hex>, appended to the tag to pin the image.
+    # sha256:<hex>, appended to the tag to pin the image while the tag is
+    # the chart's appVersion.
     digest: ""
     pullPolicy: IfNotPresent
   resources:

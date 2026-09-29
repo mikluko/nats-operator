@@ -50,7 +50,7 @@ func buildImages(ctx context.Context, root, dir, platform string) (string, error
 		cmd := exec.CommandContext(ctx, "ko", "build", "--push=false", "-B", "--platform", platform,
 			"--tags", "e2e", "--tarball", filepath.Join(dir, archive), "./cmd/"+name)
 		cmd.Dir = root
-		cmd.Env = append(os.Environ(), "KO_DOCKER_REPO="+imageRepo)
+		cmd.Env = append(os.Environ(), "KO_DOCKER_REPO="+imageRepo, "VERSION=e2e")
 		cmd.Stdout, cmd.Stderr = &stdout, &stderr
 		if err := cmd.Run(); err != nil {
 			return "", fmt.Errorf("ko build %s: %w\n%s", name, err, stderr.String())

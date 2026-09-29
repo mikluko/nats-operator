@@ -90,7 +90,7 @@ func start(t *testing.T, env map[string]string) telemetry.Shutdown {
 		otel.SetMeterProvider(mp)
 		otel.SetTracerProvider(tp)
 	})
-	stop, err := telemetry.Start(t.Context(), telemetry.ClusterController, logr.Discard())
+	stop, err := telemetry.Start(t.Context(), telemetry.ClusterController, "dev", logr.Discard())
 	require.NoError(t, err)
 	return stop
 }
