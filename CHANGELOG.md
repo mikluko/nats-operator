@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chart value `metrics.tls.secretName` has every controller serve its metrics under the certificate in that Secret, through the flag `--metrics-cert-dir`, and each ServiceMonitor verify it against the Secret's `ca.crt` or `metrics.serviceMonitor.caSecret`.
 - Chart value `metrics.serviceMonitor.authorization.credentials` has each ServiceMonitor scrape with the bearer token in a Secret key, as `authorization`, in place of `bearerTokenFile`.
 - Chart values `networkPolicy.enabled` and `networkPolicy.from` render a NetworkPolicy over each controller's pods admitting its metrics ports `8080` and `9464` only from `networkPolicy.from`.
-- Chart value `networkPolicy.egress` adds egress rules to each controller's NetworkPolicy, which then admits no other egress.
+- Chart value `networkPolicy.egress` adds egress rules to each controller's NetworkPolicy, which then admits no other egress; it requires `networkPolicy.enabled`.
 - `helm test` on the chart checks every enabled controller's `/readyz`.
 - A failed `NatsCluster` reconcile reads `Progressing=False, reason: ReconcileFailed` and records a `ReconcileFailed` Warning event.
 - The cluster controller leaves untouched any object of a name it renders that it does not control, and the `NatsCluster` reads `Ready=False, reason: ReconcileFailed` naming each one.

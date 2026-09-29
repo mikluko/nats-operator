@@ -127,7 +127,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `metrics.serviceMonitor.caSecret` | `{}` | `{name, key}`, a Secret key in the release namespace holding the CA each ServiceMonitor verifies the metrics certificate against; empty, `ca.crt` of `metrics.tls.secretName`. Requires `metrics.tls.secretName`. |
 | `networkPolicy.enabled` | `false` | A NetworkPolicy `<release>-<controller>` per enabled controller over its pods, admitting ports `8080` and `9464` from `networkPolicy.from` alone, port `8081` from the controller's pods and its `helm test` pod, and nothing else inbound. |
 | `networkPolicy.from` | `[]` | NetworkPolicy peers admitted to ports `8080` and `9464`; empty, no one. |
-| `networkPolicy.egress` | `[]` | NetworkPolicy egress rules, `{to, ports}`, rendered as given into each controller's NetworkPolicy, which then admits no other egress: the API server and DNS need rules of their own. Empty, egress is unrestricted. |
+| `networkPolicy.egress` | `[]` | NetworkPolicy egress rules, `{to, ports}`, rendered as given into each controller's NetworkPolicy, which then admits no other egress: the API server, DNS and the NATS clusters' client and monitoring ports need rules of their own. Requires `networkPolicy.enabled`. Empty, egress is unrestricted. |
 | `tests.image.repository` | `busybox` | Image of the `helm test` pods. |
 | `tests.image.tag` | `"1.37.0"` | Its image tag. |
 | `tests.image.digest` | `"sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e"` | `sha256:<hex>` appended to its image reference as `@<digest>`. |
@@ -163,7 +163,7 @@ With `metrics.serviceMonitor.enabled`, each ServiceMonitor scrapes with `scheme:
 
 Port `8080` serves controller-runtime's metrics only. The controllers' own instruments, `nats_operator.account.jwt_expiry` among them, are OpenTelemetry metrics under [Telemetry]({{< relref "/docs/reference/telemetry#metrics" >}}); with `metrics.prometheus.enabled`, each controller serves them at `/metrics` on port `9464` over plain HTTP to any client that reaches the pod, and each ServiceMonitor scrapes that port with `scheme: http` and no token. The page on port 9464 names the kind, namespace and name of every resource the controller reconciles in every namespace it watches, with the type and reason of each of its conditions; `networkPolicy.enabled` admits ports `8080` and `9464` from the peers `networkPolicy.from` names alone.
 
-`networkPolicy.egress` bounds where the controllers connect. The JetStream controller dials every address a `NatsConnection`'s `spec.servers` names, from the release namespace; egress rules admitting the NATS clusters, the API server and DNS keep it from dialling anywhere else.
+With `networkPolicy.enabled`, `networkPolicy.egress` bounds where the controllers connect. Every controller dials the NATS servers it reconciles; the JetStream controller also every address a `NatsConnection`'s `spec.servers` names, from the release namespace. Egress rules admitting the NATS clusters, the API server and DNS keep them from dialling anywhere else.
 
 ## RBAC
 

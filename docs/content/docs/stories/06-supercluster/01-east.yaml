@@ -47,7 +47,7 @@ spec:
     tls:
       certManager:
         issuerRef:
-          kind: ClusterIssuer
+          kind: Issuer
           name: nats-gateway-ca
     # The external Service is rendered from this template. The servers
     # advertise `advertise` below, the Service's hostname, which the other

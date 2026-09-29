@@ -93,3 +93,11 @@ tests:
           value: [Ingress]
       - notExists:
           path: spec.egress
+  - it: refuses networkPolicy.egress without networkPolicy.enabled
+    set:
+      networkPolicy.egress:
+        - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}}]
+          ports: [{protocol: UDP, port: 53}]
+    asserts:
+      - failedTemplate:
+          errorMessage: networkPolicy.egress requires networkPolicy.enabled

@@ -1,4 +1,7 @@
 {{- $policy := .Values.networkPolicy }}
+{{- if and $policy.egress (not $policy.enabled) }}
+{{- fail "networkPolicy.egress requires networkPolicy.enabled" }}
+{{- end }}
 {{- if $policy.enabled }}
 {{- range $name, $values := dict "cluster-controller" .Values.cluster "auth-controller" .Values.auth "jetstream-controller" .Values.jetstream }}
 {{- if $values.enabled }}

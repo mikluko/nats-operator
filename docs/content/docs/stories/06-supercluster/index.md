@@ -37,16 +37,17 @@ Identical in both Kubernetes clusters and replicated by GitOps: the trust roots 
 
 {{< manifest "01-natsoperatortrust.yaml" >}}
 
-The gateways take their certificates from a private CA whose key pair every member's cert-manager holds, replicated the same way: gateways authenticate each other by certificate alone, so a public issuer would admit any certificate it signs, and the cluster controller holds the servers until the certificate Secret carries `ca.crt`, which an ACME issuer never writes.
+The gateways take their certificates from a private CA whose key pair every member holds in `nats-system`, replicated the same way: gateways authenticate each other by certificate alone, so a public issuer would admit any certificate it signs, and the cluster controller holds the servers until the certificate Secret carries `ca.crt`, which an ACME issuer never writes. The CA is an Issuer in the NATS cluster's own namespace, not a ClusterIssuer: a ClusterIssuer named by a `NatsCluster` issues a gateway certificate to whoever may write a `NatsCluster` in any namespace the cluster controller watches, and with it a seat in the supercluster.
 
 ```yaml
 apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
+kind: Issuer
 metadata:
   name: nats-gateway-ca
+  namespace: nats-system
 spec:
   ca:
-    secretName: nats-gateway-ca   # in cert-manager's own namespace
+    secretName: nats-gateway-ca
 ```
 
 ## The home cluster

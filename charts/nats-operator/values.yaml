@@ -141,8 +141,8 @@ metrics:
   # A prometheus-operator ServiceMonitor per enabled controller over that
   # Service, which it requires, scraping with the Prometheus pod's own token,
   # whose ServiceAccount metrics.scraper.serviceAccount must name. With
-  # metrics.tls.secretName set, it verifies the certificate against caSecret
-  # as the Service's DNS name; empty, it does not verify it.
+  # metrics.tls.secretName set, it verifies the certificate as the Service's
+  # DNS name against caSecret; empty, it does not verify.
   serviceMonitor:
     enabled: false
     # On each ServiceMonitor, for a Prometheus that selects them by label.
@@ -167,7 +167,7 @@ networkPolicy:
   from: []
   # NetworkPolicy egress rules, {to, ports}, rendered as given; set, the
   # controllers reach nothing they do not admit, the API server and DNS
-  # included. Empty, egress is unrestricted.
+  # included. Requires networkPolicy.enabled. Empty, egress is unrestricted.
   egress: []
 
 # The image of the `helm test` pods, which need sh and wget.
