@@ -32,7 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Helm chart `charts/nats-operator` installing the CRDs and any subset of the three controllers, each with its own ServiceAccount and a ClusterRole holding only the verbs it uses.
 - The chart requires Kubernetes 1.33 or later.
 - The chart refuses to render a controller with more than one replica while `leaderElection.enabled` is false.
-- Each controller's `GOMEMLIMIT` is its container's memory limit, where one is set.
+- The chart sets each controller's `GOMEMLIMIT` to its memory limit, where one is set, unless `env` names it.
+- The chart names each controller's leader election lease `<release>-<API group>`.
+- The chart refuses to render a Service whose name is longer than 63 characters.
 - The chart refuses a value key it does not know, checked against `values.schema.json`.
 - Chart values `nodeSelector`, `annotations`, `podAnnotations` and `affinity`, globally and per controller.
 - Chart values `tolerations`, `priorityClassName`, `topologySpreadConstraints`, `extraArgs` and `env`, globally and per controller.

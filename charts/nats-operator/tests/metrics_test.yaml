@@ -135,3 +135,22 @@ tests:
     asserts:
       - failedTemplate:
           errorMessage: metrics.prometheus.enabled requires metrics.service.enabled
+  - it: refuses a release name that makes a metrics Service name longer than 63 characters
+    release:
+      name: a-forty-character-release-name-for-tests
+    set:
+      metrics.service.enabled: true
+      cluster.enabled: false
+      auth.enabled: false
+    asserts:
+      - failedTemplate:
+          errorMessage: "Service name a-forty-character-release-name-for-tests-jetstream-controller-metrics is 69 characters, over the 63 allowed: the release name can be at most 34 characters"
+  - it: renders a metrics Service name of exactly 63 characters
+    release:
+      name: a-release-name-of-thirty-four-char
+    set:
+      metrics.service.enabled: true
+      cluster.enabled: false
+      auth.enabled: false
+    asserts:
+      - containsDocument: {kind: Service, apiVersion: v1, name: a-release-name-of-thirty-four-char-jetstream-controller-metrics, namespace: nats}

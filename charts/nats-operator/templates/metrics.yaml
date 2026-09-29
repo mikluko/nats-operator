@@ -9,7 +9,7 @@
 {{- range $name, $values := dict "cluster-controller" .Values.cluster "auth-controller" .Values.auth "jetstream-controller" .Values.jetstream }}
 {{- if $values.enabled }}
 {{- $ctx := dict "root" $ "name" $name }}
-{{- $fullname := printf "%s-metrics" (include "nats-operator.fullname" $ctx) }}
+{{- $fullname := include "nats-operator.serviceName" (dict "root" $ "name" $name "suffix" "metrics") }}
 ---
 apiVersion: v1
 kind: Service

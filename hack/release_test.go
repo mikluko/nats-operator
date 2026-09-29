@@ -93,9 +93,9 @@ func TestRelease_FailOnAndCIName(t *testing.T) {
 	require.Equal(t, []string{ci.Name}, release.On.WorkflowRun.Workflows)
 }
 
-// TestE2E_Nightly pins that e2e runs on a schedule, its stories and
-// watch-namespaces left empty so that every single-cluster story runs
-// cluster-wide.
+// TestE2E_Nightly pins that e2e runs on a schedule on two Kubernetes clusters,
+// and otherwise on one, its stories and watch-namespaces left empty so that
+// every story runs cluster-wide.
 func TestE2E_Nightly(t *testing.T) {
 	var e2eWorkflow struct {
 		On struct {
@@ -116,7 +116,7 @@ func TestE2E_Nightly(t *testing.T) {
 			run = s
 		}
 	}
-	require.Equal(t, "1", run.Env["E2E_CLUSTERS"])
+	require.Equal(t, "${{ github.event_name == 'schedule' && '2' || '1' }}", run.Env["E2E_CLUSTERS"])
 	require.Equal(t, "${{ inputs.stories }}", run.Env["E2E_STORIES"])
 	require.Equal(t, "${{ inputs.watch-namespaces }}", run.Env["E2E_WATCH_NAMESPACES"])
 }

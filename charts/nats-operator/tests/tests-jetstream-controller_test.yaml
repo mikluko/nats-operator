@@ -85,3 +85,12 @@ tests:
       - equal:
           path: metadata.labels["app.kubernetes.io/instance"]
           value: rel
+  - it: refuses a release name that makes its Service name longer than 63 characters
+    release:
+      name: a-forty-character-release-name-for-tests
+    set:
+      cluster.enabled: false
+      auth.enabled: false
+    asserts:
+      - failedTemplate:
+          errorMessage: "Service name a-forty-character-release-name-for-tests-jetstream-controller-test is 66 characters, over the 63 allowed: the release name can be at most 37 characters"

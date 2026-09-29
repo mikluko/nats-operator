@@ -34,6 +34,8 @@ helm install nats-operator oci://ghcr.io/mikluko/nats-operator/charts/nats-opera
   --set auth.enabled=false --set jetstream.enabled=false
 ```
 
+The chart refuses to render a Service whose name, `<release>-<controller>-test` or `<release>-<controller>-metrics`, is longer than 63 characters: with the JetStream controller enabled, the release name can be at most 37 characters, and at most 34 with `metrics.service.enabled`.
+
 The chart ships a values schema: a key it does not know, misspelled or not, fails `helm install`, `helm upgrade` and `helm lint`.
 
 To check the installed controllers:
@@ -130,7 +132,7 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 
 ## Controller flags
 
-The chart runs every controller with `--leader-elect` set from `leaderElection.enabled`, `--leader-election-id` set to its own API group, metrics on `:8080` (container port `metrics`) and health probes on `:8081` (`/healthz`, `/readyz`), followed by `extraArgs` and the controller's own `extraArgs`. It creates a Service for the metrics port only while `metrics.service.enabled` is set.
+The chart runs every controller with `--leader-elect` set from `leaderElection.enabled`, `--leader-election-id` set to `<release>-<API group>`, such as `nats-operator-cluster.nats.mikluko.io`, metrics on `:8080` (container port `metrics`) and health probes on `:8081` (`/healthz`, `/readyz`), followed by `extraArgs` and the controller's own `extraArgs`. It creates a Service for the metrics port only while `metrics.service.enabled` is set.
 
 The flags below are the binaries' own. Of those not named above, the chart sets only `--system-connection`, from `auth.systemConnection`, `--allow-gateway-without-tls`, from `cluster.allowGatewayWithoutTLS`, and `--watch-namespaces`, from `watchNamespaces`:
 
@@ -230,7 +232,7 @@ This removes the controllers' Deployments, ServiceAccounts and RBAC. It leaves b
 
 - the CRDs, and with them every custom resource and everything the controllers created for them: StatefulSets, Services, ConfigMaps, Secrets, PodDisruptionBudgets, NetworkPolicies and cert-manager Certificates;
 - after a `helm test`, its Pods and Services `<release>-<controller>-test`;
-- with leader election on, the Leases `cluster.nats.mikluko.io`, `auth.nats.mikluko.io` and `jetstream.nats.mikluko.io` in the release namespace.
+- with leader election on, the Leases `<release>-cluster.nats.mikluko.io`, `<release>-auth.nats.mikluko.io` and `<release>-jetstream.nats.mikluko.io` in the release namespace.
 
 The seed Secrets the auth controller generates, `<name>-<operator|systemaccount|account>-<identity|signing-1>`, outlive their objects, the CRDs' deletion included: applying the objects again takes the same keys. Deleting those Secrets discards the NATS operator and account identities for good.
 

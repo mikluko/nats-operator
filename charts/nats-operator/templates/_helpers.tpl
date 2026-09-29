@@ -16,7 +16,20 @@ app.kubernetes.io/component: {{ .name }}
 {{- end }}
 
 {{- define "nats-operator.fullname" -}}
-{{ printf "%s-%s" .root.Release.Name .name | trunc 63 | trimSuffix "-" }}
+{{ printf "%s-%s" .root.Release.Name .name }}
+{{- end }}
+
+{{/*
+nats-operator.serviceName takes a dict of root (the chart context), name (the
+controller's name) and suffix, and returns <release>-<name>-<suffix>; it fails
+when that is longer than the 63 characters a Service name allows.
+*/}}
+{{- define "nats-operator.serviceName" -}}
+{{- $name := printf "%s-%s" (include "nats-operator.fullname" .) .suffix -}}
+{{- if gt (len $name) 63 -}}
+{{- fail (printf "Service name %s is %d characters, over the 63 allowed: the release name can be at most %d characters" $name (len $name) (sub 63 (sub (len $name) (len .root.Release.Name)))) -}}
+{{- end -}}
+{{ $name }}
 {{- end }}
 
 {{/*
@@ -84,7 +97,7 @@ when every list is empty.
 {{/*
 nats-operator.controller renders one controller's ServiceAccount, RBAC and
 Deployment. It takes a dict of root (the chart context), name (the
-controller's, and its image's), group (its API group and lease), values (its
+controller's, and its image's), group (its API group; its lease is <release>-<group>), values (its
 block of values) and, optionally, args (flags appended to the controller's
 own, before extraArgs). Its ClusterRole's rules are those of
 files/rbac/<name>.yaml, a copy of the role controller-gen generates for it.
@@ -269,7 +282,7 @@ spec:
           imagePullPolicy: {{ .values.image.pullPolicy }}
           args:
             - --leader-elect={{ .root.Values.leaderElection.enabled }}
-            - --leader-election-id={{ .group }}
+            - --leader-election-id={{ .root.Release.Name }}-{{ .group }}
             - --metrics-bind-address=:8080
             - --health-probe-bind-address=:8081
             {{- with $namespaces }}
@@ -315,14 +328,14 @@ nats-operator.test renders one controller's `helm test` hook. It takes a dict
 of root (the chart context) and name (the controller's name).
 */}}
 {{- define "nats-operator.test" -}}
-{{- $fullname := include "nats-operator.fullname" . -}}
+{{- $name := include "nats-operator.serviceName" (dict "root" .root "name" .name "suffix" "test") -}}
 {{- $image := .root.Values.tests.image -}}
 {{- $ns := .root.Release.Namespace -}}
 {{- $pod := dict "root" .root "name" (printf "%s-test" .name) -}}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ $fullname }}-test
+  name: {{ $name }}
   namespace: {{ $ns }}
   labels:
     {{- include "nats-operator.labels" . | nindent 4 }}
@@ -341,7 +354,7 @@ spec:
 apiVersion: v1
 kind: Pod
 metadata:
-  name: {{ $fullname }}-test
+  name: {{ $name }}
   namespace: {{ $ns }}
   labels:
     {{- include "nats-operator.labels" $pod | nindent 4 }}
@@ -378,7 +391,7 @@ spec:
             echo "ok $url"
           done
         - check
-        - http://{{ $fullname }}-test.{{ $ns }}.svc:8081/readyz
+        - http://{{ $name }}.{{ $ns }}.svc:8081/readyz
       securityContext:
         allowPrivilegeEscalation: false
         readOnlyRootFilesystem: true

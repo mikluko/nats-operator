@@ -107,7 +107,7 @@ tests:
           content: --leader-elect=true
       - contains:
           path: spec.template.spec.containers[0].args
-          content: --leader-election-id=cluster.nats.mikluko.io
+          content: --leader-election-id=rel-cluster.nats.mikluko.io
   - it: tags its image with the chart's appVersion by default
     chart:
       appVersion: 9.8.7
@@ -360,7 +360,7 @@ tests:
           path: spec.template.spec.containers[0].args
           value:
             - --leader-elect=true
-            - --leader-election-id=cluster.nats.mikluko.io
+            - --leader-election-id=rel-cluster.nats.mikluko.io
             - --metrics-bind-address=:8080
             - --health-probe-bind-address=:8081
             - --zap-log-level=debug
