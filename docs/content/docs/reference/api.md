@@ -197,7 +197,7 @@ Appears on: [NatsAccount](#NatsAccount).
 | `observedGeneration` | {{< type "int64" >}} | No | ObservedGeneration is the generation the status describes. |
 | `conditions` | [{{< type "[]Condition" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Condition) | No | Conditions: Ready, ReferencesResolved, Distributed, and where it applies RevocationsUnrecovered. Ready is False, reason PublicKeyInUse, while the NatsOperator's NatsSystemAccount or another NatsAccount under it holds the account's public key. |
 | `publicKey` | {{< type "string" >}} | No | PublicKey is the account's public key. |
-| `jwt` | {{< type "string" >}} | No | JWT is the current account JWT. |
+| `jwt` | {{< type "string" >}} | No | JWT is the current account JWT; empty once the account is no longer admitted to its NatsOperator and the NatsOperator records its deletion. |
 | `jwtHash` | {{< type "string" >}} | No | JWTHash identifies the current account JWT. |
 | `distribution` | [{{< type "Distribution" >}}](#Distribution) | No | Distribution is how many servers hold the current JWT. |
 | `revocations` | [{{< type "[]Revocation" >}}](#Revocation) | No | Revocations are the user keys the account JWT revokes. |
@@ -234,7 +234,7 @@ Appears on: [NatsOperator](#NatsOperator).
 | `seedSecrets` | [{{< type "SeedSecrets" >}}](#SeedSecrets) | No | SeedSecrets name the Secrets holding the generated seeds. |
 | `jwt` | {{< type "string" >}} | No | JWT is the NATS operator JWT. |
 | `systemAccount` | [{{< type "SystemAccountStatus" >}}](#SystemAccountStatus) | No | SystemAccount is the system account the NATS operator JWT names. |
-| `deletedAccounts` | [{{< type "[]DeletedAccount" >}}](#DeletedAccount) | No | DeletedAccounts are the accounts deleted while a server may still hold a valid JWT for one; the delete is re-sent to every server that joins, until that JWT would have expired. |
+| `deletedAccounts` | [{{< type "[]DeletedAccount" >}}](#DeletedAccount) | No | DeletedAccounts are the accounts deleted, or no longer admitted by a NatsReferenceGrant, while a server may still hold a valid JWT for one; the delete is re-sent to every server that joins, until that JWT would have expired or an admitted account holds its key again. |
 
 ### NatsSystemAccount {#NatsSystemAccount}
 NatsSystemAccount is a system account, signed only while a NatsOperator references it.
@@ -295,7 +295,7 @@ Appears on: [NatsUser](#NatsUser).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `observedGeneration` | {{< type "int64" >}} | No | ObservedGeneration is the generation the status describes. |
-| `conditions` | [{{< type "[]Condition" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Condition) | No | Conditions: Ready, ReferencesResolved, and Distributed, only ever False, reason NoSystemConnection. Ready is False, reason PublicKeyInUse, while another NatsUser of the account holds spec.publicKey. |
+| `conditions` | [{{< type "[]Condition" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Condition) | No | Conditions: Ready, ReferencesResolved, and Distributed, only ever False, reason NoSystemConnection. Ready is False, reason PublicKeyInUse, while another NatsUser of the account holds spec.publicKey, and reason AccountNotAdmitted while no NatsReferenceGrant admits the NatsAccount to its NatsOperator. |
 | `publicKey` | {{< type "string" >}} | No | PublicKey is the user's public key. |
 | `jwt` | {{< type "string" >}} | No | JWT is the user JWT, published for a user that brings its own key. |
 | `replacedKeys` | [{{< type "[]ReplacedKey" >}}](#ReplacedKey) | No | ReplacedKeys are keys the user held before PublicKey, each revoked in its account from when it was replaced; one leaves the list once the account JWT revokes it. |

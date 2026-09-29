@@ -436,7 +436,9 @@ spec:
                   type: object
                 type: array
               jwt:
-                description: JWT is the current account JWT.
+                description: |-
+                  JWT is the current account JWT; empty once the account is no longer
+                  admitted to its NatsOperator and the NatsOperator records its deletion.
                 type: string
               jwtHash:
                 description: JWTHash identifies the current account JWT.

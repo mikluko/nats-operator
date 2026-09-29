@@ -200,7 +200,8 @@ type NatsAccountStatus struct {
 	// +optional
 	PublicKey string `json:"publicKey,omitempty"`
 
-	// JWT is the current account JWT.
+	// JWT is the current account JWT; empty once the account is no longer
+	// admitted to its NatsOperator and the NatsOperator records its deletion.
 	// +optional
 	JWT string `json:"jwt,omitempty"`
 

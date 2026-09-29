@@ -24,3 +24,27 @@ func admit(ctx context.Context, r client.Reader, group, kind string, from client
 		grant.Referrer{Group: group, Kind: kind, Namespace: from.GetNamespace()},
 		grant.Target{Group: authGroup, Kind: toKind, Namespace: to.Namespace, Name: to.Name})
 }
+
+// admitAccount asks internal/grant whether a NatsAccount in namespace may
+// reference the NatsOperator at op. A nil condition admits.
+func admitAccount(ctx context.Context, r client.Reader, namespace string, op types.NamespacedName) (*metav1.Condition, error) {
+	return grant.Admit(ctx, r,
+		grant.Referrer{Group: authGroup, Kind: "NatsAccount", Namespace: namespace},
+		grant.Target{Group: authGroup, Kind: "NatsOperator", Namespace: op.Namespace, Name: op.Name})
+}
+
+// refusedAccounts returns the keys of the accounts in accounts, the
+// NatsAccounts naming the NatsOperator at op, that are not admitted to it.
+func refusedAccounts(ctx context.Context, r client.Reader, op types.NamespacedName, accounts []authv1beta1.NatsAccount) (map[types.NamespacedName]bool, error) {
+	out := map[types.NamespacedName]bool{}
+	for i := range accounts {
+		cond, err := admitAccount(ctx, r, accounts[i].Namespace, op)
+		if err != nil {
+			return nil, err
+		}
+		if cond != nil {
+			out[client.ObjectKeyFromObject(&accounts[i])] = true
+		}
+	}
+	return out, nil
+}

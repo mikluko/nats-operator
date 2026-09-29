@@ -64,6 +64,10 @@ const (
 	// ReasonPublicKeyInUse is Ready's reason on an account or user whose
 	// public key another holds under the same NatsOperator or account.
 	ReasonPublicKeyInUse = "PublicKeyInUse"
+	// ReasonAccountNotAdmitted is Ready's reason on a NatsUser whose
+	// NatsAccount no NatsReferenceGrant admits to its NatsOperator; the user
+	// is not signed.
+	ReasonAccountNotAdmitted = "AccountNotAdmitted"
 	// ReasonReconcileError is Ready's reason on an object whose last
 	// reconcile failed with an error no other reason names.
 	ReasonReconcileError = "ReconcileError"

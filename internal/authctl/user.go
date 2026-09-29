@@ -355,6 +355,16 @@ func (r *UserReconciler) account(ctx context.Context, u *authv1beta1.NatsUser, n
 		notReady(ReasonNotFound, fmt.Sprintf("%s %s does not exist", ref.Kind, key))
 		return userAccount{}, false, nil
 	}
+	if ref.Kind == authv1beta1.AccountKindAccount {
+		cond, err := admitAccount(ctx, r.Client, key.Namespace, acc.operator)
+		if err != nil {
+			return userAccount{}, false, err
+		}
+		if cond != nil {
+			notReady(ReasonAccountNotAdmitted, fmt.Sprintf("NatsAccount %s: %s", key, cond.Message))
+			return userAccount{}, false, nil
+		}
+	}
 	return acc, true, nil
 }
 

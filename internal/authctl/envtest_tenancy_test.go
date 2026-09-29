@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
+	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/authctl"
 	"github.com/mikluko/nats-operator/internal/grant"
 )
@@ -531,4 +532,71 @@ func userPub(t *testing.T) string {
 	pub, err := kp.PublicKey()
 	require.NoError(t, err)
 	return pub
+}
+
+// testGrantWithdrawn pins that deleting the grant admitting a NatsAccount
+// to its NatsOperator deletes the account from the servers, empties its
+// status.jwt and stops signing its users, and that restoring it signs both
+// again.
+func (e *env) testGrantWithdrawn(t *testing.T) {
+	const grantYAML = `
+apiVersion: nats.mikluko.io/v1beta1
+kind: NatsReferenceGrant
+metadata: {name: withdrawn, namespace: nats-system}
+spec:
+  from: [{group: auth.nats.mikluko.io, kind: NatsAccount, namespace: withdrawn}]
+  to: [{group: auth.nats.mikluko.io, kind: NatsOperator, name: demo}]
+`
+	e.apply(t, grantYAML+`
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsAccount
+metadata: {name: tenant, namespace: withdrawn}
+spec:
+  operatorRef: {name: demo, namespace: nats-system}
+  jwtTTL: 0s
+---
+apiVersion: auth.nats.mikluko.io/v1beta1
+kind: NatsUser
+metadata: {name: member, namespace: withdrawn}
+spec:
+  accountRef: {kind: NatsAccount, name: tenant}
+  publicKey: `+userPub(t)+`
+`)
+	acc := &authv1beta1.NatsAccount{}
+	u := &authv1beta1.NatsUser{}
+	signed := func(ct *assert.CollectT) {
+		e.get(ct, key("withdrawn", "tenant"), acc)
+		e.get(ct, key("withdrawn", "member"), u)
+		assert.NotEmpty(ct, acc.Status.JWT)
+		assert.True(ct, e.d.pushed(demo, acc.Status.JWT))
+		ready(ct, u.Status.Conditions, u.Generation, authctl.ReasonSigned)
+		assert.NotEmpty(ct, u.Status.JWT)
+	}
+	e.eventually(t, signed)
+	pub := acc.Status.PublicKey
+
+	var g natsv1beta1.NatsReferenceGrant
+	require.NoError(t, e.c.Get(t.Context(), key("nats-system", "withdrawn"), &g))
+	require.NoError(t, e.c.Delete(t.Context(), &g))
+	op := &authv1beta1.NatsOperator{}
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, key("withdrawn", "tenant"), acc)
+		e.get(ct, key("withdrawn", "member"), u)
+		e.get(ct, demo, op)
+		notReady(ct, acc.Status.Conditions, grant.ReasonReferenceNotPermitted)
+		assert.Empty(ct, acc.Status.JWT)
+		assert.Contains(ct, op.Status.DeletedAccounts, authv1beta1.DeletedAccount{PublicKey: pub}, "kept for good: the JWT never expires")
+		assert.True(ct, e.d.lastDeleted(demo, pub))
+		notReady(ct, u.Status.Conditions, authctl.ReasonAccountNotAdmitted)
+		assert.Empty(ct, u.Status.JWT)
+	})
+
+	e.apply(t, grantYAML)
+	e.eventually(t, func(ct *assert.CollectT) {
+		signed(ct)
+		e.get(ct, demo, op)
+		assert.NotContains(ct, op.Status.DeletedAccounts, authv1beta1.DeletedAccount{PublicKey: pub})
+	})
+	require.Equal(t, pub, acc.Status.PublicKey)
 }

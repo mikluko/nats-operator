@@ -193,7 +193,8 @@ spec:
                   Conditions: Ready, ReferencesResolved, and Distributed, only ever
                   False, reason NoSystemConnection. Ready is False, reason
                   PublicKeyInUse, while another NatsUser of the account holds
-                  spec.publicKey.
+                  spec.publicKey, and reason AccountNotAdmitted while no
+                  NatsReferenceGrant admits the NatsAccount to its NatsOperator.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

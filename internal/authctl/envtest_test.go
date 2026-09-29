@@ -48,12 +48,13 @@ import (
 
 const storiesDir = "../../docs/content/docs/stories"
 
-// recorder is a Distributor that keeps every push and hands it to the hook
-// onPush set, if any.
+// recorder is a Distributor that keeps every push and delete request and
+// hands each push to the hook onPush set, if any.
 type recorder struct {
-	mu     sync.Mutex
-	pushes map[types.NamespacedName][]string
-	hook   func(accountJWT string)
+	mu      sync.Mutex
+	pushes  map[types.NamespacedName][]string
+	deletes map[types.NamespacedName][]string
+	hook    func(accountJWT string)
 }
 
 var _ authctl.Distributor = (*recorder)(nil)
@@ -92,8 +93,34 @@ func (r *recorder) Lookup(_ context.Context, operator types.NamespacedName, acco
 	return newest, nil
 }
 
-func (r *recorder) Delete(context.Context, types.NamespacedName, string) error {
+func (r *recorder) Delete(_ context.Context, operator types.NamespacedName, request string) error {
+	if request == "" {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.deletes == nil {
+		r.deletes = map[types.NamespacedName][]string{}
+	}
+	r.deletes[operator] = append(r.deletes[operator], request)
 	return nil
+}
+
+// lastDeleted reports whether the newest delete request for operator names
+// account.
+func (r *recorder) lastDeleted(operator types.NamespacedName, account string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	list := r.deletes[operator]
+	if len(list) == 0 {
+		return false
+	}
+	c, err := jwt.DecodeGeneric(list[len(list)-1])
+	if err != nil {
+		return false
+	}
+	accounts, _ := c.Data["accounts"].([]any)
+	return slices.Contains(accounts, any(account))
 }
 
 // onPush sets the hook every later push is handed to; nil clears it.
@@ -176,7 +203,7 @@ func TestEnvtest(t *testing.T) {
 	c, err := client.New(cfg, client.Options{Scheme: s})
 	require.NoError(t, err)
 	e.c = c
-	for _, ns := range []string{"nats-system", "team-a", "rot", "offline", "flip", "payments", "orders", "foreign", "lost", "tenancy", "thief", "orphan", "gone", "squat", "keep", "adopt", "claim"} {
+	for _, ns := range []string{"nats-system", "team-a", "rot", "offline", "flip", "payments", "orders", "foreign", "lost", "tenancy", "thief", "orphan", "gone", "squat", "keep", "adopt", "claim", "withdrawn"} {
 		require.NoError(t, c.Create(t.Context(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}))
 	}
 	for _, f := range []string{
@@ -214,6 +241,7 @@ func TestEnvtest(t *testing.T) {
 	t.Run("UserKeyHeld", e.testUserKeyHeld)
 	t.Run("ReplacedUserKey", e.testReplacedUserKey)
 	t.Run("ReplacedKeyRefused", e.testReplacedKeyRefused)
+	t.Run("GrantWithdrawn", e.testGrantWithdrawn)
 }
 
 var demo = types.NamespacedName{Namespace: "nats-system", Name: "demo"}

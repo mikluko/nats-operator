@@ -10,6 +10,7 @@ import (
 	"github.com/nats-io/jwt/v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -92,12 +93,12 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 		return reconcile.Result{}, err
 	}
 	opKey := acc.Spec.OperatorRef.ObjectKey(acc.Namespace)
-	refused, err := admit(ctx, r.Client, authGroup, "NatsAccount", acc, "NatsOperator", opKey)
+	refused, err := admitAccount(ctx, r.Client, acc.Namespace, opKey)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
 	if !referenceAdmitted(&st.Conditions, acc.Generation, refused, notReady) {
-		return reconcile.Result{}, nil
+		return reconcile.Result{}, r.withdraw(ctx, acc)
 	}
 	holder, err := accountKeyHolder(ctx, r.Client, acc, opKey, pub)
 	if err != nil {
@@ -225,6 +226,22 @@ func (r *AccountReconciler) finalize(ctx context.Context, acc *authv1beta1.NatsA
 	return patchFinalizer(ctx, r.Client, acc, AccountFinalizer, false)
 }
 
+// withdraw drops the JWT of acc, which is not admitted to its NatsOperator,
+// from status once that NatsOperator records its deletion.
+func (r *AccountReconciler) withdraw(ctx context.Context, acc *authv1beta1.NatsAccount) error {
+	st := &acc.Status
+	if st.PublicKey == "" || st.JWT == "" {
+		return nil
+	}
+	held, err := r.deletionPending(ctx, acc)
+	if err != nil || held {
+		return err
+	}
+	st.JWT, st.JWTHash, st.Distribution = "", "", nil
+	meta.RemoveStatusCondition(&st.Conditions, ConditionDistributed)
+	return nil
+}
+
 // deletionPending reports whether acc's NatsOperator exists and its status
 // does not yet record acc's deletion.
 func (r *AccountReconciler) deletionPending(ctx context.Context, acc *authv1beta1.NatsAccount) (bool, error) {
@@ -241,7 +258,11 @@ func (r *AccountReconciler) deletionPending(ctx context.Context, acc *authv1beta
 	if err := r.List(ctx, &list, client.MatchingFields{operatorField: keyValue(key)}); err != nil {
 		return false, fmt.Errorf("list NatsAccounts: %w", err)
 	}
-	return !deletionRecorded(&op, list.Items, d, time.Now()), nil
+	refused, err := refusedAccounts(ctx, r.Client, key, list.Items)
+	if err != nil {
+		return false, err
+	}
+	return !deletionRecorded(&op, list.Items, refused, d, time.Now()), nil
 }
 
 func listUsers(ctx context.Context, c client.Reader, kind authv1beta1.AccountKind, key types.NamespacedName) ([]authv1beta1.NatsUser, error) {

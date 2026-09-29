@@ -103,7 +103,8 @@ type NatsUserStatus struct {
 	// Conditions: Ready, ReferencesResolved, and Distributed, only ever
 	// False, reason NoSystemConnection. Ready is False, reason
 	// PublicKeyInUse, while another NatsUser of the account holds
-	// spec.publicKey.
+	// spec.publicKey, and reason AccountNotAdmitted while no
+	// NatsReferenceGrant admits the NatsAccount to its NatsOperator.
 	// +optional
 	// +listType=map
 	// +listMapKey=type

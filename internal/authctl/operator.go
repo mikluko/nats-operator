@@ -11,6 +11,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -72,7 +73,11 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	if err := r.List(ctx, &named, client.MatchingFields{operatorField: keyValue(client.ObjectKeyFromObject(op))}); err != nil {
 		return 0, fmt.Errorf("list NatsAccounts: %w", err)
 	}
-	st.DeletedAccounts = recordDeleting(st.DeletedAccounts, named.Items)
+	refused, err := refusedAccounts(ctx, r.Client, client.ObjectKeyFromObject(op), named.Items)
+	if err != nil {
+		return 0, err
+	}
+	st.DeletedAccounts = recordDeleting(st.DeletedAccounts, named.Items, refused)
 	signedBefore := st.JWT != ""
 	src, err := operatorKeySource(op)
 	if err != nil {
@@ -116,10 +121,9 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 		st.JWT = opJWT
 	}
 
-	accounts, err := r.signedAccounts(ctx, op, named.Items)
-	if err != nil {
-		return 0, err
-	}
+	accounts := slices.DeleteFunc(slices.Clone(named.Items), func(acc authv1beta1.NatsAccount) bool {
+		return refused[client.ObjectKeyFromObject(&acc)]
+	})
 	users, err := listUsers(ctx, r.Client, authv1beta1.AccountKindSystemAccount, client.ObjectKeyFromObject(sys))
 	if err != nil {
 		return 0, err
@@ -163,7 +167,7 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	}
 
 	setRetiringCondition(op, retiring, append([]string{st.SystemAccount.JWT}, accountJWTs(accounts)...))
-	next, err := r.deletes(ctx, op, keys.Keys, named.Items)
+	next, err := r.deletes(ctx, op, keys.Keys, named.Items, refused)
 	if err != nil {
 		return 0, err
 	}
@@ -177,8 +181,8 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 // deletes prunes op's deleted accounts and hands the Distributor the
 // request deleting the rest, returning when the next of them expires, the
 // zero time for never.
-func (r *OperatorReconciler) deletes(ctx context.Context, op *authv1beta1.NatsOperator, keys jwtplane.Keys, accounts []authv1beta1.NatsAccount) (time.Time, error) {
-	live := liveKeys(op, accounts)
+func (r *OperatorReconciler) deletes(ctx context.Context, op *authv1beta1.NatsOperator, keys jwtplane.Keys, accounts []authv1beta1.NatsAccount, refused map[types.NamespacedName]bool) (time.Time, error) {
+	live := liveKeys(op, accounts, refused)
 	pruned, next := pruneDeleted(op.Status.DeletedAccounts, live, time.Now())
 	op.Status.DeletedAccounts = pruned
 	if r.Distributor == nil {
@@ -241,23 +245,6 @@ func (r *OperatorReconciler) systemAccount(ctx context.Context, op *authv1beta1.
 		return nil, resolvedKeys{}, false, keysFailed(fmt.Errorf("NatsSystemAccount %s: %w", key, err), notReady)
 	}
 	return &sys, keys, true, nil
-}
-
-// signedAccounts returns the accounts in accounts, the NatsAccounts naming
-// op, that are admitted to it.
-func (r *OperatorReconciler) signedAccounts(ctx context.Context, op *authv1beta1.NatsOperator, accounts []authv1beta1.NatsAccount) ([]authv1beta1.NatsAccount, error) {
-	var out []authv1beta1.NatsAccount
-	for i := range accounts {
-		acc := &accounts[i]
-		cond, err := admit(ctx, r.Client, authGroup, "NatsAccount", acc, "NatsOperator", client.ObjectKeyFromObject(op))
-		if err != nil {
-			return nil, err
-		}
-		if cond == nil {
-			out = append(out, *acc)
-		}
-	}
-	return out, nil
 }
 
 // stepdownAccounts returns the sorted public keys of the accounts carrying
@@ -332,6 +319,9 @@ func (r *OperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return systemAccountOperators(ctx, c, []reconcile.Request{{NamespacedName: ref.ObjectKey(obj.GetNamespace())}})
 		})).
 		Watches(&natsv1beta1.NatsReferenceGrant{}, grant.EnqueueReferrers(c, schema.GroupKind{Group: authGroup, Kind: "NatsOperator"}, &authv1beta1.NatsOperatorList{})).
+		Watches(&natsv1beta1.NatsReferenceGrant{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+			return grantOperators(ctx, c, obj)
+		})).
 		Complete(telemetry.Traced("NatsOperator", r))
 }
 
@@ -361,4 +351,23 @@ func systemAccountOperators(ctx context.Context, c client.Reader, reqs []reconci
 		out = append(out, reconcile.Request{NamespacedName: sys.Spec.OperatorRef.ObjectKey(sys.Namespace)})
 	}
 	return out
+}
+
+// grantOperators maps a NatsReferenceGrant that admits NatsAccounts to
+// NatsOperators to requests for every NatsOperator in its namespace.
+func grantOperators(ctx context.Context, c client.Reader, obj client.Object) []reconcile.Request {
+	g, ok := obj.(*natsv1beta1.NatsReferenceGrant)
+	if !ok {
+		return nil
+	}
+	fromAccounts := slices.ContainsFunc(g.Spec.From, func(f natsv1beta1.ReferenceGrantFrom) bool {
+		return f.Group == authGroup && f.Kind == "NatsAccount"
+	})
+	toOperators := slices.ContainsFunc(g.Spec.To, func(t natsv1beta1.ReferenceGrantTo) bool {
+		return t.Group == authGroup && t.Kind == "NatsOperator"
+	})
+	if !fromAccounts || !toOperators {
+		return nil
+	}
+	return refindex.Requests(ctx, c, &authv1beta1.NatsOperatorList{}, client.InNamespace(g.Namespace))
 }
