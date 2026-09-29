@@ -2,6 +2,7 @@ package hack_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -27,7 +28,23 @@ type step struct {
 	Uses string            `json:"uses"`
 	Run  string            `json:"run"`
 	Env  map[string]string `json:"env"`
-	With map[string]string `json:"with"`
+	With inputs            `json:"with"`
+}
+
+// inputs is a step's with, each value as the string the runner passes, since
+// YAML reads cache: false as a boolean.
+type inputs map[string]string
+
+func (in *inputs) UnmarshalJSON(b []byte) error {
+	var raw map[string]any
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	*in = inputs{}
+	for k, v := range raw {
+		(*in)[k] = fmt.Sprint(v)
+	}
+	return nil
 }
 
 // needs is a job's needs, which a workflow writes as one job or a list.
@@ -192,16 +209,16 @@ func TestRelease_ChartPinsImageDigests(t *testing.T) {
 	require.Contains(t, chart.Needs, "images")
 	pin, pkg := -1, -1
 	for i, s := range chart.Steps {
-		if s.Env["DIGESTS"] == "${{ needs.images.outputs.digests }}" {
+		if s.ID == "pin" {
 			pin = i
 			require.Empty(t, s.If)
-			require.Contains(t, s.Run, "yq -i")
+			require.Equal(t, "${{ needs.images.outputs.digests }}", s.Env["DIGESTS"])
 		}
 		if strings.Contains(s.Run, "helm package") {
 			pkg = i
 		}
 	}
-	require.NotEqual(t, -1, pin, "no chart step reads the images job's digests")
+	require.NotEqual(t, -1, pin, "no pin step in the chart job")
 	require.Less(t, pin, pkg)
 
 	b, err := os.ReadFile("../charts/nats-operator/values.yaml")
@@ -226,9 +243,8 @@ func TestRelease_OneDigestList(t *testing.T) {
 	var builds, signs int
 	for _, s := range images.Steps {
 		require.NotContains(t, s.Run, "--image-refs", s.Name)
-		if strings.Contains(s.Run, "{name: $name, digest: $digest}") {
+		if s.ID == "digests" {
 			builds++
-			require.Equal(t, "digests", s.ID)
 		}
 		if strings.Contains(s.Run, "cosign sign") {
 			signs++
@@ -362,6 +378,21 @@ func TestKoBasePinned(t *testing.T) {
 	}
 	require.NoError(t, yaml.Unmarshal(b, &ko))
 	require.Regexp(t, `^\S+@sha256:[0-9a-f]{64}$`, ko.DefaultBaseImage)
+}
+
+// TestRelease_GoUncached holds every Go toolchain release.yml sets up to
+// running without the Actions cache, which ci on main writes under the same key.
+func TestRelease_GoUncached(t *testing.T) {
+	var setups int
+	for job, j := range readWorkflow(t, "release.yml").Jobs {
+		for _, s := range j.Steps {
+			if strings.HasPrefix(s.Uses, "actions/setup-go@") {
+				setups++
+				require.Equal(t, "false", s.With["cache"], job)
+			}
+		}
+	}
+	require.NotZero(t, setups)
 }
 
 func TestRelease_AttestsBeforeRelease(t *testing.T) {
@@ -512,20 +543,21 @@ func TestKindPinnedOnce(t *testing.T) {
 	require.NotZero(t, runs)
 }
 
-// TestCI_HelmUnittestUnverified holds ci's helm-unittest install to
-// --verify=false, without which Helm 4 refuses a plugin from a VCS source.
-func TestCI_HelmUnittestUnverified(t *testing.T) {
-	var installs int
+// TestCI_HelmUnittestPinned holds ci's one helm-unittest install to a release
+// asset checked against a pinned sha256, rather than a plugin source Helm
+// verifies nothing of.
+func TestCI_HelmUnittestPinned(t *testing.T) {
+	var installs []step
 	for _, s := range readWorkflow(t, "ci.yml").Jobs["go"].Steps {
-		args := strings.Fields(s.Run)
-		if len(args) < 4 || args[0] != "helm" || args[1] != "plugin" || args[2] != "install" {
-			continue
+		if s.Env["HELM_UNITTEST_VERSION"] != "" {
+			installs = append(installs, s)
 		}
-		installs++
-		require.Equal(t, "https://github.com/helm-unittest/helm-unittest", args[3])
-		require.Contains(t, args, "--verify=false")
+		require.NotContains(t, s.Run, "--verify=false", s.Name)
 	}
-	require.Equal(t, 1, installs)
+	require.Len(t, installs, 1)
+	require.Regexp(t, `^v\d+\.\d+\.\d+$`, installs[0].Env["HELM_UNITTEST_VERSION"])
+	require.Regexp(t, `^[0-9a-f]{64}$`, installs[0].Env["HELM_UNITTEST_SHA256"])
+	require.Contains(t, installs[0].Run, "sha256sum -c")
 }
 
 // versionPkg and versionVar name the variable .ko.yaml's ldflags set to the

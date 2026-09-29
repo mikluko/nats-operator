@@ -84,7 +84,7 @@ perm-docs:
 telemetry-docs:
     go run ./hack/telemetrydocs
 
-# bin/lychee at lychee_version; the checksums are the release archives'.
+# Installs the pinned lychee into bin/.
 lychee:
     #!/usr/bin/env sh
     set -eu

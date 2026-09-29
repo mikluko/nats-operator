@@ -25,7 +25,17 @@ jobs:
         with:
           version: v4.3.0
       - name: Install helm-unittest
-        run: helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.0.3 --verify=false
+        env:
+          HELM_UNITTEST_VERSION: v1.0.3
+          HELM_UNITTEST_SHA256: 9761f23d9509c98770c026e019e743b524b57010f4bc29175f78d2582ace0633
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/helm-unittest.tgz" \
+            "https://github.com/helm-unittest/helm-unittest/releases/download/${HELM_UNITTEST_VERSION}/helm-unittest-linux-amd64-${HELM_UNITTEST_VERSION#v}.tgz"
+          echo "$HELM_UNITTEST_SHA256  $RUNNER_TEMP/helm-unittest.tgz" | sha256sum -c --quiet
+          plugin="$(helm env HELM_PLUGINS)/helm-unittest"
+          mkdir -p "$plugin"
+          tar -xzf "$RUNNER_TEMP/helm-unittest.tgz" -C "$plugin"
+          helm unittest --help >/dev/null
       - uses: ./.github/actions/setup-hugo
       - run: just verify
       - run: just chart

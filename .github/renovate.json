@@ -42,9 +42,10 @@
     },
     {
       "customType": "regex",
-      "description": "helm-unittest",
+      "description": "helm-unittest; the PR fails ci until HELM_UNITTEST_SHA256 is the new release's",
       "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/"],
-      "matchStrings": ["helm plugin install https://github\\.com/(?<depName>helm-unittest/helm-unittest) --version (?<currentValue>v\\S+)"],
+      "matchStrings": ["HELM_UNITTEST_VERSION: (?<currentValue>v\\S+)\\s+HELM_UNITTEST_SHA256: [0-9a-f]{64}"],
+      "depNameTemplate": "helm-unittest/helm-unittest",
       "datasourceTemplate": "github-releases"
     },
     {
