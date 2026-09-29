@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -337,14 +338,14 @@ func TestEnvtestRemoval(t *testing.T) {
 		require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "scaledownforeign", Name: configMapName("demo-3")}, cm))
 		cm.OwnerReferences = nil
 		require.NoError(t, c.Update(ctx, cm))
+		mgr := startCachedManager(t, cfg, scheme)
+		h.r.Client, h.r.APIReader = mgr.GetClient(), mgr.GetAPIReader()
 		nc := h.get(t)
 		nc.Spec.Replicas = 3
 		require.NoError(t, c.Update(ctx, nc))
 
-		h.untilError(t)
-		err := h.tryReconcile(t)
 		var nce *notControlledError
-		require.ErrorAs(t, err, &nce)
+		h.untilRefused(t, &nce)
 		require.Equal(t, []string{"PersistentVolumeClaim data-demo-3-0", "ConfigMap demo-3-config"}, nce.Objects)
 		got := h.get(t)
 		requireCondition(t, got, ConditionReady, metav1.ConditionFalse, ReasonReconcileFailed)
@@ -456,6 +457,21 @@ func (h *removalHarness) untilError(t *testing.T) {
 		}
 	}
 	t.Fatal("no reconcile failed")
+}
+
+// untilRefused reconciles until a reconcile fails with a
+// *notControlledError, set into nce; a reconcile reading a cache that lags
+// the API server may fail otherwise first.
+func (h *removalHarness) untilRefused(t *testing.T, nce **notControlledError) {
+	t.Helper()
+	var err error
+	for range 30 {
+		if err = h.tryReconcile(t); errors.As(err, nce) {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("no reconcile was refused; last error: %v", err)
 }
 
 // withoutSince is removals with every Since cleared.

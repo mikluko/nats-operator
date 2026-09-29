@@ -448,7 +448,7 @@ func (r *Reconciler) deleteServer(ctx context.Context, nc *clusterv1beta1.NatsCl
 // deleteIf deletes obj, as read, when it exists and ours reports it as
 // nc's, and returns a *notControlledError when it exists and is not.
 func (r *Reconciler) deleteIf(ctx context.Context, obj client.Object, ours func() bool) error {
-	if err := r.Client.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
+	if err := r.uncached().Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
@@ -480,7 +480,7 @@ func (r *Reconciler) claimGone(ctx context.Context, nc *clusterv1beta1.NatsClust
 // claim is server's data volume claim, nil when there is none.
 func (r *Reconciler) claim(ctx context.Context, nc *clusterv1beta1.NatsCluster, server string) (*corev1.PersistentVolumeClaim, error) {
 	pvc := &corev1.PersistentVolumeClaim{}
-	err := r.Client.Get(ctx, client.ObjectKey{Namespace: nc.Namespace, Name: dataClaimName(server)}, pvc)
+	err := r.uncached().Get(ctx, client.ObjectKey{Namespace: nc.Namespace, Name: dataClaimName(server)}, pvc)
 	switch {
 	case apierrors.IsNotFound(err):
 		return nil, nil

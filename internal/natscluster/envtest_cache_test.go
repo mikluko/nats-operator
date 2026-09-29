@@ -1,6 +1,7 @@
 package natscluster
 
 import (
+	"context"
 	"maps"
 	"os"
 	"testing"
@@ -14,6 +15,8 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -26,7 +29,8 @@ import (
 // TestEnvtestCreateFindsUncached pins that, reading through a manager whose
 // cache holds only objects labelled LabelCluster, a create that finds an
 // object the cache does not hold refuses it by name when the NatsCluster does
-// not control it, and proceeds when it does.
+// not control it, and proceeds when it does, restoring the labels that put
+// it back in the cache.
 func TestEnvtestCreateFindsUncached(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is unset: run `just envtest` for the API-server-backed tests")
@@ -39,14 +43,7 @@ func TestEnvtestCreateFindsUncached(t *testing.T) {
 
 	scheme, err := manager.NewScheme(natsv1beta1.AddToScheme, clusterv1beta1.AddToScheme)
 	require.NoError(t, err)
-	owned := manager.Owned{Label: LabelCluster, Kinds: []client.Object{
-		&appsv1.StatefulSet{}, &corev1.ConfigMap{}, &corev1.Service{}, &corev1.PersistentVolumeClaim{},
-		&policyv1.PodDisruptionBudget{}, &networkingv1.NetworkPolicy{},
-	}}
-	mgr, err := manager.New(cfg, &manager.Options{MetricsAddr: "0", ProbeAddr: "0"}, scheme, owned)
-	require.NoError(t, err)
-	go func() { _ = mgr.Start(ctx) }()
-	require.True(t, mgr.GetCache().WaitForCacheSync(ctx))
+	mgr := startCachedManager(t, cfg, scheme)
 
 	c, err := client.New(cfg, client.Options{Scheme: scheme})
 	require.NoError(t, err)
@@ -130,5 +127,36 @@ func TestEnvtestCreateFindsUncached(t *testing.T) {
 		ready := meta.FindStatusCondition(got.Status.Conditions, ConditionReady)
 		require.NotNil(t, ready)
 		require.NotEqual(t, ReasonReconcileFailed, ready.Reason, ready.Message)
+		require.EventuallyWithT(t, func(ct *assert.CollectT) {
+			var seen appsv1.StatefulSetList
+			if assert.NoError(ct, mgr.GetClient().List(ctx, &seen, client.InNamespace(nc.Namespace))) {
+				assert.Len(ct, seen.Items, int(nc.Spec.Replicas))
+			}
+		}, 10*time.Second, 50*time.Millisecond)
 	})
+}
+
+// startCachedManager starts, for the test's lifetime, a manager whose cache
+// holds only the objects labelled LabelCluster, as the cluster controller's
+// does.
+func startCachedManager(t *testing.T, cfg *rest.Config, scheme *runtime.Scheme) ctrl.Manager {
+	t.Helper()
+	owned := manager.Owned{Label: LabelCluster, Kinds: []client.Object{
+		&appsv1.StatefulSet{}, &corev1.ConfigMap{}, &corev1.Service{}, &corev1.PersistentVolumeClaim{},
+		&policyv1.PodDisruptionBudget{}, &networkingv1.NetworkPolicy{},
+	}}
+	mgr, err := manager.New(cfg, &manager.Options{MetricsAddr: "0", ProbeAddr: "0"}, scheme, owned)
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = mgr.Start(ctx)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+	require.True(t, mgr.GetCache().WaitForCacheSync(t.Context()))
+	return mgr
 }

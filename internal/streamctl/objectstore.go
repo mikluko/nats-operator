@@ -78,8 +78,8 @@ func (o *objectStoreObject) manager() (jetstream.ObjectStoreManager, error) {
 
 func (o *objectStoreObject) Describe() string { return "object store " + o.bucket() }
 
-// Fetch treats a stream OBJ_<bucket> that isObjectStore refuses as no
-// bucket, and as Terminal.
+// Fetch returns a TerminalError, reason NotABucket, where stream
+// OBJ_<bucket> is not one isObjectStore accepts.
 func (o *objectStoreObject) Fetch(ctx context.Context) (*lifecycle.Info, error) {
 	info, s, err := bucketStream(ctx, o.api, objStreamPrefix, o.bucket())
 	if err != nil || info == nil {

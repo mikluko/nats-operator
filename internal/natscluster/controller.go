@@ -22,7 +22,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -79,8 +78,9 @@ type Reconciler struct {
 	// Client reads Secrets from the API server, as manager.ClientOptions
 	// sets, since the reconciler watches only their metadata.
 	Client client.Client
-	// APIReader reads from the API server an object a create found
-	// existing, which Client's cache may not hold; nil, Client reads it.
+	// APIReader reads from the API server an object Client's cache may not
+	// hold: one a create found existing, or a server's claim or ConfigMap
+	// a removal deletes; nil, Client reads it.
 	APIReader client.Reader
 	Observer  Observer
 	// Reloader reaches a NATS cluster's system account to reload its
@@ -98,8 +98,7 @@ type Reconciler struct {
 	Recorder events.EventRecorder
 	// ControllerNamespace is the namespace the NetworkPolicy admits to the
 	// monitoring port, and to the metrics port while the exporter runs;
-	// SetupWithManager fills in the namespace of its own
-	// pod when it is empty.
+	// empty, SetupWithManager fills in its own pod's namespace.
 	ControllerNamespace string
 	// AllowGatewayWithoutTLS renders a gateway without tls; unset, a
 	// NatsCluster with one is refused with reason GatewayWithoutTLS.
@@ -427,7 +426,8 @@ func (r *Reconciler) statefulSets(ctx context.Context, nc *clusterv1beta1.NatsCl
 }
 
 // createServer creates a server's ConfigMap, replacing one left without its
-// StatefulSet, then the StatefulSet.
+// StatefulSet, then the StatefulSet; of an existing StatefulSet nc controls
+// it restores only the labels.
 func (r *Reconciler) createServer(ctx context.Context, nc *clusterv1beta1.NatsCluster, s Server) (*appsv1.StatefulSet, error) {
 	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: s.ConfigMap.Name, Namespace: s.ConfigMap.Namespace}}
 	if err := r.createOrUpdate(ctx, nc, cm, func() {
@@ -437,19 +437,15 @@ func (r *Reconciler) createServer(ctx context.Context, nc *clusterv1beta1.NatsCl
 	}); err != nil {
 		return nil, fmt.Errorf("apply configmap %s: %w", cm.Name, err)
 	}
-	sts := s.StatefulSet.DeepCopy()
-	if err := controllerutil.SetControllerReference(nc, sts, r.Client.Scheme()); err != nil {
-		return nil, err
-	}
-	if err := r.Client.Create(ctx, sts); err != nil {
-		if !apierrors.IsAlreadyExists(err) {
-			return nil, fmt.Errorf("create statefulset %s: %w", sts.Name, err)
+	sts := &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: s.StatefulSet.Name, Namespace: s.StatefulSet.Namespace}}
+	if err := r.createOrUpdate(ctx, nc, sts, func() {
+		if sts.ResourceVersion == "" {
+			s.StatefulSet.DeepCopyInto(sts)
+			return
 		}
-		have := &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: sts.Name, Namespace: sts.Namespace}}
-		if err := r.readExisting(ctx, nc, have); err != nil {
-			return nil, err
-		}
-		return have, nil
+		sts.Labels = merged(sts.Labels, s.StatefulSet.Labels)
+	}); err != nil {
+		return nil, fmt.Errorf("apply statefulset %s: %w", sts.Name, err)
 	}
 	return sts, nil
 }
@@ -457,15 +453,19 @@ func (r *Reconciler) createServer(ctx context.Context, nc *clusterv1beta1.NatsCl
 // readExisting reads obj, which a create found existing, from the API server
 // into obj, and returns a *notControlledError when nc does not control it.
 func (r *Reconciler) readExisting(ctx context.Context, nc *clusterv1beta1.NatsCluster, obj client.Object) error {
-	var reader client.Reader = r.Client
-	if r.APIReader != nil {
-		reader = r.APIReader
-	}
-	if err := reader.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
+	if err := r.uncached().Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
 		return fmt.Errorf("read existing %s: %w", obj.GetName(), err)
 	}
 	if !metav1.IsControlledBy(obj, nc) {
 		return r.notControlled(obj)
 	}
 	return nil
+}
+
+// uncached is APIReader, or Client where it is nil.
+func (r *Reconciler) uncached() client.Reader {
+	if r.APIReader != nil {
+		return r.APIReader
+	}
+	return r.Client
 }
