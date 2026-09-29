@@ -10,3 +10,6 @@ sources:
   - https://github.com/mikluko/nats-operator
 annotations:
   artifacthub.io/license: Apache-2.0
+maintainers:
+  - name: mikluko
+    url: https://github.com/mikluko
