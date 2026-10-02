@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-02
+
 ### Added
 
 - The documentation site has a front page: what each controller does and the kinds it owns, the install command, and the list of stories.
@@ -149,5 +151,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `cluster-controller`, `jetstream-controller` and `auth-controller` presets subscribe only to their own inbox, `_INBOX.<preset>.>`; a JetStream controller account user whose `permissions` restrict subscriptions must allow `_INBOX.jetstream-controller.>`.
 - The `readonly` preset subscribes only to its own inbox, `_INBOX.readonly.>`, which its client dials with.
 
-[Unreleased]: https://github.com/mikluko/nats-operator/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/mikluko/nats-operator/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/mikluko/nats-operator/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/mikluko/nats-operator/releases/tag/v0.1.0
