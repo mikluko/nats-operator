@@ -18,7 +18,6 @@ enableGitInfo = true
   mediaType = "text/plain"
   baseName = "llms"
   isPlainText = true
-  notAlternative = true
 
 [[menus.main]]
   pageRef = "/docs"
