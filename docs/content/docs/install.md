@@ -129,8 +129,8 @@ Then [the quickstart]({{< relref "/docs/stories/01-quickstart" >}}) deploys a NA
 | `networkPolicy.from` | `[]` | NetworkPolicy peers admitted to ports `8080` and `9464`; empty, no one. |
 | `networkPolicy.egress` | `[]` | NetworkPolicy egress rules, `{to, ports}`, rendered as given into each controller's NetworkPolicy, which then admits no other egress: the API server, DNS and the NATS clusters' client and monitoring ports need rules of their own. Requires `networkPolicy.enabled`. Empty, egress is unrestricted. |
 | `tests.image.repository` | `busybox` | Image of the `helm test` pods. |
-| `tests.image.tag` | `"1.37.0"` | Its image tag. |
-| `tests.image.digest` | `"sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e"` | `sha256:<hex>` appended to its image reference as `@<digest>`. |
+| `tests.image.tag` | `"1.38.0"` | Its image tag. |
+| `tests.image.digest` | `"sha256:fd7dc98638c8e305f4dc34e979f1c0fdfdcaeb0fbf8fcff77ae834b6da3d7e6e"` | `sha256:<hex>` appended to its image reference as `@<digest>`. |
 | `tests.image.pullPolicy` | `IfNotPresent` | Its image pull policy. |
 
 ## Controller flags
