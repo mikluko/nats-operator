@@ -159,6 +159,7 @@ const (
 func TestSite(t *testing.T) {
 	out := buildSite(t)
 	require.Empty(t, siteProblems(t, out, siteBase))
+	require.Empty(t, renditionProblems(t, out, siteBase))
 	index, err := os.ReadFile(filepath.Join(out, "index.html"))
 	require.NoError(t, err)
 	doc, err := html.Parse(bytes.NewReader(index))

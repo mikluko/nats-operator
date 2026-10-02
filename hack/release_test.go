@@ -295,6 +295,28 @@ func TestDocs_BuildJob(t *testing.T) {
 	require.Equal(t, "github.event_name != 'pull_request'", hugo[1].If)
 }
 
+// TestDocs_Deploy pins that the site deploys from the docs workflow on a push
+// to main, and that no release job deploys it.
+func TestDocs_Deploy(t *testing.T) {
+	var docs struct {
+		On struct {
+			Push struct {
+				Branches []string `yaml:"branches"`
+			} `yaml:"push"`
+		} `yaml:"on"`
+	}
+	b, err := os.ReadFile("../.github/workflows/docs.yml")
+	require.NoError(t, err)
+	require.NoError(t, yamlv3.Unmarshal(b, &docs))
+	require.Equal(t, []string{"main"}, docs.On.Push.Branches)
+	require.Equal(t, "github.event_name == 'push'", readWorkflow(t, "docs.yml").Jobs["deploy"].If)
+
+	for name, job := range readWorkflow(t, "release.yml").Jobs {
+		require.NotContains(t, job.Uses, "docs.yml", name)
+		require.NotContains(t, job.Permissions, "pages", name)
+	}
+}
+
 func TestControllerList(t *testing.T) {
 	just, err := exec.LookPath("just")
 	if err != nil {

@@ -296,14 +296,3 @@ jobs:
           if [ "$PRERELEASE" = true ]; then flags=--prerelease; fi
           gh release create "$TAG" --title "$TAG" --target "$SHA" \
             --notes-file "$RUNNER_TEMP/notes.md" $flags
-
-  docs:
-    needs: [plan, release]
-    if: needs.plan.outputs.publish == 'true'
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    uses: ./.github/workflows/docs.yml
-    with:
-      ref: ${{ github.event.workflow_run.head_sha }}

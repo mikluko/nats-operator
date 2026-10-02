@@ -9,6 +9,17 @@ enableGitInfo = true
   description = "Three Kubernetes controllers that deploy NATS clusters, own their auth plane, and manage and balance JetStream."
   docs_versions = false
 
+[outputs]
+  home = ["html", "markdown", "llms"]
+  section = ["html", "markdown"]
+  page = ["html", "markdown"]
+
+[outputFormats.llms]
+  mediaType = "text/plain"
+  baseName = "llms"
+  isPlainText = true
+  notAlternative = true
+
 [[menus.main]]
   pageRef = "/docs"
   weight = 1

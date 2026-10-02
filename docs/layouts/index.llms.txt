@@ -1,0 +1,18 @@
+{{- /* llms.txt, per llmstxt.org: the site's title and summary, then a link to the Markdown of every page under /docs, by section. */ -}}
+# {{ site.Title }}
+
+> {{ site.Params.description }}
+
+Every page of this site has a Markdown rendition at its address followed by `index.md`; [the front page's]({{ (.OutputFormats.Get "markdown").Permalink }}) lists what each controller does.
+{{ with site.GetPage "/docs" }}
+## Documentation
+{{ range .RegularPages.ByWeight }}
+- [{{ partial "title.html" . }}]({{ (.OutputFormats.Get "markdown").Permalink }}){{ with .Description }}: {{ . }}{{ end }}
+{{- end }}
+{{ range .Sections.ByWeight }}
+## {{ partial "title.html" . }}
+{{ range .RegularPagesRecursive.ByWeight }}
+- [{{ partial "title.html" . }}]({{ (.OutputFormats.Get "markdown").Permalink }}){{ with .Description }}: {{ . }}{{ end }}
+{{- end }}
+{{ end }}
+{{- end }}

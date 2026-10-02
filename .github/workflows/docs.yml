@@ -1,15 +1,12 @@
 name: docs
 
-# A manual run uploads the build as a preview artifact and never deploys it.
+# A push to main deploys the site. A pull request only builds it, and a manual
+# run uploads the build as a preview artifact; neither deploys.
 on:
   pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
-  workflow_call:
-    inputs:
-      ref:
-        description: The commit to build and deploy.
-        type: string
-        required: true
 
 permissions:
   contents: read
@@ -24,7 +21,6 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-          ref: ${{ inputs.ref }}
           fetch-depth: 0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
@@ -36,7 +32,7 @@ jobs:
       - name: Site check
         run: just site-check
       - id: pages
-        if: inputs.ref != ''
+        if: github.event_name == 'push'
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
       - name: Build
         if: github.event_name != 'pull_request'
@@ -50,7 +46,7 @@ jobs:
           path: docs/public
 
   deploy:
-    if: inputs.ref != ''
+    if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
     permissions:

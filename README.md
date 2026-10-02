@@ -19,7 +19,7 @@ helm test nats-operator --namespace nats-operator --logs
 
 ## Documentation
 
-The site documents the latest release; for `main`, read `docs/` in the tree.
+The site documents `main`; for a release, read `docs/` at its tag.
 
 - [Install](https://mikluko.github.io/nats-operator/docs/install/): prerequisites, values, flags, RBAC, upgrade and uninstall.
 - [Stories](https://mikluko.github.io/nats-operator/docs/stories/): the API, one user story at a time, starting from [the quickstart](https://mikluko.github.io/nats-operator/docs/stories/01-quickstart/).

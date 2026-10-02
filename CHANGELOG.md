@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Every page of the documentation site has a Markdown rendition at its address followed by `index.md`, and the site serves `llms.txt`, which links them.
+
+### Changed
+
+- The documentation site documents `main`: it is deployed on every push to `main`, where it was deployed once per release.
+
 ## [0.1.1] - 2026-10-02
 
 ### Added
