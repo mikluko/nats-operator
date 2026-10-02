@@ -3,6 +3,7 @@ title = "nats-operator"
 locale = "en"
 theme = "github.com/zkreations/hudocs"
 disableKinds = ["taxonomy", "term", "RSS", "sitemap"]
+enableGitInfo = true
 
 [params]
   description = "Three Kubernetes controllers that deploy NATS clusters, own their auth plane, and manage and balance JetStream."

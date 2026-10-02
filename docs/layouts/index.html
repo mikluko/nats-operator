@@ -1,0 +1,75 @@
+{{- /* The front page: a hero, a card per controller, a feature grid and the story list, from the home page's params, then its content. */ -}}
+{{ define "main" }}
+{{- $hero := .Params.hero -}}
+<main class="main-section landing" id="main-content" tabindex="-1">
+  <div class="container">
+    <section class="landing-hero">
+      <p class="landing-eyebrow">{{ $hero.eyebrow }}</p>
+      <h1 class="landing-title">{{ $hero.headline }}</h1>
+      <p class="landing-lead">{{ $hero.lead }}</p>
+      <div class="landing-actions">
+        {{- range $hero.actions }}
+          {{- $href := .url -}}
+          {{- with .page }}{{ $href = (site.GetPage .).RelPermalink }}{{ end }}
+          <a class="btn{{ if .primary }} landing-cta{{ end }}" href="{{ $href }}"{{ if .url }} rel="noopener"{{ end }}>
+            {{- partial "svg" (dict "icon" .icon) -}}
+            {{- .name -}}
+          </a>
+        {{- end }}
+      </div>
+    </section>
+
+    {{- with .Content }}
+    <section class="landing-install article-body markdown">
+      {{ . }}
+    </section>
+    {{- end }}
+
+    <section class="landing-section" aria-labelledby="landing-controllers">
+      <h2 class="landing-heading" id="landing-controllers">{{ .Params.controllersHeading }}</h2>
+      <div class="landing-grid">
+        {{- range .Params.controllers }}
+          {{- $story := site.GetPage .story }}
+          <article class="landing-card">
+            <span class="landing-card-icon">{{ partial "svg" (dict "icon" .icon) }}</span>
+            <h3 class="landing-card-title">{{ .name }}</h3>
+            <p>{{ .text | $.RenderString }}</p>
+            <p class="landing-kinds">
+              {{- range .kinds }}<code>{{ . }}</code>{{ end -}}
+            </p>
+            <a class="landing-card-link has-icon" href="{{ $story.RelPermalink }}">
+              {{- $story.Title -}}
+              {{- partial "svg" (dict "icon" "arrow-right") -}}
+            </a>
+          </article>
+        {{- end }}
+      </div>
+    </section>
+
+    <section class="landing-section" aria-labelledby="landing-features">
+      <h2 class="landing-heading" id="landing-features">{{ .Params.featuresHeading }}</h2>
+      <div class="landing-grid landing-grid-dense">
+        {{- range .Params.features }}
+          <article class="landing-feature">
+            <span class="landing-card-icon">{{ partial "svg" (dict "icon" .icon) }}</span>
+            <h3 class="landing-card-title">{{ .name }}</h3>
+            <p>{{ .text | $.RenderString }}</p>
+          </article>
+        {{- end }}
+      </div>
+    </section>
+
+    {{- with site.GetPage "/docs/stories" }}
+    <section class="landing-section" aria-labelledby="landing-stories">
+      <h2 class="landing-heading" id="landing-stories">{{ $.Params.storiesHeading }}</h2>
+      <p class="landing-subheading">{{ $.Params.storiesLead | $.RenderString }}</p>
+      <ol class="landing-stories">
+        {{- range .Pages.ByWeight }}
+          <li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>
+        {{- end }}
+      </ol>
+    </section>
+    {{- end }}
+  </div>
+</main>
+{{ end }}

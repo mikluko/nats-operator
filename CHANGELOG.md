@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The documentation site has a front page: what each controller does and the kinds it owns, the install command, and the list of stories.
+
+### Fixed
+
+- A documentation page's footer shows the date of the page's last change, where it read `0001-01-01`.
+- The documentation site's theme menu shows its labels in full in Firefox.
+
 ## [0.1.0] - 2026-09-29
 
 ### Added

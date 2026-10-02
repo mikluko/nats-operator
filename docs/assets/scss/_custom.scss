@@ -1,0 +1,196 @@
+// Firefox sizes Hudocs' dropdown to its wrapper, which is as wide as the icon
+// that opens it, and clips the labels.
+.dropdown {
+  width: max-content;
+}
+
+.landing {
+  &-hero {
+    max-width: 56rem;
+    margin-inline: auto;
+    padding-block: clamp(2rem, 6vw, 4.5rem) 2rem;
+    text-align: center;
+  }
+
+  &-eyebrow {
+    color: var(--primary);
+    font-size: .8125rem;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  &-title {
+    margin-block: .75rem 1rem;
+    color: var(--on-surface);
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: 700;
+    letter-spacing: -.02em;
+    line-height: 1.1;
+    text-wrap: balance;
+  }
+
+  &-lead {
+    max-width: 44rem;
+    margin-inline: auto;
+    color: var(--on-surface-variant);
+    font-size: clamp(1.0625rem, 1.6vw, 1.25rem);
+    text-wrap: balance;
+  }
+
+  &-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: .75rem;
+    margin-block-start: 1.75rem;
+
+    .btn {
+      padding: .625rem 1rem;
+    }
+  }
+
+  &-cta {
+    background-color: var(--primary);
+    color: var(--on-primary);
+
+    &:hover {
+      background-color: color-mix(in srgb, var(--primary) 85%, var(--on-surface));
+    }
+  }
+
+  &-install {
+    max-width: 48rem;
+    margin-inline: auto;
+    text-align: center;
+
+    pre {
+      text-align: start;
+    }
+  }
+
+  &-section {
+    margin-block-start: clamp(3rem, 7vw, 5rem);
+  }
+
+  &-heading {
+    color: var(--on-surface);
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    font-weight: 700;
+    letter-spacing: -.01em;
+    text-align: center;
+  }
+
+  &-subheading {
+    max-width: 40rem;
+    margin: .5rem auto 0;
+    color: var(--on-surface-variant);
+    text-align: center;
+  }
+
+  &-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(#{"min(100%, 18rem)"}, 1fr));
+    gap: var(--space-block);
+    margin-block-start: 2rem;
+
+    &-dense {
+      grid-template-columns: repeat(auto-fit, minmax(#{"min(100%, 15rem)"}, 1fr));
+    }
+  }
+
+  &-card,
+  &-feature {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+    color: var(--on-surface-variant);
+
+    code {
+      font-size: .875em;
+    }
+  }
+
+  &-card {
+    padding: 1.5rem;
+    border: 1px solid var(--outline);
+    border-radius: .75rem;
+    background-color: var(--surface);
+
+    &-icon {
+      display: inline-grid;
+      place-items: center;
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: .625rem;
+      background-color: var(--primary-container);
+      color: var(--primary);
+    }
+
+    &-title {
+      color: var(--on-surface);
+      font-size: 1.125rem;
+      font-weight: 600;
+    }
+
+    &-link {
+      --icon-gap: .375rem;
+      align-self: flex-start;
+      margin-block-start: auto;
+      color: var(--primary);
+      font-weight: 500;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+
+  &-kinds {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .375rem;
+
+    code {
+      padding: .125rem .375rem;
+      border-radius: .375rem;
+      background-color: var(--surface-container);
+      color: var(--on-surface-variant);
+      font-family: var(--font-monospace);
+    }
+  }
+
+  &-stories {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(#{"min(100%, 20rem)"}, 1fr));
+    gap: .75rem var(--space-block);
+    max-width: 64rem;
+    margin: 2rem auto 0;
+    padding: 0;
+    counter-reset: story;
+    list-style: none;
+
+    li {
+      counter-increment: story;
+      display: flex;
+      align-items: baseline;
+      gap: .75rem;
+
+      &::before {
+        content: counter(story, decimal-leading-zero);
+        color: var(--on-surface-muted);
+        font-family: var(--font-monospace);
+        font-size: .875rem;
+      }
+    }
+
+    a {
+      color: var(--on-surface);
+      font-weight: 500;
+
+      &:hover {
+        color: var(--primary);
+      }
+    }
+  }
+}
