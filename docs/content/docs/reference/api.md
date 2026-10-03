@@ -403,6 +403,7 @@ Appears on: [NatsClusterSpec](#NatsClusterSpec).
 | `trustRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | TrustRef names the NatsOperatorTrust holding the trust roots. |
 | `systemCredentials` | [{{< type "Credentials" >}}](#Credentials) | No | SystemCredentials are the system user the cluster controller connects as. |
 | `resolver` | [{{< type "ResolverType" >}}](#ResolverType) | No | Resolver is the account resolver; the cluster controller renders Full when omitted, and Cache for a leaf that preloads no account. |
+| `accountTrustRefs` | [{{< type "[]ObjectReference" >}}](#ObjectReference) | No | AccountTrustRefs name the NatsAccountTrusts whose account JWTs every server preloads beside the system account's; each must carry one. A Full resolver stores a preload in its directory, so a server on jetstream.volumeClaimTemplate keeps serving an account after its reference is removed. |
 
 ### CertManagerCertificate {#CertManagerCertificate}
 CertManagerCertificate is a certificate cert-manager issues.\
@@ -1595,7 +1596,7 @@ Appears on: [StreamTransfer](#StreamTransfer).
 The nats.mikluko.io API group: the kinds more than one controller reads, which are connections, trust copies and reference grants.
 | Kind | Description |
 | :--- | :---------- |
-| [NatsAccountTrust](#NatsAccountTrust) | NatsAccountTrust is an account a leaf binds a remote to. |
+| [NatsAccountTrust](#NatsAccountTrust) | NatsAccountTrust is an account a NatsCluster preloads or a leaf binds a remote to. |
 | [NatsConnection](#NatsConnection) | NatsConnection is an address and an identity on a NATS cluster, managed or not; the only way the JetStream controller reaches one. |
 | [NatsOperatorTrust](#NatsOperatorTrust) | NatsOperatorTrust is the trust roots a NatsCluster boots from: the NATS operator JWT and system account JWT. |
 | [NatsReferenceGrant](#NatsReferenceGrant) | NatsReferenceGrant admits references into its own namespace from the namespaces it lists. Admitting a NatsCluster to a NatsConnection hands that connection's credentials to the NatsCluster's namespace. |
@@ -1638,7 +1639,7 @@ Appears on: [Credentials](#Credentials).
 | `key` | {{< type "string" >}} | No | Key within the Secret. Default: `user.creds`. |
 
 ### NatsAccountTrust {#NatsAccountTrust}
-NatsAccountTrust is an account a leaf binds a remote to.
+NatsAccountTrust is an account a NatsCluster preloads or a leaf binds a remote to.
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `apiVersion` | {{< type "string" >}} | Yes | `nats.mikluko.io/v1beta1` |
@@ -1654,7 +1655,7 @@ Appears on: [NatsAccountTrust](#NatsAccountTrust).
 | :---- | :--- | :------: | :---------- |
 | `accountRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | No | AccountRef names a NatsAccount in this Kubernetes cluster; the auth controller then writes its public key and JWT into this object's status. |
 | `publicKey` | {{< type "string" >}} | No | PublicKey is the account's public key. |
-| `jwt` | {{< type "string" >}} | No | JWT is the account JWT a leaf preloads. |
+| `jwt` | {{< type "string" >}} | No | JWT is the account JWT a NatsCluster preloads. |
 
 ### NatsAccountTrustStatus {#NatsAccountTrustStatus}
 NatsAccountTrustStatus is the observed state of a NatsAccountTrust.\
