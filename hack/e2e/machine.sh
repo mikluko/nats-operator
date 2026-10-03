@@ -34,7 +34,7 @@ if [ -n "$booted" ] && [ -n "${M_DNS:-}" ]; then
 fi
 
 missing=
-for pkg in podman crun netavark aardvark-dns iptables curl ca-certificates; do
+for pkg in podman crun netavark aardvark-dns iptables curl ca-certificates procps; do
 	dpkg-query -W -f '${Status}' "$pkg" 2>/dev/null | grep -q 'install ok installed' || missing="$missing $pkg"
 done
 if [ -n "$missing" ]; then
