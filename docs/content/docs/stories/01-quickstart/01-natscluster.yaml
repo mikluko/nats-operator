@@ -4,7 +4,8 @@ metadata:
   name: demo
   namespace: nats-system
 spec:
-  # `image` sets the repository and a digest, never the tag.
+  # The image tag is always `version`. `image` sets the repository and a
+  # digest.
   version: 2.15.0
   replicas: 3
 
@@ -14,9 +15,9 @@ spec:
       memory: 4Gi
     limits:
       memory: 4Gi
-  # GOMEMLIMIT and jetstream.max_memory_store derive from limits.memory;
-  # max_file_store derives from the PVC size. The store limits are shown in
-  # status and overridable under jetstream.limits.
+  # The controller derives GOMEMLIMIT and jetstream.max_memory_store from
+  # limits.memory, and max_file_store from the PVC size. Status reports both
+  # store limits. Set jetstream.limits to override them.
 
   jetstream:
     volumeClaimTemplate:
@@ -26,11 +27,11 @@ spec:
           requests:
             storage: 20Gi
 
-  # No `routes` block: route TLS is on by default, and with no certificate
-  # named the controller self-signs one. `routes.tls.secretRef` or
-  # `routes.tls.certManager.issuerRef` name a route certificate;
-  # `routes.tls.enabled: false` turns route TLS off.
+  # This manifest has no `routes` block. Route TLS is on by default, and the
+  # controller self-signs the route certificate. To use your own certificate,
+  # set `routes.tls.secretRef` or `routes.tls.certManager.issuerRef`. To turn
+  # route TLS off, set `routes.tls.enabled: false`.
 
-  # No `tls` block: clients connect in the clear. `tls.secretRef` or
-  # `tls.certManager.issuerRef` put the client listener under TLS, and
-  # clients then dial `tls://`.
+  # This manifest has no `tls` block, so clients connect in the clear. Set
+  # `tls.secretRef` or `tls.certManager.issuerRef` to put the client listener
+  # under TLS. Clients then dial `tls://`.

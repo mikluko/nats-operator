@@ -3,7 +3,7 @@
 
 > {{ site.Params.description }}
 
-Every page of this site has a Markdown rendition at its address followed by `index.md`; [the front page's]({{ (.OutputFormats.Get "markdown").Permalink }}) lists what each controller does.
+Every page of this site has a Markdown rendition at its address followed by `index.md`. [The front page's]({{ (.OutputFormats.Get "markdown").Permalink }}) describes each controller and each area of the documentation.
 {{ with site.GetPage "/docs" }}
 ## Documentation
 {{ range .RegularPages.ByWeight }}
