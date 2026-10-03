@@ -218,6 +218,58 @@ func TestEnvtestLeafnodes(t *testing.T) {
 		require.Contains(t, rendered(t), "hubs_hub.creds")
 	})
 
+	t.Run("accountTrustRefs preload, held at the last render once the grant is withdrawn", func(t *testing.T) {
+		namespace(t, "preload")
+		namespace(t, "trusts")
+		p := mintPlane(t)
+		orders := literalTrust(t, p, "orders")
+		orders.Namespace = "trusts"
+		require.NoError(t, c.Create(ctx, orders))
+		newGrant := func() *natsv1beta1.NatsReferenceGrant {
+			return &natsv1beta1.NatsReferenceGrant{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "trusts", Name: "preloads"},
+				Spec: natsv1beta1.NatsReferenceGrantSpec{
+					From: []natsv1beta1.ReferenceGrantFrom{{Group: clusterv1beta1.GroupVersion.Group, Kind: "NatsCluster", Namespace: "preload"}},
+					To:   []natsv1beta1.ReferenceGrantTo{{Group: natsv1beta1.GroupVersion.Group, Kind: "NatsAccountTrust"}},
+				},
+			}
+		}
+		grant := newGrant()
+		require.NoError(t, c.Create(ctx, grant))
+		nc := storyCluster(t)
+		nc.Namespace = "preload"
+		nc.Spec.Auth = &clusterv1beta1.Auth{
+			TrustRef:         natsv1beta1.ObjectReference{Name: "acme"},
+			AccountTrustRefs: []natsv1beta1.ObjectReference{{Name: "orders", Namespace: "trusts"}},
+		}
+		require.NoError(t, c.Create(ctx, &natsv1beta1.NatsOperatorTrust{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "preload", Name: "acme"},
+			Spec:       natsv1beta1.NatsOperatorTrustSpec{OperatorJWT: p.trust.OperatorJWT, SystemAccountJWT: p.trust.SystemAccountJWT},
+		}))
+		require.NoError(t, c.Create(ctx, nc))
+		key := client.ObjectKeyFromObject(nc)
+		rendered := func(t *testing.T) string {
+			t.Helper()
+			var cm corev1.ConfigMap
+			require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "preload", Name: serverName(nc, 0) + "-config"}, &cm))
+			return cm.Data[configFile]
+		}
+
+		reconcile(t, key)
+		require.Contains(t, rendered(t), `"`+orders.Spec.PublicKey+`": "`+orders.Spec.JWT+`"`)
+		before := rendered(t)
+
+		require.NoError(t, c.Delete(ctx, grant))
+		got := reconcile(t, key)
+		cond := condition(t, got, ConditionProgressing, metav1.ConditionFalse, "NoGrant")
+		require.Contains(t, cond.Message, "auth.accountTrustRefs[0]: ")
+		require.Equal(t, before, rendered(t))
+
+		require.NoError(t, c.Create(ctx, newGrant()))
+		got = reconcile(t, key)
+		condition(t, got, ConditionProgressing, metav1.ConditionFalse, ReasonUpToDate)
+	})
+
 	t.Run("hub leafnodes", func(t *testing.T) {
 		namespace(t, "hub")
 		hubNC := storyLeafCluster(t, "hub.yaml", "prod-east")
