@@ -730,15 +730,19 @@ func namespaces(ns []string, steps []Step) []string {
 	return ns
 }
 
-// DropsGatewayTLS reports whether a substitution of b, or of a bundle it
-// starts from, removes spec.gateway.tls from the manifests it reaches.
-func (b *Bundle) DropsGatewayTLS() bool {
+// GatewayWithoutTLS reports whether b, or a bundle it starts from, applies a
+// NatsCluster, as substituted, whose gateway has no tls.
+func (b *Bundle) GatewayWithoutTLS() bool {
 	for _, c := range b.Chain() {
-		for _, s := range c.Substitutions {
-			spec, _ := s.Patch["spec"].(map[string]any)
-			gateway, _ := spec["gateway"].(map[string]any)
-			if tls, ok := gateway["tls"]; ok && tls == nil {
-				return true
+		for _, s := range c.Steps {
+			for _, o := range s.Apply {
+				if o.GetKind() != "NatsCluster" {
+					continue
+				}
+				gateway, found, _ := unstructured.NestedMap(o.Object, "spec", "gateway")
+				if found && gateway["tls"] == nil {
+					return true
+				}
 			}
 		}
 	}

@@ -75,7 +75,7 @@ func harness(ctx context.Context, cfg config, root, imagesFile string, down bool
 	if err != nil {
 		return err
 	}
-	chart := chartValues{allowGatewayWithoutTLS: slices.ContainsFunc(stories, (*e2e.Bundle).DropsGatewayTLS)}
+	chart := chartValues{allowGatewayWithoutTLS: slices.ContainsFunc(stories, (*e2e.Bundle).GatewayWithoutTLS)}
 	if cfg.watchNamespaces {
 		chart.watch = watchedNamespaces(stories, cfg.controllers)
 	}

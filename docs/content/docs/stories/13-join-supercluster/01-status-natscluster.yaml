@@ -1,0 +1,23 @@
+status:
+  observedGeneration: 1
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: AllServersReady
+    # Settled over the supercluster's one JetStream meta group, which west's
+    # servers have joined beside central's.
+    - type: Settled
+      status: "True"
+      reason: AllGroupsCurrent
+    - type: GatewaysConnected
+      status: "True"
+      reason: AllMembersReachable
+      message: 1 of 1 remote members connected
+  gateways:
+    - name: central
+      connected: true
+      inbound: 3
+      outbound: 3
+  endpoints:
+    client: nats://west.nats-system.svc:4222
+    gateway: nats-west.example.net:7222

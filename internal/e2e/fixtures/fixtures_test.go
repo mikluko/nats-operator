@@ -47,10 +47,11 @@ func fixtureScheme(t *testing.T) *runtime.Scheme {
 	return scheme
 }
 
-// decoded holds a directory's Secrets and ConfigMaps by name.
+// decoded holds a directory's Secrets, ConfigMaps and Services by name.
 type decoded struct {
 	secrets    map[string]*corev1.Secret
 	configMaps map[string]*corev1.ConfigMap
+	services   map[string]*corev1.Service
 }
 
 // decodeDir strictly decodes every document of every file in dir into its
@@ -62,7 +63,7 @@ func decodeDir(t *testing.T, dir string) decoded {
 	files, err := filepath.Glob(filepath.Join(dir, "*.yaml"))
 	require.NoError(t, err)
 	require.NotEmpty(t, files)
-	d := decoded{secrets: map[string]*corev1.Secret{}, configMaps: map[string]*corev1.ConfigMap{}}
+	d := decoded{secrets: map[string]*corev1.Secret{}, configMaps: map[string]*corev1.ConfigMap{}, services: map[string]*corev1.Service{}}
 	for _, f := range files {
 		b, err := os.ReadFile(f)
 		require.NoError(t, err)
@@ -80,6 +81,8 @@ func decodeDir(t *testing.T, dir string) decoded {
 				d.secrets[o.Name] = o
 			case *corev1.ConfigMap:
 				d.configMaps[o.Name] = o
+			case *corev1.Service:
+				d.services[o.Name] = o
 			}
 		}
 	}
@@ -249,6 +252,102 @@ func checkUnmanaged(t *testing.T, dir string) {
 	require.Equal(t, d.secrets["nats-client"].StringData["ca.crt"], d.secrets["messaging-nats-ca"].StringData["ca.crt"])
 }
 
+// checkJoinSupercluster requires that story 13's existing NATS cluster
+// preloads its system account and accounts under a MEMORY resolver, that its
+// gateway admits west alone, in the clear and with no authorization, at the
+// address the story's NatsCluster advertises, and that the trust patches and
+// creds chain to what it preloads.
+func checkJoinSupercluster(t *testing.T, dir string) {
+	t.Helper()
+	t.Setenv("POD_NAME", "nats-0")
+	d := decodeDir(t, dir)
+	cm := d.configMaps["nats-config"]
+	require.NotNil(t, cm)
+	cfg, err := conf.Parse(cm.Data["nats.conf"])
+	require.NoError(t, err)
+
+	operator, ok := cfg["operator"].(string)
+	require.True(t, ok, "operator is a string")
+	oc, err := jwt.DecodeOperatorClaims(operator)
+	require.NoError(t, err)
+	require.Equal(t, oc.Subject, oc.Issuer)
+	system, ok := cfg["system_account"].(string)
+	require.True(t, ok, "system_account is a string")
+	require.Equal(t, oc.SystemAccount, system)
+	require.Equal(t, "MEMORY", cfg["resolver"])
+
+	preload, ok := cfg["resolver_preload"].(map[string]any)
+	require.True(t, ok, "resolver_preload is a map")
+	accounts := map[string]*jwt.AccountClaims{}
+	for pub, value := range preload {
+		token, ok := value.(string)
+		require.True(t, ok, "resolver_preload %s is a string", pub)
+		ac, err := jwt.DecodeAccountClaims(token)
+		require.NoError(t, err)
+		require.Equal(t, pub, ac.Subject)
+		require.True(t, oc.DidSign(ac), "%s is signed by the NATS operator", ac.Name)
+		accounts[ac.Name] = ac
+	}
+	require.Equal(t, []string{"SYS", "orders", "payments"}, slices.Sorted(maps.Keys(accounts)))
+	require.Equal(t, system, accounts["SYS"].Subject)
+
+	trust := readPatch(t, dir, "natsoperatortrust.json")
+	require.Equal(t, operator, trust.Spec.OperatorJWT)
+	require.Equal(t, preload[system], trust.Spec.SystemAccountJWT)
+	for _, name := range []string{"orders", "payments"} {
+		p := readPatch(t, dir, "natsaccounttrust-"+name+".json")
+		ac := accounts[name]
+		require.Equal(t, ac.Subject, p.Spec.PublicKey, name)
+		require.Equal(t, preload[ac.Subject], p.Spec.JWT, name)
+		require.NotZero(t, ac.Expires, "%s expires", name)
+		require.True(t, ac.Limits.IsJSEnabled(), "%s has JetStream", name)
+	}
+
+	onlyKey := func(ac *jwt.AccountClaims) string {
+		t.Helper()
+		keys := ac.SigningKeys.Keys()
+		require.Len(t, keys, 1, ac.Name)
+		return keys[0]
+	}
+	requireCreds(t, d.secrets["west-cluster-controller-creds"], "user.creds", system, onlyKey(accounts["SYS"]))
+	requireCreds(t, d.secrets["orders-creds"], "user.creds", accounts["orders"].Subject, onlyKey(accounts["orders"]))
+
+	gateway, ok := cfg["gateway"].(map[string]any)
+	require.True(t, ok, "gateway is a map")
+	require.Equal(t, "central", gateway["name"])
+	require.Equal(t, true, gateway["reject_unknown"])
+	require.NotContains(t, gateway, "tls")
+	require.NotContains(t, gateway, "authorization")
+	remotes, ok := gateway["gateways"].([]any)
+	require.True(t, ok, "gateway.gateways is a list")
+	require.Len(t, remotes, 1)
+	remote, ok := remotes[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "west", remote["name"])
+
+	west := storyNatsCluster(t, "13-join-supercluster/01-west.yaml")
+	require.Equal(t, []any{"nats://" + west.Spec.Gateway.Advertise}, remote["urls"])
+	var central string
+	for _, r := range west.Spec.Gateway.Remotes {
+		if r.Name == "central" {
+			central = r.URL
+		}
+	}
+	host, _, _ := strings.Cut(strings.TrimPrefix(central, "nats://"), ":")
+	require.Equal(t, host, d.services["nats-gateway"].Annotations["external-dns.alpha.kubernetes.io/hostname"])
+}
+
+// storyNatsCluster strictly decodes the NatsCluster in the story file at
+// path under the stories directory.
+func storyNatsCluster(t *testing.T, path string) *clusterv1beta1.NatsCluster {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("../../../docs/content/docs/stories", path))
+	require.NoError(t, err)
+	var nc clusterv1beta1.NatsCluster
+	require.NoError(t, yaml.UnmarshalStrict(raw, &nc))
+	return &nc
+}
+
 // TestChains pins every story's fixtures: every document decodes strictly
 // into its type, and every JWT and creds file chains to the keys generated
 // with it.
@@ -272,6 +371,7 @@ func TestChains(t *testing.T) {
 			"orders-creds":   "orders",
 			"payments-creds": "payments",
 		}}.check,
+		"13-join-supercluster": checkJoinSupercluster,
 	}
 	require.ElementsMatch(t, slices.Collect(maps.Keys(generators)), slices.Collect(maps.Keys(stories)))
 	for story, check := range stories {
@@ -284,8 +384,8 @@ func TestChains(t *testing.T) {
 }
 
 // TestGenerate pins every story's generated files: each is readable by its
-// owner alone, and each patch file, named for the kind it targets, decodes
-// strictly into that kind.
+// owner alone, and each patch file, named for the kind it targets and
+// optionally a qualifier after a hyphen, decodes strictly into that kind.
 func TestGenerate(t *testing.T) {
 	scheme := fixtureScheme(t)
 	kinds := map[string]schema.GroupVersionKind{}
@@ -312,7 +412,8 @@ func TestGenerate(t *testing.T) {
 			patches, err := filepath.Glob(filepath.Join(dir, "*.json"))
 			require.NoError(t, err)
 			for _, path := range patches {
-				gvk, ok := kinds[strings.TrimSuffix(filepath.Base(path), ".json")]
+				kind, _, _ := strings.Cut(strings.TrimSuffix(filepath.Base(path), ".json"), "-")
+				gvk, ok := kinds[kind]
 				require.True(t, ok, "%s names no kind of %s", path, natsv1beta1.GroupVersion.Group)
 				raw, err := os.ReadFile(path)
 				require.NoError(t, err)

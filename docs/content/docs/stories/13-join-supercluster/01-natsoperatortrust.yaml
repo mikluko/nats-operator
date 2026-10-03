@@ -1,0 +1,11 @@
+# Trust roots in the literal form, copied from whoever runs the existing
+# supercluster's NATS operator: its NATS operator JWT and its system account
+# JWT. No auth controller runs for them, here or anywhere.
+apiVersion: nats.mikluko.io/v1beta1
+kind: NatsOperatorTrust
+metadata:
+  name: central
+  namespace: nats-system
+spec:
+  operatorJWT: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...
+  systemAccountJWT: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...
