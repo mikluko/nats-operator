@@ -4,8 +4,8 @@ weight: 13
 params:
   e2e:
     waits:
-      - {step: 0, wait: 3m, reason: "central's servers start and elect a JetStream meta leader"}
-      - {step: 1, wait: 4m, reason: "west's servers start and join central's meta group over the gateway"}
+      - {step: 0, wait: 2m, reason: "central's servers start"}
+      - {step: 1, wait: 4m, reason: "west's servers start and connect central's gateway, and the meta group spanning both elects a leader"}
     substitutions:
       - files: [01-natsoperatortrust.yaml]
         reason: the JWTs of the NATS operator and system account the existing NATS cluster in e2e/00-central.yaml trusts, from internal/e2e/fixtures

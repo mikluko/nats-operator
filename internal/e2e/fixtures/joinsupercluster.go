@@ -100,6 +100,8 @@ var joinCredsTemplate = parseFixture("join-creds", `# Minted by whoever runs cen
 var joinCentralTemplate = parseFixture("join-central", `# The existing supercluster's one member, central: a MEMORY resolver
 # preloading its system account and accounts, a gateway in the clear that
 # admits no gateway its own list does not name, and west named in that list.
+# Its JetStream elects no meta leader until west's gateway connects, so a
+# server is ready once it serves clients.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -193,7 +195,7 @@ spec:
             requests: {cpu: 50m, memory: 128Mi}
             limits: {memory: 128Mi}
           readinessProbe:
-            httpGet: {path: /healthz, port: 8222}
+            httpGet: {path: "/healthz?js-enabled-only=true", port: 8222}
           volumeMounts:
             - {name: config, mountPath: /etc/nats}
             - {name: data, mountPath: /data}
