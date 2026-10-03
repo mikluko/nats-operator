@@ -24,7 +24,9 @@ spec:
     name: v1beta1
     schema:
       openAPIV3Schema:
-        description: NatsAccountTrust is an account a leaf binds a remote to.
+        description: |-
+          NatsAccountTrust is an account a NatsCluster preloads or a leaf binds a
+          remote to.
         properties:
           apiVersion:
             description: |-
@@ -67,7 +69,7 @@ spec:
                 - name
                 type: object
               jwt:
-                description: JWT is the account JWT a leaf preloads.
+                description: JWT is the account JWT a NatsCluster preloads.
                 minLength: 1
                 type: string
               publicKey:

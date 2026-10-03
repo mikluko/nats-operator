@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `NatsCluster.spec.auth.accountTrustRefs` names `NatsAccountTrust`s whose account JWTs every server preloads beside the system account's, on a `NatsCluster` that is not a leaf as on one that is.
+
 ## [0.1.1] - 2026-10-02
 
 ### Added

@@ -20,7 +20,7 @@ type NatsAccountTrustSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	PublicKey string `json:"publicKey,omitempty"`
 
-	// JWT is the account JWT a leaf preloads.
+	// JWT is the account JWT a NatsCluster preloads.
 	// +optional
 	// +kubebuilder:validation:MinLength=1
 	JWT string `json:"jwt,omitempty"`
@@ -54,7 +54,8 @@ type NatsAccountTrustStatus struct {
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
-// NatsAccountTrust is an account a leaf binds a remote to.
+// NatsAccountTrust is an account a NatsCluster preloads or a leaf binds a
+// remote to.
 type NatsAccountTrust struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

@@ -232,30 +232,34 @@ func TestRender_Leaf(t *testing.T) {
 }
 
 // TestResolverType pins the resolver a NatsCluster runs: auth.resolver
-// when set, otherwise Cache on a leaf that preloads nothing and Full
-// everywhere else.
+// when set, otherwise Cache on a leaf that preloads nothing, through a
+// remote or auth.accountTrustRefs, and Full everywhere else.
 func TestResolverType(t *testing.T) {
 	preload := []LeafRemote{{LocalAccount: "A", PreloadJWT: "jwt"}}
 	fetch := []LeafRemote{{LocalAccount: "SYS"}}
+	accounts := []AccountPreload{{PublicKey: "B", JWT: "jwt"}}
 	for _, tt := range []struct {
 		name     string
 		set      clusterv1beta1.ResolverType
 		leaf     bool
 		remotes  []LeafRemote
+		accounts []AccountPreload
 		expected clusterv1beta1.ResolverType
 	}{
-		{"not a leaf", "", false, nil, clusterv1beta1.ResolverFull},
-		{"a leaf preloading nothing", "", true, fetch, clusterv1beta1.ResolverCache},
-		{"a leaf preloading an account", "", true, append(fetch, preload...), clusterv1beta1.ResolverFull},
-		{"Cache set on a preloading leaf", clusterv1beta1.ResolverCache, true, preload, clusterv1beta1.ResolverCache},
-		{"Full set on a leaf preloading nothing", clusterv1beta1.ResolverFull, true, fetch, clusterv1beta1.ResolverFull},
+		{"not a leaf", "", false, nil, nil, clusterv1beta1.ResolverFull},
+		{"not a leaf, preloading accounts", "", false, nil, accounts, clusterv1beta1.ResolverFull},
+		{"a leaf preloading nothing", "", true, fetch, nil, clusterv1beta1.ResolverCache},
+		{"a leaf preloading an account", "", true, append(fetch, preload...), nil, clusterv1beta1.ResolverFull},
+		{"a leaf preloading through accountTrustRefs", "", true, fetch, accounts, clusterv1beta1.ResolverFull},
+		{"Cache set on a preloading leaf", clusterv1beta1.ResolverCache, true, preload, accounts, clusterv1beta1.ResolverCache},
+		{"Full set on a leaf preloading nothing", clusterv1beta1.ResolverFull, true, fetch, nil, clusterv1beta1.ResolverFull},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			nc := &clusterv1beta1.NatsCluster{Spec: clusterv1beta1.NatsClusterSpec{Auth: &clusterv1beta1.Auth{Resolver: tt.set}}}
 			if tt.leaf {
 				nc.Spec.LeafRemotes = []clusterv1beta1.LeafRemote{{ConnectionRef: natsv1beta1.ObjectReference{Name: "hub"}}}
 			}
-			require.Equal(t, tt.expected, resolverType(nc, tt.remotes))
+			require.Equal(t, tt.expected, resolverType(nc, tt.remotes, tt.accounts))
 		})
 	}
 }
@@ -314,11 +318,6 @@ func TestReadLeafRemotes_Refusals(t *testing.T) {
 			at.Spec.PublicKey = publicKey(t, newTestPair(t, nkeys.PrefixByteAccount))
 			require.NoError(t, c.Update(context.Background(), at))
 		}, ReasonLeafRemoteInvalid, "jwt is account"},
-		{"preloading into Full without a volume", func(t *testing.T) *clusterv1beta1.NatsCluster {
-			nc := operatorLeaf(t)
-			nc.Spec.JetStream.VolumeClaimTemplate = nil
-			return nc
-		}, nil, ReasonUnsupportedSpec, "auth.resolver: Cache"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			c := f.client(t)
@@ -339,15 +338,6 @@ func TestReadLeafRemotes_Refusals(t *testing.T) {
 			require.Contains(t, cond.Message, tt.msg)
 		})
 	}
-
-	t.Run("Cache on a preloading leaf needs no volume", func(t *testing.T) {
-		nc := operatorLeaf(t)
-		nc.Spec.JetStream.VolumeClaimTemplate = nil
-		nc.Spec.Auth.Resolver = clusterv1beta1.ResolverCache
-		_, cond, err := readLeafRemotes(ctx, f.client(t), nc, f.p.trust)
-		require.NoError(t, err)
-		require.Nil(t, cond)
-	})
 }
 
 func TestUnsupportedLeafFields(t *testing.T) {
@@ -516,7 +506,8 @@ func TestLeafStatus(t *testing.T) {
 
 // TestLeafWatches pins the watch mappings: a NatsConnection, a
 // NatsAccountTrust, and a Secret a NatsConnection reads each enqueue the
-// NatsClusters whose leafRemotes name them, from any namespace.
+// NatsClusters whose leafRemotes, or for a NatsAccountTrust whose
+// auth.accountTrustRefs, name them, from any namespace.
 func TestLeafWatches(t *testing.T) {
 	leaf := func(ns, name string, remotes ...clusterv1beta1.LeafRemote) *clusterv1beta1.NatsCluster {
 		return &clusterv1beta1.NatsCluster{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name}, Spec: clusterv1beta1.NatsClusterSpec{LeafRemotes: remotes}}
@@ -529,8 +520,8 @@ func TestLeafWatches(t *testing.T) {
 	}
 	b := fake.NewClientBuilder().WithScheme(leafScheme(t))
 	for field, keys := range map[string]func(*clusterv1beta1.NatsCluster) []string{
-		LeafConnectionField:   leafConnectionKeys,
-		LeafAccountTrustField: leafAccountTrustKeys,
+		LeafConnectionField: leafConnectionKeys,
+		AccountTrustField:   accountTrustKeys,
 	} {
 		b = b.WithIndex(&clusterv1beta1.NatsCluster{}, field, func(o client.Object) []string { return keys(o.(*clusterv1beta1.NatsCluster)) })
 	}
@@ -544,6 +535,9 @@ func TestLeafWatches(t *testing.T) {
 			LocalAccountTrustRef: &natsv1beta1.ObjectReference{Name: "telemetry", Namespace: "a"},
 		}),
 		leaf("a", "other", clusterv1beta1.LeafRemote{ConnectionRef: natsv1beta1.ObjectReference{Name: "elsewhere"}}),
+		&clusterv1beta1.NatsCluster{ObjectMeta: metav1.ObjectMeta{Namespace: "c", Name: "preloading"}, Spec: clusterv1beta1.NatsClusterSpec{Auth: &clusterv1beta1.Auth{
+			AccountTrustRefs: []natsv1beta1.ObjectReference{{Name: "telemetry", Namespace: "a"}},
+		}}},
 		conn("a", "hub", "hub-creds"), conn("a", "elsewhere", "other-creds"),
 	).Build()
 	r := &Reconciler{Client: c}
@@ -559,7 +553,7 @@ func TestLeafWatches(t *testing.T) {
 	hubConn := &natsv1beta1.NatsConnection{ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "hub"}}
 	require.ElementsMatch(t, []string{"a/same", "b/cross"}, enqueued(t, refindex.EnqueueByField(c, clusters, LeafConnectionField), hubConn))
 	telemetry := &natsv1beta1.NatsAccountTrust{ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "telemetry"}}
-	require.ElementsMatch(t, []string{"b/cross"}, enqueued(t, refindex.EnqueueByField(c, clusters, LeafAccountTrustField), telemetry))
+	require.ElementsMatch(t, []string{"b/cross", "c/preloading"}, enqueued(t, refindex.EnqueueByField(c, clusters, AccountTrustField), telemetry))
 	require.ElementsMatch(t, []string{"a/same", "b/cross"}, names(r.clustersReadingSecret(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "hub-creds"}})))
 	require.Empty(t, r.clustersReadingSecret(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "b", Name: "hub-creds"}}))
 	require.Empty(t, r.clustersReadingSecret(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "a", Name: "unrelated"}}))

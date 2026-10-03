@@ -166,18 +166,20 @@ func leafnodesConfig(nc *clusterv1beta1.NatsCluster, remotes []LeafRemote, l Lay
 
 // resolverType is the resolver nc runs: auth.resolver when set; otherwise
 // Cache on a leaf that preloads no account and Full everywhere else.
-func resolverType(nc *clusterv1beta1.NatsCluster, remotes []LeafRemote) clusterv1beta1.ResolverType {
+func resolverType(nc *clusterv1beta1.NatsCluster, remotes []LeafRemote, accounts []AccountPreload) clusterv1beta1.ResolverType {
 	if t := nc.Spec.Auth.Resolver; t != "" {
 		return t
 	}
-	if len(nc.Spec.LeafRemotes) > 0 && !preloads(remotes) {
+	if len(nc.Spec.LeafRemotes) > 0 && !preloads(remotes, accounts) {
 		return clusterv1beta1.ResolverCache
 	}
 	return clusterv1beta1.ResolverFull
 }
 
-func preloads(remotes []LeafRemote) bool {
-	return slices.ContainsFunc(remotes, func(r LeafRemote) bool { return r.PreloadJWT != "" })
+// preloads reports whether remotes or accounts preload an account besides
+// the system account.
+func preloads(remotes []LeafRemote, accounts []AccountPreload) bool {
+	return len(accounts) > 0 || slices.ContainsFunc(remotes, func(r LeafRemote) bool { return r.PreloadJWT != "" })
 }
 
 // unsupportedLeafFields names the leafRemotes fields nc cannot render: a
@@ -273,10 +275,6 @@ func readLeafRemotes(ctx context.Context, r client.Reader, nc *clusterv1beta1.Na
 		}
 		out = append(out, lr)
 	}
-	if trust != nil && preloads(out) && resolverType(nc, out) == clusterv1beta1.ResolverFull &&
-		(nc.Spec.JetStream == nil || nc.Spec.JetStream.VolumeClaimTemplate == nil) {
-		return nil, notProgressing(ReasonUnsupportedSpec, "a leaf preloading accounts keeps its Full resolver on jetstream.volumeClaimTemplate, which is not set; set it, or set auth.resolver: Cache"), nil
-	}
 	return out, nil, nil
 }
 
@@ -291,43 +289,69 @@ func readRefusedLocalAccount(ctx context.Context, r client.Reader, from grant.Re
 }
 
 // readLocalAccount fills lr's local account from the NatsAccountTrust ref
-// names: its public key, and the JWT to preload when it carries one, which
-// must be that account's, signed by trust's NATS operator.
+// names: its public key, and the JWT to preload when it carries one.
 func readLocalAccount(ctx context.Context, r client.Reader, from grant.Referrer, nc *clusterv1beta1.NatsCluster, trust *Trust, ref natsv1beta1.ObjectReference, lr *LeafRemote) (*metav1.Condition, error) {
+	acc, cond, err := readAccountTrust(ctx, r, from, nc, trust, ref, leafTrustReasons)
+	if cond != nil || err != nil {
+		return cond, err
+	}
+	lr.LocalAccount, lr.PreloadJWT = acc.PublicKey, acc.JWT
+	return nil, nil
+}
+
+// trustReasons are the reasons a NatsAccountTrust that does not resolve is
+// refused with.
+type trustReasons struct{ notFound, notReady, invalid string }
+
+var leafTrustReasons = trustReasons{ReasonLeafRemoteNotFound, ReasonLeafRemoteNotReady, ReasonLeafRemoteInvalid}
+
+// trustedAccount is an account a NatsAccountTrust gives.
+type trustedAccount struct {
+	PublicKey string
+	// JWT is the account's JWT, empty when the trust carries none.
+	JWT string
+	// Reported is whether the auth controller writes both into the trust's
+	// status, the reference form.
+	Reported bool
+}
+
+// readAccountTrust reads the account of the NatsAccountTrust ref names,
+// admitted from from; its JWT, when it carries one, must be that account's,
+// signed by trust's NATS operator. A trust that does not resolve returns
+// the Progressing condition saying why, a grant refusal keeping its reason.
+func readAccountTrust(ctx context.Context, r client.Reader, from grant.Referrer, nc *clusterv1beta1.NatsCluster, trust *Trust, ref natsv1beta1.ObjectReference, reasons trustReasons) (trustedAccount, *metav1.Condition, error) {
 	notProgressing := func(reason, format string, args ...any) *metav1.Condition {
 		return &metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: reason, Message: fmt.Sprintf(format, args...)}
 	}
 	key := ref.ObjectKey(nc.Namespace)
 	denied, err := grant.Admit(ctx, r, from, grant.Target{Group: natsv1beta1.GroupVersion.Group, Kind: "NatsAccountTrust", Namespace: key.Namespace, Name: key.Name})
 	if err != nil {
-		return nil, err
+		return trustedAccount{}, nil, err
 	}
 	if denied != nil {
-		return notProgressing(denied.Reason, "%s", denied.Message), nil
+		return trustedAccount{}, notProgressing(denied.Reason, "%s", denied.Message), nil
 	}
 	at := &natsv1beta1.NatsAccountTrust{}
 	if err := r.Get(ctx, key, at); err != nil {
 		if apierrors.IsNotFound(err) {
-			return notProgressing(ReasonLeafRemoteNotFound, "NatsAccountTrust %s does not exist", key), nil
+			return trustedAccount{}, notProgressing(reasons.notFound, "NatsAccountTrust %s does not exist", key), nil
 		}
-		return nil, fmt.Errorf("get NatsAccountTrust %s: %w", key, err)
+		return trustedAccount{}, nil, fmt.Errorf("get NatsAccountTrust %s: %w", key, err)
 	}
-	pub, accJWT := at.Spec.PublicKey, at.Spec.JWT
+	acc := trustedAccount{PublicKey: at.Spec.PublicKey, JWT: at.Spec.JWT}
 	if at.Spec.AccountRef != nil {
-		pub, accJWT = at.Status.PublicKey, at.Status.JWT
-		if pub == "" {
-			return notProgressing(ReasonLeafRemoteNotReady, "NatsAccountTrust %s has no public key in its status yet", key), nil
+		acc = trustedAccount{PublicKey: at.Status.PublicKey, JWT: at.Status.JWT, Reported: true}
+		if acc.PublicKey == "" {
+			return trustedAccount{}, notProgressing(reasons.notReady, "NatsAccountTrust %s has no public key in its status yet", key), nil
 		}
 	}
-	lr.LocalAccount = pub
-	if accJWT == "" {
-		return nil, nil
+	if acc.JWT == "" {
+		return acc, nil, nil
 	}
-	if err := checkAccountJWT(trust, pub, accJWT); err != nil {
-		return notProgressing(ReasonLeafRemoteInvalid, "NatsAccountTrust %s: %v", key, err), nil
+	if err := checkAccountJWT(trust, acc.PublicKey, acc.JWT); err != nil {
+		return trustedAccount{}, notProgressing(reasons.invalid, "NatsAccountTrust %s: %v", key, err), nil
 	}
-	lr.PreloadJWT = accJWT
-	return nil, nil
+	return acc, nil, nil
 }
 
 // checkAccountJWT checks that accJWT is the account JWT of pub, signed by
