@@ -12,14 +12,6 @@
     text-align: center;
   }
 
-  &-eyebrow {
-    color: var(--primary);
-    font-size: .8125rem;
-    font-weight: 600;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-  }
-
   &-title {
     margin-block: .75rem 1rem;
     color: var(--on-surface);
@@ -62,11 +54,6 @@
   &-install {
     max-width: 48rem;
     margin-inline: auto;
-    text-align: center;
-
-    pre {
-      text-align: start;
-    }
   }
 
   &-section {
@@ -81,41 +68,48 @@
     text-align: center;
   }
 
-  &-subheading {
-    max-width: 40rem;
-    margin: .5rem auto 0;
-    color: var(--on-surface-variant);
-    text-align: center;
-  }
-
   &-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(#{"min(100%, 18rem)"}, 1fr));
     gap: var(--space-block);
     margin-block-start: 2rem;
-
-    &-dense {
-      grid-template-columns: repeat(auto-fit, minmax(#{"min(100%, 15rem)"}, 1fr));
-    }
   }
 
-  &-card,
-  &-feature {
-    display: flex;
-    flex-direction: column;
-    gap: .75rem;
+  &-areas {
+    display: grid;
+    grid-template-columns: minmax(8rem, max-content) 1fr;
+    gap: .75rem var(--space-block);
+    max-width: 48rem;
+    margin: 2rem auto 0;
     color: var(--on-surface-variant);
 
-    code {
-      font-size: .875em;
+    dd {
+      margin: 0;
+    }
+
+    a {
+      color: var(--primary);
+      font-weight: 500;
+
+      &:hover {
+        text-decoration: underline;
+      }
     }
   }
 
   &-card {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+    color: var(--on-surface-variant);
     padding: 1.5rem;
     border: 1px solid var(--outline);
     border-radius: .75rem;
     background-color: var(--surface);
+
+    code {
+      font-size: .875em;
+    }
 
     &-icon {
       display: inline-grid;
