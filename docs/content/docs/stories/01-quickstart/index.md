@@ -15,42 +15,87 @@ params:
         patch: {status: {jetstream: {limits: {maxMemoryStore: 192Mi}}}}
 ---
 
-A platform engineer wants a three-server NATS cluster with JetStream in one Kubernetes cluster, and one stream on it. No auth plane: every client lands in the global account.
+In this story you deploy a three-server NATS cluster with JetStream in one Kubernetes cluster. You then restart it with more memory, create a stream on it and publish a message.
 
-## The NATS cluster
+The NATS cluster has no auth plane, so every client lands in the global account.
 
-The cluster controller renders the server config, owns the StatefulSet, and self-signs route certificates because none is named.
+## Before you begin
+
+You need:
+
+- A Kubernetes cluster with the cluster controller and the JetStream controller installed. See [Install]({{< relref "/docs/install" >}}).
+- The namespace `nats-system`. Create it with `kubectl create namespace nats-system`.
+- A StorageClass named `standard`, which the manifests ask for.
+- The [NATS CLI](https://github.com/nats-io/natscli), for the last step.
+
+[Following a story]({{< relref "/docs/stories#following-a-story" >}}) explains how to read the manifests and the status files.
+
+## 1. Deploy the NATS cluster
+
+Apply the `NatsCluster`.
 
 {{< manifest "01-natscluster.yaml" >}}
 
-At rest it reports every server on the same config revision, and `Settled` once every Raft group has a leader and every member is current. `endpoints` is where a connection's address comes from.
+The cluster controller renders the server config and creates one StatefulSet per server. The manifest sets no route certificate, so the controller self-signs one.
+
+Check the status:
+
+```sh
+kubectl -n nats-system get natscluster demo -o yaml
+```
+
+Wait until it matches the status below. Every server reports the same `configRevision`. `Settled` is True once every Raft group has a leader and every member is current.
 
 {{< manifest "01-status-natscluster-at-rest.yaml" >}}
 
-Raising the memory changes each server's pod template, which is restart-only, so the rollout restarts one server at a time and waits for `Settled` before the next. A `spec.version` change rolls the same way.
+You use `endpoints.client` as the server address in step 3.
+
+## 2. Raise the memory limit
+
+Apply the same `NatsCluster` with its memory raised from 4Gi to 8Gi.
 
 {{< manifest "02-natscluster-8gi.yaml" >}}
 
+The change alters each server's pod template, and only a restart applies a pod template. The cluster controller restarts one server at a time and waits for `Settled` before it restarts the next. A change to `spec.version` rolls out the same way.
+
+While the rollout runs, the status looks like this:
+
 {{< manifest "02-status-natscluster-mid-rollout.yaml" >}}
 
-## The stream
+## 3. Create a stream
 
-The JetStream controller reaches the NATS cluster only through a connection, the same way it reaches a NATS cluster nobody here deployed.
+The JetStream controller reaches a NATS cluster only through a `NatsConnection`. Apply one that points at the client endpoint from step 1.
 
 {{< manifest "03-natsconnection.yaml" >}}
 
+Apply the `NatsStream`.
+
 {{< manifest "03-natsstream.yaml" >}}
 
-The stream's status is re-read on a resync period, so drift made outside Kubernetes is reapplied from spec and reported, for one resync, as `Synced=False`, reason `DriftCorrected`.
+Check the status:
+
+```sh
+kubectl -n nats-system get natsstream orders -o yaml
+```
+
+`Ready` and `Synced` are True.
 
 {{< manifest "03-status-natsstream.yaml" >}}
 
-## Connecting a client
+The JetStream controller reads the stream from the server again on every resync period. If the stream was changed outside Kubernetes, the controller reapplies the spec. For one resync it reports `Synced=False` with the reason `DriftCorrected`.
 
-With the [NATS CLI](https://github.com/nats-io/natscli), through a port-forward to the NATS cluster's client Service:
+## 4. Publish a message
+
+Forward the client port of the NATS cluster's client Service, then publish a message and read the stream:
 
 ```sh
 kubectl -n nats-system port-forward svc/demo 4222:4222 &
 nats -s nats://localhost:4222 pub orders.created '{"id": 1}'
 nats -s nats://localhost:4222 stream info ORDERS
 ```
+
+The last command prints the state of the stream `ORDERS`, which now has one message.
+
+## Next
+
+[Owning the auth plane]({{< relref "/docs/stories/02-auth-plane" >}}) puts this NATS cluster under a NATS operator, with accounts and users declared as resources.
