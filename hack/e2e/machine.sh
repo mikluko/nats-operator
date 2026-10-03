@@ -53,6 +53,7 @@ if ! helm version --short 2>/dev/null | grep -q "^$helm_version+"; then
 	rm -rf "$tmp"
 fi
 
+mkdir -p /etc/sysctl.d
 printf 'fs.inotify.max_user_instances = 1024\nfs.inotify.max_user_watches = 524288\n' \
 	>/etc/sysctl.d/90-nats-operator-e2e.conf
 systemctl enable podman.socket >/dev/null 2>&1
