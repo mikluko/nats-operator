@@ -209,6 +209,8 @@ func routeTLSEnabled(spec *clusterv1beta1.NatsClusterSpec) bool {
 type Inputs struct {
 	// Trust is nil exactly when the NatsCluster has no auth plane.
 	Trust *Trust
+	// Accounts are what auth.accountTrustRefs preload.
+	Accounts []AccountPreload
 	// Certs are the TLS Secrets the servers mount.
 	Certs Certs
 	// MonitorNamespace is the namespace the NetworkPolicy admits to the
@@ -268,12 +270,15 @@ func serverConfig(nc *clusterv1beta1.NatsCluster, in Inputs, server string, l La
 	if trust := in.Trust; trust != nil {
 		c.Operator = trust.OperatorJWT
 		c.SystemAccount = trust.SystemAccount
-		c.Resolver = resolverConfig(resolverType(nc, remotes), l.ResolverDir)
+		c.Resolver = resolverConfig(resolverType(nc, remotes, in.Accounts), l.ResolverDir)
 		c.ResolverPreload = map[string]string{trust.SystemAccount: trust.SystemAccountJWT}
 		for _, r := range remotes {
 			if r.PreloadJWT != "" {
 				c.ResolverPreload[r.LocalAccount] = r.PreloadJWT
 			}
+		}
+		for _, a := range in.Accounts {
+			c.ResolverPreload[a.PublicKey] = a.JWT
 		}
 	}
 	return c

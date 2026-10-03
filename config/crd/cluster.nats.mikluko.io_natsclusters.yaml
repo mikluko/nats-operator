@@ -62,6 +62,28 @@ spec:
                   Auth puts the NATS cluster under a NATS operator; absent, servers run
                   with no accounts and no client auth.
                 properties:
+                  accountTrustRefs:
+                    description: |-
+                      AccountTrustRefs name the NatsAccountTrusts whose account JWTs every
+                      server preloads beside the system account's; each must carry one.
+                    items:
+                      description: ObjectReference names an object whose kind the
+                        referring field fixes.
+                      properties:
+                        name:
+                          description: Name of the referenced object.
+                          minLength: 1
+                          type: string
+                        namespace:
+                          description: |-
+                            Namespace of the referenced object, the referrer's own when omitted.
+                            Another namespace is admitted only by a NatsReferenceGrant there.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
+                    x-kubernetes-list-type: atomic
                   resolver:
                     description: |-
                       Resolver is the account resolver; the cluster controller renders Full

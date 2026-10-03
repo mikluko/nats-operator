@@ -141,6 +141,9 @@ func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) err
 		out := leafRefNamespaces(nc)
 		if a := nc.Spec.Auth; a != nil {
 			out = append(out, a.TrustRef.Namespace)
+			for _, ref := range a.AccountTrustRefs {
+				out = append(out, ref.Namespace)
+			}
 		}
 		return out
 	}); err != nil {
@@ -243,11 +246,21 @@ func (r *Reconciler) reconcile(ctx context.Context, nc *clusterv1beta1.NatsClust
 	if cond != nil {
 		return r.holdFor(ctx, orig, nc, cond)
 	}
+	accounts, cond, err := readAccountPreloads(ctx, r.Client, nc, trust)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if cond == nil {
+		cond = checkPreloads(nc, trust, remotes, accounts)
+	}
+	if cond != nil {
+		return r.holdFor(ctx, orig, nc, cond)
+	}
 	certs, certWait, certReason, err := r.ensureCerts(ctx, nc)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	plan, err := Render(nc, Inputs{Trust: trust, Certs: certs, MonitorNamespace: r.ControllerNamespace}, remotes...)
+	plan, err := Render(nc, Inputs{Trust: trust, Accounts: accounts, Certs: certs, MonitorNamespace: r.ControllerNamespace}, remotes...)
 	if err != nil {
 		return ctrl.Result{}, r.hold(ctx, orig, nc, unsupportedSpec(err.Error()))
 	}

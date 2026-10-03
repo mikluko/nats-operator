@@ -249,6 +249,12 @@ type Auth struct {
 	// when omitted, and Cache for a leaf that preloads no account.
 	// +optional
 	Resolver ResolverType `json:"resolver,omitempty"`
+
+	// AccountTrustRefs name the NatsAccountTrusts whose account JWTs every
+	// server preloads beside the system account's; each must carry one.
+	// +optional
+	// +listType=atomic
+	AccountTrustRefs []natsv1beta1.ObjectReference `json:"accountTrustRefs,omitempty"`
 }
 
 // ResolverType is a NATS account resolver type.
