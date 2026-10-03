@@ -134,8 +134,10 @@ func TestGatewayWithoutTLS(t *testing.T) {
 
 // TestStories_GatewayTLS pins that every NatsCluster the stories apply with
 // a gateway carries gateway tls, so none is refused by a cluster controller
-// run without --allow-gateway-without-tls.
+// run without --allow-gateway-without-tls, save in story 13, whose existing
+// supercluster runs its gateways in the clear and whose page names the flag.
 func TestStories_GatewayTLS(t *testing.T) {
+	inTheClear := map[string]bool{"13-join-supercluster": true}
 	files, err := filepath.Glob("../../docs/content/docs/stories/*/*.yaml")
 	require.NoError(t, err)
 	require.NotEmpty(t, files)
@@ -156,7 +158,8 @@ func TestStories_GatewayTLS(t *testing.T) {
 				continue
 			}
 			gateways++
-			require.False(t, gatewayWithoutTLS(&nc.Spec, false), "%s: NatsCluster %s", f, nc.Name)
+			story := filepath.Base(filepath.Dir(f))
+			require.Equal(t, inTheClear[story], gatewayWithoutTLS(&nc.Spec, false), "%s: NatsCluster %s", f, nc.Name)
 		}
 	}
 	require.NotZero(t, gateways, "no story applies a NatsCluster with a gateway")
