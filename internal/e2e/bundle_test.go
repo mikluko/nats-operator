@@ -25,7 +25,7 @@ func generated(t *testing.T) string {
 func TestLoadBundles_Stories(t *testing.T) {
 	bundles, err := LoadBundles(storiesDir, generated(t))
 	require.NoError(t, err)
-	require.Len(t, bundles, 12)
+	require.Len(t, bundles, 13)
 	skipped := map[string]string{}
 	for i, b := range bundles {
 		require.Equal(t, i+1, b.Number, b.Name)
@@ -497,23 +497,40 @@ func TestLoadBundles_Generated(t *testing.T) {
 	})
 }
 
-func TestBundle_DropsGatewayTLS(t *testing.T) {
-	drops := Substitution{Files: []string{"01-a.yaml"}, Patch: map[string]any{"spec": map[string]any{"gateway": map[string]any{"tls": nil}}}}
-	sets := Substitution{Files: []string{"01-a.yaml"}, Patch: map[string]any{"spec": map[string]any{"gateway": map[string]any{"tls": map[string]any{}}}}}
-	other := Substitution{Files: []string{"01-a.yaml"}, Patch: map[string]any{"spec": map[string]any{"replicas": 1}}}
+// TestBundle_GatewayWithoutTLS pins that a bundle needs gateways without TLS
+// where a NatsCluster it or its base applies, as substituted, has a gateway
+// and no gateway tls.
+func TestBundle_GatewayWithoutTLS(t *testing.T) {
+	const cluster = "apiVersion: cluster.nats.mikluko.io/v1beta1\nkind: NatsCluster\nmetadata: {name: a, namespace: a}\n"
+	const withTLS = cluster + "spec: {gateway: {discovery: Explicit, tls: {secretRef: {name: gw}}}}\n"
+	const dropsTLS = "---\nparams:\n  e2e:\n    substitutions:\n      - {files: [01-a.yaml], reason: r, patch: {spec: {gateway: {tls: null}}}}\n---\n"
+	load := func(t *testing.T, files map[string]string) *Bundle {
+		t.Helper()
+		if _, ok := files["index.md"]; !ok {
+			files["index.md"] = "---\n---\n"
+		}
+		bundles, err := LoadBundles(writeBundle(t, files), "")
+		require.NoError(t, err)
+		require.Len(t, bundles, 1)
+		return bundles[0]
+	}
 	for _, tc := range []struct {
-		name string
-		b    *Bundle
-		want bool
+		name  string
+		files map[string]string
+		want  bool
 	}{
-		{name: "none", b: &Bundle{}},
-		{name: "other fields", b: &Bundle{Substitutions: []Substitution{other}}},
-		{name: "tls set", b: &Bundle{Substitutions: []Substitution{sets}}},
-		{name: "tls removed", b: &Bundle{Substitutions: []Substitution{other, drops}}, want: true},
-		{name: "tls removed by the base", b: &Bundle{Base: &Bundle{Substitutions: []Substitution{drops}}}, want: true},
+		{name: "no NatsCluster", files: map[string]string{"01-a.yaml": "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: a, namespace: a}\n"}},
+		{name: "no gateway", files: map[string]string{"01-a.yaml": cluster + "spec: {replicas: 1}\n"}},
+		{name: "gateway tls", files: map[string]string{"01-a.yaml": withTLS}},
+		{name: "gateway without tls", files: map[string]string{"01-a.yaml": cluster + "spec: {gateway: {discovery: Explicit}}\n"}, want: true},
+		{name: "tls removed by a substitution", files: map[string]string{"index.md": dropsTLS, "01-a.yaml": withTLS}, want: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			require.Equal(t, tc.want, tc.b.DropsGatewayTLS())
+			require.Equal(t, tc.want, load(t, tc.files).GatewayWithoutTLS())
 		})
 	}
+	t.Run("in the base", func(t *testing.T) {
+		base := load(t, map[string]string{"01-a.yaml": cluster + "spec: {gateway: {discovery: Explicit}}\n"})
+		require.True(t, (&Bundle{Base: base}).GatewayWithoutTLS())
+	})
 }

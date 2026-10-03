@@ -86,20 +86,20 @@ func TestChartSets(t *testing.T) {
 	require.Equal(t, []string{"--values", "v.yaml"}, chartSets(nil, nil, chartValues{values: "v.yaml"})[8:])
 }
 
-// TestStoriesDropGatewayTLS pins the stories whose substitutions, or those
-// of the story they start from, remove their gateways' tls: 6, 8 after 6, 9
-// and 11.
-func TestStoriesDropGatewayTLS(t *testing.T) {
+// TestStoriesGatewayWithoutTLS pins the stories that run a gateway without
+// TLS: 6, 8 after 6, 9 and 11, whose substitutions remove it, and 13, whose
+// page has none.
+func TestStoriesGatewayWithoutTLS(t *testing.T) {
 	generated, err := generateFixtures(t.TempDir())
 	require.NoError(t, err)
 	stories, err := selectBundles("../..", generated, "")
 	require.NoError(t, err)
 	got := map[int]bool{}
 	for _, b := range stories {
-		got[b.Number] = b.DropsGatewayTLS()
+		got[b.Number] = b.GatewayWithoutTLS()
 	}
-	for n, drops := range got {
-		require.Equal(t, n == 6 || n == 8 || n == 9 || n == 11, drops, "story %d", n)
+	for n, without := range got {
+		require.Equal(t, n == 6 || n == 8 || n == 9 || n == 11 || n == 13, without, "story %d", n)
 	}
 	require.Contains(t, got, 1)
 }

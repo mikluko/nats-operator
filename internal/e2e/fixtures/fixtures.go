@@ -21,11 +21,12 @@ import (
 // generators write a story's fixtures into dir, with the patch files of the
 // substitutions that take generated values, keyed by the story's directory.
 var generators = map[string]func(dir string) error{
-	"03-unmanaged":    unmanaged,
-	"06-supercluster": supercluster,
-	"09-acceptance":   acceptance,
-	"10-leafnodes":    leafnodes,
-	"11-evacuation":   evacuation,
+	"03-unmanaged":         unmanaged,
+	"06-supercluster":      supercluster,
+	"09-acceptance":        acceptance,
+	"10-leafnodes":         leafnodes,
+	"11-evacuation":        evacuation,
+	"13-join-supercluster": joinSupercluster,
 }
 
 // Generate writes every story's fixtures into root/<story>/e2e, root laid

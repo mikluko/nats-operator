@@ -1,0 +1,18 @@
+status:
+  observedGeneration: 1
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Synced
+    - type: Synced
+      status: "True"
+      reason: MatchesSpec
+  ownership:
+    origin: Created
+  server:
+    leader: !any west-1
+    replicas:
+      - name: !any west-0
+        current: true
+      - name: !any west-2
+        current: true

@@ -1,0 +1,16 @@
+apiVersion: jetstream.nats.mikluko.io/v1beta1
+kind: NatsStream
+metadata:
+  name: orders
+  namespace: orders
+spec:
+  connectionRef:
+    name: west
+  name: ORDERS
+  subjects: ["orders.>"]
+  storage: File
+  replicas: 3
+  # On west's servers, not central's: both are in the one meta group.
+  placement:
+    cluster: west
+  maxAge: 72h

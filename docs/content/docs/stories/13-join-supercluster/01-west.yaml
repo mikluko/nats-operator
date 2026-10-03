@@ -1,0 +1,52 @@
+apiVersion: cluster.nats.mikluko.io/v1beta1
+kind: NatsCluster
+metadata:
+  name: west   # the gateway name, which the existing members' lists carry
+  namespace: nats-system
+spec:
+  version: 2.15.0
+  replicas: 3
+  resources:
+    requests:
+      cpu: "1"
+      memory: 4Gi
+    limits:
+      memory: 4Gi
+  jetstream:
+    volumeClaimTemplate:
+      spec:
+        storageClassName: gp3
+        resources:
+          requests:
+            storage: 100Gi
+  auth:
+    trustRef:
+      name: central
+    # A system user of the existing NATS operator's system account, issued
+    # for this cluster controller by whoever holds that account's signing key.
+    systemCredentials:
+      secretKeyRef:
+        name: west-cluster-controller-creds
+    # Every server preloads these accounts beside the system account, since
+    # the existing members push no account JWT. A changed list, or a changed
+    # JWT in a NatsAccountTrust it names, restarts the servers.
+    accountTrustRefs:
+      - name: orders
+      - name: payments
+  gateway:
+    # Every member of the existing supercluster, and this one, whose own
+    # entry is skipped.
+    discovery: Explicit
+    remotes:
+      - name: central
+        url: nats://nats-central.example.net:7222
+      - name: west
+        url: nats://nats-west.example.net:7222
+    # No `tls`: the existing members run their gateways in the clear, so this
+    # one does too. The cluster controller renders it only when it runs with
+    # `--allow-gateway-without-tls`.
+    service:
+      type: LoadBalancer
+      annotations:
+        external-dns.alpha.kubernetes.io/hostname: nats-west.example.net
+    advertise: nats-west.example.net:7222
