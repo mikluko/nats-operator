@@ -380,7 +380,7 @@ func TestGoToolchainOnce(t *testing.T) {
 					setups++
 					require.Equal(t, "go.mod", s.With["go-version-file"], "%s job %s", f, job)
 					require.Empty(t, s.With["go-version"], "%s job %s", f, job)
-					if filepath.Base(f) == "ci.yml" {
+					if filepath.Base(f) == "ci.yml" && s.With["cache"] != "false" {
 						require.Equal(t, []string{"go.sum", filepath.Join(filepath.Dir(toolsModfile), "go.sum")},
 							strings.Fields(s.With["cache-dependency-path"]), "%s job %s", f, job)
 					}
@@ -681,7 +681,7 @@ func TestKindPinnedOnce(t *testing.T) {
 // asset checked against a pinned sha256.
 func TestCI_HelmUnittestPinned(t *testing.T) {
 	var installs []step
-	for _, s := range readWorkflow(t, "ci.yml").Jobs["go"].Steps {
+	for _, s := range readWorkflow(t, "ci.yml").Jobs["helm"].Steps {
 		if s.Env["HELM_UNITTEST_VERSION"] != "" {
 			installs = append(installs, s)
 		}
