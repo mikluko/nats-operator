@@ -7,12 +7,9 @@ spec:
   servers: ["tls://nats.messaging.svc:4222"]
   tls:
     ca:
-      # `key` defaults to ca.crt, the key cert-manager writes.
       secretKeyRef:
         name: messaging-nats-ca
-  # Minted by whoever runs that NATS cluster's auth plane and delivered here
-  # by them. The account is whichever one these credentials sign into.
   credentials:
     secretKeyRef:
       name: payments-secrets
-      key: nats.creds   # defaults to user.creds, the key NatsUser writes
+      key: nats.creds

@@ -11,7 +11,4 @@ status:
         stream LEDGER exists and carries no ownership marker; set
         spec.adoptionPolicy to Adopt or AdoptOrCreate to take it over
       lastTransitionTime: !any "2026-09-26T09:12:06Z"
-  # spec.terminalPolicy is Retry, so this is rechecked every resync period and
-  # clears once LEDGER is gone or carries the marker. Under Hold only an edit
-  # to the resource clears it.
   nextCheckTime: !any "2026-09-26T09:22:06Z"

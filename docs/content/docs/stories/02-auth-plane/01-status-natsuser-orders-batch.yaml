@@ -5,5 +5,4 @@ status:
       status: "True"
       reason: Signed
   publicKey: UDXU4RCSJNZOIQHZNWXHXORDPRTGNJAHAHFRGZNEEJCPQTT2M7NLCNF4
-  # Public and signed: the client pairs it with the seed it already holds.
   jwt: !any eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...

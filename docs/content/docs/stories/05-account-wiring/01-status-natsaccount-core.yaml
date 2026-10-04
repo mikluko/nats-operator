@@ -15,7 +15,7 @@ status:
     - export: monitoring/execute
       subject: "monitoring.execute"
       type: Service
-      activation: Signed   # minted from monitoring's importers list
+      activation: Signed
   distribution:
     servers: 3
     current: 3

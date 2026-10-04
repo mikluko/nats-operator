@@ -1,4 +1,3 @@
-# A system account has no JetStream fields.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsSystemAccount
 metadata:
@@ -16,8 +15,6 @@ metadata:
 spec:
   operatorRef:
     name: demo
-  # The account JWT expires after this and is re-signed at half of it.
-  # 48h is the default; the system account's JWT never expires.
   jwtTTL: 48h
   limits:
     connections: 500

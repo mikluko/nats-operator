@@ -1,5 +1,3 @@
-# Story 1's stream with connectionRef pointing into the orders account;
-# everything else is as story 1 declared it.
 apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata:

@@ -1,4 +1,3 @@
-# Owned by the platform team, in nats-system: the account and its limits.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsAccount
 metadata:
@@ -15,8 +14,6 @@ spec:
       streams: 10
       consumers: 100
 ---
-# The platform team's consent: NatsUsers in the payments namespace may
-# reference the payments account here, and nothing else in nats-system.
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsReferenceGrant
 metadata:
@@ -30,4 +27,4 @@ spec:
   to:
     - group: auth.nats.mikluko.io
       kind: NatsAccount
-      name: payments   # omitted: every NatsAccount in nats-system
+      name: payments
