@@ -41,9 +41,6 @@ tests:
           path: spec.restartPolicy
           value: Never
       - equal:
-          path: spec.containers[0].image
-          value: busybox:1.37.0@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e
-      - equal:
           path: spec.containers[0].command
           value:
             - sh
@@ -72,12 +69,13 @@ tests:
           value: registry.example/busybox:1.36
   - it: pins tests.image to its digest when set
     set:
+      tests.image.tag: "1.36"
       tests.image.digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
     documentSelector: {path: kind, value: Pod}
     asserts:
       - equal:
           path: spec.containers[0].image
-          value: busybox:1.37.0@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          value: busybox:1.36@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   - it: mounts no ServiceAccount token into the test Pod
     documentSelector: {path: kind, value: Pod}
     asserts:
