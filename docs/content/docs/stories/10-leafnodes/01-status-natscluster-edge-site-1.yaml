@@ -15,6 +15,6 @@ status:
     - connectionNamespace: nats-system
       connectionName: hub
       connected: 3
-      account: !any ATELEMETRY...   # the hub account the credentials sign into
+      account: !any ATELEMETRY...
   endpoints:
     client: nats://edge-site-1.nats-system.svc:4222

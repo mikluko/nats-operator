@@ -10,8 +10,6 @@ status:
     - type: Overlapping
       status: "False"
       reason: PoolsDisjoint
-  # One stream a pool: skewed by one whichever server leads it. Every stream
-  # of the account has a resource in a pool, so there is no (default) pool.
   pools:
     - name: requests
       streams: 1

@@ -10,9 +10,6 @@ status:
     - type: Overlapping
       status: "False"
       reason: PoolsDisjoint
-  # REQ_07 in requests; PAYMENTS, from story 4, carries no pool label and
-  # falls to the default pool. A pool of one stream is skewed by one
-  # whichever server leads it.
   pools:
     - name: requests
       streams: 1

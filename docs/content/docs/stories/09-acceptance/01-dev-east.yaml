@@ -22,7 +22,6 @@ spec:
   serverTags:
     cluster: dev-east
     region: us-east-2
-  # Scheduling passes through: dev pins every server to one zone.
   podTemplate:
     spec:
       nodeSelector:

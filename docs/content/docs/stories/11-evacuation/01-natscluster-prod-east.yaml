@@ -1,5 +1,3 @@
-# The NATS cluster being retired: story 9's prod-east, whose gateway list, like
-# every member's, now names prod-east-2 as well.
 apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:
@@ -15,7 +13,6 @@ spec:
     limits:
       memory: 29Gi
   jetstream:
-    # Overrides the memory store derived from limits.memory.
     limits:
       maxMemoryStore: 10Gi
     volumeClaimTemplate:

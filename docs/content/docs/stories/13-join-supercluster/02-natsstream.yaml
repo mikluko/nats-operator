@@ -10,7 +10,6 @@ spec:
   subjects: ["orders.>"]
   storage: File
   replicas: 3
-  # On west's servers, not central's: both are in the one meta group.
   placement:
     cluster: west
   maxAge: 72h

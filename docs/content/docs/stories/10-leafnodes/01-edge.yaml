@@ -1,6 +1,3 @@
-# In the edge site's own Kubernetes cluster. No auth controller, no NATS
-# operator: the leaf runs with no accounts, and everything its local clients
-# publish reaches the hub in the account the remote's credentials sign into.
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:
@@ -27,24 +24,16 @@ spec:
     limits:
       memory: 1Gi
   jetstream:
-    # Required with leafRemotes.
     domain: edge-site-1
     volumeClaimTemplate:
       spec:
         resources:
           requests:
             storage: 20Gi
-  # A leaf is a NatsCluster that dials out. This one sets no
-  # auth.systemCredentials, so any change to its remotes restarts its servers.
   leafRemotes:
     - connectionRef:
         name: hub
-      # With no auth plane on the leaf there is one local account, the
-      # global one, and the remote binds it.
 ---
-# A local buffer that keeps accepting while the link is down, and a source
-# on the hub side is how it drains; that part is ordinary JetStream config
-# in the hub's telemetry account, not shown.
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:

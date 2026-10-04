@@ -1,9 +1,7 @@
-# One NatsCluster per Kubernetes cluster, each in its own GitOps tree.
-# Only what differs between them is commented.
 apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:
-  name: prod-east   # in the home cluster
+  name: prod-east
   namespace: nats-system
 spec:
   version: 2.15.0
@@ -15,7 +13,6 @@ spec:
     limits:
       memory: 29Gi
   jetstream:
-    # Overrides the memory store derived from limits.memory.
     limits:
       maxMemoryStore: 10Gi
     volumeClaimTemplate:

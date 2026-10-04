@@ -1,5 +1,3 @@
-# The monitoring team's JetStream, in prod-east. Its streams were created by
-# the application at runtime before any of this existed, so they are adopted.
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:
@@ -55,7 +53,6 @@ spec:
         matchLabels:
           traffic: responses
 ---
-# The platform team's, one per NATS cluster; prod-east shown.
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:

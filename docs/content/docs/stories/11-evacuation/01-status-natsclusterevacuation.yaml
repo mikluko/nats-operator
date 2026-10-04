@@ -1,4 +1,3 @@
-# Balancers skip streams an evacuation is moving.
 status:
   observedGeneration: 1
   conditions:
