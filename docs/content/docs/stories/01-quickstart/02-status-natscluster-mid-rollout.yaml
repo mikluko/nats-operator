@@ -28,9 +28,6 @@ status:
     gate:
       waitingFor: Settled
       since: !any "2026-09-25T16:02:11Z"
-      # A gate that stays shut holds the rollout here, with no timeout. After
-      # ten minutes the reason of Progressing is GateBlocked, and its message
-      # lists the unsettled groups.
   jetstream:
     metaLeader: !any demo-0
   servers:

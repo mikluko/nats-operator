@@ -1,89 +1,103 @@
 # Writing style
 
-Follow this sheet when you write or edit the documentation site under `docs/content`, `README.md`, `charts/nats-operator/README.md`, `docs/README.md` or `SECURITY.md`.
+This sheet has the rules that are particular to this project.
+For everything else, use these sources, in this order:
 
-The rules come from the [Google developer documentation style guide](https://developers.google.com/style), the [Kubernetes documentation style guide](https://kubernetes.io/docs/contribute/style/style-guide/), the [Microsoft Writing Style Guide](https://learn.microsoft.com/en-us/style-guide/welcome/) and [Diátaxis](https://diataxis.fr/).
+1. [Diátaxis](https://diataxis.fr/) for the type of a page and what belongs on it.
+1. The [Kubernetes documentation style guide](https://kubernetes.io/docs/contribute/style/style-guide/) for wording and formatting.
+1. The [Google developer documentation style guide](https://developers.google.com/style) and the [Microsoft Writing Style Guide](https://learn.microsoft.com/en-us/style-guide/welcome/) for anything the first two leave open.
 
-Use the terms in [`CONTEXT.md`](../CONTEXT.md). Write "controller", "NATS operator", "NATS cluster" and "Kubernetes cluster". Never write "operator" or "cluster" unqualified.
+A rule on this sheet overrides all of them.
 
-## Voice
+## Terms
 
-- Address the reader as "you".
-- Write an instruction as an imperative. "Apply the manifest."
-- Use the present tense for behaviour.
-- Use the active voice and name the actor. "The cluster controller creates one StatefulSet per server."
-- Leave out marketing. Write no slogan, no tagline, and no adjective that a test could not check.
-
-## Sentences
-
-- Put one idea in a sentence. Aim for fewer than 25 words, and never exceed 35.
-- Do not join two clauses with a semicolon.
-- Use a colon only before a list, a block of code or an example.
-- Give a reason only where the reader would otherwise do the wrong thing.
-- Say what a thing is or does. Use a negative only where the reader would assume the opposite.
-- Use plain verbs. A condition is True or False. An object reports a status. Avoid "reads", "carries", "holds", "names" and "admits" with an object as the subject.
-- Let the material set the length of a sentence and of a paragraph. A short sentence before a dense one helps.
-- Do not write "simply", "just", "easy" or "note that".
-- Do not close a section with a summary.
-- Do not use an em dash.
+[`CONTEXT.md`](../CONTEXT.md) is the glossary.
+Use its terms, and none of the words it lists under "Avoid".
+"Operator" and "cluster" never appear unqualified: write "controller", "NATS operator", "NATS cluster" or "Kubernetes cluster".
 
 ## Page types
 
-### Story
+Each page is one Diátaxis type.
+Content of another type gets one sentence and a link to the page it belongs on.
 
-A story is a tutorial.
+Table: The type of each page.
 
-1. Open with what you will have at the end, in the second person.
-2. List what must exist first, under the heading "Before you begin".
-3. Write each step as a numbered heading that is an imperative, such as "1. Deploy the NATS cluster".
-4. Under the heading, give the instruction, then the manifest or the command, then the result to expect.
-5. Link background instead of explaining it on the page.
+| Page | Its reader | Type |
+|---|---|---|
+| Front page, `README.md`, `charts/nats-operator/README.md` | is deciding whether to use the project | None of the four. A short explanation of what the project is, the shortest how-to guide that gets it running, and links, each under its own heading. |
+| Story 1, the quickstart | is new to these controllers and learning them | Tutorial |
+| Every other story | knows NATS and Kubernetes and has that goal in hand | How-to guide |
+| Stories index | is choosing a story | Landing page: what the section contains, and links |
+| Install | has decided and wants the chart installed, upgraded or removed | How-to guide |
+| Pages under `docs/content/docs/reference` | is at work and looking up a fact | Reference |
+| `SECURITY.md` | is reporting a vulnerability or judging the trust model | None of the four. How to report, the trust boundaries as reference, and how to verify a release. |
+| `docs/README.md` | is contributing to the site | How-to guide |
 
-The `manifest` shortcode prints a file's name, its YAML and the `kubectl` command that applies or deletes it. Its output cannot sit inside a Markdown list item, which is why a step is a heading.
+## Stories
 
-A comment inside a manifest is copy, and these rules apply to it.
+A story is a directory under `docs/content/docs/stories`.
+The end-to-end harness applies the manifests in it and waits until the live objects match its status files, so the page and the test are the same files.
+[`hack/e2e/README.md`](../hack/e2e/README.md) describes how the harness reads them.
 
-### Install page
+An edit to a story's prose must leave these as they are:
 
-The install page is a how-to guide with reference tables. Write each procedure as numbered steps. Keep each table cell to the fact.
+- The YAML of every manifest and status file, apart from its comments.
+- Every file name. The harness takes the step and the role of a file from its name.
+- The front matter under `params.e2e`.
+- The directory name, which is the page's address.
+- The set of `manifest` shortcodes on the page. You can move one, but the page keeps showing every file it showed.
 
-### Reference page
+The `manifest` shortcode prints the file's name, its YAML, and the `kubectl` command that applies it or deletes what it names.
+For a status file it prints the name and the YAML.
+A value that the harness treats as an example carries the tag `!any` in the file, and the shortcode removes the tag.
 
-A reference page states facts in complete, short sentences. It does not persuade.
+### Comments in a manifest
 
-### Front page
+A comment in a manifest is copy, and it follows the type of its page.
+A comment that lists the values a field takes, gives a default or explains a behavior is reference: delete it, and link the [API reference](content/docs/reference/api.md) from the page.
+A status file has no comments.
 
-The front page gives four things:
+### Commands the page adds
 
-- what the project is, in one sentence
-- who it is for
-- the fastest path, which is the quickstart, the install page and the reference
-- what each area of the documentation contains
+A page can add a command that the story's files do not have, such as the `kubectl get` that shows a status.
+Run it against a Kubernetes cluster before you add it.
 
-## Formatting
+## Departures from the Kubernetes style guide
 
-- Write headings in sentence case. A heading says what its section contains.
-- Use H2, then H3, in order.
-- Use code font for anything the reader types and for any name in the API.
-- Put a placeholder in angle brackets, such as `<version>`, and explain it once.
+| The Kubernetes guide says | This project does | Why |
+|---|---|---|
+| The command comes first, in its own block, then "The output is similar to this:", then the output. | For a manifest, the `manifest` shortcode prints the YAML and then the command. For a status file, write the `kubectl get` command in a block, then "The `status` in the output is similar to this:", then the shortcode. | The shortcode builds the command from the file's address, so the two stay together. A status file has the `status` stanza alone. |
+| A procedure is a numbered list. This rule is from the Google guide. | A step that shows a manifest is a second-level heading in the imperative, with no number. Commands with no manifest between them go in a numbered list. | The Markdown rendition of a `manifest` shortcode is not indented, so it ends the list item it is in. |
+| The page title is in title case. | The page title is in sentence case. | Title case would turn the glossary's "NATS cluster" into "NATS Cluster", which reads as a kind. |
 
-## What a copy edit must not change
+The quickstart addresses its reader as "you", as every other page does.
+Diátaxis allows a tutorial "we".
 
-- A fact, a field, a value, a default, a command or a condition reason.
-- The YAML of a story's manifest.
-- A story's front matter under `params.e2e`, its `manifest` shortcodes, or the names of its files. The end-to-end harness reads them.
-- A generated page under `docs/content/docs/reference`. Edit its source, then run `just verify`. The sources are `hack/telemetrydocs`, `hack/permdocs`, `hack/api-docs` and the doc comments under `api`.
+## Generated pages
 
-Every sentence must be true of the tree at the commit that ships it. If a rewrite needs a fact that the page did not state, check the fact in the code or leave the sentence out.
+Do not edit a page under `docs/content/docs/reference` that a tool generates.
+Edit its source, then run `just verify`.
 
-If you rename a heading, find the links to its anchor and update them.
+Table: The source of each generated page.
 
-## Checks
+| Page | Source |
+|---|---|
+| `api.md` | The doc comments under `api`, and `hack/api-docs` |
+| `nats-permissions.md` | `hack/permdocs` |
+| `telemetry.md` | `hack/telemetrydocs` |
 
-Run these from the repository root before you open a pull request:
+## Verify
 
-```sh
-just site-check
-go test ./hack/...
-just verify
-```
+Every sentence is true of the tree at the commit that ships it.
+Before you open a pull request:
+
+1. Run every command on the page, open every path, and follow every link.
+1. Follow the quickstart from its first step to its last on a Kubernetes cluster that has the chart installed and nothing else, if you changed it.
+1. If you renamed a heading, find the links to its anchor and update them.
+1. Run the checks from the repository root:
+
+   ```sh
+   just site-check
+   go test ./hack/... ./internal/e2e/...
+   just verify
+   ```

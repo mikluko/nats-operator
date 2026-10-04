@@ -5,4 +5,3 @@ metadata:
   namespace: nats-system
 spec:
   servers: ["nats://demo.nats-system.svc:4222"]
-  # This connection has no credentials. Story 2 adds `credentials`.

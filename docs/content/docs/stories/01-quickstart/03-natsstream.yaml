@@ -4,23 +4,11 @@ metadata:
   name: orders
   namespace: nats-system
 spec:
-  # A connection is the only way to a NATS cluster. The stream is created in
-  # the account that the connection's credentials sign in to.
   connectionRef:
     name: demo
-  # Never (default) | Adopt | AdoptOrCreate. With Never, the controller creates
-  # the stream. If a stream of that name exists and the controller does not own
-  # it, the resource reports Terminal and the stream is left alone. Story 3
-  # covers adoption.
   adoptionPolicy: Never
-  # Retain (default for streams, key-value buckets and object stores) | Delete.
-  # With Retain, deleting this resource leaves the stream and its data on the
-  # server.
   deletionPolicy: Retain
-  # Hold (default) | Retry. This sets what a Terminal condition does. Story 3
-  # covers it.
   terminalPolicy: Hold
-  # Optional. The default is metadata.name.
   name: ORDERS
   subjects: ["orders.>"]
   storage: File

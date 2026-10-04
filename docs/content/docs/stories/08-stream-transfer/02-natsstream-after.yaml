@@ -1,6 +1,3 @@
-# The only edit: placement.cluster. Within one supercluster a placement change
-# is a move request: the server builds a new group in west, copies the stream
-# and its consumers live, then drops the east copies.
 apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata:

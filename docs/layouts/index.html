@@ -1,4 +1,4 @@
-{{- /* The front page: what the project is, the install command from its content, a card per controller, what each documentation area contains, and the story list. */ -}}
+{{- /* The front page: what the project is, a card per controller, the install how-to from its content, what each documentation area contains, and the story list. */ -}}
 {{ define "main" }}
 <main class="main-section landing" id="main-content" tabindex="-1">
   <div class="container">
@@ -16,12 +16,6 @@
         {{- end }}
       </div>
     </section>
-
-    {{- with .Content }}
-    <section class="landing-install article-body markdown">
-      {{ . }}
-    </section>
-    {{- end }}
 
     <section class="landing-section" aria-labelledby="landing-controllers">
       <h2 class="landing-heading" id="landing-controllers">{{ .Params.controllersHeading }}</h2>
@@ -43,6 +37,12 @@
         {{- end }}
       </div>
     </section>
+
+    {{- with .Content }}
+    <section class="landing-section landing-install article-body markdown">
+      {{ . }}
+    </section>
+    {{- end }}
 
     <section class="landing-section" aria-labelledby="landing-areas">
       <h2 class="landing-heading" id="landing-areas">{{ .Params.areasHeading }}</h2>
