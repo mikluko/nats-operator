@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `NatsCluster.spec.auth.accountTrustRefs` names `NatsAccountTrust`s whose account JWTs every server preloads beside the system account's, on a `NatsCluster` that is not a leaf as on one that is.
+- A `NatsCluster`'s `gateway.service` and `leafnodes.service` take `loadBalancerSourceRanges` and `loadBalancerClass`, set on the LoadBalancer Service they render; each is refused unless `type` is LoadBalancer, and `loadBalancerClass` is refused when it changes while `type` stays LoadBalancer.
 
 ## [0.1.1] - 2026-10-02
 
