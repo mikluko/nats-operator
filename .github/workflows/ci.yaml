@@ -1,4 +1,5 @@
-name: ci
+name: CI
+run-name: "Running test suites for #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
 
 on:
   pull_request:
@@ -159,6 +160,7 @@ jobs:
           annotations: true
 
   e2e:
+    name: acceptance (${{ matrix.watch-namespaces && 'watched namespaces' || 'every namespace' }})
     strategy:
       fail-fast: false
       matrix:

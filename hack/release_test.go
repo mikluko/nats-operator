@@ -281,7 +281,7 @@ func TestDocs_BuildJob(t *testing.T) {
 	require.Len(t, hugo, 2)
 	require.Contains(t, hugo[0].Run, "just site-check")
 	require.Empty(t, hugo[0].If)
-	require.Equal(t, "github.event_name != 'pull_request'", hugo[1].If)
+	require.Empty(t, hugo[1].If)
 }
 
 // TestDocs_Deploy pins that the site deploys from the docs workflow on a push
@@ -298,6 +298,11 @@ func TestDocs_Deploy(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, yamlv3.Unmarshal(b, &docs))
 	require.Equal(t, []string{"main"}, docs.On.Push.Branches)
+	var triggers struct {
+		On map[string]any `yaml:"on"`
+	}
+	require.NoError(t, yamlv3.Unmarshal(b, &triggers))
+	require.NotContains(t, triggers.On, "pull_request")
 	require.Equal(t, "github.event_name == 'push'", readWorkflow(t, "docs.yaml").Jobs["deploy"].If)
 
 	for name, job := range readWorkflow(t, "release-roll.yaml").Jobs {

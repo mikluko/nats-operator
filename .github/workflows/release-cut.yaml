@@ -1,4 +1,5 @@
-name: release-cut
+name: Cut release
+run-name: Checking changelog for a due release
 
 on:
   push:
