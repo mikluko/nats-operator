@@ -137,6 +137,22 @@ func (r *recorder) pushed(operator types.NamespacedName, token string) bool {
 	return slices.Contains(r.pushes[operator], token)
 }
 
+// pushedFor returns every JWT pushed for operator whose subject is account.
+func (r *recorder) pushedFor(t *testing.T, operator types.NamespacedName, account string) []*jwt.AccountClaims {
+	t.Helper()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []*jwt.AccountClaims
+	for _, token := range r.pushes[operator] {
+		c, err := jwt.DecodeAccountClaims(token)
+		require.NoError(t, err)
+		if c.Subject == account {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // eventLog is an events.EventRecorder keeping each event as its type,
 // reason and note.
 type eventLog struct {
@@ -203,7 +219,7 @@ func TestEnvtest(t *testing.T) {
 	c, err := client.New(cfg, client.Options{Scheme: s})
 	require.NoError(t, err)
 	e.c = c
-	for _, ns := range []string{"nats-system", "team-a", "rot", "offline", "flip", "payments", "orders", "foreign", "lost", "tenancy", "thief", "orphan", "gone", "squat", "keep", "adopt", "claim", "withdrawn"} {
+	for _, ns := range []string{"nats-system", "team-a", "rot", "offline", "flip", "payments", "orders", "foreign", "lost", "tenancy", "thief", "orphan", "gone", "squat", "keep", "adopt", "claim", "withdrawn", "pending"} {
 		require.NoError(t, c.Create(t.Context(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}))
 	}
 	for _, f := range []string{
@@ -223,6 +239,7 @@ func TestEnvtest(t *testing.T) {
 	t.Run("ServedByNatsServer", e.testServed)
 	t.Run("CrossNamespaceImport", e.testCrossNamespaceImport)
 	t.Run("ImportFromOtherOperator", e.testImportFromOtherOperator)
+	t.Run("ImporterWaitsForExporter", e.testImporterWaitsForExporter)
 	t.Run("NoExpiryAndAccountTrust", e.testNoExpiryAndAccountTrust)
 	t.Run("Rotation", e.testRotation)
 	t.Run("OfflineIdentities", e.testOfflineIdentities)
@@ -509,6 +526,65 @@ spec:
 		g.Spec.To = g.Spec.To[:1]
 	})
 	e.eventually(t, state(false, grant.ReasonReferenceNotPermitted, grant.ReasonNoGrant))
+}
+
+// testImporterWaitsForExporter pins that an importer whose exporter has no
+// public key is not signed, and is signed with the import once it has one.
+func (e *env) testImporterWaitsForExporter(t *testing.T) {
+	e.apply(t, `
+apiVersion: auth.nats-operator.io/v1beta1
+kind: NatsAccount
+metadata: {name: importer, namespace: pending}
+spec:
+  operatorRef: {name: demo, namespace: nats-system}
+  imports:
+    - accountRef: {kind: NatsAccount, name: exporter}
+      export: events
+---
+apiVersion: auth.nats-operator.io/v1beta1
+kind: NatsAccount
+metadata: {name: exporter, namespace: pending}
+spec:
+  operatorRef: {name: demo, namespace: nats-system}
+  keys:
+    identity:
+      secretKeyRef: {name: exporter-identity, key: `+authctl.SeedKey+`}
+  exports:
+    - {name: events, type: Stream, subject: "pending.events.>"}
+---
+apiVersion: nats-operator.io/v1beta1
+kind: NatsReferenceGrant
+metadata: {name: pending, namespace: nats-system}
+spec:
+  from: [{group: auth.nats-operator.io, kind: NatsAccount, namespace: pending}]
+  to: [{group: auth.nats-operator.io, kind: NatsOperator, name: demo}]
+`)
+	var importer authv1beta1.NatsAccount
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, key("pending", "importer"), &importer)
+		for _, typ := range []string{authctl.ConditionReady, grant.ConditionReferencesResolved} {
+			cond := meta.FindStatusCondition(importer.Status.Conditions, typ)
+			if assert.NotNil(ct, cond, typ) {
+				assert.Equal(ct, metav1.ConditionFalse, cond.Status, typ)
+				assert.Equal(ct, authctl.ReasonExporterPending, cond.Reason, typ)
+				assert.Equal(ct, "exporter/events: NatsAccount pending/exporter has no public key yet", cond.Message, typ)
+			}
+		}
+	})
+	require.NotEmpty(t, importer.Status.PublicKey)
+	require.Empty(t, importer.Status.JWT)
+
+	exporterPub := e.seedSecret(t, "pending", "exporter-identity", nkeys.PrefixByteAccount)
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, key("pending", "importer"), &importer)
+		ready(ct, importer.Status.Conditions, importer.Generation, authctl.ReasonSigned)
+	})
+	pushed := e.d.pushedFor(t, demo, importer.Status.PublicKey)
+	require.NotEmpty(t, pushed)
+	for _, c := range pushed {
+		require.Len(t, c.Imports, 1)
+		require.Equal(t, exporterPub, c.Imports[0].Account)
+	}
 }
 
 // testImportFromOtherOperator pins that an import from a NatsAccount
