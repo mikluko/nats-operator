@@ -12,6 +12,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/yuin/goldmark"
+	gast "github.com/yuin/goldmark/ast"
+	gparser "github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/text"
 
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
@@ -296,4 +300,51 @@ func TestUserPresetUnknown(t *testing.T) {
 	var b strings.Builder
 	require.ErrorContains(t, userPreset(&b, jwtplane.UserPreset("no-such-preset")), "no-such-preset")
 	require.Empty(t, b.String())
+}
+
+// TestPresetLinks pins every in-page link to the heading that carries its
+// text, so an identity's preset link lands on the preset and not on a
+// heading of the same name.
+func TestPresetLinks(t *testing.T) {
+	page, err := render()
+	require.NoError(t, err)
+	src := []byte(strings.TrimPrefix(page, frontMatter))
+	doc := goldmark.New(goldmark.WithParserOptions(gparser.WithAutoHeadingID())).Parser().Parse(text.NewReader(src))
+	headings := map[string]string{}
+	var links []*gast.Link
+	require.NoError(t, gast.Walk(doc, func(n gast.Node, entering bool) (gast.WalkStatus, error) {
+		if !entering {
+			return gast.WalkContinue, nil
+		}
+		switch n := n.(type) {
+		case *gast.Heading:
+			id, ok := n.AttributeString("id")
+			require.True(t, ok)
+			headings[string(id.([]byte))] = plain(n, src)
+		case *gast.Link:
+			if strings.HasPrefix(string(n.Destination), "#") {
+				links = append(links, n)
+			}
+		}
+		return gast.WalkContinue, nil
+	}))
+	require.NotEmpty(t, links)
+	for _, l := range links {
+		anchor := strings.TrimPrefix(string(l.Destination), "#")
+		require.Equal(t, plain(l, src), headings[anchor], "link #%s", anchor)
+	}
+}
+
+// plain returns the text of n's inline children, code spans included.
+func plain(n gast.Node, src []byte) string {
+	var b strings.Builder
+	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
+		switch c := c.(type) {
+		case *gast.Text:
+			b.Write(c.Value(src))
+		case *gast.CodeSpan:
+			b.WriteString(plain(c, src))
+		}
+	}
+	return b.String()
 }
