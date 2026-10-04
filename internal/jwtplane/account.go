@@ -53,7 +53,7 @@ type Limits struct {
 	// JetStreamTiers disables JetStream for the account.
 	JetStream *JetStreamLimits
 	// JetStreamTiers are the limits by tier name. SignAccount refuses them
-	// beside JetStream, and a blank tier name.
+	// beside JetStream.
 	JetStreamTiers map[string]JetStreamLimits
 }
 

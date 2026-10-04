@@ -37,7 +37,7 @@ AccountJetStreamTier are an account's JetStream limits for one tier.\
 Appears on: [AccountJetStreamLimits](#AccountJetStreamLimits).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `name` | {{< type "string" >}} | Yes | Name is the tier. nats-server puts a stream in the tier named R followed by its replica count: R1, R3. |
+| `name` | [{{< type "JetStreamTierName" >}}](#JetStreamTierName) | Yes | Name is the tier the limits apply to. |
 | `memoryStorage` | [{{< type "Quantity" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity) | No | MemoryStorage is the memory store limit. |
 | `diskStorage` | [{{< type "Quantity" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity) | No | DiskStorage is the file store limit. |
 | `streams` | {{< type "int64" >}} | No | Streams is the maximum number of streams. |
@@ -179,6 +179,18 @@ Appears on: [NatsAccountStatus](#NatsAccountStatus).
 | `localSubject` | {{< type "string" >}} | No | LocalSubject is where the import appears in this account. |
 | `type` | [{{< type "ExportType" >}}](#ExportType) | No | Type is the type of the export taken. |
 | `activation` | [{{< type "ActivationState" >}}](#ActivationState) | No | Activation is the state of the activation token of a Private export. |
+
+### JetStreamTierName {#JetStreamTierName}
+JetStreamTierName names a JetStream tier: R followed by the replica count of the streams nats-server puts in it.\
+Type: {{< type "string" >}}\
+Appears on: [AccountJetStreamTier](#AccountJetStreamTier).
+| Value | Description |
+| :---- | :---------- |
+| `R1` |  |
+| `R2` |  |
+| `R3` |  |
+| `R4` |  |
+| `R5` |  |
 
 ### Keys {#Keys}
 Keys adopts existing seeds; omitted, the auth controller generates keys into Secrets that outlive the object.\

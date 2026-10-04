@@ -411,7 +411,7 @@ func accountLimits(l *authv1beta1.AccountLimits) jwtplane.Limits {
 		if out.JetStreamTiers == nil {
 			out.JetStreamTiers = map[string]jwtplane.JetStreamLimits{}
 		}
-		out.JetStreamTiers[t.Name] = jwtplane.JetStreamLimits{
+		out.JetStreamTiers[string(t.Name)] = jwtplane.JetStreamLimits{
 			MemoryStorage:        quantity(t.MemoryStorage),
 			DiskStorage:          quantity(t.DiskStorage),
 			Streams:              deref(t.Streams),

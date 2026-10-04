@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `NatsAccount.spec.limits.jetstream.tiers` sets an account's JetStream limits by tier, such as `R1` and `R3`, in place of limits for the account as a whole.
+- `NatsAccount.spec.limits.jetstream.tiers` sets an account's JetStream limits by tier, `R1` to `R5` after the replica count of a stream, in place of limits for the account as a whole.
 - `NatsAccount.spec.limits.jetstream`, and each of its tiers, takes `maxAckPending`, `memoryMaxStreamBytes`, `diskMaxStreamBytes` and `maxBytesRequired`.
 
 ### Changed

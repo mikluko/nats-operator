@@ -61,6 +61,15 @@ func TestAccountLimits_TiersServed(t *testing.T) {
 		o.AccountResolver = resolver
 	}}
 	natstest.StartSupercluster(t, c)
+	require.Eventually(t, func() bool {
+		for _, s := range c.Servers {
+			a, err := s.LookupAccount(accPub)
+			if err != nil || !a.JetStreamEnabled() {
+				return false
+			}
+		}
+		return true
+	}, 30*time.Second, 50*time.Millisecond, "a server has not enabled JetStream for the account")
 
 	nc, err := nats.Connect(c.Servers[0].ClientURL(), nats.UserJWTAndSeed(userJWT, string(userSeed)))
 	require.NoError(t, err)

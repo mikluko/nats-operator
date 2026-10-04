@@ -353,11 +353,13 @@ spec:
                               pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                               x-kubernetes-int-or-string: true
                             name:
-                              description: |-
-                                Name is the tier.
-                                nats-server puts a stream in the tier named R followed by its replica
-                                count: R1, R3.
-                              minLength: 1
+                              description: Name is the tier the limits apply to.
+                              enum:
+                              - R1
+                              - R2
+                              - R3
+                              - R4
+                              - R5
                               type: string
                             streams:
                               description: Streams is the maximum number of streams.

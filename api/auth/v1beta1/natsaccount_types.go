@@ -109,13 +109,24 @@ type AccountJetStreamLimits struct {
 	Tiers []AccountJetStreamTier `json:"tiers,omitempty"`
 }
 
+// JetStreamTierName names a JetStream tier: R followed by the replica count
+// of the streams nats-server puts in it.
+// +kubebuilder:validation:Enum=R1;R2;R3;R4;R5
+type JetStreamTierName string
+
+// JetStream tier names.
+const (
+	JetStreamTierR1 JetStreamTierName = "R1"
+	JetStreamTierR2 JetStreamTierName = "R2"
+	JetStreamTierR3 JetStreamTierName = "R3"
+	JetStreamTierR4 JetStreamTierName = "R4"
+	JetStreamTierR5 JetStreamTierName = "R5"
+)
+
 // AccountJetStreamTier are an account's JetStream limits for one tier.
 type AccountJetStreamTier struct {
-	// Name is the tier.
-	// nats-server puts a stream in the tier named R followed by its replica
-	// count: R1, R3.
-	// +kubebuilder:validation:MinLength=1
-	Name string `json:"name"`
+	// Name is the tier the limits apply to.
+	Name JetStreamTierName `json:"name"`
 
 	// MemoryStorage is the memory store limit.
 	// +optional

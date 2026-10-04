@@ -16,7 +16,7 @@ import (
 
 // testTieredLimits checks that an account's JetStream limits by tier are
 // signed into its JWT in place of limits for the account, and that the API
-// server refuses the two together.
+// server refuses the two together and a tier nats-server never reads.
 func (e *env) testTieredLimits(t *testing.T) {
 	e.apply(t, `
 apiVersion: auth.nats-operator.io/v1beta1
@@ -67,4 +67,21 @@ spec:
 	err = e.c.Create(t.Context(), &unstructured.Unstructured{Object: both})
 	require.True(t, apierrors.IsInvalid(err), "got %v", err)
 	require.ErrorContains(t, err, "jetstream limits are set either for the account or by tier")
+
+	var unread map[string]any
+	require.NoError(t, yaml.Unmarshal([]byte(`
+apiVersion: auth.nats-operator.io/v1beta1
+kind: NatsAccount
+metadata: {name: tier-unread, namespace: nats-system}
+spec:
+  operatorRef: {name: demo}
+  limits:
+    jetstream:
+      tiers:
+        - name: R6
+          diskStorage: 10Gi
+`), &unread))
+	err = e.c.Create(t.Context(), &unstructured.Unstructured{Object: unread})
+	require.True(t, apierrors.IsInvalid(err), "got %v", err)
+	require.ErrorContains(t, err, `supported values: "R1", "R2", "R3", "R4", "R5"`)
 }

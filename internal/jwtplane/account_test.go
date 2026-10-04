@@ -168,24 +168,15 @@ func TestSignAccountLimits(t *testing.T) {
 	}
 }
 
-func TestSignAccountTiersRefused(t *testing.T) {
+func TestSignAccountTiersBesideAccountLimits(t *testing.T) {
 	op := newKeys(t, nkeys.PrefixByteOperator, "s")
 	acc := newKeys(t, nkeys.PrefixByteAccount, "s")
-	tiers := map[string]jwtplane.JetStreamLimits{"R1": {}}
-	tests := []struct {
-		name   string
-		limits jwtplane.Limits
-		want   string
-	}{
-		{"beside limits for the account", jwtplane.Limits{JetStream: &jwtplane.JetStreamLimits{}, JetStreamTiers: tiers}, "mutually exclusive"},
-		{"blank tier name", jwtplane.Limits{JetStreamTiers: map[string]jwtplane.JetStreamLimits{"": {}}}, "blank"},
+	limits := jwtplane.Limits{
+		JetStream:      &jwtplane.JetStreamLimits{},
+		JetStreamTiers: map[string]jwtplane.JetStreamLimits{"R1": {}},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := jwtplane.SignAccount(jwtplane.Account{Keys: acc, Limits: tt.limits}, op, time.Now())
-			require.ErrorContains(t, err, tt.want)
-		})
-	}
+	_, err := jwtplane.SignAccount(jwtplane.Account{Keys: acc, Limits: limits}, op, time.Now())
+	require.ErrorContains(t, err, "mutually exclusive")
 }
 
 func TestSignAccountExports(t *testing.T) {
