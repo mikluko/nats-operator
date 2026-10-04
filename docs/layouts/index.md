@@ -5,8 +5,6 @@
 
 {{ .Params.lead }}
 
-{{ .RenderShortcodes }}
-
 ## {{ .Params.controllersHeading }}
 {{ range .Params.controllers }}
 {{- $story := site.GetPage .story }}
@@ -18,6 +16,8 @@ Kinds: {{ range $i, $kind := .kinds }}{{ if $i }}, {{ end }}`{{ $kind }}`{{ end 
 
 Story: [{{ $story.Title }}]({{ ($story.OutputFormats.Get "markdown").Permalink }})
 {{ end }}
+{{ .RenderShortcodes }}
+
 ## {{ .Params.areasHeading }}
 {{ range .Params.areas }}
 {{- $page := site.GetPage .page }}

@@ -38,7 +38,7 @@ params:
     - page: /docs/install
       text: The chart's values, the controllers' flags, metrics and RBAC, and how to upgrade and uninstall.
     - page: /docs/stories
-      text: One task per page, with the manifests to apply and the status to expect. The end-to-end harness applies the same manifests to kind clusters and waits for the same statuses.
+      text: The quickstart tutorial, then one guide per task, with the manifests to apply and the status to expect. The end-to-end harness applies the same manifests to kind clusters and waits for the same statuses.
     - page: /docs/reference/api
       text: Every kind, field and value of the four API groups.
     - page: /docs/reference/nats-permissions
@@ -54,14 +54,18 @@ params:
 
 ## Install
 
+You need Kubernetes 1.33, Helm 3.14 and nats-server 2.15.0, or later.
+
+To install all three controllers, run this command with `<version>` replaced by a release version:
+
 ```sh
 helm install nats-operator oci://ghcr.io/mikluko/nats-operator/charts/nats-operator \
   --version <version> \
   --namespace nats-operator --create-namespace
 ```
 
-Replace `<version>` with a release version. You need Kubernetes 1.33, Helm 3.14 and nats-server 2.15.0, or later.
+Then follow [the quickstart]({{< relref "docs/stories/01-quickstart" >}}) to deploy a NATS cluster with JetStream.
 
+[Install]({{< relref "docs/install" >}}) has the chart's values, RBAC, and how to upgrade and uninstall.
 The images and the chart are signed keylessly with cosign and carry a GitHub build provenance attestation.
-
-[Install]({{< relref "docs/install" >}}) covers the values, RBAC, upgrade and uninstall. Then [the quickstart]({{< relref "docs/stories/01-quickstart" >}}) deploys a NATS cluster with JetStream.
+[Verifying a release](https://github.com/mikluko/nats-operator/blob/main/SECURITY.md#verifying-a-release) has the commands that check both.

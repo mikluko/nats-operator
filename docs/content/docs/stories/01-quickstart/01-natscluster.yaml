@@ -4,8 +4,6 @@ metadata:
   name: demo
   namespace: nats-system
 spec:
-  # The image tag is always `version`. `image` sets the repository and a
-  # digest.
   version: 2.15.0
   replicas: 3
 
@@ -15,9 +13,6 @@ spec:
       memory: 4Gi
     limits:
       memory: 4Gi
-  # The controller derives GOMEMLIMIT and jetstream.max_memory_store from
-  # limits.memory, and max_file_store from the PVC size. Status reports both
-  # store limits. Set jetstream.limits to override them.
 
   jetstream:
     volumeClaimTemplate:
@@ -26,12 +21,3 @@ spec:
         resources:
           requests:
             storage: 20Gi
-
-  # This manifest has no `routes` block. Route TLS is on by default, and the
-  # controller self-signs the route certificate. To use your own certificate,
-  # set `routes.tls.secretRef` or `routes.tls.certManager.issuerRef`. To turn
-  # route TLS off, set `routes.tls.enabled: false`.
-
-  # This manifest has no `tls` block, so clients connect in the clear. Set
-  # `tls.secretRef` or `tls.certManager.issuerRef` to put the client listener
-  # under TLS. Clients then dial `tls://`.

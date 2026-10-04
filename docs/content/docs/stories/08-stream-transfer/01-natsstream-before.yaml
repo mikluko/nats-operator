@@ -1,4 +1,3 @@
-# The orders stream lives in east, in the story 6 supercluster.
 apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata:
