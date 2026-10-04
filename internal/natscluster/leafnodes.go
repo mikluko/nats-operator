@@ -417,6 +417,8 @@ func leafnodesService(nc *clusterv1beta1.NatsCluster) *corev1.Service {
 			svc.Spec.Type = t.Type
 		}
 		svc.Annotations = t.Annotations
+		svc.Spec.LoadBalancerSourceRanges = slices.Clone(t.LoadBalancerSourceRanges)
+		svc.Spec.LoadBalancerClass = t.LoadBalancerClass
 	}
 	return svc
 }
@@ -517,6 +519,7 @@ func (r *Reconciler) applyLeafnodes(ctx context.Context, nc *clusterv1beta1.Nats
 		h.Spec.Type = w.Spec.Type
 		h.Spec.Selector = w.Spec.Selector
 		h.Spec.Ports = w.Spec.Ports
+		updateLoadBalancer(&h.Spec, &w.Spec)
 	})); err != nil {
 		return err
 	}

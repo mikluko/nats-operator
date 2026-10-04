@@ -745,6 +745,8 @@ Appears on: [Gateway](#Gateway), [Leafnodes](#Leafnodes).
 | :---- | :--- | :------: | :---------- |
 | `type` | [{{< type "ServiceType" >}}](https://pkg.go.dev/k8s.io/api/core/v1#ServiceType) | No | Type of the Service, ClusterIP when omitted. |
 | `annotations` | {{< type "map[string]string" >}} | No | Annotations set on the Service. |
+| `loadBalancerSourceRanges` | {{< type "[]string" >}} | No | LoadBalancerSourceRanges are the CIDRs the load balancer accepts clients from, set only when type is LoadBalancer. |
+| `loadBalancerClass` | {{< type "string" >}} | No | LoadBalancerClass names the load balancer implementation, set only when type is LoadBalancer. It cannot change while type stays LoadBalancer, since Kubernetes refuses that change on the Service. |
 
 ### VolumeClaimTemplate {#VolumeClaimTemplate}
 VolumeClaimTemplate is a PersistentVolumeClaim template.\

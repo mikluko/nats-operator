@@ -199,6 +199,13 @@ func testCreateRules(t *testing.T, c client.Client) {
 		{"image digest that is not sha256", cluster(", image: {digest: 'latest'}"), "spec.image.digest"},
 		{"exporter image digest that is not sha256", cluster(", exporter: {image: {digest: 'sha256:abc'}}"), "spec.exporter.image.digest"},
 		{"leafnode TLS with two certificates", cluster(", leafnodes: {tls: {secretRef: {name: s}, certManager: {issuerRef: {name: i}}}}"), "set exactly one of secretRef and certManager"},
+		{"gateway source ranges on a ClusterIP Service", cluster(", gateway: {discovery: Explicit, remotes: [{name: a, url: u}], service: {loadBalancerSourceRanges: [10.0.0.0/8]}}"), "loadBalancerSourceRanges is set only when type is LoadBalancer"},
+		{"gateway source ranges on a NodePort Service", cluster(", gateway: {discovery: Explicit, remotes: [{name: a, url: u}], service: {type: NodePort, loadBalancerSourceRanges: [10.0.0.0/8]}}"), "loadBalancerSourceRanges is set only when type is LoadBalancer"},
+		{"gateway class on a ClusterIP Service", cluster(", gateway: {discovery: Explicit, remotes: [{name: a, url: u}], service: {type: ClusterIP, loadBalancerClass: example.com/lb}}"), "loadBalancerClass is set only when type is LoadBalancer"},
+		{"leafnode source ranges on a ClusterIP Service", cluster(", auth: {trustRef: {name: t}}, leafnodes: {service: {loadBalancerSourceRanges: [10.0.0.0/8]}}"), "loadBalancerSourceRanges is set only when type is LoadBalancer"},
+		{"leafnode class on a NodePort Service", cluster(", auth: {trustRef: {name: t}}, leafnodes: {service: {type: NodePort, loadBalancerClass: example.com/lb}}"), "loadBalancerClass is set only when type is LoadBalancer"},
+		{"source range that is not a CIDR", cluster(", gateway: {discovery: Explicit, remotes: [{name: a, url: u}], service: {type: LoadBalancer, loadBalancerSourceRanges: [10.0.0.1]}}"), "a source range must be a CIDR"},
+		{"empty class", cluster(", gateway: {discovery: Explicit, remotes: [{name: a, url: u}], service: {type: LoadBalancer, loadBalancerClass: ''}}"), "spec.gateway.service.loadBalancerClass"},
 
 		{"operator jwt beside identity key", manifest("NatsOperator", "o", "{systemAccountRef: {name: sys}, jwt: x, keys: {identity: "+seed+", signing: "+signing+"}}"), "jwt and keys.identity are mutually exclusive"},
 		{"operator jwt without signing key", manifest("NatsOperator", "o", "{systemAccountRef: {name: sys}, jwt: x}"), "jwt requires at least one signing key"},
@@ -255,6 +262,12 @@ func testTransitionRules(t *testing.T, c client.Client) {
 	evacuation := func(conn, from, tag string) string {
 		return manifest("NatsClusterEvacuation", "e", "{connectionRef: {name: "+conn+"}, from: {cluster: "+from+"}, to: {serverTags: ["+tag+"]}}")
 	}
+	gateway := func(service string) string {
+		return manifest("NatsCluster", "c", "{version: 2.15.0, replicas: 1, gateway: {discovery: Explicit, remotes: [{name: a, url: u}], service: "+service+"}}")
+	}
+	leafnodes := func(service string) string {
+		return manifest("NatsCluster", "c", "{version: 2.15.0, replicas: 1, auth: {trustRef: {name: t}}, leafnodes: {service: "+service+"}}")
+	}
 	tests := []struct {
 		name          string
 		before, after string
@@ -267,6 +280,15 @@ func testTransitionRules(t *testing.T, c client.Client) {
 		{"one minor down", cluster("2.16.0"), cluster("2.15.9"), ""},
 		{"two minors down", cluster("2.17.0"), cluster("2.15.9"), "at most one minor at a time"},
 		{"major up", cluster("2.15.0"), cluster("3.0.0"), "at most one minor at a time"},
+
+		{"gateway class changed", gateway("{type: LoadBalancer, loadBalancerClass: a.example/lb}"), gateway("{type: LoadBalancer, loadBalancerClass: b.example/lb}"), "loadBalancerClass cannot change while type stays LoadBalancer"},
+		{"gateway class removed", gateway("{type: LoadBalancer, loadBalancerClass: a.example/lb}"), gateway("{type: LoadBalancer}"), "loadBalancerClass cannot change while type stays LoadBalancer"},
+		{"gateway class set on a LoadBalancer", gateway("{type: LoadBalancer}"), gateway("{type: LoadBalancer, loadBalancerClass: a.example/lb}"), "loadBalancerClass cannot change while type stays LoadBalancer"},
+		{"gateway class set with the type", gateway("{type: ClusterIP}"), gateway("{type: LoadBalancer, loadBalancerClass: a.example/lb}"), ""},
+		{"gateway class removed with the type", gateway("{type: LoadBalancer, loadBalancerClass: a.example/lb}"), gateway("{type: NodePort}"), ""},
+		{"gateway class unchanged, source ranges changed", gateway("{type: LoadBalancer, loadBalancerClass: a.example/lb, loadBalancerSourceRanges: [10.0.0.0/8]}"), gateway("{type: LoadBalancer, loadBalancerClass: a.example/lb, loadBalancerSourceRanges: ['10.20.0.0/16', '2001:db8:20::/56']}"), ""},
+		{"leafnode class changed", leafnodes("{type: LoadBalancer, loadBalancerClass: a.example/lb}"), leafnodes("{type: LoadBalancer, loadBalancerClass: b.example/lb}"), "loadBalancerClass cannot change while type stays LoadBalancer"},
+		{"leafnode class removed", leafnodes("{type: LoadBalancer, loadBalancerClass: a.example/lb}"), leafnodes("{type: LoadBalancer}"), "loadBalancerClass cannot change while type stays LoadBalancer"},
 
 		{"user moved to another account", user("{kind: NatsAccount, name: a}", ""), user("{kind: NatsAccount, name: b}", ""), "accountRef is immutable"},
 		{"user moved to another namespace", user("{kind: NatsAccount, name: a}", ""), user("{kind: NatsAccount, name: a, namespace: other}", ""), "accountRef is immutable"},

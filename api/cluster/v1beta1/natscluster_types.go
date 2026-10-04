@@ -327,6 +327,9 @@ type GatewayRemote struct {
 }
 
 // ServiceTemplate is the template of an external Service.
+// +kubebuilder:validation:XValidation:rule="!has(self.loadBalancerSourceRanges) || size(self.loadBalancerSourceRanges) == 0 || (has(self.type) && self.type == 'LoadBalancer')",message="loadBalancerSourceRanges is set only when type is LoadBalancer"
+// +kubebuilder:validation:XValidation:rule="!has(self.loadBalancerClass) || (has(self.type) && self.type == 'LoadBalancer')",message="loadBalancerClass is set only when type is LoadBalancer"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.type) || oldSelf.type != 'LoadBalancer' || !has(self.type) || self.type != 'LoadBalancer' || (has(self.loadBalancerClass) == has(oldSelf.loadBalancerClass) && (!has(self.loadBalancerClass) || self.loadBalancerClass == oldSelf.loadBalancerClass))",message="loadBalancerClass cannot change while type stays LoadBalancer"
 type ServiceTemplate struct {
 	// Type of the Service, ClusterIP when omitted.
 	// +optional
@@ -335,6 +338,22 @@ type ServiceTemplate struct {
 	// Annotations set on the Service.
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// LoadBalancerSourceRanges are the CIDRs the load balancer accepts
+	// clients from, set only when type is LoadBalancer.
+	// +optional
+	// +listType=atomic
+	// +kubebuilder:validation:MaxItems=256
+	// +kubebuilder:validation:items:MaxLength=43
+	// +kubebuilder:validation:items:XValidation:rule="isCIDR(self)",message="a source range must be a CIDR"
+	LoadBalancerSourceRanges []string `json:"loadBalancerSourceRanges,omitempty"`
+
+	// LoadBalancerClass names the load balancer implementation, set only
+	// when type is LoadBalancer. It cannot change while type stays
+	// LoadBalancer, since Kubernetes refuses that change on the Service.
+	// +optional
+	// +kubebuilder:validation:MinLength=1
+	LoadBalancerClass *string `json:"loadBalancerClass,omitempty"`
 }
 
 // Leafnodes is the hub side of leaf connections.

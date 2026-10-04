@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/yaml"
 
@@ -273,6 +274,36 @@ func TestRender_Gateway(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, p.GatewayService)
 	require.NotContains(t, p.HeadlessService.Spec.Ports, servicePort("gateway", PortGateway))
+}
+
+// TestRender_GatewayLoadBalancer pins that gateway.service's source ranges
+// and class reach the gateway Service.
+func TestRender_GatewayLoadBalancer(t *testing.T) {
+	nc := storySupercluster(t, "west")
+	nc.Spec.Gateway.Service.LoadBalancerSourceRanges = []string{"10.20.0.0/16", "2001:db8:20::/56"}
+	nc.Spec.Gateway.Service.LoadBalancerClass = ptr.To("eks.amazonaws.com/nlb")
+	svc := gatewayService(nc)
+	require.Equal(t, []string{"10.20.0.0/16", "2001:db8:20::/56"}, svc.Spec.LoadBalancerSourceRanges)
+	require.Equal(t, ptr.To("eks.amazonaws.com/nlb"), svc.Spec.LoadBalancerClass)
+
+	nc.Spec.Gateway.Service.LoadBalancerSourceRanges = nil
+	nc.Spec.Gateway.Service.LoadBalancerClass = nil
+	svc = gatewayService(nc)
+	require.Nil(t, svc.Spec.LoadBalancerSourceRanges)
+	require.Nil(t, svc.Spec.LoadBalancerClass)
+}
+
+// TestUpdateLoadBalancer pins that an update sets the template's source
+// ranges and class, and keeps a class the template leaves unset.
+func TestUpdateLoadBalancer(t *testing.T) {
+	have := corev1.ServiceSpec{LoadBalancerSourceRanges: []string{"10.0.0.0/8"}, LoadBalancerClass: ptr.To("service.k8s.aws/nlb")}
+	updateLoadBalancer(&have, &corev1.ServiceSpec{})
+	require.Nil(t, have.LoadBalancerSourceRanges)
+	require.Equal(t, ptr.To("service.k8s.aws/nlb"), have.LoadBalancerClass, "a defaulted class is kept")
+
+	updateLoadBalancer(&have, &corev1.ServiceSpec{LoadBalancerSourceRanges: []string{"10.20.0.0/16"}, LoadBalancerClass: ptr.To("eks.amazonaws.com/nlb")})
+	require.Equal(t, []string{"10.20.0.0/16"}, have.LoadBalancerSourceRanges)
+	require.Equal(t, ptr.To("eks.amazonaws.com/nlb"), have.LoadBalancerClass)
 }
 
 func servers(gws ...*sysobs.Gateways) *sysobs.Snapshot {

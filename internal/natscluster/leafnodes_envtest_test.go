@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -277,6 +278,7 @@ func TestEnvtestLeafnodes(t *testing.T) {
 		nc.Namespace = "hub"
 		nc.Spec.Leafnodes = hubNC.Spec.Leafnodes
 		nc.Spec.Leafnodes.TLS = &clusterv1beta1.ListenerTLS{CertificateSource: clusterv1beta1.CertificateSource{SecretRef: &natsv1beta1.SecretReference{Name: "leaf-cert"}}}
+		nc.Spec.Leafnodes.Service.LoadBalancerClass = ptr.To("a.example/lb")
 		err := c.Create(ctx, nc)
 		require.True(t, apierrors.IsInvalid(err), "%v", err)
 		require.ErrorContains(t, err, "a leafnode listener requires auth")
@@ -299,7 +301,16 @@ func TestEnvtestLeafnodes(t *testing.T) {
 		require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "hub", Name: "demo-leafnodes"}, &svc))
 		require.Equal(t, corev1.ServiceTypeLoadBalancer, svc.Spec.Type)
 		require.Equal(t, "leaf.prod-east.acme.example", svc.Annotations["external-dns.alpha.kubernetes.io/hostname"])
+		require.Equal(t, ptr.To("a.example/lb"), svc.Spec.LoadBalancerClass)
+		require.Nil(t, svc.Spec.LoadBalancerSourceRanges)
 		require.True(t, metav1.IsControlledBy(&svc, got))
+
+		got.Spec.Leafnodes.Service.LoadBalancerSourceRanges = []string{"10.20.0.0/16"}
+		require.NoError(t, c.Update(ctx, got))
+		reconcile(t, key)
+		require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "hub", Name: "demo-leafnodes"}, &svc))
+		require.Equal(t, []string{"10.20.0.0/16"}, svc.Spec.LoadBalancerSourceRanges)
+		require.Equal(t, ptr.To("a.example/lb"), svc.Spec.LoadBalancerClass)
 
 		cert, err := selfSignedRouteSecret(nc, []string{"leaf.prod-east.acme.example"}, r.now())
 		require.NoError(t, err)
