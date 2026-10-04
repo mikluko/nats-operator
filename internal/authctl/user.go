@@ -42,7 +42,7 @@ const UserFinalizer = "auth.nats-operator.io/revoke"
 const kickInterval = time.Second
 
 // UserReconciler signs a NatsUser's JWT with its account's active signing
-// key, into status or into a creds Secret. A creds Secret the user does not
+// key, or the scoped one of the user's role, into status or into a creds Secret. A creds Secret the user does not
 // own is never written.
 type UserReconciler struct {
 	client.Client
@@ -194,18 +194,11 @@ func userClaims(u *authv1beta1.NatsUser, pub string) jwtplane.User {
 		PublicKey:     pub,
 		SystemAccount: u.Spec.AccountRef.Kind == authv1beta1.AccountKindSystemAccount,
 		Preset:        jwtplane.UserPreset(u.Spec.Preset),
+		Role:          u.Spec.Role,
+		Permissions:   permissions(u.Spec.Permissions),
 	}
 	for _, t := range u.Spec.ConnectionTypes {
 		out.AllowedConnectionTypes = append(out.AllowedConnectionTypes, string(t))
-	}
-	if p := u.Spec.Permissions; p != nil {
-		out.Permissions = &jwtplane.Permissions{}
-		if p.Publish != nil {
-			out.Permissions.Publish = jwtplane.SubjectPermissions{Allow: p.Publish.Allow, Deny: p.Publish.Deny}
-		}
-		if p.Subscribe != nil {
-			out.Permissions.Subscribe = jwtplane.SubjectPermissions{Allow: p.Subscribe.Allow, Deny: p.Subscribe.Deny}
-		}
 	}
 	return out
 }

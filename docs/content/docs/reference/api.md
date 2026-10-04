@@ -102,7 +102,7 @@ Appears on: [ImportStatus](#ImportStatus).
 ### ConnectionType {#ConnectionType}
 ConnectionType is a NATS connection type a user may connect as.\
 Type: {{< type "string" >}}\
-Appears on: [NatsUserSpec](#NatsUserSpec).
+Appears on: [NatsUserSpec](#NatsUserSpec), [SigningKeyScope](#SigningKeyScope).
 | Value | Description |
 | :---- | :---------- |
 | `STANDARD` |  |
@@ -342,6 +342,7 @@ Appears on: [NatsUser](#NatsUser).
 | `permissions` | [{{< type "Permissions" >}}](#Permissions) | No | Permissions are the user's publish and subscribe permissions. |
 | `connectionTypes` | [{{< type "[]ConnectionType" >}}](#ConnectionType) | No | ConnectionTypes restricts how the user may connect; empty allows any. |
 | `preset` | [{{< type "UserPreset" >}}](#UserPreset) | No | Preset is a named permission set in place of Permissions and ConnectionTypes. |
+| `role` | {{< type "string" >}} | No | Role signs the user with the account's scoped signing key of this role, in place of Permissions, ConnectionTypes and Preset: nats-server refuses a user JWT that carries its own under a scoped key. |
 | `publicKey` | {{< type "string" >}} | No | PublicKey is a key whose seed the client holds; the user then gets a signed JWT in status and no creds Secret. |
 | `credentials` | [{{< type "Credentials" >}}](#Credentials) | No | Credentials is where the user's creds are written, in the shape a NatsConnection reads; deleted while no grant admits the user to its account. |
 
@@ -358,7 +359,7 @@ Appears on: [NatsUser](#NatsUser).
 
 ### Permissions {#Permissions}
 Permissions are a user's publish and subscribe permissions.\
-Appears on: [NatsUserSpec](#NatsUserSpec).
+Appears on: [NatsUserSpec](#NatsUserSpec), [SigningKeyScope](#SigningKeyScope).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `publish` | [{{< type "SubjectPermissions" >}}](#SubjectPermissions) | No | Publish are the subjects the user may publish to. |
@@ -415,6 +416,17 @@ Appears on: [Keys](#Keys).
 | `name` | {{< type "string" >}} | Yes | Name identifies the key within the list. |
 | `secretKeyRef` | [{{< type "SeedSecretKeySelector" >}}](#SeedSecretKeySelector) | Yes | SecretKeyRef selects the seed. |
 | `retiring` | {{< type "bool" >}} | No | Retiring keeps the key listed, so what it signed stays valid, and signs nothing new with it. Nothing removes a retiring key from the list. |
+| `scope` | [{{< type "SigningKeyScope" >}}](#SigningKeyScope) | No | Scope makes the key a scoped signing key of an account: it signs only the NatsUsers naming the scope's role, and the servers hold each of them to the scope. A NATS operator's signing key takes none. |
+
+### SigningKeyScope {#SigningKeyScope}
+SigningKeyScope is what every user signed by a scoped signing key is held to, carried in the account JWT.\
+Appears on: [SigningKey](#SigningKey).
+| Field | Type | Required | Description |
+| :---- | :--- | :------: | :---------- |
+| `role` | {{< type "string" >}} | Yes | Role names the scope; a NatsUser whose spec.role is this is signed by the first key of the role that is not retiring. |
+| `permissions` | [{{< type "Permissions" >}}](#Permissions) | No | Permissions are the publish and subscribe permissions of the key's users. |
+| `connectionTypes` | [{{< type "[]ConnectionType" >}}](#ConnectionType) | No | ConnectionTypes restricts how the key's users may connect; empty allows any. |
+| `limits` | [{{< type "UserLimits" >}}](#UserLimits) | No | Limits are the limits of each of the key's users; an omitted limit is unlimited. |
 
 ### SubjectPermissions {#SubjectPermissions}
 SubjectPermissions allow and deny subjects.\
@@ -432,6 +444,14 @@ Appears on: [NatsOperatorStatus](#NatsOperatorStatus).
 | `name` | {{< type "string" >}} | No | Name of the NatsSystemAccount spec.systemAccountRef resolves to. |
 | `publicKey` | {{< type "string" >}} | No | PublicKey of the system account. |
 | `jwt` | {{< type "string" >}} | No | JWT of the system account. |
+
+### UserLimits {#UserLimits}
+UserLimits are the limits of one user's connection.\
+Appears on: [SigningKeyScope](#SigningKeyScope).
+| Field | Type | Required | Description |
+| :---- | :--- | :------: | :---------- |
+| `subscriptions` | {{< type "int64" >}} | No | Subscriptions is the maximum number of subscriptions. |
+| `payload` | [{{< type "Quantity" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity) | No | Payload is the maximum message payload. |
 
 ### UserPreset {#UserPreset}
 UserPreset is a named permission set.\

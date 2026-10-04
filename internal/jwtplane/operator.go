@@ -37,6 +37,10 @@ func SignOperator(o Operator) (string, error) {
 	if _, err := o.Keys.signer(nkeys.PrefixByteOperator); err != nil {
 		return "", err
 	}
+	signing, err := o.Keys.signingPublicKeys(nkeys.PrefixByteOperator)
+	if err != nil {
+		return "", err
+	}
 	if o.JWT != "" {
 		if o.Keys.Identity != nil {
 			return "", fmt.Errorf("%w: identity key and offline JWT are exclusive", ErrIdentityConflict)
@@ -47,10 +51,6 @@ func SignOperator(o Operator) (string, error) {
 		return "", fmt.Errorf("%w: NATS operator has neither identity key nor JWT", ErrWrongKeyType)
 	}
 	pub, err := o.Keys.publicKey(nkeys.PrefixByteOperator)
-	if err != nil {
-		return "", err
-	}
-	signing, err := o.Keys.signingPublicKeys(nkeys.PrefixByteOperator)
 	if err != nil {
 		return "", err
 	}

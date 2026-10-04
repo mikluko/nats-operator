@@ -261,6 +261,7 @@ func TestEnvtest(t *testing.T) {
 	t.Run("ReplacedUserKey", e.testReplacedUserKey)
 	t.Run("ReplacedKeyRefused", e.testReplacedKeyRefused)
 	t.Run("GrantWithdrawn", e.testGrantWithdrawn)
+	t.Run("ScopedSigningKey", e.testScopedSigningKey)
 }
 
 var demo = types.NamespacedName{Namespace: "nats-system", Name: "demo"}

@@ -12,9 +12,17 @@ var (
 	// kind its role requires.
 	ErrWrongKeyType = errors.New("wrong key type")
 
-	// ErrNoActiveSigningKey is returned when every signing key is retiring,
-	// or none is given.
-	ErrNoActiveSigningKey = errors.New("no signing key that is not retiring")
+	// ErrNoActiveSigningKey is returned when every signing key is retiring
+	// or scoped, or none is given.
+	ErrNoActiveSigningKey = errors.New("no signing key that is neither retiring nor scoped")
+
+	// ErrNoScopedSigningKey is returned when no signing key that is not
+	// retiring has a scope of the role asked for.
+	ErrNoScopedSigningKey = errors.New("no scoped signing key that is not retiring has the role")
+
+	// ErrScopedOperatorKey is returned for a NATS operator's signing key
+	// that carries a scope.
+	ErrScopedOperatorKey = errors.New("a NATS operator's signing key takes no scope")
 
 	// ErrIdentityConflict is returned when Keys carries both an identity
 	// key pair and a different public key.
@@ -60,6 +68,21 @@ type SigningKey struct {
 	// Retiring keeps the key listed in the JWT, so what it signed stays
 	// valid, while nothing new is signed with it.
 	Retiring bool
+	// Scope makes the key a scoped signing key of an account; a NATS
+	// operator's key carrying one is refused with ErrScopedOperatorKey.
+	Scope *UserScope
+}
+
+// UserScope is what the servers hold every user signed by a scoped signing
+// key to.
+type UserScope struct {
+	Role        string
+	Permissions *Permissions
+	// AllowedConnectionTypes are jwt.ConnectionType* values; empty allows any.
+	AllowedConnectionTypes []string
+	// Subscriptions and Payload limit each user; zero is unlimited.
+	Subscriptions int64
+	Payload       int64
 }
 
 // Keys are the keys of a NATS operator or account. Identity is nil when the
@@ -89,10 +112,22 @@ func (k Keys) publicKey(kind nkeys.PrefixByte) (string, error) {
 	return pub, nil
 }
 
-// signer returns the first signing key that is not retiring.
+// signer returns the first signing key that is neither retiring nor scoped.
 func (k Keys) signer(kind nkeys.PrefixByte) (nkeys.KeyPair, error) {
+	return k.firstSigner(kind, func(sk SigningKey) bool { return sk.Scope == nil }, ErrNoActiveSigningKey)
+}
+
+// scopedSigner returns the first signing key of an account that is not
+// retiring and whose scope has role.
+func (k Keys) scopedSigner(role string) (nkeys.KeyPair, error) {
+	return k.firstSigner(nkeys.PrefixByteAccount,
+		func(sk SigningKey) bool { return sk.Scope != nil && sk.Scope.Role == role },
+		fmt.Errorf("%w: %q", ErrNoScopedSigningKey, role))
+}
+
+func (k Keys) firstSigner(kind nkeys.PrefixByte, match func(SigningKey) bool, none error) (nkeys.KeyPair, error) {
 	for _, sk := range k.Signing {
-		if sk.Retiring {
+		if sk.Retiring || !match(sk) {
 			continue
 		}
 		pub, err := sk.Pair.PublicKey()
@@ -104,7 +139,7 @@ func (k Keys) signer(kind nkeys.PrefixByte) (nkeys.KeyPair, error) {
 		}
 		return sk.Pair, nil
 	}
-	return nil, ErrNoActiveSigningKey
+	return nil, none
 }
 
 // signingPublicKeys lists every signing key, retiring ones included.
@@ -117,6 +152,9 @@ func (k Keys) signingPublicKeys(kind nkeys.PrefixByte) ([]string, error) {
 		}
 		if !isPublicKey(pub, kind) {
 			return nil, fmt.Errorf("%w: signing key %q is not a %s key", ErrWrongKeyType, sk.Name, kind)
+		}
+		if sk.Scope != nil && kind != nkeys.PrefixByteAccount {
+			return nil, fmt.Errorf("%w: signing key %q", ErrScopedOperatorKey, sk.Name)
 		}
 		pubs = append(pubs, pub)
 	}

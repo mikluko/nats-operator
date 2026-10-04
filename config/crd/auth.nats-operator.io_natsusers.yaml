@@ -169,6 +169,13 @@ spec:
                   signed JWT in status and no creds Secret.
                 minLength: 1
                 type: string
+              role:
+                description: |-
+                  Role signs the user with the account's scoped signing key of this
+                  role, in place of Permissions, ConnectionTypes and Preset: nats-server
+                  refuses a user JWT that carries its own under a scoped key.
+                minLength: 1
+                type: string
             required:
             - accountRef
             type: object
@@ -186,6 +193,9 @@ spec:
             - message: the readonly preset is for a NatsAccount user
               rule: '!has(self.preset) || self.preset != ''readonly'' || self.accountRef.kind
                 == ''NatsAccount'''
+            - message: role excludes permissions, connectionTypes and preset
+              rule: '!has(self.role) || (!has(self.permissions) && !has(self.connectionTypes)
+                && !has(self.preset))'
           status:
             description: NatsUserStatus is the observed state of a user.
             properties:

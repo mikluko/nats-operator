@@ -198,7 +198,17 @@ func accountClaims(name string, keys Keys, revs []Revocation) (*jwt.AccountClaim
 	}
 	c := jwt.NewAccountClaims(pub)
 	c.Name = name
-	c.SigningKeys.Add(signing...)
+	for i, sk := range keys.Signing {
+		if sk.Scope == nil {
+			c.SigningKeys.Add(signing[i])
+			continue
+		}
+		scope, err := jwtUserScope(signing[i], *sk.Scope)
+		if err != nil {
+			return nil, fmt.Errorf("signing key %q: %w", sk.Name, err)
+		}
+		c.SigningKeys.AddScopedSigner(scope)
+	}
 	for _, r := range revs {
 		if r.PublicKey != jwt.All && !nkeys.IsValidPublicUserKey(r.PublicKey) {
 			return nil, fmt.Errorf("%w: revoked %q is neither a user public key nor %q", ErrWrongKeyType, r.PublicKey, jwt.All)
@@ -206,6 +216,21 @@ func accountClaims(name string, keys Keys, revs []Revocation) (*jwt.AccountClaim
 		c.RevokeAt(r.PublicKey, r.At)
 	}
 	return c, nil
+}
+
+func jwtUserScope(key string, s UserScope) (*jwt.UserScope, error) {
+	if err := checkConnectionTypes(s.AllowedConnectionTypes); err != nil {
+		return nil, err
+	}
+	out := jwt.NewUserScope()
+	out.Key = key
+	out.Role = s.Role
+	out.Template.AllowedConnectionTypes.Add(s.AllowedConnectionTypes...)
+	applyPermissions(&out.Template.Permissions, s.Permissions)
+	return out, errors.Join(
+		setLimit(&out.Template.Subs, s.Subscriptions, "subscriptions"),
+		setLimit(&out.Template.Payload, s.Payload, "payload"),
+	)
 }
 
 func signAccountClaims(c *jwt.AccountClaims, operator Keys) (string, error) {
@@ -220,21 +245,10 @@ func signAccountClaims(c *jwt.AccountClaims, operator Keys) (string, error) {
 }
 
 func applyLimits(dst *jwt.OperatorLimits, l Limits) error {
-	set := func(dst *int64, v int64, name string) error {
-		switch {
-		case v < 0:
-			return fmt.Errorf("%w: %s %d", ErrNegativeLimit, name, v)
-		case v == 0:
-			*dst = jwt.NoLimit
-		default:
-			*dst = v
-		}
-		return nil
-	}
 	errs := []error{
-		set(&dst.Conn, l.Connections, "connections"),
-		set(&dst.Subs, l.Subscriptions, "subscriptions"),
-		set(&dst.Payload, l.Payload, "payload"),
+		setLimit(&dst.Conn, l.Connections, "connections"),
+		setLimit(&dst.Subs, l.Subscriptions, "subscriptions"),
+		setLimit(&dst.Payload, l.Payload, "payload"),
 	}
 	if l.JetStream != nil {
 		js, err := jetStreamLimits(*l.JetStream, "jetstream")
@@ -290,6 +304,18 @@ func jetStreamLimits(l JetStreamLimits, name string) (jwt.JetStreamLimits, error
 		}
 	}
 	return out, errors.Join(errs...)
+}
+
+func setLimit(dst *int64, v int64, name string) error {
+	switch {
+	case v < 0:
+		return fmt.Errorf("%w: %s %d", ErrNegativeLimit, name, v)
+	case v == 0:
+		*dst = jwt.NoLimit
+	default:
+		*dst = v
+	}
+	return nil
 }
 
 func jwtExport(e Export) *jwt.Export {
