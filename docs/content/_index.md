@@ -36,7 +36,7 @@ params:
   areasHeading: Documentation
   areas:
     - page: /docs/install
-      text: The chart's values, the controllers' flags, metrics and RBAC, and how to upgrade and uninstall.
+      text: How to install the chart with all three controllers or a subset, upgrade it and uninstall it.
     - page: /docs/stories
       text: The quickstart tutorial, then one guide per task, with the manifests to apply and the status to expect. The end-to-end harness applies the same manifests to kind clusters and waits for the same statuses.
     - page: /docs/reference/api
@@ -45,6 +45,8 @@ params:
       text: The nats-server subjects each controller requests, and the presets that grant them.
     - page: /docs/reference/telemetry
       text: The OpenTelemetry metrics and traces each controller exports, and the Kubernetes events the controllers record.
+    - page: /docs/reference/chart
+      text: The chart's values, the controllers' flags, their metrics endpoints and the RBAC each controller is granted.
     - page: /docs/design/v1
       text: The scope, the architecture, the resource API and how each controller works.
     - page: /docs/adr
@@ -66,6 +68,7 @@ helm install nats-operator oci://ghcr.io/mikluko/nats-operator/charts/nats-opera
 
 Then follow [the quickstart]({{< relref "docs/stories/01-quickstart" >}}) to deploy a NATS cluster with JetStream.
 
-[Install]({{< relref "docs/install" >}}) has the chart's values, RBAC, and how to upgrade and uninstall.
+[Install]({{< relref "docs/install" >}}) shows how to install a subset of the controllers, upgrade and uninstall.
+[Chart and controller flags]({{< relref "docs/reference/chart" >}}) lists the chart's values and the RBAC of each controller.
 The images and the chart are signed keylessly with cosign and carry a GitHub build provenance attestation.
 [Verifying a release](https://github.com/mikluko/nats-operator/blob/main/SECURITY.md#verifying-a-release) has the commands that check both.

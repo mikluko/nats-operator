@@ -163,8 +163,8 @@
     },
     {
       "customType": "regex",
-      "description": "The helm test image's defaults in the install page",
-      "managerFilePatterns": ["/^docs/content/docs/install\\.md$/"],
+      "description": "The helm test image's defaults in the chart reference page",
+      "managerFilePatterns": ["/^docs/content/docs/reference/chart\\.md$/"],
       "matchStrings": ["\\| `tests\\.image\\.repository` \\| `(?<depName>[^`]+)` \\|[^\\n]*\\n\\| `tests\\.image\\.tag` \\| `\"(?<currentValue>[^\"]+)\"` \\|[^\\n]*\\n\\| `tests\\.image\\.digest` \\| `\"(?<currentDigest>sha256:[0-9a-f]{64})\"`"],
       "datasourceTemplate": "docker"
     }

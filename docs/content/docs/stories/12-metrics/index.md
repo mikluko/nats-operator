@@ -94,7 +94,7 @@ Port 4222 is the client port, which a `NatsConnection` has in `spec.servers`, an
 
 With these values, each ServiceMonitor scrapes with the token of the Prometheus pod, and `metrics.scraper.serviceAccount` allows that ServiceAccount to read `/metrics`.
 The ServiceMonitor verifies the certificate against `ca.crt` in the Secret, under the DNS name of the Service, such as `nats-operator-cluster-controller-metrics.nats-operator.svc`.
-[Metrics]({{< relref "/docs/install#metrics" >}}) on the install page describes the other values for metrics and the network policy.
+[Metrics]({{< relref "/docs/reference/chart#metrics" >}}) and [Network policy]({{< relref "/docs/reference/chart#network-policy" >}}) in the chart reference describe the other values for metrics and the network policy.
 
 ## Check that the controllers work under the policy
 

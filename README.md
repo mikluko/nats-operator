@@ -33,9 +33,9 @@ Then follow [the quickstart](https://mikluko.github.io/nats-operator/docs/storie
 The site documents `main`.
 For a release, read `docs/` at its tag.
 
-- [Install](https://mikluko.github.io/nats-operator/docs/install/): prerequisites, values, flags, RBAC, upgrade and uninstall.
+- [Install](https://mikluko.github.io/nats-operator/docs/install/): prerequisites, install, upgrade and uninstall.
 - [Stories](https://mikluko.github.io/nats-operator/docs/stories/): the quickstart tutorial, then one guide per task.
-- Reference: [API](https://mikluko.github.io/nats-operator/docs/reference/api/), [NATS permissions](https://mikluko.github.io/nats-operator/docs/reference/nats-permissions/) and [telemetry](https://mikluko.github.io/nats-operator/docs/reference/telemetry/).
+- Reference: [API](https://mikluko.github.io/nats-operator/docs/reference/api/), [NATS permissions](https://mikluko.github.io/nats-operator/docs/reference/nats-permissions/), [telemetry](https://mikluko.github.io/nats-operator/docs/reference/telemetry/), and the [chart's values, flags and RBAC](https://mikluko.github.io/nats-operator/docs/reference/chart/).
 - [Design](docs/design/v1.md) and [ADRs](docs/adr/).
 - [Security](SECURITY.md): how to report a vulnerability, the trust boundaries, and how to verify a release.
 
