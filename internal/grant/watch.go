@@ -17,7 +17,7 @@ import (
 
 // TargetNamespaceField is the field index IndexReferrers registers: the
 // namespaces other than its own that a referrer's references name.
-const TargetNamespaceField = "grant.nats.mikluko.io/target-namespace"
+const TargetNamespaceField = "grant.nats-operator.io/target-namespace"
 
 // IndexReferrers registers TargetNamespaceField on indexer for obj's kind.
 // targets returns the namespaces an object's references name; empty strings

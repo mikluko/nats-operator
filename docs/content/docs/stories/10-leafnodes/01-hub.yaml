@@ -1,4 +1,4 @@
-apiVersion: cluster.nats.mikluko.io/v1beta1
+apiVersion: cluster.nats-operator.io/v1beta1
 kind: NatsCluster
 metadata:
   name: prod-east
@@ -65,7 +65,7 @@ spec:
         external-dns.alpha.kubernetes.io/hostname: leaf.prod-east.acme.example
     advertise: leaf.prod-east.acme.example:7422
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: edge-site-1
@@ -84,7 +84,7 @@ spec:
     secretKeyRef:
       name: edge-site-1-leaf-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: edge-site-2-system

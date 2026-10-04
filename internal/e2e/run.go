@@ -372,7 +372,7 @@ var jetStreamKinds = []string{"NatsStream", "NatsConsumer", "NatsKeyValue", "Nat
 func retainJetStream(ctx context.Context, c client.Client, ns string) error {
 	for _, kind := range jetStreamKinds {
 		list := &unstructured.UnstructuredList{}
-		list.SetGroupVersionKind(schema.GroupVersionKind{Group: "jetstream.nats.mikluko.io", Version: "v1beta1", Kind: kind + "List"})
+		list.SetGroupVersionKind(schema.GroupVersionKind{Group: "jetstream.nats-operator.io", Version: "v1beta1", Kind: kind + "List"})
 		err := c.List(ctx, list, client.InNamespace(ns))
 		switch {
 		case meta.IsNoMatchError(err):
@@ -398,7 +398,7 @@ func retainJetStream(ctx context.Context, c client.Client, ns string) error {
 // in namespace ns; an API server without the kind has none to set it on.
 func forceDeletes(ctx context.Context, c client.Client, ns string) error {
 	list := &unstructured.UnstructuredList{}
-	list.SetGroupVersionKind(schema.GroupVersionKind{Group: "cluster.nats.mikluko.io", Version: "v1beta1", Kind: "NatsClusterList"})
+	list.SetGroupVersionKind(schema.GroupVersionKind{Group: "cluster.nats-operator.io", Version: "v1beta1", Kind: "NatsClusterList"})
 	err := c.List(ctx, list, client.InNamespace(ns))
 	switch {
 	case meta.IsNoMatchError(err):
@@ -467,14 +467,14 @@ type heldBy struct {
 // the runner removes them: users before their accounts, JetStream resources
 // before the NatsCluster whose data they hold.
 var controllerFinalizers = []heldBy{
-	{schema.GroupVersionKind{Group: "auth.nats.mikluko.io", Version: "v1beta1", Kind: "NatsUser"}, authctl.UserFinalizer},
-	{schema.GroupVersionKind{Group: "auth.nats.mikluko.io", Version: "v1beta1", Kind: "NatsAccount"}, authctl.AccountFinalizer},
-	{schema.GroupVersionKind{Group: "jetstream.nats.mikluko.io", Version: "v1beta1", Kind: "NatsConsumer"}, lifecycle.Finalizer},
-	{schema.GroupVersionKind{Group: "jetstream.nats.mikluko.io", Version: "v1beta1", Kind: "NatsStream"}, lifecycle.Finalizer},
-	{schema.GroupVersionKind{Group: "jetstream.nats.mikluko.io", Version: "v1beta1", Kind: "NatsKeyValue"}, lifecycle.Finalizer},
-	{schema.GroupVersionKind{Group: "jetstream.nats.mikluko.io", Version: "v1beta1", Kind: "NatsObjectStore"}, lifecycle.Finalizer},
-	{schema.GroupVersionKind{Group: "jetstream.nats.mikluko.io", Version: "v1beta1", Kind: "NatsClusterEvacuation"}, lifecycle.Finalizer},
-	{schema.GroupVersionKind{Group: "cluster.nats.mikluko.io", Version: "v1beta1", Kind: "NatsCluster"}, natscluster.FinalizerJetStreamData},
+	{schema.GroupVersionKind{Group: "auth.nats-operator.io", Version: "v1beta1", Kind: "NatsUser"}, authctl.UserFinalizer},
+	{schema.GroupVersionKind{Group: "auth.nats-operator.io", Version: "v1beta1", Kind: "NatsAccount"}, authctl.AccountFinalizer},
+	{schema.GroupVersionKind{Group: "jetstream.nats-operator.io", Version: "v1beta1", Kind: "NatsConsumer"}, lifecycle.Finalizer},
+	{schema.GroupVersionKind{Group: "jetstream.nats-operator.io", Version: "v1beta1", Kind: "NatsStream"}, lifecycle.Finalizer},
+	{schema.GroupVersionKind{Group: "jetstream.nats-operator.io", Version: "v1beta1", Kind: "NatsKeyValue"}, lifecycle.Finalizer},
+	{schema.GroupVersionKind{Group: "jetstream.nats-operator.io", Version: "v1beta1", Kind: "NatsObjectStore"}, lifecycle.Finalizer},
+	{schema.GroupVersionKind{Group: "jetstream.nats-operator.io", Version: "v1beta1", Kind: "NatsClusterEvacuation"}, lifecycle.Finalizer},
+	{schema.GroupVersionKind{Group: "cluster.nats-operator.io", Version: "v1beta1", Kind: "NatsCluster"}, natscluster.FinalizerJetStreamData},
 }
 
 // releaseFinalizers removes controllerFinalizers from every object being

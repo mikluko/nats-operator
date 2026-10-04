@@ -1,4 +1,4 @@
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata:
   name: payments
@@ -14,17 +14,17 @@ spec:
       streams: 10
       consumers: 100
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsReferenceGrant
 metadata:
   name: payments-users
   namespace: nats-system
 spec:
   from:
-    - group: auth.nats.mikluko.io
+    - group: auth.nats-operator.io
       kind: NatsUser
       namespace: payments
   to:
-    - group: auth.nats.mikluko.io
+    - group: auth.nats-operator.io
       kind: NatsAccount
       name: payments

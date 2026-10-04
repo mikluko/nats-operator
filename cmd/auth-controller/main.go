@@ -1,4 +1,4 @@
-// Command auth-controller owns auth.nats.mikluko.io and reads nats.mikluko.io.
+// Command auth-controller owns auth.nats-operator.io and reads nats-operator.io.
 package main
 
 import (

@@ -79,10 +79,10 @@ const DefaultMaxInFlight = 4
 // source shows it leaving; past it the stream is requested again.
 const requestGrace = time.Minute
 
-// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsclusterevacuations,verbs=get;list;watch;patch
-// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsclusterevacuations/status,verbs=patch
-// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsstreams;natskeyvalues;natsobjectstores,verbs=list;watch
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
+// +kubebuilder:rbac:groups=jetstream.nats-operator.io,resources=natsclusterevacuations,verbs=get;list;watch;patch
+// +kubebuilder:rbac:groups=jetstream.nats-operator.io,resources=natsclusterevacuations/status,verbs=patch
+// +kubebuilder:rbac:groups=jetstream.nats-operator.io,resources=natsstreams;natskeyvalues;natsobjectstores,verbs=list;watch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
 
 // EvacuationReconciler empties each NatsClusterEvacuation's source NATS
 // cluster through a NatsConnection of the system account, and cancels the

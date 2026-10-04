@@ -16,19 +16,19 @@ import (
 const (
 	// operatorField indexes NatsSystemAccount, NatsAccount and
 	// NatsOperatorTrust by the NatsOperator they name.
-	operatorField = "auth.nats.mikluko.io/operator"
+	operatorField = "auth.nats-operator.io/operator"
 	// systemAccountField indexes NatsOperator by its NatsSystemAccount.
-	systemAccountField = "auth.nats.mikluko.io/system-account"
+	systemAccountField = "auth.nats-operator.io/system-account"
 	// exporterField indexes NatsAccount by the NatsAccounts it imports
 	// from.
-	exporterField = "auth.nats.mikluko.io/exporter"
+	exporterField = "auth.nats-operator.io/exporter"
 	// accountField indexes NatsAccountTrust by its NatsAccount.
-	accountField = "auth.nats.mikluko.io/account"
+	accountField = "auth.nats-operator.io/account"
 	// seedSecretField indexes NatsOperator, NatsSystemAccount and
 	// NatsAccount by the seed Secrets they read, generated ones included.
-	seedSecretField = "auth.nats.mikluko.io/seed-secret"
+	seedSecretField = "auth.nats-operator.io/seed-secret"
 	// userAccountField indexes NatsUser by its account.
-	userAccountField = "auth.nats.mikluko.io/user-account"
+	userAccountField = "auth.nats-operator.io/user-account"
 )
 
 // accountValue is the userAccountField value of the account of kind at k.

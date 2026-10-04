@@ -1,6 +1,6 @@
 # nats-operator
 
-This chart installs the CRDs of the four API groups under `nats.mikluko.io` and any of three controllers:
+This chart installs the CRDs of the four API groups under `nats-operator.io` and any of three controllers:
 
 - The cluster controller deploys NATS clusters and restarts them one server at a time.
 - The auth controller creates their JWT auth plane and distributes it to the servers.

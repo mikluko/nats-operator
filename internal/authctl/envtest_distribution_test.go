@@ -97,7 +97,7 @@ func TestEnvtestDistribution(t *testing.T) {
 	cl := startFullCluster(t, plane{opJWT: op.Status.JWT, sysJWT: op.Status.SystemAccount.JWT, sysPub: oc.SystemAccount}, 3)
 
 	e.apply(t, `
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: auth-controller
@@ -111,7 +111,7 @@ spec:
     secretKeyRef:
       name: auth-controller-creds
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata:
   name: system
@@ -122,7 +122,7 @@ spec:
     secretKeyRef:
       name: auth-controller-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata:
   name: short
@@ -132,7 +132,7 @@ spec:
     name: demo
   jwtTTL: 4s
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata:
   name: forever
@@ -343,7 +343,7 @@ func revokedUser(t *testing.T, e *env, name, accountRef string) string {
 	pub, err := kp.PublicKey()
 	require.NoError(t, err)
 	e.apply(t, `
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata: {name: `+name+`, namespace: nats-system}
 spec:

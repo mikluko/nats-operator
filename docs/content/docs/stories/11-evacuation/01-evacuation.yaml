@@ -1,4 +1,4 @@
-apiVersion: cluster.nats.mikluko.io/v1beta1
+apiVersion: cluster.nats-operator.io/v1beta1
 kind: NatsCluster
 metadata:
   name: prod-east-2
@@ -54,7 +54,7 @@ spec:
         external-dns.alpha.kubernetes.io/hostname: nats.prod-east-2.acme.example
     advertise: nats.prod-east-2.acme.example:7222
 ---
-apiVersion: jetstream.nats.mikluko.io/v1beta1
+apiVersion: jetstream.nats-operator.io/v1beta1
 kind: NatsClusterEvacuation
 metadata:
   name: retire-prod-east

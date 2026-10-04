@@ -42,22 +42,22 @@ tests:
             - apiGroups: [events.k8s.io]
               resources: [events]
               verbs: [create, patch]
-            - apiGroups: [jetstream.nats.mikluko.io]
+            - apiGroups: [jetstream.nats-operator.io]
               resources: [natsbalancers, natssystembalancers]
               verbs: [get, list, watch]
-            - apiGroups: [jetstream.nats.mikluko.io]
+            - apiGroups: [jetstream.nats-operator.io]
               resources: [natsbalancers/status, natsclusterevacuations/status, natsconsumers/status, natskeyvalues/status, natsobjectstores/status, natsstreams/status, natssystembalancers/status]
               verbs: [patch]
-            - apiGroups: [jetstream.nats.mikluko.io]
+            - apiGroups: [jetstream.nats-operator.io]
               resources: [natsclusterevacuations, natsconsumers, natskeyvalues, natsobjectstores, natsstreams]
               verbs: [get, list, patch, watch]
-            - apiGroups: [nats.mikluko.io]
+            - apiGroups: [nats-operator.io]
               resources: [natsconnections]
               verbs: [get, list, watch]
-            - apiGroups: [nats.mikluko.io]
+            - apiGroups: [nats-operator.io]
               resources: [natsconnections/status]
               verbs: [patch]
-            - apiGroups: [nats.mikluko.io]
+            - apiGroups: [nats-operator.io]
               resources: [natsreferencegrants]
               verbs: [list, watch]
   - it: binds its ClusterRole to its ServiceAccount
@@ -80,7 +80,7 @@ tests:
               verbs: [create]
             - apiGroups: [coordination.k8s.io]
               resources: [leases]
-              resourceNames: [rel-jetstream.nats.mikluko.io]
+              resourceNames: [rel-jetstream.nats-operator.io]
               verbs: [get, update, patch]
             - apiGroups: [""]
               resources: [events]
@@ -96,7 +96,7 @@ tests:
           content: --leader-elect=true
       - contains:
           path: spec.template.spec.containers[0].args
-          content: --leader-election-id=rel-jetstream.nats.mikluko.io
+          content: --leader-election-id=rel-jetstream.nats-operator.io
   - it: tags its image with the chart's appVersion by default
     chart:
       appVersion: 9.8.7
@@ -256,4 +256,4 @@ tests:
           value: a-release-name-of-fifty-three-characters-for-the-test-jetstream-controller
       - contains:
           path: spec.template.spec.containers[0].args
-          content: --leader-election-id=a-release-name-of-fifty-three-characters-for-the-test-jetstream.nats.mikluko.io
+          content: --leader-election-id=a-release-name-of-fifty-three-characters-for-the-test-jetstream.nats-operator.io

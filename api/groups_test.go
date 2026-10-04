@@ -17,10 +17,10 @@ func TestGroupVersions(t *testing.T) {
 		got  string
 		want string
 	}{
-		{"nats", natsv1beta1.GroupVersion.String(), "nats.mikluko.io/v1beta1"},
-		{"cluster", clusterv1beta1.GroupVersion.String(), "cluster.nats.mikluko.io/v1beta1"},
-		{"auth", authv1beta1.GroupVersion.String(), "auth.nats.mikluko.io/v1beta1"},
-		{"jetstream", jetstreamv1beta1.GroupVersion.String(), "jetstream.nats.mikluko.io/v1beta1"},
+		{"nats", natsv1beta1.GroupVersion.String(), "nats-operator.io/v1beta1"},
+		{"cluster", clusterv1beta1.GroupVersion.String(), "cluster.nats-operator.io/v1beta1"},
+		{"auth", authv1beta1.GroupVersion.String(), "auth.nats-operator.io/v1beta1"},
+		{"jetstream", jetstreamv1beta1.GroupVersion.String(), "jetstream.nats-operator.io/v1beta1"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

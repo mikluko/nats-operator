@@ -1,4 +1,4 @@
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata:
   name: demo-sys
@@ -9,7 +9,7 @@ spec:
     secretKeyRef:
       name: jetstream-controller-creds
 ---
-apiVersion: jetstream.nats.mikluko.io/v1beta1
+apiVersion: jetstream.nats-operator.io/v1beta1
 kind: NatsSystemBalancer
 metadata:
   name: demo

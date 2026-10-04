@@ -46,17 +46,17 @@ const (
 
 // StreamRefField is the field index holding "namespace/name" of the
 // NatsStream a NatsConsumer's streamRef names.
-const StreamRefField = "jetstream.nats.mikluko.io/stream-ref"
+const StreamRefField = "jetstream.nats-operator.io/stream-ref"
 
 var immutableConsumerKeys = []string{
 	"deliver_policy", "mem_storage", "opt_start_seq", "opt_start_time",
 	"ack_policy", "replay_policy", "idle_heartbeat", "flow_control", "max_waiting",
 }
 
-// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsconsumers,verbs=get;list;watch;patch
-// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsconsumers/status,verbs=patch
-// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsstreams,verbs=get;list;watch
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
+// +kubebuilder:rbac:groups=jetstream.nats-operator.io,resources=natsconsumers,verbs=get;list;watch;patch
+// +kubebuilder:rbac:groups=jetstream.nats-operator.io,resources=natsconsumers/status,verbs=patch
+// +kubebuilder:rbac:groups=jetstream.nats-operator.io,resources=natsstreams,verbs=get;list;watch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
 
 // ConsumerReconciler keeps NatsConsumers' consumers at their specs under
 // their lifecycle policies. A consumer with streamRef waits for that

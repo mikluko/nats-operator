@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** every API group moves from `nats.mikluko.io` to `nats-operator.io`: `nats-operator.io`, `auth.nats-operator.io`, `cluster.nats-operator.io` and `jetstream.nats-operator.io`. Finalizers, annotations, labels, JetStream ownership metadata and Lease names move with them. Objects and CRDs of the old groups are not served or migrated.
+
 ## [0.2.0] - 2026-10-04
 
 ### Added

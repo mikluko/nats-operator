@@ -57,7 +57,7 @@ It asks for three servers, each with a 20Gi volume for JetStream.
 The output is:
 
 ```text
-natscluster.cluster.nats.mikluko.io/demo created
+natscluster.cluster.nats-operator.io/demo created
 ```
 
 Wait until the NATS cluster is ready:
@@ -69,7 +69,7 @@ kubectl -n nats-system wait --for=condition=Ready natscluster/demo --timeout=5m
 The output is:
 
 ```text
-natscluster.cluster.nats.mikluko.io/demo condition met
+natscluster.cluster.nats-operator.io/demo condition met
 ```
 
 List the pods:
@@ -117,7 +117,7 @@ Apply the same `NatsCluster` with its memory request and limit raised from 4Gi t
 The output is:
 
 ```text
-natscluster.cluster.nats.mikluko.io/demo configured
+natscluster.cluster.nats-operator.io/demo configured
 ```
 
 A pod gets a new memory limit only when it restarts.
@@ -147,7 +147,7 @@ kubectl -n nats-system wait --for=condition=Progressing=false natscluster/demo -
 The output is:
 
 ```text
-natscluster.cluster.nats.mikluko.io/demo condition met
+natscluster.cluster.nats-operator.io/demo condition met
 ```
 
 Check the memory limit of a server:
@@ -172,7 +172,7 @@ Apply one that has the client address from the status of the `NatsCluster`.
 The output is:
 
 ```text
-natsconnection.nats.mikluko.io/demo created
+natsconnection.nats-operator.io/demo created
 ```
 
 Apply the `NatsStream`.
@@ -183,7 +183,7 @@ It declares the stream `ORDERS` on the subjects `orders.>`, with three replicas.
 The output is:
 
 ```text
-natsstream.jetstream.nats.mikluko.io/orders created
+natsstream.jetstream.nats-operator.io/orders created
 ```
 
 The manifest sets `adoptionPolicy`, `deletionPolicy` and `terminalPolicy` to their defaults.
@@ -281,9 +281,9 @@ You have built a three-server NATS cluster with JetStream, restarted it with mor
    The output is:
 
    ```text
-   natsstream.jetstream.nats.mikluko.io "orders" deleted from nats-system namespace
-   natsconnection.nats.mikluko.io "demo" deleted from nats-system namespace
-   natscluster.cluster.nats.mikluko.io "demo" deleted from nats-system namespace
+   natsstream.jetstream.nats-operator.io "orders" deleted from nats-system namespace
+   natsconnection.nats-operator.io "demo" deleted from nats-system namespace
+   natscluster.cluster.nats-operator.io "demo" deleted from nats-system namespace
    namespace "nats-system" deleted
    ```
 

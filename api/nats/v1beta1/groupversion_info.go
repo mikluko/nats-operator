@@ -7,7 +7,7 @@ import (
 )
 
 // GroupVersion identifies this API group and version.
-var GroupVersion = schema.GroupVersion{Group: "nats.mikluko.io", Version: "v1beta1"}
+var GroupVersion = schema.GroupVersion{Group: "nats-operator.io", Version: "v1beta1"}
 
 // SchemeBuilder registers this group's kinds with a scheme.
 var SchemeBuilder = runtime.NewSchemeBuilder(func(s *runtime.Scheme) error {

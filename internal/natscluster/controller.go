@@ -105,9 +105,9 @@ type Reconciler struct {
 	AllowGatewayWithoutTLS bool
 }
 
-// +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters,verbs=get;list;watch;patch
-// +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters/status,verbs=patch
-// +kubebuilder:rbac:groups=cluster.nats.mikluko.io,resources=natsclusters/finalizers,verbs=update
+// +kubebuilder:rbac:groups=cluster.nats-operator.io,resources=natsclusters,verbs=get;list;watch;patch
+// +kubebuilder:rbac:groups=cluster.nats-operator.io,resources=natsclusters/status,verbs=patch
+// +kubebuilder:rbac:groups=cluster.nats-operator.io,resources=natsclusters/finalizers,verbs=update
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services;secrets,verbs=get;list;watch;create;update;delete
@@ -115,12 +115,12 @@ type Reconciler struct {
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;delete
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;create;update;delete
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsoperatortrusts,verbs=get;list;watch
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsoperatortrusts,verbs=get;list;watch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsreferencegrants,verbs=list;watch
 
 // TrustField is the field index SetupWithManager registers on NatsClusters:
 // the namespace/name of the NatsOperatorTrust auth.trustRef names.
-const TrustField = "cluster.nats.mikluko.io/trust"
+const TrustField = "cluster.nats-operator.io/trust"
 
 // SetupWithManager registers r and its field indexes with mgr.
 func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {

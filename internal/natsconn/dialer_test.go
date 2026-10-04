@@ -11,7 +11,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/grant"
 )
 
-const jetstreamGroup = "jetstream.nats.mikluko.io"
+const jetstreamGroup = "jetstream.nats-operator.io"
 
 func streamIn(namespace string) grant.Referrer {
 	return grant.Referrer{Group: jetstreamGroup, Kind: "NatsStream", Namespace: namespace}

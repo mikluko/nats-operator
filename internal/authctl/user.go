@@ -35,7 +35,7 @@ import (
 // UserFinalizer holds a deleted NatsUser until its key is revoked, the
 // revocation has reached every server, its connections are closed and its
 // creds Secret is removed.
-const UserFinalizer = "auth.nats.mikluko.io/revoke"
+const UserFinalizer = "auth.nats-operator.io/revoke"
 
 // kickInterval is how long a deleted user waits between kick passes that
 // still found connections.
@@ -55,11 +55,11 @@ type UserReconciler struct {
 
 var _ reconcile.Reconciler = (*UserReconciler)(nil)
 
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=get;list;watch;patch
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers/status,verbs=update
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers/finalizers,verbs=update
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators;natssystemaccounts;natsaccounts,verbs=get;list;watch
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
+// +kubebuilder:rbac:groups=auth.nats-operator.io,resources=natsusers,verbs=get;list;watch;patch
+// +kubebuilder:rbac:groups=auth.nats-operator.io,resources=natsusers/status,verbs=update
+// +kubebuilder:rbac:groups=auth.nats-operator.io,resources=natsusers/finalizers,verbs=update
+// +kubebuilder:rbac:groups=auth.nats-operator.io,resources=natsoperators;natssystemaccounts;natsaccounts,verbs=get;list;watch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsreferencegrants,verbs=list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;delete
 
 // Reconcile signs the JWT of the NatsUser req names, and on its deletion

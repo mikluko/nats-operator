@@ -160,7 +160,7 @@ Table: The values of the `helm test` pods. [Helm test](#helm-test) describes the
 The chart runs every controller with these flags, followed by `extraArgs` and then the controller's own `extraArgs`:
 
 - `--leader-elect`, set from `leaderElection.enabled`.
-- `--leader-election-id`, set to `<release>-<API group>`, such as `nats-operator-cluster.nats.mikluko.io`.
+- `--leader-election-id`, set to `<release>-<API group>`, such as `nats-operator-cluster.nats-operator.io`.
 - Metrics on `:8080`, the container port `metrics`.
   The chart renders a Service for that port only while `metrics.service.enabled` is set.
 - Health probes on `:8081`, at `/healthz` and `/readyz`.
@@ -263,11 +263,11 @@ Table: The further rules of the cluster controller.
 | `""` | `secrets`, `services` | `get`, `list`, `watch`, `create`, `update`, `delete` |
 | `apps` | `statefulsets` | `get`, `list`, `watch`, `create`, `update`, `patch`, `delete` |
 | `cert-manager.io` | `certificates` | `get`, `create`, `update`, `delete` |
-| `cluster.nats.mikluko.io` | `natsclusters` | `get`, `list`, `watch`, `patch` |
-| `cluster.nats.mikluko.io` | `natsclusters/finalizers` | `update` |
-| `cluster.nats.mikluko.io` | `natsclusters/status` | `patch` |
-| `nats.mikluko.io` | `natsaccounttrusts`, `natsconnections`, `natsoperatortrusts` | `get`, `list`, `watch` |
-| `nats.mikluko.io` | `natsreferencegrants` | `list`, `watch` |
+| `cluster.nats-operator.io` | `natsclusters` | `get`, `list`, `watch`, `patch` |
+| `cluster.nats-operator.io` | `natsclusters/finalizers` | `update` |
+| `cluster.nats-operator.io` | `natsclusters/status` | `patch` |
+| `nats-operator.io` | `natsaccounttrusts`, `natsconnections`, `natsoperatortrusts` | `get`, `list`, `watch` |
+| `nats-operator.io` | `natsreferencegrants` | `list`, `watch` |
 | `networking.k8s.io` | `networkpolicies` | `get`, `list`, `watch`, `create`, `update`, `delete` |
 | `policy` | `poddisruptionbudgets` | `get`, `list`, `watch`, `create`, `update` |
 
@@ -278,12 +278,12 @@ Table: The further rules of the auth controller.
 | API group | Resources | Verbs |
 |---|---|---|
 | `""` | `secrets` | `get`, `list`, `watch`, `create`, `update`, `delete` |
-| `auth.nats.mikluko.io` | `natsaccounts`, `natsusers` | `get`, `list`, `watch`, `patch` |
-| `auth.nats.mikluko.io` | `natsaccounts/status`, `natsoperators/status`, `natssystemaccounts/status`, `natsusers/finalizers`, `natsusers/status` | `update` |
-| `auth.nats.mikluko.io` | `natsoperators`, `natssystemaccounts` | `get`, `list`, `watch` |
-| `nats.mikluko.io` | `natsaccounttrusts`, `natsconnections`, `natsoperatortrusts` | `get`, `list`, `watch` |
-| `nats.mikluko.io` | `natsaccounttrusts/status`, `natsoperatortrusts/status` | `update` |
-| `nats.mikluko.io` | `natsreferencegrants` | `list`, `watch` |
+| `auth.nats-operator.io` | `natsaccounts`, `natsusers` | `get`, `list`, `watch`, `patch` |
+| `auth.nats-operator.io` | `natsaccounts/status`, `natsoperators/status`, `natssystemaccounts/status`, `natsusers/finalizers`, `natsusers/status` | `update` |
+| `auth.nats-operator.io` | `natsoperators`, `natssystemaccounts` | `get`, `list`, `watch` |
+| `nats-operator.io` | `natsaccounttrusts`, `natsconnections`, `natsoperatortrusts` | `get`, `list`, `watch` |
+| `nats-operator.io` | `natsaccounttrusts/status`, `natsoperatortrusts/status` | `update` |
+| `nats-operator.io` | `natsreferencegrants` | `list`, `watch` |
 
 ### JetStream controller
 
@@ -292,12 +292,12 @@ Table: The further rules of the JetStream controller.
 | API group | Resources | Verbs |
 |---|---|---|
 | `""` | `secrets` | `get`, `list`, `watch` |
-| `jetstream.nats.mikluko.io` | `natsbalancers`, `natssystembalancers` | `get`, `list`, `watch` |
-| `jetstream.nats.mikluko.io` | `natsbalancers/status`, `natsclusterevacuations/status`, `natsconsumers/status`, `natskeyvalues/status`, `natsobjectstores/status`, `natsstreams/status`, `natssystembalancers/status` | `patch` |
-| `jetstream.nats.mikluko.io` | `natsclusterevacuations`, `natsconsumers`, `natskeyvalues`, `natsobjectstores`, `natsstreams` | `get`, `list`, `watch`, `patch` |
-| `nats.mikluko.io` | `natsconnections` | `get`, `list`, `watch` |
-| `nats.mikluko.io` | `natsconnections/status` | `patch` |
-| `nats.mikluko.io` | `natsreferencegrants` | `list`, `watch` |
+| `jetstream.nats-operator.io` | `natsbalancers`, `natssystembalancers` | `get`, `list`, `watch` |
+| `jetstream.nats-operator.io` | `natsbalancers/status`, `natsclusterevacuations/status`, `natsconsumers/status`, `natskeyvalues/status`, `natsobjectstores/status`, `natsstreams/status`, `natssystembalancers/status` | `patch` |
+| `jetstream.nats-operator.io` | `natsclusterevacuations`, `natsconsumers`, `natskeyvalues`, `natsobjectstores`, `natsstreams` | `get`, `list`, `watch`, `patch` |
+| `nats-operator.io` | `natsconnections` | `get`, `list`, `watch` |
+| `nats-operator.io` | `natsconnections/status` | `patch` |
+| `nats-operator.io` | `natsreferencegrants` | `list`, `watch` |
 
 ## Helm test
 
@@ -313,7 +313,7 @@ Table: The finalizers that the controllers put on their kinds.
 
 | Kind | Finalizer | Held by |
 |---|---|---|
-| `NatsCluster` with JetStream | `cluster.nats.mikluko.io/jetstream-data` | cluster controller |
-| `NatsAccount` | `auth.nats.mikluko.io/delete` | auth controller |
-| `NatsUser` | `auth.nats.mikluko.io/revoke` | auth controller |
-| `NatsStream`, `NatsConsumer`, `NatsKeyValue`, `NatsObjectStore`, `NatsClusterEvacuation` | `jetstream.nats.mikluko.io/finalizer` | JetStream controller |
+| `NatsCluster` with JetStream | `cluster.nats-operator.io/jetstream-data` | cluster controller |
+| `NatsAccount` | `auth.nats-operator.io/delete` | auth controller |
+| `NatsUser` | `auth.nats-operator.io/revoke` | auth controller |
+| `NatsStream`, `NatsConsumer`, `NatsKeyValue`, `NatsObjectStore`, `NatsClusterEvacuation` | `jetstream.nats-operator.io/finalizer` | JetStream controller |

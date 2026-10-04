@@ -1,4 +1,4 @@
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsSystemAccount
 metadata:
   name: sys
@@ -7,7 +7,7 @@ spec:
   operatorRef:
     name: demo
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata:
   name: orders

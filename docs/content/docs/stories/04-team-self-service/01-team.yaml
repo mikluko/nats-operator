@@ -1,4 +1,4 @@
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: payments-api
@@ -17,7 +17,7 @@ spec:
     secretKeyRef:
       name: payments-api-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: payments-jetstream
@@ -36,7 +36,7 @@ spec:
     secretKeyRef:
       name: payments-jetstream-creds
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata:
   name: demo
@@ -47,7 +47,7 @@ spec:
     secretKeyRef:
       name: payments-jetstream-creds
 ---
-apiVersion: jetstream.nats.mikluko.io/v1beta1
+apiVersion: jetstream.nats-operator.io/v1beta1
 kind: NatsStream
 metadata:
   name: payments

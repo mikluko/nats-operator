@@ -71,7 +71,7 @@ rules:
   - get
   - update
 - apiGroups:
-  - cluster.nats.mikluko.io
+  - cluster.nats-operator.io
   resources:
   - natsclusters
   verbs:
@@ -80,13 +80,13 @@ rules:
   - patch
   - watch
 - apiGroups:
-  - cluster.nats.mikluko.io
+  - cluster.nats-operator.io
   resources:
   - natsclusters/finalizers
   verbs:
   - update
 - apiGroups:
-  - cluster.nats.mikluko.io
+  - cluster.nats-operator.io
   resources:
   - natsclusters/status
   verbs:
@@ -99,7 +99,7 @@ rules:
   - create
   - patch
 - apiGroups:
-  - nats.mikluko.io
+  - nats-operator.io
   resources:
   - natsaccounttrusts
   - natsconnections
@@ -109,7 +109,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - nats.mikluko.io
+  - nats-operator.io
   resources:
   - natsreferencegrants
   verbs:

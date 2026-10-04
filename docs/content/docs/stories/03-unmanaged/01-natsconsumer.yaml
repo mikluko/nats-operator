@@ -1,4 +1,4 @@
-apiVersion: jetstream.nats.mikluko.io/v1beta1
+apiVersion: jetstream.nats-operator.io/v1beta1
 kind: NatsConsumer
 metadata:
   name: ledger-audit
@@ -11,7 +11,7 @@ spec:
   deliverPolicy: All
   ackPolicy: Explicit
 ---
-apiVersion: jetstream.nats.mikluko.io/v1beta1
+apiVersion: jetstream.nats-operator.io/v1beta1
 kind: NatsConsumer
 metadata:
   name: payments-settlement

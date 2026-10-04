@@ -22,7 +22,7 @@ import (
 // Finalizer holds a JetStream controller resource until the server has been
 // told of its deletion: a JetStream object resource's deletion policy has
 // run, or a NatsClusterEvacuation's moves in flight are cancelled.
-const Finalizer = "jetstream.nats.mikluko.io/finalizer"
+const Finalizer = "jetstream.nats-operator.io/finalizer"
 
 // DefaultResync is how often a resource is compared to its server object
 // when Syncer.Resync is zero.

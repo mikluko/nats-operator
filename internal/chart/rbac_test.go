@@ -25,9 +25,9 @@ const rulesTest = "grants exactly its ClusterRole rules"
 var controllers = []string{"cluster", "auth", "jetstream"}
 
 var ownGroups = map[string]string{
-	"cluster":   "cluster.nats.mikluko.io",
-	"auth":      "auth.nats.mikluko.io",
-	"jetstream": "jetstream.nats.mikluko.io",
+	"cluster":   "cluster.nats-operator.io",
+	"auth":      "auth.nats-operator.io",
+	"jetstream": "jetstream.nats-operator.io",
 }
 
 // grants maps "group/resource" to the verbs granted on it.
@@ -58,7 +58,7 @@ func TestChartRBAC_Groups(t *testing.T) {
 			for other, own := range ownGroups {
 				require.False(t, other != c && group == own, "%s holds %s", c, key)
 			}
-			if strings.HasSuffix(group, "nats.mikluko.io") {
+			if strings.HasSuffix(group, "nats-operator.io") {
 				base, _, _ := strings.Cut(resource, "/")
 				require.True(t, plurals[group+"/"+base], "%s names no CRD", key)
 			}

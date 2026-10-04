@@ -1,4 +1,4 @@
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsOperatorTrust
 metadata:
   name: acme
@@ -7,7 +7,7 @@ spec:
   operatorJWT: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...
   systemAccountJWT: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata:
   name: hub-system
@@ -18,7 +18,7 @@ spec:
     secretKeyRef:
       name: edge-site-2-system-leaf-creds
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata:
   name: hub-telemetry
@@ -29,7 +29,7 @@ spec:
     secretKeyRef:
       name: edge-site-2-leaf-creds
 ---
-apiVersion: cluster.nats.mikluko.io/v1beta1
+apiVersion: cluster.nats-operator.io/v1beta1
 kind: NatsCluster
 metadata:
   name: edge-site-2
@@ -56,7 +56,7 @@ spec:
       localAccountTrustRef:
         name: telemetry
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsAccountTrust
 metadata:
   name: telemetry

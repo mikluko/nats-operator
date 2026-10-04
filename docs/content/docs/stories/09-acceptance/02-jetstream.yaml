@@ -1,4 +1,4 @@
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata:
   name: prod
@@ -9,7 +9,7 @@ spec:
     secretKeyRef:
       name: nats-service-creds
 ---
-apiVersion: jetstream.nats.mikluko.io/v1beta1
+apiVersion: jetstream.nats-operator.io/v1beta1
 kind: NatsStream
 metadata:
   name: requests
@@ -22,7 +22,7 @@ spec:
   adoptionPolicy: Adopt
   name: REQUESTS
 ---
-apiVersion: jetstream.nats.mikluko.io/v1beta1
+apiVersion: jetstream.nats-operator.io/v1beta1
 kind: NatsStream
 metadata:
   name: responses
@@ -35,7 +35,7 @@ spec:
   adoptionPolicy: Adopt
   name: RESPONSES
 ---
-apiVersion: jetstream.nats.mikluko.io/v1beta1
+apiVersion: jetstream.nats-operator.io/v1beta1
 kind: NatsBalancer
 metadata:
   name: prod
@@ -53,7 +53,7 @@ spec:
         matchLabels:
           traffic: responses
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata:
   name: prod-east-sys
@@ -64,7 +64,7 @@ spec:
     secretKeyRef:
       name: jetstream-controller-creds
 ---
-apiVersion: jetstream.nats.mikluko.io/v1beta1
+apiVersion: jetstream.nats-operator.io/v1beta1
 kind: NatsSystemBalancer
 metadata:
   name: prod-east

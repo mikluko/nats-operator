@@ -38,7 +38,7 @@ const (
 
 // SecretField is the field index SetupWithManager registers on
 // NatsConnections: the names of the Secrets a connection reads.
-const SecretField = "natsconn.nats.mikluko.io/secret"
+const SecretField = "natsconn.nats-operator.io/secret"
 
 // DefaultRetryAfter is how soon a NatsConnection that is not Ready is
 // reconciled again when Reconciler.RetryAfter is zero.

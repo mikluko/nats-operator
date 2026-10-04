@@ -30,8 +30,8 @@ type SystemConnection struct {
 	Name   types.NamespacedName
 }
 
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections,verbs=get;list;watch
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsconnections,verbs=get;list;watch
+// +kubebuilder:rbac:groups=auth.nats-operator.io,resources=natsoperators,verbs=get;list;watch
 
 // Conn returns the connection for operator. The error wraps
 // ErrOperatorGone when operator does not exist, and ErrForeignConnection

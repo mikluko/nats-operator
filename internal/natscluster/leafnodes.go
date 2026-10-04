@@ -26,7 +26,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections;natsaccounttrusts,verbs=get;list;watch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsconnections;natsaccounttrusts,verbs=get;list;watch
 
 // PortLeafnodes is the leafnode listener's port on a hub.
 const PortLeafnodes = 7422

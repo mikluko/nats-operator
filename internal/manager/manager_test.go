@@ -23,7 +23,7 @@ func TestFlags(t *testing.T) {
 		{
 			name: "defaults",
 			args: nil,
-			want: Options{MetricsAddr: ":8080", ProbeAddr: ":8081", LeaderElectionID: "cluster.nats.mikluko.io"},
+			want: Options{MetricsAddr: ":8080", ProbeAddr: ":8081", LeaderElectionID: "cluster.nats-operator.io"},
 		},
 		{
 			name: "overrides",
@@ -33,12 +33,12 @@ func TestFlags(t *testing.T) {
 		{
 			name: "watch namespaces",
 			args: []string{"-watch-namespaces= a,b ,,c"},
-			want: Options{MetricsAddr: ":8080", ProbeAddr: ":8081", LeaderElectionID: "cluster.nats.mikluko.io", WatchNamespaces: []string{"a", "b", "c"}},
+			want: Options{MetricsAddr: ":8080", ProbeAddr: ":8081", LeaderElectionID: "cluster.nats-operator.io", WatchNamespaces: []string{"a", "b", "c"}},
 		},
 		{
 			name: "metrics certificate",
 			args: []string{"-metrics-cert-dir=/var/run/secrets/metrics-tls"},
-			want: Options{MetricsAddr: ":8080", MetricsCertDir: "/var/run/secrets/metrics-tls", ProbeAddr: ":8081", LeaderElectionID: "cluster.nats.mikluko.io"},
+			want: Options{MetricsAddr: ":8080", MetricsCertDir: "/var/run/secrets/metrics-tls", ProbeAddr: ":8081", LeaderElectionID: "cluster.nats-operator.io"},
 		},
 		{
 			name:    "watch namespaces naming none",
@@ -50,7 +50,7 @@ func TestFlags(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fs := flag.NewFlagSet(tt.name, flag.ContinueOnError)
 			fs.SetOutput(io.Discard)
-			got := Flags(fs, "cluster.nats.mikluko.io")
+			got := Flags(fs, "cluster.nats-operator.io")
 			err := fs.Parse(tt.args)
 			if tt.wantErr {
 				require.Error(t, err)

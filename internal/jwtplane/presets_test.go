@@ -47,7 +47,7 @@ func crdEnum(t *testing.T, file string, path ...string) []string {
 // presets the API admits.
 func TestPresetsMatchAPI(t *testing.T) {
 	t.Run("user presets", func(t *testing.T) {
-		admitted := crdEnum(t, "auth.nats.mikluko.io_natsusers.yaml", "spec", "preset")
+		admitted := crdEnum(t, "auth.nats-operator.io_natsusers.yaml", "spec", "preset")
 		var expanded []string
 		for _, p := range jwtplane.UserPresets() {
 			expanded = append(expanded, string(p))
@@ -55,7 +55,7 @@ func TestPresetsMatchAPI(t *testing.T) {
 		require.ElementsMatch(t, admitted, expanded)
 	})
 	t.Run("export presets", func(t *testing.T) {
-		admitted := crdEnum(t, "auth.nats.mikluko.io_natsaccounts.yaml", "spec", "exports", "[]", "preset")
+		admitted := crdEnum(t, "auth.nats-operator.io_natsaccounts.yaml", "spec", "exports", "[]", "preset")
 		require.Equal(t, []string{jwtplane.ExportPresetJetStreamStepdown}, admitted)
 		for _, p := range admitted {
 			_, err := jwtplane.ExportPreset(p)

@@ -31,10 +31,10 @@ type OperatorTrustReconciler struct {
 
 var _ reconcile.Reconciler = (*OperatorTrustReconciler)(nil)
 
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsoperatortrusts,verbs=get;list;watch
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsoperatortrusts/status,verbs=update
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsoperatortrusts,verbs=get;list;watch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsoperatortrusts/status,verbs=update
+// +kubebuilder:rbac:groups=auth.nats-operator.io,resources=natsoperators,verbs=get;list;watch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsreferencegrants,verbs=list;watch
 
 // Reconcile implements reconcile.Reconciler.
 func (r *OperatorTrustReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -104,10 +104,10 @@ type AccountTrustReconciler struct {
 
 var _ reconcile.Reconciler = (*AccountTrustReconciler)(nil)
 
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsaccounttrusts,verbs=get;list;watch
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsaccounttrusts/status,verbs=update
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts,verbs=get;list;watch
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsaccounttrusts,verbs=get;list;watch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsaccounttrusts/status,verbs=update
+// +kubebuilder:rbac:groups=auth.nats-operator.io,resources=natsaccounts,verbs=get;list;watch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsreferencegrants,verbs=list;watch
 
 // Reconcile implements reconcile.Reconciler.
 func (r *AccountTrustReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {

@@ -1,4 +1,4 @@
-apiVersion: jetstream.nats.mikluko.io/v1beta1
+apiVersion: jetstream.nats-operator.io/v1beta1
 kind: NatsStream
 metadata:
   name: payments
@@ -9,7 +9,7 @@ spec:
   adoptionPolicy: Adopt
   name: PAYMENTS
 ---
-apiVersion: jetstream.nats.mikluko.io/v1beta1
+apiVersion: jetstream.nats-operator.io/v1beta1
 kind: NatsStream
 metadata:
   name: refunds
@@ -24,7 +24,7 @@ spec:
   replicas: 3
   maxAge: 2160h
 ---
-apiVersion: jetstream.nats.mikluko.io/v1beta1
+apiVersion: jetstream.nats-operator.io/v1beta1
 kind: NatsStream
 metadata:
   name: ledger

@@ -1,5 +1,5 @@
-// Command jetstream-controller owns jetstream.nats.mikluko.io and reads
-// nats.mikluko.io.
+// Command jetstream-controller owns jetstream.nats-operator.io and reads
+// nats-operator.io.
 package main
 
 import (
@@ -40,8 +40,8 @@ func main() {
 
 var schemes = []func(*runtime.Scheme) error{natsv1beta1.AddToScheme, jetstreamv1beta1.AddToScheme}
 
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections,verbs=get;list;watch
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections/status,verbs=patch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsconnections,verbs=get;list;watch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsconnections/status,verbs=patch
 
 // setup adds the JetStream controller to mgr, comparing each JetStream
 // resource to its server object every resync.
