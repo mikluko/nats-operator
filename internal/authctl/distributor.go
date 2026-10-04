@@ -18,6 +18,11 @@ var (
 	// ErrStaleJWT is returned by Push for a JWT issued before one a server
 	// acknowledged or holds for the same account.
 	ErrStaleJWT = errors.New("a newer JWT for the account exists")
+
+	// ErrUntrustedSigner is wrapped by Push's error for a JWT signed by a key
+	// that a server does not list in the NATS operator JWT it runs under;
+	// the JWT was sent unless no server lists the key.
+	ErrUntrustedSigner = errors.New("the servers do not trust the signer")
 )
 
 // Distributor carries account JWTs, and deletes of accounts, to the
@@ -30,8 +35,8 @@ type Distributor interface {
 	Push(ctx context.Context, operator types.NamespacedName, accountJWT string) error
 
 	// Current returns how many servers trust operator, how many of them
-	// hold accountJWT, and when a server last acknowledged a push for its
-	// account, if one did.
+	// hold accountJWT and trust its signer, and when a server last
+	// acknowledged a push for its account, if one did.
 	Current(ctx context.Context, operator types.NamespacedName, accountJWT string) (authv1beta1.Distribution, error)
 
 	// Lookup returns the newest JWT for account that a server trusting

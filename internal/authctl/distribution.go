@@ -34,8 +34,13 @@ func distribute(ctx context.Context, d Distributor, operator types.NamespacedNam
 		return prev, cond(metav1.ConditionFalse, ReasonNoSystemConnection, "the auth controller runs without --system-connection: no server receives this JWT"), 0, nil
 	}
 	got, err := d.Current(ctx, operator, token)
+	var untrusted error
 	if err == nil && got.Current < got.Servers {
-		if err = d.Push(ctx, operator, token); err == nil {
+		err = d.Push(ctx, operator, token)
+		if errors.Is(err, ErrUntrustedSigner) {
+			untrusted, err = err, nil
+		}
+		if err == nil {
 			got, err = d.Current(ctx, operator, token)
 		}
 	}
@@ -47,6 +52,9 @@ func distribute(ctx context.Context, d Distributor, operator types.NamespacedNam
 	}
 	if got.LastPushTime == nil && prev != nil {
 		got.LastPushTime = prev.LastPushTime
+	}
+	if untrusted != nil {
+		return &got, cond(metav1.ConditionFalse, ReasonUntrustedSigner, untrusted.Error()), distributionRecheck, nil
 	}
 	msg := fmt.Sprintf("%d of %d servers hold this JWT", got.Current, got.Servers)
 	if got.Servers == 0 || got.Current < got.Servers {
@@ -100,6 +108,16 @@ func ignoreUnreachable(err error) error {
 		return nil
 	}
 	return err
+}
+
+// ignoreUndelivered is err, or nil when err is ErrUnreachable or
+// ErrUntrustedSigner: the JWT stands and distribute reports why no server
+// serves it.
+func ignoreUndelivered(err error) error {
+	if errors.Is(err, ErrUntrustedSigner) {
+		return nil
+	}
+	return ignoreUnreachable(err)
 }
 
 // soonest is the earlier of two requeue delays, zero being none.

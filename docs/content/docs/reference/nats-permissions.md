@@ -33,6 +33,7 @@ Connects through the `NatsConnection` its `--system-connection` flag names, as a
 | Subject | Use | Code |
 |---|---|---|
 | `$SYS.REQ.SERVER.PING.STATSZ` | Lists the servers that should answer the requests below. | `internal/authctl` |
+| `$SYS.REQ.SERVER.PING.VARZ` | Reads the NATS operator JWT each server runs under, for the keys it trusts. | `internal/authctl` |
 | `$SYS.REQ.CLAIMS.UPDATE` | Pushes an account JWT to every resolver. | `internal/authctl` |
 | `$SYS.REQ.CLAIMS.DELETE` | Deletes accounts from every `Full` resolver. | `internal/authctl` |
 | `$SYS.REQ.ACCOUNT.*.CLAIMS.LOOKUP` | Reads the JWT the resolvers hold for an account, by account public key. | `internal/authctl` |
@@ -87,7 +88,7 @@ A `NatsUser` with `spec.preset` gets exactly these claims, and sets neither `spe
 
 For a system account user.
 
-Publish: `$SYS.REQ.CLAIMS.UPDATE`, `$SYS.REQ.CLAIMS.DELETE`, `$SYS.REQ.ACCOUNT.*.CLAIMS.LOOKUP`, `$SYS.REQ.SERVER.PING.STATSZ`, `$SYS.REQ.SERVER.PING.CONNZ`, `$SYS.REQ.SERVER.*.KICK`.
+Publish: `$SYS.REQ.CLAIMS.UPDATE`, `$SYS.REQ.CLAIMS.DELETE`, `$SYS.REQ.ACCOUNT.*.CLAIMS.LOOKUP`, `$SYS.REQ.SERVER.PING.STATSZ`, `$SYS.REQ.SERVER.PING.VARZ`, `$SYS.REQ.SERVER.PING.CONNZ`, `$SYS.REQ.SERVER.*.KICK`.
 
 Subscribe: `_INBOX.auth-controller.>`.
 

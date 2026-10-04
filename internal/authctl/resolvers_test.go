@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -387,6 +388,44 @@ func userCreds(t *testing.T, keys jwtplane.Keys) nats.Option {
 	token, err := jwtplane.SignUser(jwtplane.User{Name: "u", PublicKey: pub}, keys)
 	require.NoError(t, err)
 	return nats.UserJWTAndSeed(token, string(seed))
+}
+
+// TestResolvers_UntrustedSigner pins that a JWT signed by a NATS operator
+// key no server lists is neither sent nor counted, and that one signed by a
+// key only some servers list is sent and counted on those alone.
+func TestResolvers_UntrustedSigner(t *testing.T) {
+	p := newPlane(t)
+	c := startFullCluster(t, p, 3)
+	r := resolversOn(t, c, testOperator)
+	keys, pub := newAccount(t)
+	unlisted, err := nkeys.CreateOperator()
+	require.NoError(t, err)
+	signer := jwtplane.SigningKey{Name: "unlisted", Pair: unlisted}
+	token, err := jwtplane.SignAccount(jwtplane.Account{Name: "orders", Keys: keys}, jwtplane.Keys{Signing: []jwtplane.SigningKey{signer}}, time.Now())
+	require.NoError(t, err)
+
+	require.ErrorIs(t, r.Push(t.Context(), testOperator, token), authctl.ErrUntrustedSigner)
+	for i := range c.srvs {
+		require.Empty(t, c.held(i, pub), "server %d was sent a JWT it does not trust", i)
+	}
+	requireDistribution(t, r, token, 3, 0)
+
+	listing := p.op
+	listing.Signing = append(slices.Clone(p.op.Signing), signer)
+	opJWT, err := jwtplane.SignOperator(jwtplane.Operator{Name: "op", Keys: listing, SystemAccount: p.sysPub})
+	require.NoError(t, err)
+	c.stop(2)
+	c.oc, err = jwt.DecodeOperatorClaims(opJWT)
+	require.NoError(t, err)
+	c.start(2)
+	for range authctl.RosterMisses {
+		require.NoError(t, r.PollOperator(t.Context(), testOperator))
+	}
+
+	require.ErrorIs(t, r.Push(t.Context(), testOperator, token), authctl.ErrUntrustedSigner)
+	require.Equal(t, token, c.held(2, pub), "the server listing the key was sent the JWT")
+	dial(t, c.srvs[2].ClientURL(), jwtplane.User{Name: "u"}, keys)
+	requireDistribution(t, r, token, 3, 1)
 }
 
 // TestResolvers_SystemAccountKeyPushed pins that nats-server takes an account

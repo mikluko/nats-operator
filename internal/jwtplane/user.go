@@ -220,6 +220,7 @@ var userPresets = map[UserPreset]userPreset{
 			"$SYS.REQ.CLAIMS.DELETE",
 			"$SYS.REQ.ACCOUNT.*.CLAIMS.LOOKUP",
 			"$SYS.REQ.SERVER.PING.STATSZ",
+			"$SYS.REQ.SERVER.PING.VARZ",
 			"$SYS.REQ.SERVER.PING.CONNZ",
 			"$SYS.REQ.SERVER.*.KICK",
 		},

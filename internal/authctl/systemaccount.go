@@ -118,7 +118,7 @@ func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta
 		var err error
 		if !held {
 			err = push(ctx, r.Distributor, key, signed.JWT)
-			if err := ignoreUnreachable(err); err != nil {
+			if err := ignoreUndelivered(err); err != nil {
 				return 0, fmt.Errorf("push system account JWT: %w", err)
 			}
 		}

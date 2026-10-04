@@ -16,11 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Each release's images and chart are signed with the certificate identity `https://github.com/mikluko/nats-operator/.github/workflows/release-roll.yaml@refs/tags/v<version>`, and their build provenance attestations name the signer workflow `release-roll.yaml` and the source ref `refs/tags/v<version>`; `SECURITY.md` has the commands for these and for releases 0.1.0 through 0.3.1.
 - A `NatsAccount` importing from a `NatsAccount` that has no public key yet is not signed until it has one; meanwhile its `Ready` and `ReferencesResolved` conditions are False with the reason `ExporterPending`.
+- The `auth-controller` user preset may publish `$SYS.REQ.SERVER.PING.VARZ`.
 
 ### Fixed
 
 - A `NatsAccount` that takes over an account with no signing key keeps the revocations of the JWT the servers hold. A revocation read from the servers lists the account's identity key among its `issuers`, and is kept when the account's signing keys rotate.
 - A `NatsSystemAccount` taking over a system account made elsewhere keeps the revocations of the JWT the servers hold, and every system account JWT carries the exports `account-monitoring-services` and `account-monitoring-streams` that `nsc` gives one. While the servers cannot be asked at its first signing, its `NatsOperator` has the condition `RevocationsUnrecovered` True and the system account JWT is not pushed.
+- An account JWT signed by a NATS operator key that no server lists in the NATS operator JWT it runs under is not pushed, and `status.distribution` does not count a server that does not list the key; the `NatsAccount` or `NatsSystemAccount` then has the condition `Distributed` False with the reason `UntrustedSigner`.
 
 ## [0.3.1] - 2026-10-04
 

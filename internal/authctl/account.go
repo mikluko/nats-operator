@@ -174,7 +174,7 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 	}
 	adopt := func() error {
 		err := push(ctx, r.Distributor, opKey, token)
-		if err := ignoreUnreachable(err); err != nil {
+		if err := ignoreUndelivered(err); err != nil {
 			return fmt.Errorf("push account JWT: %w", err)
 		}
 		st.JWT = token

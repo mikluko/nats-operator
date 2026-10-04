@@ -50,6 +50,7 @@ var identities = []identity{
 		Preset:     jwtplane.PresetAuthController,
 		Calls: []call{
 			{"$SYS.REQ.SERVER.PING.STATSZ", "Lists the servers that should answer the requests below.", []string{"internal/authctl"}},
+			{"$SYS.REQ.SERVER.PING.VARZ", "Reads the NATS operator JWT each server runs under, for the keys it trusts.", []string{"internal/authctl"}},
 			{"$SYS.REQ.CLAIMS.UPDATE", "Pushes an account JWT to every resolver.", []string{"internal/authctl"}},
 			{"$SYS.REQ.CLAIMS.DELETE", "Deletes accounts from every `Full` resolver.", []string{"internal/authctl"}},
 			{"$SYS.REQ.ACCOUNT.*.CLAIMS.LOOKUP", "Reads the JWT the resolvers hold for an account, by account public key.", []string{"internal/authctl"}},
