@@ -55,7 +55,7 @@ func TestRender_Story1(t *testing.T) {
 		require.Equal(t, nc.Spec.Resources, nats.Resources)
 		require.Equal(t, intstr.FromString("monitor"), nats.ReadinessProbe.HTTPGet.Port)
 		exporter := container(t, sts, "exporter")
-		require.Equal(t, "natsio/prometheus-nats-exporter:0.17.3@"+ExporterDigest, exporter.Image)
+		require.Equal(t, ExporterRepository+":"+ExporterTag+"@"+ExporterDigest, exporter.Image)
 
 		require.Len(t, sts.Spec.VolumeClaimTemplates, 1)
 		pvc := sts.Spec.VolumeClaimTemplates[0]
@@ -193,13 +193,13 @@ func TestRender_Images(t *testing.T) {
 		{
 			name:         "defaults",
 			wantNATS:     "nats:2.15.0",
-			wantExporter: "natsio/prometheus-nats-exporter:0.17.3@" + ExporterDigest,
+			wantExporter: ExporterRepository + ":" + ExporterTag + "@" + ExporterDigest,
 		},
 		{
 			name:         "exporter repository",
 			exporter:     &clusterv1beta1.ExporterImage{Repository: "registry.example/exporter"},
 			wantNATS:     "nats:2.15.0",
-			wantExporter: "registry.example/exporter:0.17.3",
+			wantExporter: "registry.example/exporter:" + ExporterTag,
 		},
 		{
 			name:         "repositories",
@@ -213,7 +213,7 @@ func TestRender_Images(t *testing.T) {
 			image:        &clusterv1beta1.Image{Digest: digest},
 			exporter:     &clusterv1beta1.ExporterImage{Digest: digest},
 			wantNATS:     "nats:2.15.0@" + digest,
-			wantExporter: "natsio/prometheus-nats-exporter:0.17.3@" + digest,
+			wantExporter: ExporterRepository + ":" + ExporterTag + "@" + digest,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
