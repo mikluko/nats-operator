@@ -101,10 +101,11 @@ The `status` in the output is similar to this:
 
 {{< manifest "01-status-natscluster-at-rest.yaml" >}}
 
-Notice two things:
+Notice that `Settled` is True.
+Every Raft group has a leader, and every member of every group is current.
 
-- `Settled` is True. Every Raft group has a leader, and every member of every group is current.
-- `endpoints.client` is the address that clients connect to. You use it when you create the stream.
+Notice `endpoints.client` as well.
+It is the address that clients connect to, and you use it when you create the stream.
 
 ## Raise the memory limit
 
@@ -197,7 +198,8 @@ The `status` in the output is similar to this:
 
 {{< manifest "03-status-natsstream.yaml" >}}
 
-Notice that `Ready` and `Synced` are True: the stream exists on the servers and matches the manifest.
+Notice that `Ready` and `Synced` are True.
+The stream exists on the servers and matches the manifest.
 Your stream is empty, so `server.bytes` is 0 and `server.messages` is absent.
 
 ## Publish a message
