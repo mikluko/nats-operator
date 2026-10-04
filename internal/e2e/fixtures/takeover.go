@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -103,10 +104,12 @@ func takeover(dir string) error {
 	if err := writeStatusPatch(dir, "natssystemaccount-status.json", map[string]any{"publicKey": sys.identityPub}); err != nil {
 		return err
 	}
+	issuers := []string{orders.identityPub, orders.signingPub}
+	slices.Sort(issuers)
 	return writeStatusPatch(dir, "natsaccount-status.json", map[string]any{
 		"publicKey": orders.identityPub,
 		"revocations": []map[string]any{
-			{"publicKey": oldPub, "at": revokedAt.UTC().Format(time.RFC3339), "issuers": []string{orders.signingPub}},
+			{"publicKey": oldPub, "at": revokedAt.UTC().Format(time.RFC3339), "issuers": issuers},
 		},
 	})
 }

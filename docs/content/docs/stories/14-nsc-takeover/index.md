@@ -74,8 +74,8 @@ The account loses these claims, because a `NatsAccount` has no field for them:
 - An import from an account of another NATS operator, and an import from the system account.
 - The description and the tags.
 
-Revocations carry over if the account has a signing key and you list it: the auth controller reads them from the JWT on the servers.
-An account that has no signing key loses its revocations.
+Revocations carry over: the auth controller reads them from the JWT on the servers.
+An account that has no signing key keeps its revocations too, and rotating a signing key later does not drop them.
 An account that revokes every user, with the key `*`, is not signed: its `NatsAccount` has the condition `Ready` False with the reason `InvalidJWT`, and its JWT on the servers stays as it is.
 
 The system account always loses its revocations and its exports, the two exports that `nsc` gives it included.
