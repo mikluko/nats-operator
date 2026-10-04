@@ -18,9 +18,15 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
-          cache-dependency-path: |
-            go.sum
-            hack/tools/go.sum
+          cache: false
+      - id: go-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-${{ runner.os }}-${{ hashFiles('go.sum', 'hack/tools/go.sum') }}-${{ github.sha }}
+          restore-keys: go-${{ runner.os }}-${{ hashFiles('go.sum', 'hack/tools/go.sum') }}-
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
         with:
           just-version: 1.58.0
@@ -30,6 +36,13 @@ jobs:
       - run: just test
       - run: just envtest
       - run: just lint
+      - if: github.ref == 'refs/heads/main' && steps.go-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
   govulncheck:
     runs-on: ubuntu-latest

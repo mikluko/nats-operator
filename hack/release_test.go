@@ -380,7 +380,7 @@ func TestGoToolchainOnce(t *testing.T) {
 					setups++
 					require.Equal(t, "go.mod", s.With["go-version-file"], "%s job %s", f, job)
 					require.Empty(t, s.With["go-version"], "%s job %s", f, job)
-					if filepath.Base(f) == "ci.yml" {
+					if filepath.Base(f) == "ci.yml" && s.With["cache"] != "false" {
 						require.Equal(t, []string{"go.sum", filepath.Join(filepath.Dir(toolsModfile), "go.sum")},
 							strings.Fields(s.With["cache-dependency-path"]), "%s job %s", f, job)
 					}
