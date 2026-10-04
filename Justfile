@@ -21,12 +21,9 @@ image platform=("linux/" + if arch() == "aarch64" { "arm64" } else { "amd64" }):
     done
     VERSION="${VERSION:-dev}" KO_DOCKER_REPO=ghcr.io/mikluko/nats-operator ko build --push=false -B --platform "{{ platform }}" "$@"
 
-# OperatorReload skips under -race, so it runs again without. hack/rbac
-# analyses source and starts no goroutines of its own, so it runs without -race.
-test:
-    env -u KUBEBUILDER_ASSETS go test -race $(go list ./... | grep -v '/hack/rbac$')
-    env -u KUBEBUILDER_ASSETS go test ./hack/rbac
-    env -u KUBEBUILDER_ASSETS go test -run OperatorReload ./internal/natscluster
+# Arguments go to go test: `just test -race`.
+test *args:
+    env -u KUBEBUILDER_ASSETS go test {{ args }} ./...
 
 lint:
     go tool -modfile=hack/tools/go.mod golangci-lint run

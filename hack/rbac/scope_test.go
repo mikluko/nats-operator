@@ -13,6 +13,8 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+const root = "../.."
+
 func TestSplitRules(t *testing.T) {
 	rules := []rbacv1.PolicyRule{
 		{APIGroups: []string{""}, Resources: []string{"secrets"}, Verbs: []string{"get"}},
