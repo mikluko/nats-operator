@@ -1,5 +1,5 @@
 name: CI
-run-name: "Checking pull request #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
+run-name: "Running test suites for #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
 
 on:
   pull_request:
