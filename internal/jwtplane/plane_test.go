@@ -30,7 +30,8 @@ type planeUser struct {
 
 // startPlane builds the plane: account A, whose identity is offline, exports
 // the stepdown preset and a private service that B imports; the system
-// account imports A's stepdown exports.
+// account imports A's stepdown exports. C revokes every user as of when it
+// is signed, D as of an hour before.
 func startPlane(t *testing.T) plane {
 	t.Helper()
 	now := time.Now()
@@ -38,6 +39,8 @@ func startPlane(t *testing.T) plane {
 	sys := newKeys(t, nkeys.PrefixByteAccount, "sys")
 	a := offline(t, newKeys(t, nkeys.PrefixByteAccount, "a"))
 	b := newKeys(t, nkeys.PrefixByteAccount, "b")
+	c := newKeys(t, nkeys.PrefixByteAccount, "c")
+	d := newKeys(t, nkeys.PrefixByteAccount, "d")
 	sysPub, aPub, bPub := pub(t, sys.Identity), a.PublicKey, pub(t, b.Identity)
 
 	opJWT, err := jwtplane.SignOperator(jwtplane.Operator{Name: "op", Keys: op, SystemAccount: sysPub})
@@ -64,6 +67,8 @@ func startPlane(t *testing.T) plane {
 	sign("a-readonly", jwtplane.User{Preset: jwtplane.PresetReadonly}, a)
 	sign("a-leaf", jwtplane.User{Preset: jwtplane.PresetLeafnode}, a)
 	sign("b", jwtplane.User{}, b)
+	sign("c", jwtplane.User{}, c)
+	sign("d", jwtplane.User{}, d)
 	for _, preset := range controllerPresets {
 		sign("sys-"+string(preset), jwtplane.User{Preset: preset, SystemAccount: true}, sys)
 	}
@@ -82,11 +87,15 @@ func startPlane(t *testing.T) plane {
 		Imports: []jwtplane.Import{{Account: aPub, Export: execute, Token: token}},
 	}, op, now)
 	require.NoError(t, err)
+	cJWT, err := jwtplane.SignAccount(jwtplane.Account{Name: "C", Keys: c, Revocations: []jwtplane.Revocation{{PublicKey: jwt.All, At: time.Now()}}}, op, now)
+	require.NoError(t, err)
+	dJWT, err := jwtplane.SignAccount(jwtplane.Account{Name: "D", Keys: d, Revocations: []jwtplane.Revocation{{PublicKey: jwt.All, At: now.Add(-time.Hour)}}}, op, now)
+	require.NoError(t, err)
 
 	opc, err := jwt.DecodeOperatorClaims(opJWT)
 	require.NoError(t, err)
 	res := &server.MemAccResolver{}
-	for pk, tok := range map[string]string{sysPub: sysJWT, aPub: aJWT, bPub: bJWT} {
+	for pk, tok := range map[string]string{sysPub: sysJWT, aPub: aJWT, bPub: bJWT, pub(t, c.Identity): cJWT, pub(t, d.Identity): dJWT} {
 		require.NoError(t, res.Store(pk, tok))
 	}
 	srv, err := server.NewServer(&server.Options{
@@ -131,6 +140,16 @@ func TestPlaneServed(t *testing.T) {
 	t.Run("revoked user is refused", func(t *testing.T) {
 		_, err := p.connect(t, "a-revoked")
 		require.Error(t, err)
+	})
+
+	t.Run("user issued before its account revoked every user is refused", func(t *testing.T) {
+		_, err := p.connect(t, "c")
+		require.Error(t, err)
+	})
+
+	t.Run("user issued after its account revoked every user connects", func(t *testing.T) {
+		_, err := p.connect(t, "d")
+		require.NoError(t, err)
 	})
 
 	t.Run("leafnode preset user is refused as a client", func(t *testing.T) {
