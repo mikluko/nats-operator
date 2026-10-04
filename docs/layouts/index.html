@@ -1,14 +1,12 @@
-{{- /* The front page: a hero, a card per controller, a feature grid and the story list, from the home page's params, then its content. */ -}}
+{{- /* The front page: what the project is, the install command from its content, a card per controller, what each documentation area contains, and the story list. */ -}}
 {{ define "main" }}
-{{- $hero := .Params.hero -}}
 <main class="main-section landing" id="main-content" tabindex="-1">
   <div class="container">
     <section class="landing-hero">
-      <p class="landing-eyebrow">{{ $hero.eyebrow }}</p>
-      <h1 class="landing-title">{{ $hero.headline }}</h1>
-      <p class="landing-lead">{{ $hero.lead }}</p>
+      <h1 class="landing-title">{{ .Title }}</h1>
+      <p class="landing-lead">{{ .Params.lead }}</p>
       <div class="landing-actions">
-        {{- range $hero.actions }}
+        {{- range .Params.actions }}
           {{- $href := .url -}}
           {{- with .page }}{{ $href = (site.GetPage .).RelPermalink }}{{ end }}
           <a class="btn{{ if .primary }} landing-cta{{ end }}" href="{{ $href }}"{{ if .url }} rel="noopener"{{ end }}>
@@ -46,23 +44,20 @@
       </div>
     </section>
 
-    <section class="landing-section" aria-labelledby="landing-features">
-      <h2 class="landing-heading" id="landing-features">{{ .Params.featuresHeading }}</h2>
-      <div class="landing-grid landing-grid-dense">
-        {{- range .Params.features }}
-          <article class="landing-feature">
-            <span class="landing-card-icon">{{ partial "svg" (dict "icon" .icon) }}</span>
-            <h3 class="landing-card-title">{{ .name }}</h3>
-            <p>{{ .text | $.RenderString }}</p>
-          </article>
+    <section class="landing-section" aria-labelledby="landing-areas">
+      <h2 class="landing-heading" id="landing-areas">{{ .Params.areasHeading }}</h2>
+      <dl class="landing-areas">
+        {{- range .Params.areas }}
+          {{- $page := site.GetPage .page }}
+          <dt><a href="{{ $page.RelPermalink }}">{{ partial "title.html" $page }}</a></dt>
+          <dd>{{ .text | $.RenderString }}</dd>
         {{- end }}
-      </div>
+      </dl>
     </section>
 
     {{- with site.GetPage "/docs/stories" }}
     <section class="landing-section" aria-labelledby="landing-stories">
       <h2 class="landing-heading" id="landing-stories">{{ $.Params.storiesHeading }}</h2>
-      <p class="landing-subheading">{{ $.Params.storiesLead | $.RenderString }}</p>
       <ol class="landing-stories">
         {{- range .Pages.ByWeight }}
           <li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>

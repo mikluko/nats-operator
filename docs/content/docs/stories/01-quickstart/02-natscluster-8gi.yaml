@@ -1,4 +1,4 @@
-# The same NatsCluster with its memory raised from 4Gi to 8Gi; nothing else
+# The same NatsCluster with its memory raised from 4Gi to 8Gi. Nothing else
 # changes.
 apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
