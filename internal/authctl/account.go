@@ -127,6 +127,12 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 	if err != nil {
 		return reconcile.Result{}, err
 	}
+	if len(imports.pending) > 0 {
+		msg := strings.Join(imports.pending, "; ")
+		conditions.Set(&st.Conditions, acc.Generation, metav1.Condition{Type: grant.ConditionReferencesResolved, Status: metav1.ConditionFalse, Reason: ReasonExporterPending, Message: msg})
+		notReady(ReasonExporterPending, msg)
+		return reconcile.Result{}, nil
+	}
 	st.Imports = imports.statuses
 
 	users, err := listUsers(ctx, r.Client, authv1beta1.AccountKindAccount, client.ObjectKeyFromObject(acc))
@@ -415,6 +421,9 @@ type resolvedImports struct {
 	statuses []authv1beta1.ImportStatus
 	// unresolved says, per import left out, why.
 	unresolved []string
+	// pending names, per import whose exporter has no public key yet, that
+	// exporter; an account with one is not signed.
+	pending []string
 	// notPermitted is set when a missing NatsReferenceGrant left one out.
 	notPermitted bool
 }
@@ -455,7 +464,7 @@ func (r *AccountReconciler) resolveImports(ctx context.Context, acc *authv1beta1
 			continue
 		}
 		if exporter.Status.PublicKey == "" {
-			skip("NatsAccount %s has no public key yet", exKey)
+			out.pending = append(out.pending, fmt.Sprintf("%s: NatsAccount %s has no public key yet", label, exKey))
 			continue
 		}
 		exports, err := accountExports(&exporter)
