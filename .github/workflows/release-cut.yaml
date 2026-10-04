@@ -1,4 +1,5 @@
 name: Cut release
+run-name: "Checking main and cutting a release if one is due: ${{ github.event.head_commit.message }}"
 
 on:
   push:

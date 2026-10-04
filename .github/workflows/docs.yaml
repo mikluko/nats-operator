@@ -1,4 +1,5 @@
 name: Documentation site
+run-name: ${{ github.event_name == 'pull_request' && format('Building the site for pull request #{0}: {1}', github.event.pull_request.number, github.event.pull_request.title) || github.event_name == 'push' && format('Deploying the site: {0}', github.event.head_commit.message) || format('Building a preview of the site from {0}', github.ref_name) }}
 
 # A push to main deploys the site. A pull request only builds it, and a manual
 # run uploads the build as a preview artifact; neither deploys.
