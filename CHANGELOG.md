@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An import of a `NatsAccount` names the `NatsSystemAccount` of its `NatsOperator` under `accountRef`, taking `account-monitoring-services` or `account-monitoring-streams` with the account's own public key in the subject.
 - An import of a `NatsAccount` names its exporter by `publicKey` in place of `accountRef`, with the export's `subject` and `type`, and for a private export `activation.secretKeyRef` selecting the activation token the exporter issued; `status.imports[].activation` then reads `Supplied`.
 - An import of a `NatsAccount` takes `share` on a Service import and `allowTrace` on a Stream import.
+- A signing key under `keys.signing` of a `NatsAccount` or a `NatsSystemAccount` takes `scope`, which makes it a scoped signing key: a `role`, and the `permissions`, `connectionTypes` and `limits` (`subscriptions`, `payload`) that the servers hold every user it signs to.
+- `NatsUser.spec.role` signs the user with the account's scoped signing key of that role; it excludes `permissions`, `connectionTypes` and `preset`. A scoped signing key signs no other user and no activation token.
 
 ### Changed
 

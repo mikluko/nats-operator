@@ -55,6 +55,8 @@ Write the whole spec before you apply it:
 
 - List every signing key of the account under `keys.signing`.
   A user whose JWT was signed by a key that the list leaves out can no longer connect, and the servers close its connections.
+- Give each scoped signing key its `scope`: the role, the permissions, the connection types, and the limits for subscriptions and payload.
+  A scoped key that you list without its `scope` becomes a plain signing key, and its users fail with `maximum subscriptions exceeded`.
 - Set `limits` for connections, subscriptions, payload and JetStream.
   A limit that you omit is unlimited, and an account without `limits.jetstream` has no JetStream.
   If the account has JetStream limits by tier, list each tier under `limits.jetstream.tiers` by its name.
@@ -77,7 +79,7 @@ Write the whole spec before you apply it:
 
 The account loses these claims, because a `NatsAccount` has no field for them:
 
-- The scope of a scoped signing key. If you list the key, its users fail with `maximum subscriptions exceeded`.
+- In the scope of a scoped signing key: the response permissions, the source networks, the times, the locale, the bearer token flag, the data limit and the description.
 - Subject mappings, default permissions, and auth callout.
 - The latency sampling and the account token position of an export.
 - The description and the tags.
