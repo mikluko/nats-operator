@@ -12,15 +12,10 @@ spec:
       allow: ["orders.>", "$JS.API.>"]
     subscribe:
       allow: ["orders.>", "_INBOX.>"]
-  # Optional. The Secret takes the shape a NatsConnection reads by default:
-  # the creds under key `user.creds`, which `key` overrides.
   credentials:
     secretKeyRef:
       name: orders-service-creds
 ---
-# Bring your own key: the client holds the seed, the auth controller signs a
-# JWT for the public key and publishes it in status. No Secret is written, so
-# `publicKey` and `credentials` are mutually exclusive.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:
@@ -35,8 +30,6 @@ spec:
     publish:
       allow: ["orders.batch.>"]
 ---
-# What the JetStream controller acts as inside the orders account: an
-# ordinary user, declared like any other.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:
@@ -55,9 +48,6 @@ spec:
     secretKeyRef:
       name: orders-jetstream-creds
 ---
-# The cluster controller's own identity in this Kubernetes cluster. The
-# preset expands to the subjects that controller calls; `permissions` would
-# be refused beside it.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:

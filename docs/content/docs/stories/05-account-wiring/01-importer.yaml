@@ -1,4 +1,3 @@
-# The core account consumes both. An import names the export, not a subject.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsAccount
 metadata:
@@ -10,9 +9,8 @@ spec:
   imports:
     - accountRef:
         kind: NatsAccount
-        name: monitoring   # cross-namespace needs a NatsReferenceGrant, as for users
+        name: monitoring
       export: check-results
-      # Where it appears in this account; defaults to the exported subject.
       localSubject: "upstream.results.>"
     - accountRef:
         kind: NatsAccount

@@ -1,5 +1,3 @@
-# The orders account with its connection limit raised from 500; nothing else
-# changes.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsAccount
 metadata:

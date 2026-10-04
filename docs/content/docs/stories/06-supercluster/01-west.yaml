@@ -1,7 +1,3 @@
-# A remote Kubernetes cluster: no auth controller, no signing key. What it
-# needs is the NatsOperatorTrust above, the same gateway remotes as every
-# member, and the controllers' creds Secrets, which External Secrets or SOPS
-# delivers from the home cluster.
 apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:

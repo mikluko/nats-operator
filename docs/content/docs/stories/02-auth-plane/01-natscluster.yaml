@@ -1,4 +1,3 @@
-# Story 1's NatsCluster, now under the NATS operator. Only `auth` is new.
 apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:
@@ -21,11 +20,8 @@ spec:
           requests:
             storage: 20Gi
   auth:
-    # From the trust roots the cluster controller renders `operator`,
-    # `system_account` and the resolver with the system account preloaded.
     trustRef:
       name: demo
-    # What the cluster controller connects as for reloads and settledness.
     systemCredentials:
       secretKeyRef:
-        name: cluster-controller-creds   # key defaults to user.creds
+        name: cluster-controller-creds

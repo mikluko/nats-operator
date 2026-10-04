@@ -1,8 +1,7 @@
-# The home Kubernetes cluster: the auth controller runs here, and here alone.
 apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:
-  name: east   # the gateway name, and the remote name the other members use
+  name: east
   namespace: nats-system
 spec:
   version: 2.15.0
@@ -23,35 +22,23 @@ spec:
   serverTags:
     region: us-east-2
   auth:
-    # The literal NatsOperatorTrust replicated to every member, even here in
-    # the home Kubernetes cluster.
     trustRef:
       name: acme
     systemCredentials:
       secretKeyRef:
         name: cluster-controller-creds
   gateway:
-    # Joining a supercluster is this list: every member's NatsCluster carries
-    # the same one. Explicit renders each entry as a gateway remote with
-    # reject_unknown on; Gossip renders them as seeds with reject_unknown off.
-    # Either way a change restarts servers: gateway config is not reloadable.
-    # A NATS cluster's own entry is allowed and skipped.
     discovery: Explicit
     remotes:
       - name: east
         url: tls://nats-east.example.net:7222
       - name: west
         url: tls://nats-west.example.net:7222
-    # Without a `tls` block the NatsCluster is refused unless the cluster
-    # controller runs with `--allow-gateway-without-tls`.
     tls:
       certManager:
         issuerRef:
           kind: Issuer
           name: nats-gateway-ca
-    # The external Service is rendered from this template. The servers
-    # advertise `advertise` below, the Service's hostname, which the other
-    # members' remotes name too.
     service:
       type: LoadBalancer
       annotations:

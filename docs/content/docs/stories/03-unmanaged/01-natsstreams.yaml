@@ -6,10 +6,6 @@ metadata:
 spec:
   connectionRef:
     name: shared-payments
-  # The stream must already exist; if it does not, the resource waits
-  # (Adopted=False, reason NotFound) and never creates it. On adoption the
-  # controller writes the server's config into this spec, so the spec needs
-  # only what identifies the stream. See 01-live-natsstream-payments.yaml.
   adoptionPolicy: Adopt
   name: PAYMENTS
 ---
@@ -21,9 +17,6 @@ metadata:
 spec:
   connectionRef:
     name: shared-payments
-  # Adopt if it exists, create it if not. The spec as written is applied to the
-  # server either way; the controller then writes the fields it omits into spec
-  # from the server, as field manager jetstream-controller.
   adoptionPolicy: AdoptOrCreate
   name: REFUNDS
   subjects: ["refunds.>"]
@@ -31,9 +24,6 @@ spec:
   replicas: 3
   maxAge: 2160h
 ---
-# adoptionPolicy defaults to Never, and a stream of this name already exists
-# that the controller did not create: the resource goes Terminal and nothing
-# on the server changes. See 01-status-natsstream-ledger.yaml.
 apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata:
@@ -42,9 +32,6 @@ metadata:
 spec:
   connectionRef:
     name: shared-payments
-  # Hold (default): a Terminal condition stays until the resource is edited.
-  # Retry: the check reruns every resync period and clears itself once the
-  # cause is gone, for example when the conflicting stream is deleted by hand.
   terminalPolicy: Retry
   name: LEDGER
   subjects: ["ledger.>"]

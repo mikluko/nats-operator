@@ -10,7 +10,6 @@ status:
       message: 3 of 3 servers hold this JWT
   publicKey: !any AORDERS...
   jwtHash: !any 9c41e7
-  # The STATSZ roster, each server's CLAIMS.LOOKUP compared to jwtHash.
   distribution:
     servers: 3
     current: 3

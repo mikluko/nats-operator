@@ -1,5 +1,3 @@
-# Declared in the orders namespace, which no grant covers, against the
-# payments account.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:

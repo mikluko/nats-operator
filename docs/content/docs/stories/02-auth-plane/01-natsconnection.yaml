@@ -1,7 +1,3 @@
-# A connection is an identity as well as an address: its credentials decide
-# the account every resource using it lands in. One per account the
-# JetStream controller manages, plus one with system credentials for
-# observation (story 7).
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:
@@ -11,4 +7,4 @@ spec:
   servers: ["nats://demo.nats-system.svc:4222"]
   credentials:
     secretKeyRef:
-      name: orders-jetstream-creds   # key defaults to user.creds
+      name: orders-jetstream-creds
