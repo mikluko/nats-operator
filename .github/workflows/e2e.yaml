@@ -1,5 +1,5 @@
-name: End-to-end stories
-run-name: "${{ github.event_name == 'schedule' && (github.event.schedule == '47 5 * * 0' && 'Running every story on three Kubernetes clusters, weekly' || 'Running every story on two Kubernetes clusters, nightly') || format('Running {0} on {1} from {2}', inputs.stories && format('stories {0}', inputs.stories) || 'every story', inputs.clusters == '1' && 'one Kubernetes cluster' || format('{0} Kubernetes clusters', inputs.clusters), github.ref_name) }}"
+name: Acceptance suite
+run-name: "${{ github.event_name == 'schedule' && (github.event.schedule == '47 5 * * 0' && 'Running the acceptance suite on three Kubernetes clusters, weekly' || 'Running the acceptance suite on two Kubernetes clusters, nightly') || format('Running {0} on {1} from {2}', inputs.stories && format('acceptance stories {0}', inputs.stories) || 'the acceptance suite', inputs.clusters == '1' && 'one Kubernetes cluster' || format('{0} Kubernetes clusters', inputs.clusters), github.ref_name) }}"
 
 on:
   schedule:
