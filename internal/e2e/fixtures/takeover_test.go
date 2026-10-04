@@ -19,8 +19,8 @@ import (
 // checkTakeover requires that story 14's existing NATS cluster runs a full
 // resolver preloading the system account alone, that its NATS operator,
 // system account, account and users are what nsc makes and chain to the
-// seeds the story adopts, that the account revokes one of its users and no
-// other, and that the status patches name the keys of those seeds.
+// seeds the story adopts, that the system account and the account each
+// revoke one of their users and no other, and that the status patches name the keys of those seeds.
 func checkTakeover(t *testing.T, dir string) {
 	t.Helper()
 	t.Setenv("POD_NAME", "nats-0")
@@ -56,6 +56,7 @@ func checkTakeover(t *testing.T, dir string) {
 	require.True(t, oc.DidSign(sc), "the system account is signed by the NATS operator")
 	require.Equal(t, []string{systemSigning}, sc.SigningKeys.Keys())
 	require.Len(t, sc.Exports, 2)
+	require.Len(t, sc.Revocations, 1)
 
 	nsc := d.secrets["nsc"]
 	require.NotNil(t, nsc)
@@ -70,6 +71,10 @@ func checkTakeover(t *testing.T, dir string) {
 
 	requireCreds(t, nsc, "sys.creds", system, systemSigning)
 	require.Equal(t, nsc.StringData["sys.creds"], d.secrets["auth-controller-creds"].StringData["user.creds"])
+	requireCreds(t, nsc, "sys-old.creds", system, systemSigning)
+	sysOld := userClaims(t, nsc, "sys-old.creds")
+	require.True(t, sc.IsClaimRevoked(sysOld))
+	require.False(t, sc.IsClaimRevoked(userClaims(t, nsc, "sys.creds")))
 	requireCreds(t, nsc, "orders-worker.creds", orders, ordersSigning)
 	requireCreds(t, nsc, "orders-old.creds", orders, ordersSigning)
 	app := userClaims(t, nsc, "orders-app.creds")
@@ -90,6 +95,10 @@ func checkTakeover(t *testing.T, dir string) {
 	var sys authv1beta1.NatsSystemAccount
 	readStatusPatch(t, dir, "natssystemaccount-status.json", &sys)
 	require.Equal(t, system, sys.Status.PublicKey)
+	require.Len(t, sys.Status.Revocations, 1)
+	require.Equal(t, sysOld.Subject, sys.Status.Revocations[0].PublicKey)
+	require.Equal(t, sc.Revocations[sysOld.Subject], sys.Status.Revocations[0].At.Unix())
+	require.Equal(t, []string{systemSigning}, sys.Status.Revocations[0].Issuers)
 	var acc authv1beta1.NatsAccount
 	readStatusPatch(t, dir, "natsaccount-status.json", &acc)
 	require.Equal(t, orders, acc.Status.PublicKey)

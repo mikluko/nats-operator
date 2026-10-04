@@ -19,13 +19,14 @@ type takeoverData struct {
 	// Operator, System and Orders are each an identity seed and a signing
 	// seed, in that order.
 	Operator, System, Orders [2]string
-	// Sys, App, Worker and Old are creds files, line by line.
-	Sys, App, Worker, Old []string
+	// Sys, SysOld, App, Worker and Old are creds files, line by line.
+	Sys, SysOld, App, Worker, Old []string
 }
 
 // takeover writes story 14's fixtures into dir: a NATS cluster with a full
 // resolver whose NATS operator, system account, account and users have the
-// claims nsc gives them, the seeds and the sys user's creds the story hands
+// claims nsc gives them, the system account and the account each revoking
+// one user, the seeds and the sys user's creds the story hands
 // to the auth controller, and the public keys its status files must show as
 // patch files.
 func takeover(dir string) error {
@@ -53,6 +54,14 @@ func takeover(dir string) error {
 		return err
 	}
 
+	if d.Sys, _, err = nscUser("sys", sys, sys.signing); err != nil {
+		return err
+	}
+	var sysOldPub string
+	if d.SysOld, sysOldPub, err = nscUser("sys-old", sys, sys.signing); err != nil {
+		return err
+	}
+	revokedAt := time.Now().Truncate(time.Second)
 	sc := jwt.NewAccountClaims(sys.identityPub)
 	sc.Name = "SYS"
 	sc.SigningKeys.Add(sys.signingPub)
@@ -60,10 +69,8 @@ func takeover(dir string) error {
 		{Name: "account-monitoring-services", Subject: "$SYS.REQ.ACCOUNT.*.*", Type: jwt.Service, ResponseType: jwt.ResponseTypeStream, AccountTokenPosition: 4},
 		{Name: "account-monitoring-streams", Subject: "$SYS.ACCOUNT.*.>", Type: jwt.Stream, AccountTokenPosition: 3},
 	}
+	sc.RevokeAt(sysOldPub, revokedAt)
 	if d.SystemJWT, err = sc.Encode(op.signing); err != nil {
-		return err
-	}
-	if d.Sys, _, err = nscUser("sys", sys, sys.signing); err != nil {
 		return err
 	}
 
@@ -77,7 +84,6 @@ func takeover(dir string) error {
 	if d.Old, oldPub, err = nscUser("orders-old", orders, orders.signing); err != nil {
 		return err
 	}
-	revokedAt := time.Now().Truncate(time.Second)
 	ac := jwt.NewAccountClaims(orders.identityPub)
 	ac.Name = "orders"
 	ac.SigningKeys.Add(orders.signingPub)
@@ -101,7 +107,12 @@ func takeover(dir string) error {
 	}); err != nil {
 		return err
 	}
-	if err := writeStatusPatch(dir, "natssystemaccount-status.json", map[string]any{"publicKey": sys.identityPub}); err != nil {
+	if err := writeStatusPatch(dir, "natssystemaccount-status.json", map[string]any{
+		"publicKey": sys.identityPub,
+		"revocations": []map[string]any{
+			{"publicKey": sysOldPub, "at": revokedAt.UTC().Format(time.RFC3339), "issuers": []string{sys.signingPub}},
+		},
+	}); err != nil {
 		return err
 	}
 	issuers := []string{orders.identityPub, orders.signingPub}
@@ -195,7 +206,7 @@ var takeoverSeedsTemplate = parseFixture("takeover-seeds", `# The seeds nsc keep
 var takeoverMessagingTemplate = parseFixture("takeover-messaging", `# The existing NATS cluster: the config nsc generates for a full resolver,
 # preloading the system account alone, and a Job that pushes the account
 # orders as nsc push does, creates a stream in it and checks that its
-# revoked user is refused.
+# revoked user and the system account's are refused.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -242,6 +253,8 @@ stringData:
   orders.jwt: {{.OrdersJWT}}
   sys.creds: |
 {{range .Sys}}{{if .}}    {{.}}{{end}}
+{{end}}  sys-old.creds: |
+{{range .SysOld}}{{if .}}    {{.}}{{end}}
 {{end}}  orders-app.creds: |
 {{range .App}}{{if .}}    {{.}}{{end}}
 {{end}}  orders-worker.creds: |
@@ -333,6 +346,11 @@ spec:
               nats --creds /nsc/orders-worker.creds pub orders.created '{"id": 1}'
               if refused=$(nats --creds /nsc/orders-old.creds pub orders.created '{"id": 0}' 2>&1); then
                 echo "the revoked user published"
+                exit 1
+              fi
+              echo "$refused" | grep -qi 'authorization violation'
+              if refused=$(nats --creds /nsc/sys-old.creds pub orders.created '{"id": 0}' 2>&1); then
+                echo "the revoked user of the system account published"
                 exit 1
               fi
               echo "$refused" | grep -qi 'authorization violation'

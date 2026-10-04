@@ -1,6 +1,7 @@
 # The users nsc issued, against the account as the auth controller signs it:
 # the limit the story raises has reached the servers, the stream is still
-# there, both users connect, and the revoked user is refused.
+# there, both users connect, and the revoked user of the account and the
+# revoked user of the system account are refused.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -25,6 +26,11 @@ spec:
               nats --creds /nsc/orders-worker.creds pub orders.created '{"id": 2}'
               if refused=$(nats --creds /nsc/orders-old.creds pub orders.created '{"id": 0}' 2>&1); then
                 echo "the revoked user published"
+                exit 1
+              fi
+              echo "$refused" | grep -qi 'authorization violation'
+              if refused=$(nats --creds /nsc/sys-old.creds pub orders.created '{"id": 0}' 2>&1); then
+                echo "the revoked user of the system account published"
                 exit 1
               fi
               echo "$refused" | grep -qi 'authorization violation'

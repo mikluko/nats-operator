@@ -14,3 +14,8 @@ status:
     servers: 3
     current: 3
     lastPushTime: !any "2026-10-04T18:02:11Z"
+  revocations:
+    - publicKey: !any USYSOLD...
+      at: !any "2026-10-04T17:40:52Z"
+      issuers:
+        - !any ASYS...SIGNING1

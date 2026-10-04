@@ -13,7 +13,7 @@ params:
         reason: the public keys of the NATS operator and system account e2e/00-messaging.yaml runs under, from internal/e2e/fixtures
         patchFile: e2e/natsoperator-status.json
       - files: [01-status-natssystemaccount.yaml]
-        reason: the public key of the system account e2e/00-messaging.yaml runs under, from internal/e2e/fixtures
+        reason: the public key of the system account e2e/00-messaging.yaml runs under, and the user that account revokes, from internal/e2e/fixtures
         patchFile: e2e/natssystemaccount-status.json
       - files: [02-status-natsaccount.yaml, 03-status-natsaccount.yaml]
         reason: the public key of the account the Job in e2e/00-messaging.yaml pushes, and the user that account revokes, from internal/e2e/fixtures
@@ -78,7 +78,9 @@ Revocations carry over: the auth controller reads them from the JWT on the serve
 An account that has no signing key keeps its revocations too, and rotating a signing key later does not drop them.
 An account that revokes every user, with the key `*`, is not signed: its `NatsAccount` has the condition `Ready` False with the reason `InvalidJWT`, and its JWT on the servers stays as it is.
 
-The system account always loses its revocations and its exports, the two exports that `nsc` gives it included.
+The system account keeps its revocations too, until you rotate its signing keys: its revocations list signing keys alone as their `issuers`.
+It keeps the two exports that `nsc` gives it, `account-monitoring-services` and `account-monitoring-streams`, which the auth controller signs into every system account.
+It loses any other export and every import, because a `NatsSystemAccount` has no field for them.
 
 [AccountLimits]({{< relref "/docs/reference/api#AccountLimits" >}}) and [Export]({{< relref "/docs/reference/api#Export" >}}) in the API reference list every field.
 
@@ -161,6 +163,8 @@ The `status` in the output is similar to this:
 
 {{< manifest "01-status-natssystemaccount.yaml" >}}
 
+`revocations` lists the user that the system account revoked under `nsc`.
+
 Wait until `Distributed` is True before you apply an account.
 The auth controller can then ask every server for the JWT that it holds, which is where the revocations of an account come from.
 
@@ -214,6 +218,14 @@ The auth controller creates the creds of a new user from a `NatsUser`, as [Put a
    ```
 
    The server refuses the connection with `Authorization Violation`.
+
+1. Publish with the creds of the user that the system account revoked:
+
+   ```sh
+   nats -s nats://localhost:4222 --creds sys-old.creds pub orders.created '{"id": 0}'
+   ```
+
+   The server refuses this connection in the same way.
 
 ## Change a limit of the account
 
