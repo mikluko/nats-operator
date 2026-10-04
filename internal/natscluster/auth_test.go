@@ -515,8 +515,7 @@ func TestClustersTrusting(t *testing.T) {
 
 // skipUnderRace skips a test under the race detector, which trips on
 // nats-server 2.15 comparing a resolver's atomically updated expiry counter
-// with reflect.DeepEqual on every reload. `just test` runs these tests again
-// without -race.
+// with reflect.DeepEqual on every reload. `just test` runs these tests.
 func skipUnderRace(t *testing.T) {
 	t.Helper()
 	if raceEnabled {

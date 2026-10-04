@@ -1,3 +1,8 @@
+// The analysis starts no goroutines and runs several times slower under the
+// race detector.
+
+//go:build !race
+
 package main
 
 import (
@@ -36,8 +41,6 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 	"github.com/mikluko/nats-operator/internal/manager"
 )
-
-const root = "../.."
 
 const (
 	clientPkg         = "sigs.k8s.io/controller-runtime/pkg/client"
