@@ -58,7 +58,7 @@ func supercluster(dir string) error {
 
 var superclusterTemplate = parseFixture("supercluster", `{{template "keys" (dict "name" "acme-operator" "identity" .OperatorIdentity "signing" .OperatorSigning)}}---
 {{template "keys" (dict "name" "sys" "identity" .SystemIdentity "signing" .SystemSigning)}}---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsOperator
 metadata:
   name: acme
@@ -70,7 +70,7 @@ spec:
 {{template "systemAccount"}}---
 {{template "sysuser" "cluster-controller"}}---
 {{template "sysuser" "auth-controller"}}---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata:
   name: auth-controller

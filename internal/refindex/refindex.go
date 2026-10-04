@@ -20,9 +20,9 @@ import (
 const (
 	// ConnectionField holds "namespace/name" of each NatsConnection a
 	// resource names.
-	ConnectionField = "jetstream.nats.mikluko.io/connection"
+	ConnectionField = "jetstream.nats-operator.io/connection"
 	// UIDField holds a resource's UID.
-	UIDField = "jetstream.nats.mikluko.io/uid"
+	UIDField = "jetstream.nats-operator.io/uid"
 )
 
 // IndexConnections registers ConnectionField for obj's kind; refs returns

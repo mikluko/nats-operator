@@ -18,8 +18,8 @@ func TestCreateOrUpdate_RefusesUncontrolled(t *testing.T) {
 	nc := storyCluster(t)
 	nc.UID = types.UID("nc-uid")
 	other := metav1.OwnerReference{APIVersion: "apps/v1", Kind: "Deployment", Name: "other", UID: "other-uid", Controller: ptr.To(true)}
-	ours := metav1.OwnerReference{APIVersion: "cluster.nats.mikluko.io/v1beta1", Kind: "NatsCluster", Name: nc.Name, UID: nc.UID, Controller: ptr.To(true)}
-	owner := metav1.OwnerReference{APIVersion: "cluster.nats.mikluko.io/v1beta1", Kind: "NatsCluster", Name: nc.Name, UID: nc.UID}
+	ours := metav1.OwnerReference{APIVersion: "cluster.nats-operator.io/v1beta1", Kind: "NatsCluster", Name: nc.Name, UID: nc.UID, Controller: ptr.To(true)}
+	owner := metav1.OwnerReference{APIVersion: "cluster.nats-operator.io/v1beta1", Kind: "NatsCluster", Name: nc.Name, UID: nc.UID}
 
 	for _, tc := range []struct {
 		name    string

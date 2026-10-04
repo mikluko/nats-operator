@@ -51,22 +51,22 @@ tests:
             - apiGroups: [cert-manager.io]
               resources: [certificates]
               verbs: [create, delete, get, update]
-            - apiGroups: [cluster.nats.mikluko.io]
+            - apiGroups: [cluster.nats-operator.io]
               resources: [natsclusters]
               verbs: [get, list, patch, watch]
-            - apiGroups: [cluster.nats.mikluko.io]
+            - apiGroups: [cluster.nats-operator.io]
               resources: [natsclusters/finalizers]
               verbs: [update]
-            - apiGroups: [cluster.nats.mikluko.io]
+            - apiGroups: [cluster.nats-operator.io]
               resources: [natsclusters/status]
               verbs: [patch]
             - apiGroups: [events.k8s.io]
               resources: [events]
               verbs: [create, patch]
-            - apiGroups: [nats.mikluko.io]
+            - apiGroups: [nats-operator.io]
               resources: [natsaccounttrusts, natsconnections, natsoperatortrusts]
               verbs: [get, list, watch]
-            - apiGroups: [nats.mikluko.io]
+            - apiGroups: [nats-operator.io]
               resources: [natsreferencegrants]
               verbs: [list, watch]
             - apiGroups: [networking.k8s.io]
@@ -95,7 +95,7 @@ tests:
               verbs: [create]
             - apiGroups: [coordination.k8s.io]
               resources: [leases]
-              resourceNames: [rel-cluster.nats.mikluko.io]
+              resourceNames: [rel-cluster.nats-operator.io]
               verbs: [get, update, patch]
             - apiGroups: [""]
               resources: [events]
@@ -111,7 +111,7 @@ tests:
           content: --leader-elect=true
       - contains:
           path: spec.template.spec.containers[0].args
-          content: --leader-election-id=rel-cluster.nats.mikluko.io
+          content: --leader-election-id=rel-cluster.nats-operator.io
   - it: tags its image with the chart's appVersion by default
     chart:
       appVersion: 9.8.7
@@ -172,13 +172,13 @@ tests:
       extraArgs: [--leader-election-id=other]
     asserts:
       - failedTemplate:
-          errorMessage: 'extraArgs entry "--leader-election-id=other" sets the lease name, which the chart fixes as rel-cluster.nats.mikluko.io'
+          errorMessage: 'extraArgs entry "--leader-election-id=other" sets the lease name, which the chart fixes as rel-cluster.nats-operator.io'
   - it: refuses a controller's extraArgs entry setting -leader-election-id, its value apart
     set:
       cluster.extraArgs: [-leader-election-id, other]
     asserts:
       - failedTemplate:
-          errorMessage: 'extraArgs entry "-leader-election-id" sets the lease name, which the chart fixes as rel-cluster.nats.mikluko.io'
+          errorMessage: 'extraArgs entry "-leader-election-id" sets the lease name, which the chart fixes as rel-cluster.nats-operator.io'
   - it: refuses an extraArgs entry setting --leader-elect=false
     set:
       cluster.replicas: 2
@@ -460,7 +460,7 @@ tests:
           path: spec.template.spec.containers[0].args
           value:
             - --leader-elect=true
-            - --leader-election-id=rel-cluster.nats.mikluko.io
+            - --leader-election-id=rel-cluster.nats-operator.io
             - --metrics-bind-address=:8080
             - --health-probe-bind-address=:8081
             - --zap-log-level=debug
@@ -483,7 +483,7 @@ tests:
           path: spec.template.spec.containers[0].args
           value:
             - --leader-elect=true
-            - --leader-election-id=rel-cluster.nats.mikluko.io
+            - --leader-election-id=rel-cluster.nats-operator.io
             - --metrics-bind-address=:8080
             - --health-probe-bind-address=:8081
             - --metrics-cert-dir=/var/run/secrets/nats-operator/metrics-tls
@@ -611,22 +611,22 @@ tests:
             - apiGroups: [cert-manager.io]
               resources: [certificates]
               verbs: [create, delete, get, update]
-            - apiGroups: [cluster.nats.mikluko.io]
+            - apiGroups: [cluster.nats-operator.io]
               resources: [natsclusters]
               verbs: [get, list, patch, watch]
-            - apiGroups: [cluster.nats.mikluko.io]
+            - apiGroups: [cluster.nats-operator.io]
               resources: [natsclusters/finalizers]
               verbs: [update]
-            - apiGroups: [cluster.nats.mikluko.io]
+            - apiGroups: [cluster.nats-operator.io]
               resources: [natsclusters/status]
               verbs: [patch]
             - apiGroups: [events.k8s.io]
               resources: [events]
               verbs: [create, patch]
-            - apiGroups: [nats.mikluko.io]
+            - apiGroups: [nats-operator.io]
               resources: [natsaccounttrusts, natsconnections, natsoperatortrusts]
               verbs: [get, list, watch]
-            - apiGroups: [nats.mikluko.io]
+            - apiGroups: [nats-operator.io]
               resources: [natsreferencegrants]
               verbs: [list, watch]
             - apiGroups: [networking.k8s.io]

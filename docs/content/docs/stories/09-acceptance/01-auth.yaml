@@ -1,4 +1,4 @@
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsOperator
 metadata:
   name: acme
@@ -7,7 +7,7 @@ spec:
   systemAccountRef:
     name: sys
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsSystemAccount
 metadata:
   name: sys
@@ -16,7 +16,7 @@ spec:
   operatorRef:
     name: acme
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata:
   name: checks-prod
@@ -29,7 +29,7 @@ spec:
       type: Service
       subject: "checks.run.>"
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata:
   name: monitoring-prod
@@ -60,7 +60,7 @@ spec:
         name: checks-prod
       export: run
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata:
   name: core-prod
@@ -78,7 +78,7 @@ spec:
         name: monitoring-prod
       export: configure
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata:
   name: collector-prod

@@ -21,7 +21,7 @@ type NatsReferenceGrantSpec struct {
 // ReferenceGrantFrom names a kind of referrer in one namespace.
 type ReferenceGrantFrom struct {
 	// Group is the referrer's API group, matched exactly, such as
-	// cluster.nats.mikluko.io.
+	// cluster.nats-operator.io.
 	// +required
 	// +kubebuilder:validation:MinLength=1
 	Group string `json:"group"`
@@ -40,7 +40,7 @@ type ReferenceGrantFrom struct {
 // ReferenceGrantTo names a kind of object in the grant's namespace.
 type ReferenceGrantTo struct {
 	// Group is the referenced object's API group, matched exactly, such as
-	// nats.mikluko.io.
+	// nats-operator.io.
 	// +required
 	// +kubebuilder:validation:MinLength=1
 	Group string `json:"group"`

@@ -1,6 +1,6 @@
 # The orders account in the story 6 supercluster, and the orders team's
 # connection to it through east.
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata:
   name: orders
@@ -13,22 +13,22 @@ spec:
       memoryStorage: 64Mi
       diskStorage: 8Gi
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsReferenceGrant
 metadata:
   name: orders-users
   namespace: nats-system
 spec:
   from:
-    - group: auth.nats.mikluko.io
+    - group: auth.nats-operator.io
       kind: NatsUser
       namespace: orders
   to:
-    - group: auth.nats.mikluko.io
+    - group: auth.nats-operator.io
       kind: NatsAccount
       name: orders
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: acme-orders
@@ -42,7 +42,7 @@ spec:
     secretKeyRef:
       name: acme-orders-creds
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata:
   name: acme-orders

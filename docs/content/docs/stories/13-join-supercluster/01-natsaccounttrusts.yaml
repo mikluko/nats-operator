@@ -1,4 +1,4 @@
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsAccountTrust
 metadata:
   name: orders
@@ -7,7 +7,7 @@ spec:
   publicKey: AORDERS...
   jwt: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsAccountTrust
 metadata:
   name: payments

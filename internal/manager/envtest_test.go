@@ -65,7 +65,7 @@ func TestEnvtestStart(t *testing.T) {
 	ran := make(chan struct{})
 	c := Controller{
 		Name:  "test-controller",
-		Group: "test.nats.mikluko.io",
+		Group: "test.nats-operator.io",
 		Setup: func(_ context.Context, mgr ctrl.Manager) error {
 			return mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
 				close(ran)
@@ -98,7 +98,7 @@ func TestEnvtestCache(t *testing.T) {
 	cfg := startEnvtest(t).Config
 	scheme, err := NewScheme()
 	require.NoError(t, err)
-	owned := Owned{Label: "test.nats.mikluko.io/owner", Kinds: []client.Object{&corev1.ConfigMap{}}}
+	owned := Owned{Label: "test.nats-operator.io/owner", Kinds: []client.Object{&corev1.ConfigMap{}}}
 	recorded, reads := secretreads.Record(cfg)
 	mgr, err := New(recorded, &Options{MetricsAddr: "0", ProbeAddr: "0"}, scheme, owned)
 	require.NoError(t, err)
@@ -280,7 +280,7 @@ func TestEnvtestReadyUnelected(t *testing.T) {
 	admin, err := client.New(cfg, client.Options{Scheme: scheme})
 	require.NoError(t, err)
 
-	const ns, id = "default", "test.nats.mikluko.io"
+	const ns, id = "default", "test.nats-operator.io"
 	now := metav1.NewMicroTime(time.Now())
 	require.NoError(t, admin.Create(t.Context(), &coordinationv1.Lease{
 		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: id},
@@ -353,7 +353,7 @@ func TestEnvtestReleasesLease(t *testing.T) {
 	admin, err := client.New(cfg, client.Options{Scheme: scheme})
 	require.NoError(t, err)
 
-	const ns, id = "default", "release.nats.mikluko.io"
+	const ns, id = "default", "release.nats-operator.io"
 	opts, err := managerOptions(&Options{MetricsAddr: "0", ProbeAddr: "0", LeaderElection: true, LeaderElectionID: id}, scheme, Owned{})
 	require.NoError(t, err)
 	opts.LeaderElectionNamespace = ns

@@ -10,8 +10,8 @@ import (
 
 // Metadata keys of the ownership marker.
 const (
-	OwnerKey  = "jetstream.nats.mikluko.io/owner"
-	OriginKey = "jetstream.nats.mikluko.io/origin"
+	OwnerKey  = "jetstream.nats-operator.io/owner"
+	OriginKey = "jetstream.nats-operator.io/origin"
 )
 
 // reservedPrefix marks the metadata keys nats-server writes itself.

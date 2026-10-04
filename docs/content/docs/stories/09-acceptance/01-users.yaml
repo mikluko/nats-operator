@@ -1,4 +1,4 @@
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: monitoring-prod-service
@@ -17,7 +17,7 @@ spec:
     secretKeyRef:
       name: nats-service-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: monitoring-prod-readonly
@@ -32,7 +32,7 @@ spec:
     secretKeyRef:
       name: nats-readonly-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: checks-prod-service
@@ -50,7 +50,7 @@ spec:
     secretKeyRef:
       name: checks-prod-service-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: checks-prod-readonly
@@ -64,7 +64,7 @@ spec:
     secretKeyRef:
       name: checks-prod-readonly-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: core-prod-service
@@ -82,7 +82,7 @@ spec:
     secretKeyRef:
       name: core-prod-service-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: core-prod-readonly
@@ -96,7 +96,7 @@ spec:
     secretKeyRef:
       name: core-prod-readonly-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: collector-prod-service
@@ -114,7 +114,7 @@ spec:
     secretKeyRef:
       name: collector-prod-service-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: collector-prod-readonly
@@ -128,7 +128,7 @@ spec:
     secretKeyRef:
       name: collector-prod-readonly-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: dev-east-cluster-controller
@@ -142,7 +142,7 @@ spec:
     secretKeyRef:
       name: dev-east-cluster-controller-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: dev-east-jetstream-controller
@@ -156,7 +156,7 @@ spec:
     secretKeyRef:
       name: dev-east-jetstream-controller-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: prod-west-cluster-controller
@@ -170,7 +170,7 @@ spec:
     secretKeyRef:
       name: prod-west-cluster-controller-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: prod-west-jetstream-controller
@@ -184,20 +184,20 @@ spec:
     secretKeyRef:
       name: prod-west-jetstream-controller-creds
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsReferenceGrant
 metadata:
   name: monitoring-users
   namespace: nats-system
 spec:
   from:
-    - group: auth.nats.mikluko.io
+    - group: auth.nats-operator.io
       kind: NatsUser
       namespace: monitoring
   to:
-    - group: auth.nats.mikluko.io
+    - group: auth.nats-operator.io
       kind: NatsAccount
       name: monitoring-prod
-    - group: auth.nats.mikluko.io
+    - group: auth.nats-operator.io
       kind: NatsAccount
       name: monitoring-dev

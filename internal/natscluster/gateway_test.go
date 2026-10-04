@@ -219,7 +219,7 @@ func TestGatewayCertificate(t *testing.T) {
 		"kind": "Certificate",
 		"metadata": {"name": "west-gateway", "namespace": "nats-system", "labels": {
 			"app.kubernetes.io/instance": "west", "app.kubernetes.io/managed-by": "cluster-controller",
-			"app.kubernetes.io/name": "nats", "cluster.nats.mikluko.io/cluster": "west"}},
+			"app.kubernetes.io/name": "nats", "cluster.nats-operator.io/cluster": "west"}},
 		"spec": {
 			"secretName": "west-gateway-tls",
 			"dnsNames": ["nats-west.example.net"],

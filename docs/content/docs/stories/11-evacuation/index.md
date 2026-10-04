@@ -127,5 +127,5 @@ The `status` in the output is similar to this:
 `Deleting` is True with the reason `JetStreamDataRemains`, and its message lists the stream groups that are still in `prod-east`.
 Move them, and the deletion finishes.
 
-To delete the `NatsCluster` together with the data that it still has, set the annotation `cluster.nats.mikluko.io/force-delete` on it.
+To delete the `NatsCluster` together with the data that it still has, set the annotation `cluster.nats-operator.io/force-delete` on it.
 [Deletion guard]({{< relref "/docs/design/v1#46-deletion-guard" >}}) in the design describes what the deletion waits for.

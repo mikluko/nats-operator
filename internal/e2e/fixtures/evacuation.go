@@ -48,7 +48,7 @@ type evacuationData struct {
 	orders, payments                  jwtplane.Keys
 }
 
-var evacuationTemplate = parseFixture("evacuation", `{{define "account"}}apiVersion: auth.nats.mikluko.io/v1beta1
+var evacuationTemplate = parseFixture("evacuation", `{{define "account"}}apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata:
   name: {{.}}
@@ -60,7 +60,7 @@ spec:
     jetstream:
       memoryStorage: 64Mi
       diskStorage: 1Gi
-{{template "adopt" .}}{{end}}{{define "connection"}}apiVersion: nats.mikluko.io/v1beta1
+{{template "adopt" .}}{{end}}{{define "connection"}}apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata:
   name: {{.}}
@@ -74,7 +74,7 @@ spec:
 {{template "keys" (dict "name" "sys" "identity" .SystemIdentity "signing" .SystemSigning)}}---
 {{template "keys" (dict "name" "orders" "identity" .OrdersIdentity "signing" .OrdersSigning)}}---
 {{template "keys" (dict "name" "payments" "identity" .PaymentsIdentity "signing" .PaymentsSigning)}}---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsOperator
 metadata:
   name: acme
@@ -86,7 +86,7 @@ spec:
 {{template "systemAccount"}}---
 {{template "account" "orders"}}---
 {{template "account" "payments"}}---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsOperatorTrust
 metadata:
   name: acme
@@ -98,7 +98,7 @@ spec:
 {{template "sysuser" "cluster-controller"}}---
 {{template "sysuser" "auth-controller"}}---
 {{template "sysuser" "jetstream-controller"}}---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata:
   name: auth-controller
@@ -109,7 +109,7 @@ spec:
     secretKeyRef:
       name: auth-controller-creds
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata:
   name: prod-east-sys

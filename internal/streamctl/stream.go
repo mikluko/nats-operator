@@ -23,9 +23,9 @@ import (
 // StreamKind is the kind a NatsStream is referred to by.
 const StreamKind = "NatsStream"
 
-// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsstreams,verbs=get;list;watch;patch
-// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsstreams/status,verbs=patch
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
+// +kubebuilder:rbac:groups=jetstream.nats-operator.io,resources=natsstreams,verbs=get;list;watch;patch
+// +kubebuilder:rbac:groups=jetstream.nats-operator.io,resources=natsstreams/status,verbs=patch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
 
 // StreamReconciler keeps NatsStreams' streams at their specs through their
 // connections, under their lifecycle policies.

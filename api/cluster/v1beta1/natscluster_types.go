@@ -15,13 +15,13 @@ import (
 const (
 	// AnnotationForceStep pushes the rollout step for the named server
 	// through its gate.
-	AnnotationForceStep = "cluster.nats.mikluko.io/force-step"
+	AnnotationForceStep = "cluster.nats-operator.io/force-step"
 	// AnnotationReplaceServer replaces the named server under the rollout
 	// gate.
-	AnnotationReplaceServer = "cluster.nats.mikluko.io/replace-server"
+	AnnotationReplaceServer = "cluster.nats-operator.io/replace-server"
 	// AnnotationForceDelete lets deletion proceed while JetStream data
 	// remains.
-	AnnotationForceDelete = "cluster.nats.mikluko.io/force-delete"
+	AnnotationForceDelete = "cluster.nats-operator.io/force-delete"
 )
 
 // NatsClusterSpec is the desired state of a NATS cluster.

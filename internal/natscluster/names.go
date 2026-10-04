@@ -8,40 +8,40 @@ import (
 
 // Labels and annotations the cluster controller sets on what it renders.
 const (
-	LabelCluster = "cluster.nats.mikluko.io/cluster"
-	LabelServer  = "cluster.nats.mikluko.io/server"
+	LabelCluster = "cluster.nats-operator.io/cluster"
+	LabelServer  = "cluster.nats-operator.io/server"
 
 	// AnnotationConfigRevision on a server's StatefulSet and ConfigMap names
 	// the config revision they were rendered at; on its pod template, the
 	// revision its pod was last restarted for.
-	AnnotationConfigRevision = "cluster.nats.mikluko.io/config-revision"
+	AnnotationConfigRevision = "cluster.nats-operator.io/config-revision"
 
 	// AnnotationRestartGeneration on a server's pod template counts the
 	// restarts for the revision the template already names, so that every
 	// restart changes the template.
-	AnnotationRestartGeneration = "cluster.nats.mikluko.io/restart-generation"
+	AnnotationRestartGeneration = "cluster.nats-operator.io/restart-generation"
 
 	// AnnotationSpecDigest on a server's StatefulSet is a digest of the
 	// spec it was rendered with; a change to it restarts the server.
-	AnnotationSpecDigest = "cluster.nats.mikluko.io/spec-digest"
+	AnnotationSpecDigest = "cluster.nats-operator.io/spec-digest"
 
 	// AnnotationVolumeDigest on a server's StatefulSet is a digest of the
 	// volume claim templates it was created with; a change to it replaces
 	// the server.
-	AnnotationVolumeDigest = "cluster.nats.mikluko.io/volume-digest"
+	AnnotationVolumeDigest = "cluster.nats-operator.io/volume-digest"
 
 	// AnnotationConfigApply on a server's ConfigMap is how the revision it
 	// holds is applied: Reload while the cluster controller reloads it,
 	// Restart once the reload failed.
-	AnnotationConfigApply = "cluster.nats.mikluko.io/config-apply"
+	AnnotationConfigApply = "cluster.nats-operator.io/config-apply"
 
 	// AnnotationRestartReason on a server's ConfigMap names what made its
 	// revision restart-only.
-	AnnotationRestartReason = "cluster.nats.mikluko.io/restart-reason"
+	AnnotationRestartReason = "cluster.nats-operator.io/restart-reason"
 
 	// AnnotationReloadSince on a server's ConfigMap is when it was written
 	// for a reload, in RFC 3339.
-	AnnotationReloadSince = "cluster.nats.mikluko.io/reload-since"
+	AnnotationReloadSince = "cluster.nats-operator.io/reload-since"
 
 	// MetadataConfigRevision is the server_metadata key a server reports
 	// its config revision under.

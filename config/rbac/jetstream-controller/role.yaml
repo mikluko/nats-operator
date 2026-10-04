@@ -32,7 +32,7 @@ rules:
   - create
   - patch
 - apiGroups:
-  - jetstream.nats.mikluko.io
+  - jetstream.nats-operator.io
   resources:
   - natsbalancers
   - natssystembalancers
@@ -41,7 +41,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - jetstream.nats.mikluko.io
+  - jetstream.nats-operator.io
   resources:
   - natsbalancers/status
   - natsclusterevacuations/status
@@ -53,7 +53,7 @@ rules:
   verbs:
   - patch
 - apiGroups:
-  - jetstream.nats.mikluko.io
+  - jetstream.nats-operator.io
   resources:
   - natsclusterevacuations
   - natsconsumers
@@ -66,7 +66,7 @@ rules:
   - patch
   - watch
 - apiGroups:
-  - nats.mikluko.io
+  - nats-operator.io
   resources:
   - natsconnections
   verbs:
@@ -74,13 +74,13 @@ rules:
   - list
   - watch
 - apiGroups:
-  - nats.mikluko.io
+  - nats-operator.io
   resources:
   - natsconnections/status
   verbs:
   - patch
 - apiGroups:
-  - nats.mikluko.io
+  - nats-operator.io
   resources:
   - natsreferencegrants
   verbs:

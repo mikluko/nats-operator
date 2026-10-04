@@ -71,7 +71,7 @@ var acceptanceTemplate = parseFixture("acceptance", `{{template "keys" (dict "na
 {{template "sysuser" "cluster-controller"}}---
 {{template "sysuser" "auth-controller"}}---
 {{template "sysuser" "jetstream-controller"}}---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata:
   name: auth-controller

@@ -37,19 +37,19 @@ func notReady(ct *assert.CollectT, conds []metav1.Condition, reason string) {
 // place.
 func (e *env) testLostSeed(t *testing.T) {
 	e.apply(t, `
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsOperator
 metadata: {name: lost, namespace: lost}
 spec:
   systemAccountRef: {name: sys}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsSystemAccount
 metadata: {name: sys, namespace: lost}
 spec:
   operatorRef: {name: lost}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata: {name: app, namespace: lost}
 spec:
@@ -94,19 +94,19 @@ spec:
 // the objects applied again come back under the same keys.
 func (e *env) testSeedsOutliveOwner(t *testing.T) {
 	manifest := `
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsOperator
 metadata: {name: keep, namespace: keep}
 spec:
   systemAccountRef: {name: sys}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsSystemAccount
 metadata: {name: sys, namespace: keep}
 spec:
   operatorRef: {name: keep}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata: {name: app, namespace: keep}
 spec:
@@ -151,30 +151,30 @@ spec:
 // the NatsOperator is refused.
 func (e *env) testAccountKeyHeld(t *testing.T) {
 	e.apply(t, `
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsOperator
 metadata: {name: home, namespace: tenancy}
 spec:
   systemAccountRef: {name: sys}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsSystemAccount
 metadata: {name: sys, namespace: tenancy}
 spec:
   operatorRef: {name: home}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata: {name: victim, namespace: tenancy}
 spec:
   operatorRef: {name: home}
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsReferenceGrant
 metadata: {name: thief, namespace: tenancy}
 spec:
-  from: [{group: auth.nats.mikluko.io, kind: NatsAccount, namespace: thief}]
-  to: [{group: auth.nats.mikluko.io, kind: NatsOperator, name: home}]
+  from: [{group: auth.nats-operator.io, kind: NatsAccount, namespace: thief}]
+  to: [{group: auth.nats-operator.io, kind: NatsOperator, name: home}]
 `)
 	home := key("tenancy", "home")
 	sys, victim := &authv1beta1.NatsSystemAccount{}, &authv1beta1.NatsAccount{}
@@ -192,7 +192,7 @@ spec:
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e.apply(t, fmt.Sprintf(`
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata: {name: %s, namespace: thief}
 spec:
@@ -236,7 +236,7 @@ func (e *env) testAccountKeySquatted(t *testing.T) {
 	e.seedSecret(t, "tenancy", "restored-signing", nkeys.PrefixByteAccount)
 	e.seedSecret(t, "tenancy", "fresh-signing", nkeys.PrefixByteAccount)
 	e.apply(t, fmt.Sprintf(`
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata: {name: squatter, namespace: squat}
 spec:
@@ -245,7 +245,7 @@ spec:
   keys:
     signing: [{name: s, secretKeyRef: {name: squat-signing, key: seed}}]
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsSystemAccount
 metadata: {name: decoy, namespace: thief}
 spec:
@@ -263,7 +263,7 @@ spec:
 
 	for _, tc := range []struct{ name, pub string }{{"restored", restored}, {"fresh", fresh}} {
 		e.apply(t, fmt.Sprintf(`
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata: {name: %s, namespace: tenancy}
 spec:
@@ -291,13 +291,13 @@ func (e *env) testSystemKeyUnrecorded(t *testing.T) {
 	lateSigning := e.seedSecret(t, "claim", "late-signing", nkeys.PrefixByteAccount)
 	e.seedSecret(t, "claim", "early-signing", nkeys.PrefixByteAccount)
 	e.apply(t, `
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsOperator
 metadata: {name: adopt, namespace: adopt}
 spec:
   systemAccountRef: {name: sys}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsSystemAccount
 metadata: {name: sys, namespace: adopt}
 spec:
@@ -306,16 +306,16 @@ spec:
     identity: {secretKeyRef: {name: sys-first, key: seed}}
     signing: [{name: s, secretKeyRef: {name: sys-signing, key: seed}}]
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsReferenceGrant
 metadata: {name: claim, namespace: adopt}
 spec:
-  from: [{group: auth.nats.mikluko.io, kind: NatsAccount, namespace: claim}]
-  to: [{group: auth.nats.mikluko.io, kind: NatsOperator, name: adopt}]
+  from: [{group: auth.nats-operator.io, kind: NatsAccount, namespace: claim}]
+  to: [{group: auth.nats-operator.io, kind: NatsOperator, name: adopt}]
 `)
 	claimer := func(name, pub string) string {
 		return fmt.Sprintf(`
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata: {name: %s, namespace: claim}
 spec:
@@ -389,18 +389,18 @@ func accountPub(t *testing.T) string {
 // records no key, and revokes nothing when deleted.
 func (e *env) testUserKeyHeld(t *testing.T) {
 	e.apply(t, `
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata: {name: alice, namespace: tenancy}
 spec:
   accountRef: {kind: NatsAccount, name: victim}
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsReferenceGrant
 metadata: {name: thief-users, namespace: tenancy}
 spec:
-  from: [{group: auth.nats.mikluko.io, kind: NatsUser, namespace: thief}]
-  to: [{group: auth.nats.mikluko.io, kind: NatsAccount, name: victim}]
+  from: [{group: auth.nats-operator.io, kind: NatsUser, namespace: thief}]
+  to: [{group: auth.nats-operator.io, kind: NatsAccount, name: victim}]
 `)
 	alice := &authv1beta1.NatsUser{}
 	e.eventually(t, func(ct *assert.CollectT) {
@@ -408,7 +408,7 @@ spec:
 		ready(ct, alice.Status.Conditions, alice.Generation, authctl.ReasonSigned)
 	})
 	e.apply(t, fmt.Sprintf(`
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata: {name: mallory, namespace: thief}
 spec:
@@ -444,7 +444,7 @@ spec:
 func (e *env) testReplacedUserKey(t *testing.T) {
 	k1, k2 := userPub(t), userPub(t)
 	e.apply(t, fmt.Sprintf(`
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata: {name: bob, namespace: tenancy}
 spec:
@@ -486,7 +486,7 @@ spec:
 func (e *env) testReplacedKeyRefused(t *testing.T) {
 	k1 := userPub(t)
 	e.apply(t, fmt.Sprintf(`
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata: {name: carol, namespace: tenancy}
 spec:
@@ -540,23 +540,23 @@ func userPub(t *testing.T) string {
 // again.
 func (e *env) testGrantWithdrawn(t *testing.T) {
 	const grantYAML = `
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsReferenceGrant
 metadata: {name: withdrawn, namespace: nats-system}
 spec:
-  from: [{group: auth.nats.mikluko.io, kind: NatsAccount, namespace: withdrawn}]
-  to: [{group: auth.nats.mikluko.io, kind: NatsOperator, name: demo}]
+  from: [{group: auth.nats-operator.io, kind: NatsAccount, namespace: withdrawn}]
+  to: [{group: auth.nats-operator.io, kind: NatsOperator, name: demo}]
 `
 	e.apply(t, grantYAML+`
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata: {name: tenant, namespace: withdrawn}
 spec:
   operatorRef: {name: demo, namespace: nats-system}
   jwtTTL: 0s
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata: {name: member, namespace: withdrawn}
 spec:

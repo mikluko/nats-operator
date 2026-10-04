@@ -14,7 +14,7 @@ import (
 	"github.com/mikluko/nats-operator/internal/grant"
 )
 
-const authGroup = "auth.nats.mikluko.io"
+const authGroup = "auth.nats-operator.io"
 
 func scheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
@@ -59,7 +59,7 @@ func TestAdmit(t *testing.T) {
 		{"grant names another object", []client.Object{paymentsGrant("payments")}, user("payments"), account("nats-system", "other"), true},
 		{"grant for another referrer kind", []client.Object{paymentsGrant("")}, grant.Referrer{Group: authGroup, Kind: "NatsAccount", Namespace: "payments"}, account("nats-system", "payments"), true},
 		{"grant for another target kind", []client.Object{paymentsGrant("")}, user("payments"), grant.Target{Group: authGroup, Kind: "NatsSystemAccount", Namespace: "nats-system", Name: "sys"}, true},
-		{"grant for another group", []client.Object{paymentsGrant("")}, grant.Referrer{Group: "jetstream.nats.mikluko.io", Kind: "NatsUser", Namespace: "payments"}, account("nats-system", "payments"), true},
+		{"grant for another group", []client.Object{paymentsGrant("")}, grant.Referrer{Group: "jetstream.nats-operator.io", Kind: "NatsUser", Namespace: "payments"}, account("nats-system", "payments"), true},
 		{"grant in another namespace", []client.Object{func() client.Object {
 			g := paymentsGrant("")
 			g.Namespace = "elsewhere"

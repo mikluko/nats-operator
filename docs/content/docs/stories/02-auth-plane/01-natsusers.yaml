@@ -1,4 +1,4 @@
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: orders-service
@@ -16,7 +16,7 @@ spec:
     secretKeyRef:
       name: orders-service-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: orders-batch
@@ -30,7 +30,7 @@ spec:
     publish:
       allow: ["orders.batch.>"]
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: orders-jetstream
@@ -48,7 +48,7 @@ spec:
     secretKeyRef:
       name: orders-jetstream-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: cluster-controller
@@ -62,7 +62,7 @@ spec:
     secretKeyRef:
       name: cluster-controller-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: jetstream-controller
@@ -76,7 +76,7 @@ spec:
     secretKeyRef:
       name: jetstream-controller-creds
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: auth-controller

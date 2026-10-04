@@ -311,7 +311,7 @@ func TestRoutesCertificate(t *testing.T) {
 		"kind": "Certificate",
 		"metadata": {"name": "demo-routes", "namespace": "nats-system", "labels": {
 			"app.kubernetes.io/instance": "demo", "app.kubernetes.io/managed-by": "cluster-controller",
-			"app.kubernetes.io/name": "nats", "cluster.nats.mikluko.io/cluster": "demo"}},
+			"app.kubernetes.io/name": "nats", "cluster.nats-operator.io/cluster": "demo"}},
 		"spec": {
 			"secretName": "demo-routes-tls",
 			"dnsNames": ["*.demo-headless.nats-system.svc", "*.demo-headless.nats-system.svc.cluster.local"],

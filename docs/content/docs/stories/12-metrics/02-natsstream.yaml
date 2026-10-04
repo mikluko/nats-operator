@@ -1,4 +1,4 @@
-apiVersion: jetstream.nats.mikluko.io/v1beta1
+apiVersion: jetstream.nats-operator.io/v1beta1
 kind: NatsStream
 metadata:
   name: events

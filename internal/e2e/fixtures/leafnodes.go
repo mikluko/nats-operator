@@ -97,7 +97,7 @@ var leafnodesEdgeTemplate = parseFixture("leafnodes-edge", `{{range $i, $s := .}
 var leafnodesHubTemplate = parseFixture("leafnodes-hub", `{{template "keys" (dict "name" "acme-operator" "identity" .OperatorIdentity "signing" .OperatorSigning)}}---
 {{template "keys" (dict "name" "sys" "identity" .SystemIdentity "signing" .SystemSigning)}}---
 {{template "keys" (dict "name" "telemetry" "identity" .TelemetryIdentity "signing" .TelemetrySigning)}}---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsOperator
 metadata:
   name: acme
@@ -108,7 +108,7 @@ spec:
 {{template "adopt" "acme-operator"}}---
 {{template "systemAccount"}}---
 # The edge preloads this account's JWT, which therefore never expires.
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata:
   name: telemetry
@@ -118,7 +118,7 @@ spec:
     name: acme
   jwtTTL: 0s
 {{template "adopt" "telemetry"}}---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsOperatorTrust
 metadata:
   name: acme
@@ -129,7 +129,7 @@ spec:
 ---
 {{template "sysuser" "cluster-controller"}}---
 {{template "sysuser" "auth-controller"}}---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata:
   name: auth-controller

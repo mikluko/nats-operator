@@ -58,10 +58,10 @@ const (
 	ReasonDisjoint = "PoolsDisjoint"
 )
 
-// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsbalancers,verbs=get;list;watch
-// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsbalancers/status,verbs=patch
-// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsstreams;natskeyvalues;natsobjectstores;natssystembalancers;natsclusterevacuations,verbs=list;watch
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
+// +kubebuilder:rbac:groups=jetstream.nats-operator.io,resources=natsbalancers,verbs=get;list;watch
+// +kubebuilder:rbac:groups=jetstream.nats-operator.io,resources=natsbalancers/status,verbs=patch
+// +kubebuilder:rbac:groups=jetstream.nats-operator.io,resources=natsstreams;natskeyvalues;natsobjectstores;natssystembalancers;natsclusterevacuations,verbs=list;watch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
 
 // BalancerReconciler runs each NatsBalancer's passes over its account's
 // streams, which its NatsConnection must reach as a user of that account.

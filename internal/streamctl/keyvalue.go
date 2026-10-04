@@ -20,9 +20,9 @@ import (
 // KeyValueKind is the kind a NatsKeyValue is referred to by.
 const KeyValueKind = "NatsKeyValue"
 
-// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natskeyvalues,verbs=get;list;watch;patch
-// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natskeyvalues/status,verbs=patch
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
+// +kubebuilder:rbac:groups=jetstream.nats-operator.io,resources=natskeyvalues,verbs=get;list;watch;patch
+// +kubebuilder:rbac:groups=jetstream.nats-operator.io,resources=natskeyvalues/status,verbs=patch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
 
 // KeyValueReconciler keeps NatsKeyValues' buckets at their specs through
 // nats.go's key-value manager, under their lifecycle policies. Drift is

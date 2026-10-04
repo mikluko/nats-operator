@@ -441,14 +441,14 @@ func (e *env) testServed(t *testing.T) {
 // private export; dropping the grant drops the import from the JWT.
 func (e *env) testCrossNamespaceImport(t *testing.T) {
 	e.apply(t, `
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsReferenceGrant
 metadata: {name: team-a, namespace: nats-system}
 spec:
-  from: [{group: auth.nats.mikluko.io, kind: NatsAccount, namespace: team-a}]
-  to: [{group: auth.nats.mikluko.io, kind: NatsOperator, name: demo}]
+  from: [{group: auth.nats-operator.io, kind: NatsAccount, namespace: team-a}]
+  to: [{group: auth.nats-operator.io, kind: NatsOperator, name: demo}]
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata: {name: billing, namespace: team-a}
 spec:
@@ -493,7 +493,7 @@ spec:
 
 	e.update(t, key("nats-system", "team-a"), &natsv1beta1.NatsReferenceGrant{}, func(o client.Object) {
 		g := o.(*natsv1beta1.NatsReferenceGrant)
-		g.Spec.To = append(g.Spec.To, natsv1beta1.ReferenceGrantTo{Group: "auth.nats.mikluko.io", Kind: "NatsAccount", Name: "monitoring"})
+		g.Spec.To = append(g.Spec.To, natsv1beta1.ReferenceGrantTo{Group: "auth.nats-operator.io", Kind: "NatsAccount", Name: "monitoring"})
 	})
 	e.eventually(t, state(false, authctl.ReasonImportsUnresolved, authctl.ReasonImportsUnresolved, "check-results"))
 
@@ -516,19 +516,19 @@ spec:
 // importer from Ready.
 func (e *env) testImportFromOtherOperator(t *testing.T) {
 	e.apply(t, `
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsOperator
 metadata: {name: foreign, namespace: foreign}
 spec:
   systemAccountRef: {name: sys}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsSystemAccount
 metadata: {name: sys, namespace: foreign}
 spec:
   operatorRef: {name: foreign}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata: {name: exporter, namespace: foreign}
 spec:
@@ -536,7 +536,7 @@ spec:
   exports:
     - {name: events, type: Stream, subject: "foreign.events.>"}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata: {name: importer, namespace: foreign}
 spec:
@@ -545,12 +545,12 @@ spec:
     - accountRef: {kind: NatsAccount, name: exporter}
       export: events
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsReferenceGrant
 metadata: {name: foreign, namespace: nats-system}
 spec:
-  from: [{group: auth.nats.mikluko.io, kind: NatsAccount, namespace: foreign}]
-  to: [{group: auth.nats.mikluko.io, kind: NatsOperator, name: demo}]
+  from: [{group: auth.nats-operator.io, kind: NatsAccount, namespace: foreign}]
+  to: [{group: auth.nats-operator.io, kind: NatsOperator, name: demo}]
 `)
 	var exporter, importer authv1beta1.NatsAccount
 	e.eventually(t, func(ct *assert.CollectT) {
@@ -579,20 +579,20 @@ spec:
 // of NatsAccountTrust, within its namespace and, without a grant, across.
 func (e *env) testNoExpiryAndAccountTrust(t *testing.T) {
 	e.apply(t, `
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata: {name: telemetry, namespace: nats-system}
 spec:
   operatorRef: {name: demo}
   jwtTTL: 0s
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsAccountTrust
 metadata: {name: telemetry, namespace: nats-system}
 spec:
   accountRef: {name: telemetry}
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsAccountTrust
 metadata: {name: telemetry, namespace: team-a}
 spec:
@@ -629,7 +629,7 @@ func (e *env) testRotation(t *testing.T) {
 		pubs[name] = e.seedSecret(t, "rot", name, prefix)
 	}
 	e.apply(t, `
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsOperator
 metadata: {name: rot, namespace: rot}
 spec:
@@ -638,13 +638,13 @@ spec:
     signing: [{name: k1, secretKeyRef: {name: rot-k1, key: seed}}]
   systemAccountRef: {name: sys}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsSystemAccount
 metadata: {name: sys, namespace: rot}
 spec:
   operatorRef: {name: rot}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata: {name: app, namespace: rot}
 spec:
@@ -731,7 +731,7 @@ func (e *env) testOfflineIdentities(t *testing.T) {
 	require.NoError(t, err)
 
 	e.apply(t, fmt.Sprintf(`
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsOperator
 metadata: {name: offline, namespace: offline}
 spec:
@@ -740,7 +740,7 @@ spec:
     signing: [{name: s, secretKeyRef: {name: op-signing, key: seed}}]
   systemAccountRef: {name: sys}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsSystemAccount
 metadata: {name: sys, namespace: offline}
 spec:
@@ -749,7 +749,7 @@ spec:
   keys:
     signing: [{name: s, secretKeyRef: {name: sys-signing, key: seed}}]
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata: {name: app, namespace: offline}
 spec:
@@ -758,7 +758,7 @@ spec:
   keys:
     signing: [{name: s, secretKeyRef: {name: acc-signing, key: seed}}]
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsOperator
 metadata: {name: stray, namespace: offline}
 spec:
@@ -767,7 +767,7 @@ spec:
     signing: [{name: s, secretKeyRef: {name: op-signing, key: seed}}]
   systemAccountRef: {name: stray-sys}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsSystemAccount
 metadata: {name: stray-sys, namespace: offline}
 spec:
@@ -818,32 +818,32 @@ spec:
 // account JWT.
 func (e *env) testFlipAndStepdown(t *testing.T) {
 	e.apply(t, `
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsOperator
 metadata: {name: flip, namespace: flip}
 spec:
   systemAccountRef: {name: sys-a}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsSystemAccount
 metadata: {name: sys-a, namespace: flip}
 spec:
   operatorRef: {name: flip}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsSystemAccount
 metadata: {name: sys-b, namespace: flip}
 spec:
   operatorRef: {name: flip}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata: {name: js, namespace: flip}
 spec:
   operatorRef: {name: flip}
   exports: [{preset: jetstream-stepdown}]
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsOperatorTrust
 metadata: {name: flip, namespace: flip}
 spec:

@@ -51,14 +51,14 @@ var _ reconcile.Reconciler = (*AccountReconciler)(nil)
 
 // AccountFinalizer holds a deleted NatsAccount until its NatsOperator
 // records the deletion.
-const AccountFinalizer = "auth.nats.mikluko.io/delete"
+const AccountFinalizer = "auth.nats-operator.io/delete"
 
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts,verbs=get;list;watch;patch
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsaccounts/status,verbs=update
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsoperators,verbs=get;list;watch
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natssystemaccounts,verbs=get;list;watch
-// +kubebuilder:rbac:groups=auth.nats.mikluko.io,resources=natsusers,verbs=list;watch
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsreferencegrants,verbs=list;watch
+// +kubebuilder:rbac:groups=auth.nats-operator.io,resources=natsaccounts,verbs=get;list;watch;patch
+// +kubebuilder:rbac:groups=auth.nats-operator.io,resources=natsaccounts/status,verbs=update
+// +kubebuilder:rbac:groups=auth.nats-operator.io,resources=natsoperators,verbs=get;list;watch
+// +kubebuilder:rbac:groups=auth.nats-operator.io,resources=natssystemaccounts,verbs=get;list;watch
+// +kubebuilder:rbac:groups=auth.nats-operator.io,resources=natsusers,verbs=list;watch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsreferencegrants,verbs=list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create
 
 // Reconcile implements reconcile.Reconciler.

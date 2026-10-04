@@ -76,22 +76,22 @@ func testCRDsInstalled(t *testing.T, env *envtest.Environment) {
 }
 
 var apiVersions = map[string]string{
-	"NatsOperatorTrust":  "nats.mikluko.io/v1beta1",
-	"NatsAccountTrust":   "nats.mikluko.io/v1beta1",
-	"NatsCluster":        "cluster.nats.mikluko.io/v1beta1",
-	"NatsOperator":       "auth.nats.mikluko.io/v1beta1",
-	"NatsSystemAccount":  "auth.nats.mikluko.io/v1beta1",
-	"NatsAccount":        "auth.nats.mikluko.io/v1beta1",
-	"NatsUser":           "auth.nats.mikluko.io/v1beta1",
-	"NatsConnection":     "nats.mikluko.io/v1beta1",
-	"NatsStream":         "jetstream.nats.mikluko.io/v1beta1",
-	"NatsConsumer":       "jetstream.nats.mikluko.io/v1beta1",
-	"NatsKeyValue":       "jetstream.nats.mikluko.io/v1beta1",
-	"NatsObjectStore":    "jetstream.nats.mikluko.io/v1beta1",
-	"NatsBalancer":       "jetstream.nats.mikluko.io/v1beta1",
-	"NatsSystemBalancer": "jetstream.nats.mikluko.io/v1beta1",
+	"NatsOperatorTrust":  "nats-operator.io/v1beta1",
+	"NatsAccountTrust":   "nats-operator.io/v1beta1",
+	"NatsCluster":        "cluster.nats-operator.io/v1beta1",
+	"NatsOperator":       "auth.nats-operator.io/v1beta1",
+	"NatsSystemAccount":  "auth.nats-operator.io/v1beta1",
+	"NatsAccount":        "auth.nats-operator.io/v1beta1",
+	"NatsUser":           "auth.nats-operator.io/v1beta1",
+	"NatsConnection":     "nats-operator.io/v1beta1",
+	"NatsStream":         "jetstream.nats-operator.io/v1beta1",
+	"NatsConsumer":       "jetstream.nats-operator.io/v1beta1",
+	"NatsKeyValue":       "jetstream.nats-operator.io/v1beta1",
+	"NatsObjectStore":    "jetstream.nats-operator.io/v1beta1",
+	"NatsBalancer":       "jetstream.nats-operator.io/v1beta1",
+	"NatsSystemBalancer": "jetstream.nats-operator.io/v1beta1",
 
-	"NatsClusterEvacuation": "jetstream.nats.mikluko.io/v1beta1",
+	"NatsClusterEvacuation": "jetstream.nats-operator.io/v1beta1",
 }
 
 // statusSpecs are admissible specs, one per kind a story status file names.

@@ -22,7 +22,7 @@ const SeedKey = "seed"
 // was generated for, as "<operator|systemaccount|account>/<name>". The
 // Secret carries no owner reference: it outlives that object, and an object
 // of the same kind and name applied again reads it.
-const GeneratedForAnnotation = "auth.nats.mikluko.io/generated-for"
+const GeneratedForAnnotation = "auth.nats-operator.io/generated-for"
 
 // generatedSigningKeyName is the name of the signing key generated where
 // spec lists none.

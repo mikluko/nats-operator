@@ -7,5 +7,5 @@
 {{- fail (printf "auth.systemConnection names namespace %s, which watchNamespaces does not" $ns) }}
 {{- end }}
 {{- end }}
-{{- include "nats-operator.controller" (dict "root" . "name" "auth-controller" "group" "auth.nats.mikluko.io" "values" .Values.auth "args" $args) }}
+{{- include "nats-operator.controller" (dict "root" . "name" "auth-controller" "group" "auth.nats-operator.io" "values" .Values.auth "args" $args) }}
 {{- end }}

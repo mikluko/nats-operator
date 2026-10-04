@@ -102,6 +102,8 @@ The cluster controller takes the CA from `ca.crt` of the certificate Secret.
 Helm installs the CRDs in the chart's `crds/` directory on the first install only.
 It never upgrades or deletes them, so you apply the CRDs of the new version yourself, before you upgrade the release.
 
+If the installed version is 0.2.x or earlier, follow [Upgrade from 0.2.x or earlier](#upgrade-from-02x-or-earlier) instead of these steps.
+
 1. Pull the chart of the new version:
 
    ```sh
@@ -147,6 +149,32 @@ To hold the restarts of a NATS cluster, set `spec.rollout.paused` on its `NatsCl
 The restarts stop before the next server until you unset it.
 [Rollout]({{< relref "/docs/design/v1#44-rollout" >}}) in the design describes the gate.
 
+### Upgrade from 0.2.x or earlier
+
+Versions 0.2.x and earlier serve the API groups under `nats.mikluko.io`.
+Later versions serve the API groups under `nats-operator.io` alone.
+There is no migration from one to the other: you remove the old version with everything that it deployed, and install the new version in its place.
+The NATS clusters, their JetStream data and the identities of the auth plane are not carried over.
+
+1. Remove the old version: do every step of [Uninstall](#uninstall), with the chart of the installed version.
+   Deleting a `NatsCluster` deletes its servers.
+
+1. Delete the PersistentVolumeClaims of the servers, which outlast their `NatsCluster`:
+
+   ```sh
+   kubectl delete persistentvolumeclaim --all-namespaces \
+     --selector cluster.nats.mikluko.io/cluster
+   ```
+
+   The servers of a `NatsCluster` that has the same name and namespace mount a PersistentVolumeClaim that remains.
+
+1. Delete the generated seed Secrets, which have the annotation `auth.nats.mikluko.io/generated-for`.
+   The auth controller does not read a generated seed Secret without the annotation `auth.nats-operator.io/generated-for`, and the object that the Secret is named after then has `Ready` False.
+
+1. Install the new version, as in [Install](#install).
+
+1. In each manifest, replace `nats.mikluko.io` with `nats-operator.io`, and apply the manifests.
+
 ## Uninstall
 
 `helm uninstall` removes the controllers and leaves the CRDs, every custom resource and every NATS cluster in place.
@@ -169,7 +197,7 @@ To remove the controllers alone, do the second step and stop.
 
    - The CRDs, every custom resource, and everything that the controllers created for the custom resources: StatefulSets, Services, ConfigMaps, Secrets, PodDisruptionBudgets, NetworkPolicies and cert-manager Certificates.
    - The Pods and Services `<release>-<controller>-test`, if you ran `helm test`.
-   - The Leases `<release>-cluster.nats.mikluko.io`, `<release>-auth.nats.mikluko.io` and `<release>-jetstream.nats.mikluko.io` in the release namespace, if leader election is on.
+   - The Leases `<release>-cluster.nats-operator.io`, `<release>-auth.nats-operator.io` and `<release>-jetstream.nats-operator.io` in the release namespace, if leader election is on.
 
 1. Delete the CRDs, from the chart that you pulled as in [Upgrade](#upgrade):
 

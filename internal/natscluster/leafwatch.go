@@ -21,8 +21,8 @@ import (
 // their leafRemotes name, and of every NatsAccountTrust their leafRemotes or
 // auth.accountTrustRefs name.
 const (
-	LeafConnectionField = "cluster.nats.mikluko.io/leaf-connection"
-	AccountTrustField   = "cluster.nats.mikluko.io/account-trust"
+	LeafConnectionField = "cluster.nats-operator.io/leaf-connection"
+	AccountTrustField   = "cluster.nats-operator.io/account-trust"
 )
 
 func leafConnectionKeys(nc *clusterv1beta1.NatsCluster) []string {
@@ -50,7 +50,7 @@ func accountTrustKeys(nc *clusterv1beta1.NatsCluster) []string {
 
 // ConnectionSecretField is the field index on NatsConnections of the
 // namespace/name of every Secret they read.
-const ConnectionSecretField = "cluster.nats.mikluko.io/connection-secret"
+const ConnectionSecretField = "cluster.nats-operator.io/connection-secret"
 
 func connectionSecretKeys(conn *natsv1beta1.NatsConnection) []string {
 	var out []string

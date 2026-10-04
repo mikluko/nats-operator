@@ -21,9 +21,9 @@ import (
 // ObjectStoreKind is the kind a NatsObjectStore is referred to by.
 const ObjectStoreKind = "NatsObjectStore"
 
-// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsobjectstores,verbs=get;list;watch;patch
-// +kubebuilder:rbac:groups=jetstream.nats.mikluko.io,resources=natsobjectstores/status,verbs=patch
-// +kubebuilder:rbac:groups=nats.mikluko.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
+// +kubebuilder:rbac:groups=jetstream.nats-operator.io,resources=natsobjectstores,verbs=get;list;watch;patch
+// +kubebuilder:rbac:groups=jetstream.nats-operator.io,resources=natsobjectstores/status,verbs=patch
+// +kubebuilder:rbac:groups=nats-operator.io,resources=natsconnections;natsreferencegrants,verbs=list;watch
 
 // ObjectStoreReconciler keeps NatsObjectStores' object stores at their
 // specs through nats.go's object store manager, under their lifecycle

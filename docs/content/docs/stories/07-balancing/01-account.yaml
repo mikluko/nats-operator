@@ -1,4 +1,4 @@
-apiVersion: jetstream.nats.mikluko.io/v1beta1
+apiVersion: jetstream.nats-operator.io/v1beta1
 kind: NatsBalancer
 metadata:
   name: payments
@@ -19,7 +19,7 @@ spec:
     leader: true
     placement: false
 ---
-apiVersion: jetstream.nats.mikluko.io/v1beta1
+apiVersion: jetstream.nats-operator.io/v1beta1
 kind: NatsStream
 metadata:
   name: req-07

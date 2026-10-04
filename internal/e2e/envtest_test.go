@@ -47,7 +47,7 @@ func TestEnvtest_Runner(t *testing.T) {
 
 	t.Run("Deadline before any read fails", func(t *testing.T) {
 		root := writeBundle(t, map[string]string{
-			"01-conn.yaml": `apiVersion: nats.mikluko.io/v1beta1
+			"01-conn.yaml": `apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata: {name: demo, namespace: unread}
 spec: {servers: ["nats://demo:4222"]}
@@ -65,7 +65,7 @@ spec: {servers: ["nats://demo:4222"]}
 	t.Run("Fresh runs once the namespaces are made, before the first step", func(t *testing.T) {
 		bundle := func(ns string) *Bundle {
 			bundles, err := LoadBundles(writeBundle(t, map[string]string{
-				"01-conn.yaml": "apiVersion: nats.mikluko.io/v1beta1\nkind: NatsConnection\nmetadata: {name: demo, namespace: " + ns + "}\nspec: {servers: [\"nats://demo:4222\"]}\n",
+				"01-conn.yaml": "apiVersion: nats-operator.io/v1beta1\nkind: NatsConnection\nmetadata: {name: demo, namespace: " + ns + "}\nspec: {servers: [\"nats://demo:4222\"]}\n",
 			}), "")
 			require.NoError(t, err)
 			return bundles[0]
@@ -76,7 +76,7 @@ spec: {servers: ["nats://demo:4222"]}
 				calls = append(calls, cluster)
 				require.NoError(t, c.Get(ctx, client.ObjectKey{Name: "freshened"}, &corev1.Namespace{}))
 				u := &unstructured.Unstructured{}
-				u.SetAPIVersion("nats.mikluko.io/v1beta1")
+				u.SetAPIVersion("nats-operator.io/v1beta1")
 				u.SetKind("NatsConnection")
 				err := c.Get(ctx, client.ObjectKey{Namespace: "freshened", Name: "demo"}, u)
 				require.True(t, apierrors.IsNotFound(err), "Fresh ran after the first step: %v", err)
@@ -100,8 +100,8 @@ spec: {servers: ["nats://demo:4222"]}
 
 	t.Run("Status arriving passes, then a step deletes", func(t *testing.T) {
 		root := writeBundle(t, map[string]string{
-			"02-delete-conn.yaml": "apiVersion: nats.mikluko.io/v1beta1\nkind: NatsConnection\nmetadata: {name: demo, namespace: arrives}\n",
-			"01-conn.yaml": `apiVersion: nats.mikluko.io/v1beta1
+			"02-delete-conn.yaml": "apiVersion: nats-operator.io/v1beta1\nkind: NatsConnection\nmetadata: {name: demo, namespace: arrives}\n",
+			"01-conn.yaml": `apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata: {name: demo, namespace: arrives}
 spec: {servers: ["nats://demo:4222"]}
@@ -115,7 +115,7 @@ spec: {servers: ["nats://demo:4222"]}
 		res := r.Run(t.Context(), bundles[0])
 		require.Equal(t, Pass, res.Outcome, res.Detail)
 		u := &unstructured.Unstructured{}
-		u.SetAPIVersion("nats.mikluko.io/v1beta1")
+		u.SetAPIVersion("nats-operator.io/v1beta1")
 		u.SetKind("NatsConnection")
 		err = c.Get(t.Context(), client.ObjectKey{Namespace: "arrives", Name: "demo"}, u)
 		require.True(t, apierrors.IsNotFound(err), "step 2 deleted the connection: %v", err)
@@ -171,7 +171,7 @@ kind: Pod
 metadata: {name: nats-0, namespace: crashing}
 spec: {containers: [{name: nats, image: nats:2.15.0}]}
 `,
-		"01-conn.yaml": `apiVersion: nats.mikluko.io/v1beta1
+		"01-conn.yaml": `apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata: {name: demo, namespace: crashing}
 spec: {servers: ["nats://demo:4222"]}
@@ -216,11 +216,11 @@ func TestEnvtest_ReleaseGuards(t *testing.T) {
 		require.NoError(t, c.Create(t.Context(), u))
 		return u
 	}
-	nc := obj("cluster.nats.mikluko.io/v1beta1", "NatsCluster", "demo", map[string]any{"version": "2.15.0", "replicas": int64(3)})
-	consumer := obj("jetstream.nats.mikluko.io/v1beta1", "NatsConsumer", "audit",
+	nc := obj("cluster.nats-operator.io/v1beta1", "NatsCluster", "demo", map[string]any{"version": "2.15.0", "replicas": int64(3)})
+	consumer := obj("jetstream.nats-operator.io/v1beta1", "NatsConsumer", "audit",
 		map[string]any{"connectionRef": map[string]any{"name": "demo"}, "stream": "LEDGER"})
 	require.Equal(t, "Delete", consumer.Object["spec"].(map[string]any)["deletionPolicy"], "a consumer deletes by default")
-	stream := obj("jetstream.nats.mikluko.io/v1beta1", "NatsStream", "ledger",
+	stream := obj("jetstream.nats-operator.io/v1beta1", "NatsStream", "ledger",
 		map[string]any{"connectionRef": map[string]any{"name": "demo"}, "name": "LEDGER"})
 
 	require.NoError(t, releaseGuards(t.Context(), c, "guarded"))
@@ -346,12 +346,12 @@ params:
       - {name: west, files: [01-west.yaml, 01-status-natsconnection.yaml]}
 ---
 `,
-		"01-east.yaml": `apiVersion: nats.mikluko.io/v1beta1
+		"01-east.yaml": `apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata: {name: east, namespace: placed}
 spec: {servers: ["nats://east:4222"]}
 `,
-		"01-west.yaml": `apiVersion: nats.mikluko.io/v1beta1
+		"01-west.yaml": `apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata: {name: west, namespace: placed}
 spec: {servers: ["nats://west:4222"]}
@@ -369,7 +369,7 @@ spec: {servers: ["nats://west:4222"]}
 		require.Equal(t, Pass, res.Outcome, res.Detail)
 		present := func(c client.Client, name string) bool {
 			u := &unstructured.Unstructured{}
-			u.SetAPIVersion("nats.mikluko.io/v1beta1")
+			u.SetAPIVersion("nats-operator.io/v1beta1")
 			u.SetKind("NatsConnection")
 			return c.Get(t.Context(), client.ObjectKey{Namespace: "placed", Name: name}, u) == nil
 		}
@@ -438,7 +438,7 @@ func startAPIServer(t *testing.T) client.WithWatch {
 }
 
 func setReadyWhenPresent(ctx context.Context, c client.WithWatch, ns, name string) {
-	gvk := schema.GroupVersionKind{Group: "nats.mikluko.io", Version: "v1beta1", Kind: "NatsConnection"}
+	gvk := schema.GroupVersionKind{Group: "nats-operator.io", Version: "v1beta1", Kind: "NatsConnection"}
 	whenPresent(ctx, c, gvk, ns, name, func(u *unstructured.Unstructured) error {
 		u.Object["status"] = map[string]any{
 			"observedGeneration": u.GetGeneration(),

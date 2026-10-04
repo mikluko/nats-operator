@@ -1,4 +1,4 @@
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata:
   name: hub
@@ -9,7 +9,7 @@ spec:
     secretKeyRef:
       name: edge-site-1-leaf-creds
 ---
-apiVersion: cluster.nats.mikluko.io/v1beta1
+apiVersion: cluster.nats-operator.io/v1beta1
 kind: NatsCluster
 metadata:
   name: edge-site-1
@@ -34,7 +34,7 @@ spec:
     - connectionRef:
         name: hub
 ---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsConnection
 metadata:
   name: local
@@ -42,7 +42,7 @@ metadata:
 spec:
   servers: ["nats://edge-site-1.nats-system.svc:4222"]
 ---
-apiVersion: jetstream.nats.mikluko.io/v1beta1
+apiVersion: jetstream.nats-operator.io/v1beta1
 kind: NatsStream
 metadata:
   name: telemetry-buffer

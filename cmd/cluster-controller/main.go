@@ -1,5 +1,5 @@
-// Command cluster-controller owns cluster.nats.mikluko.io and reads
-// nats.mikluko.io.
+// Command cluster-controller owns cluster.nats-operator.io and reads
+// nats-operator.io.
 package main
 
 import (

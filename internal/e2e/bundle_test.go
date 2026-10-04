@@ -133,11 +133,11 @@ func TestParseFileName(t *testing.T) {
 	}
 }
 
-const twoUsers = `apiVersion: auth.nats.mikluko.io/v1beta1
+const twoUsers = `apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata: {name: orders-batch, namespace: a}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata: {name: orders-api, namespace: b}
 `
@@ -159,12 +159,12 @@ func TestTarget(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			root := writeBundle(t, map[string]string{
 				"01-users.yaml": twoUsers,
-				"02-stream.yaml": `apiVersion: jetstream.nats.mikluko.io/v1beta1
+				"02-stream.yaml": `apiVersion: jetstream.nats-operator.io/v1beta1
 kind: NatsStream
 metadata: {name: orders, namespace: a}
 spec: {replicas: 1}
 `,
-				"03-delete-old.yaml": "apiVersion: cluster.nats.mikluko.io/v1beta1\nkind: NatsCluster\nmetadata: {name: old, namespace: a}\n",
+				"03-delete-old.yaml": "apiVersion: cluster.nats-operator.io/v1beta1\nkind: NatsCluster\nmetadata: {name: old, namespace: a}\n",
 				tt.status:            "status:\n  observedGeneration: 1\n",
 			})
 			bundles, err := LoadBundles(root, "")
@@ -501,7 +501,7 @@ func TestLoadBundles_Generated(t *testing.T) {
 // where a NatsCluster it or its base applies, as substituted, has a gateway
 // and no gateway tls.
 func TestBundle_GatewayWithoutTLS(t *testing.T) {
-	const cluster = "apiVersion: cluster.nats.mikluko.io/v1beta1\nkind: NatsCluster\nmetadata: {name: a, namespace: a}\n"
+	const cluster = "apiVersion: cluster.nats-operator.io/v1beta1\nkind: NatsCluster\nmetadata: {name: a, namespace: a}\n"
 	const withTLS = cluster + "spec: {gateway: {discovery: Explicit, tls: {secretRef: {name: gw}}}}\n"
 	const dropsTLS = "---\nparams:\n  e2e:\n    substitutions:\n      - {files: [01-a.yaml], reason: r, patch: {spec: {gateway: {tls: null}}}}\n---\n"
 	load := func(t *testing.T, files map[string]string) *Bundle {

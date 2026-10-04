@@ -16,7 +16,7 @@ import (
 
 // FinalizerJetStreamData holds a NatsCluster with JetStream while stream
 // groups remain placed in its NATS cluster.
-const FinalizerJetStreamData = "cluster.nats.mikluko.io/jetstream-data"
+const FinalizerJetStreamData = "cluster.nats-operator.io/jetstream-data"
 
 // ConditionDeleting is True while a deleted NatsCluster waits.
 const ConditionDeleting = "Deleting"

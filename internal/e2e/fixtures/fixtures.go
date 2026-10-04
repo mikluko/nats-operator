@@ -159,7 +159,7 @@ stringData:
     signing:
       - name: signing-1
         secretKeyRef: {name: {{.}}-keys, key: signing-1}
-{{end}}{{define "systemAccount"}}apiVersion: auth.nats.mikluko.io/v1beta1
+{{end}}{{define "systemAccount"}}apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsSystemAccount
 metadata:
   name: sys
@@ -167,7 +167,7 @@ metadata:
 spec:
   operatorRef:
     name: acme
-{{template "adopt" "sys"}}{{end}}{{define "sysuser"}}apiVersion: auth.nats.mikluko.io/v1beta1
+{{template "adopt" "sys"}}{{end}}{{define "sysuser"}}apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: {{.}}

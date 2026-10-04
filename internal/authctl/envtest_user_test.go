@@ -164,7 +164,7 @@ func (e *env) testUsersUnderGrant(t *testing.T) {
 		e.apply(t, string(raw))
 	}
 	e.apply(t, `
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata:
   name: payments-api
@@ -380,34 +380,34 @@ func (e *env) testSystemUserDeletion(t *testing.T) {
 	pub, err := kp.PublicKey()
 	require.NoError(t, err)
 	sysToOp := `
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsReferenceGrant
 metadata: {name: sys-to-op, namespace: sysdel-op}
 spec:
-  from: [{group: auth.nats.mikluko.io, kind: NatsSystemAccount, namespace: sysdel-sys}]
-  to: [{group: auth.nats.mikluko.io, kind: NatsOperator}]
+  from: [{group: auth.nats-operator.io, kind: NatsSystemAccount, namespace: sysdel-sys}]
+  to: [{group: auth.nats-operator.io, kind: NatsOperator}]
 `
 	e.apply(t, sysToOp+`---
-apiVersion: nats.mikluko.io/v1beta1
+apiVersion: nats-operator.io/v1beta1
 kind: NatsReferenceGrant
 metadata: {name: op-to-sys, namespace: sysdel-sys}
 spec:
-  from: [{group: auth.nats.mikluko.io, kind: NatsOperator, namespace: sysdel-op}]
-  to: [{group: auth.nats.mikluko.io, kind: NatsSystemAccount}]
+  from: [{group: auth.nats-operator.io, kind: NatsOperator, namespace: sysdel-op}]
+  to: [{group: auth.nats-operator.io, kind: NatsSystemAccount}]
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsOperator
 metadata: {name: ops, namespace: sysdel-op}
 spec:
   systemAccountRef: {namespace: sysdel-sys, name: sys}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsSystemAccount
 metadata: {name: sys, namespace: sysdel-sys}
 spec:
   operatorRef: {namespace: sysdel-op, name: ops}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata: {name: held, namespace: sysdel-sys}
 spec:
@@ -536,7 +536,7 @@ func (e *env) testRevocationRecord(t *testing.T) {
 	pub, err := kp.PublicKey()
 	require.NoError(t, err)
 	e.apply(t, `
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata: {name: revoked-system-user, namespace: nats-system}
 spec:
@@ -603,25 +603,25 @@ spec:
 // outlives its NatsOperator is released: no revocation can be signed.
 func (e *env) testOrphanedAccountUser(t *testing.T) {
 	e.apply(t, `
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsOperator
 metadata: {name: orphan, namespace: orphan}
 spec:
   systemAccountRef: {name: sys}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsSystemAccount
 metadata: {name: sys, namespace: orphan}
 spec:
   operatorRef: {name: orphan}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata: {name: app, namespace: orphan}
 spec:
   operatorRef: {name: orphan}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsUser
 metadata: {name: svc, namespace: orphan}
 spec:
@@ -652,19 +652,19 @@ spec:
 // with its NatsOperator, as a namespace deletion does, is released.
 func (e *env) testAccountDeletedWithOperator(t *testing.T) {
 	e.apply(t, `
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsOperator
 metadata: {name: gone, namespace: gone}
 spec:
   systemAccountRef: {name: sys}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsSystemAccount
 metadata: {name: sys, namespace: gone}
 spec:
   operatorRef: {name: gone}
 ---
-apiVersion: auth.nats.mikluko.io/v1beta1
+apiVersion: auth.nats-operator.io/v1beta1
 kind: NatsAccount
 metadata: {name: app, namespace: gone}
 spec:
