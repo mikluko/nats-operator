@@ -307,7 +307,7 @@ func TestEnvtestLeafnodes(t *testing.T) {
 
 		got.Spec.Leafnodes.Service.LoadBalancerSourceRanges = []string{"10.20.0.0/16"}
 		require.NoError(t, c.Update(ctx, got))
-		got = reconcile(t, key)
+		reconcile(t, key)
 		require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "hub", Name: "demo-leafnodes"}, &svc))
 		require.Equal(t, []string{"10.20.0.0/16"}, svc.Spec.LoadBalancerSourceRanges)
 		require.Equal(t, ptr.To("a.example/lb"), svc.Spec.LoadBalancerClass)
