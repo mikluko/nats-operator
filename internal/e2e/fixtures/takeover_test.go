@@ -3,6 +3,7 @@ package fixtures
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/nats-io/jwt/v2"
@@ -95,7 +96,8 @@ func checkTakeover(t *testing.T, dir string) {
 	require.Len(t, acc.Status.Revocations, 1)
 	require.Equal(t, old.Subject, acc.Status.Revocations[0].PublicKey)
 	require.Equal(t, ac.Revocations[old.Subject], acc.Status.Revocations[0].At.Unix())
-	require.Equal(t, []string{ordersSigning}, acc.Status.Revocations[0].Issuers)
+	require.True(t, slices.IsSorted(acc.Status.Revocations[0].Issuers))
+	require.ElementsMatch(t, []string{orders, ordersSigning}, acc.Status.Revocations[0].Issuers)
 }
 
 // userClaims decodes the user JWT of the creds under key in secret.

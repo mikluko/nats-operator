@@ -24,7 +24,7 @@ import (
 
 // accountRevocations merges the revocations recorded, those prev carries for
 // pub, and those of users revoked in the account and of the keys they
-// replaced, less any none of whose issuers is in signing.
+// replaced, less any none of whose issuers is pub or in signing.
 func accountRevocations(recorded []authv1beta1.Revocation, prev, pub string, signing []string, users []authv1beta1.NatsUser) []authv1beta1.Revocation {
 	byKey := map[string]*authv1beta1.Revocation{}
 	revoke := func(key string, at time.Time, issuers []string) {
@@ -61,13 +61,29 @@ func accountRevocations(recorded []authv1beta1.Revocation, prev, pub string, sig
 	}
 	out := make([]authv1beta1.Revocation, 0, len(byKey))
 	for _, r := range byKey {
-		if !slices.ContainsFunc(r.Issuers, func(k string) bool { return slices.Contains(signing, k) }) {
+		if !slices.ContainsFunc(r.Issuers, func(k string) bool { return k == pub || slices.Contains(signing, k) }) {
 			continue
 		}
 		slices.Sort(r.Issuers)
 		out = append(out, *r)
 	}
 	slices.SortFunc(out, func(a, b authv1beta1.Revocation) int { return cmp.Compare(a.PublicKey, b.PublicKey) })
+	return out
+}
+
+// heldRevocations returns the revocations of held, a JWT of pub the servers
+// hold, each issued by a signing key held lists or by pub. A user JWT made
+// outside the controller may be signed by the account's identity key.
+func heldRevocations(held, pub string) []authv1beta1.Revocation {
+	c, err := jwt.DecodeAccountClaims(held)
+	if err != nil || c.Subject != pub {
+		return nil
+	}
+	issuers := append(c.SigningKeys.Keys(), pub)
+	out := make([]authv1beta1.Revocation, 0, len(c.Revocations))
+	for key, ts := range c.Revocations {
+		out = append(out, authv1beta1.Revocation{PublicKey: key, At: metav1.Time{Time: time.Unix(ts, 0)}, Issuers: slices.Clone(issuers)})
+	}
 	return out
 }
 
@@ -98,7 +114,7 @@ func recoverRevocations(ctx context.Context, d Distributor, operator types.Names
 	case err != nil:
 		return recoveredRevocations{}, err
 	}
-	return recoveredRevocations{revocations: accountRevocations(revs, held, pub, signing, users), asked: true}, nil
+	return recoveredRevocations{revocations: accountRevocations(append(revs, heldRevocations(held, pub)...), "", pub, signing, users), asked: true}, nil
 }
 
 // recordRecovery sets ConditionRevocationsUnrecovered on conds from s: True

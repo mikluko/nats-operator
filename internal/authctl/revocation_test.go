@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nkeys"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -164,6 +165,12 @@ func TestAccountRevocations(t *testing.T) {
 			want:     []authv1beta1.Revocation{rev(carried, t0, keyA, keyB)},
 		},
 		{
+			name:     "a revocation the identity key may have issued outlives every signing key",
+			recorded: []authv1beta1.Revocation{rev(carried, t0, accPub, keyA)},
+			signing:  []string{keyC},
+			want:     []authv1beta1.Revocation{rev(carried, t0, accPub, keyA)},
+		},
+		{
 			name:     "rotating out every issuer drops the revocation, from the record and from the JWT",
 			recorded: []authv1beta1.Revocation{rev(carried, t0, keyA), rev(denied, t0, keyB)},
 			prev:     prev,
@@ -214,6 +221,12 @@ func TestRecoverRevocations(t *testing.T) {
 	rev := func(key string, at time.Time) authv1beta1.Revocation {
 		return authv1beta1.Revocation{PublicKey: key, At: metav1.Time{Time: at}, Issuers: []string{keyA}}
 	}
+	heldRev := func(key string, at time.Time) authv1beta1.Revocation {
+		r := rev(key, at)
+		r.Issuers = append(r.Issuers, accPub)
+		slices.Sort(r.Issuers)
+		return r
+	}
 	deletingUser := authv1beta1.NatsUser{
 		ObjectMeta: metav1.ObjectMeta{DeletionTimestamp: &metav1.Time{Time: t0.Add(time.Hour)}, Finalizers: []string{UserFinalizer}},
 		Status:     authv1beta1.NatsUserStatus{PublicKey: deleting},
@@ -237,7 +250,7 @@ func TestRecoverRevocations(t *testing.T) {
 			name:      "claims found: the record is seeded from the servers' JWT",
 			d:         &lookupOnly{jwt: held},
 			users:     []authv1beta1.NatsUser{deletingUser},
-			want:      []authv1beta1.Revocation{rev(revoked, t0), rev(deleting, t0.Add(time.Hour))},
+			want:      []authv1beta1.Revocation{heldRev(revoked, t0), rev(deleting, t0.Add(time.Hour))},
 			wantAsked: true,
 		},
 		{
@@ -266,7 +279,7 @@ func TestRecoverRevocations(t *testing.T) {
 			prev:        current,
 			users:       []authv1beta1.NatsUser{deletingUser},
 			unrecovered: true,
-			want:        []authv1beta1.Revocation{rev(revoked, t0), rev(deleting, t0.Add(time.Hour))},
+			want:        []authv1beta1.Revocation{heldRev(revoked, t0), rev(deleting, t0.Add(time.Hour))},
 			wantAsked:   true,
 		},
 		{
@@ -308,6 +321,22 @@ func TestRecoverRevocations(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("claims of an account made with no signing key: its revocations are kept under a signing key they never named", func(t *testing.T) {
+		c := jwt.NewAccountClaims(accPub)
+		c.RevokeAt(revoked, t0)
+		made, err := c.Encode(op.Signing[0].Pair)
+		require.NoError(t, err)
+		got, err := recoverRevocations(t.Context(), &lookupOnly{jwt: made}, types.NamespacedName{Name: "op"}, nil, "", accPub, []string{keyA}, nil, false, false)
+		require.NoError(t, err)
+		require.Equal(t, []authv1beta1.Revocation{{PublicKey: revoked, At: metav1.Time{Time: t0}, Issuers: []string{accPub}}}, got.revocations)
+	})
+
+	t.Run("claims of another account: nothing is taken", func(t *testing.T) {
+		got, err := recoverRevocations(t.Context(), &lookupOnly{jwt: held}, types.NamespacedName{Name: "op"}, nil, "", testPub(t, testKeys(t, nkeys.PrefixByteAccount).Identity), []string{keyA}, nil, false, false)
+		require.NoError(t, err)
+		require.Empty(t, got.revocations)
+	})
 
 	t.Run("no Distributor: nothing to ask", func(t *testing.T) {
 		got, err := recoverRevocations(t.Context(), nil, types.NamespacedName{Name: "op"}, nil, "", accPub, []string{keyA}, nil, true, true)
