@@ -628,7 +628,7 @@ func TestRenovate_WatchesToolPins(t *testing.T) {
 		require.NotZero(t, found[dep], dep)
 	}
 	require.Equal(t, pinned["kindest/node"]+1, found["kindest/node"], "internal/e2e.KindNodeImage")
-	require.Equal(t, 2, found["busybox"], "values.yaml and install.md")
+	require.Equal(t, 2, found["busybox"], "values.yaml and reference/chart.md")
 
 	var gomod struct {
 		Gomod struct {

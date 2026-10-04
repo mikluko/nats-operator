@@ -15,9 +15,9 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-const installPage = "../../docs/content/docs/install.md"
+const chartPage = "../../docs/content/docs/reference/chart.md"
 
-// pageTable is one table of the install page: the text of the heading above
+// pageTable is one table of the chart reference page: the text of the heading above
 // it, and the code spans of each body cell.
 type pageTable struct {
 	heading string
@@ -25,11 +25,11 @@ type pageTable struct {
 	rows    [][][]string
 }
 
-// TestInstallPage_Values pins that the install page's values table names
+// TestChartPage_Values pins that the chart reference page's values tables name
 // only keys values.yaml has, covers every leaf of values.yaml, and states each
 // default as values.yaml sets it.
-func TestInstallPage_Values(t *testing.T) {
-	tables := installTables(t)
+func TestChartPage_Values(t *testing.T) {
+	tables := chartTables(t)
 	values := chartValues(t)
 
 	var listed []string
@@ -52,19 +52,19 @@ func TestInstallPage_Values(t *testing.T) {
 			require.Equal(t, got, want, "default of %s", key)
 		}
 	}
-	require.NotEmpty(t, listed, "the install page has no values table")
+	require.NotEmpty(t, listed, "the chart reference page has no values table")
 
 	for _, leaf := range leaves(values, "") {
 		covered := slices.ContainsFunc(listed, func(k string) bool {
 			return leaf == k || strings.HasPrefix(leaf, k+".")
 		})
-		require.True(t, covered, "the install page omits %s", leaf)
+		require.True(t, covered, "the chart reference page omits %s", leaf)
 	}
 }
 
-// TestInstallPage_RBAC pins that the install page's RBAC tables are each
+// TestChartPage_RBAC pins that the chart reference page's RBAC tables are each
 // controller's generated ClusterRole, exactly.
-func TestInstallPage_RBAC(t *testing.T) {
+func TestChartPage_RBAC(t *testing.T) {
 	headings := map[string]string{
 		"Cluster controller":   "cluster",
 		"Auth controller":      "auth",
@@ -72,7 +72,7 @@ func TestInstallPage_RBAC(t *testing.T) {
 	}
 	page := map[string]grants{}
 	var common grants
-	for _, tb := range installTables(t) {
+	for _, tb := range chartTables(t) {
 		if tb.header[0] != "API group" {
 			continue
 		}
@@ -113,9 +113,9 @@ func tableGrants(t *testing.T, tb pageTable) grants {
 	return g
 }
 
-func installTables(t *testing.T) []pageTable {
+func chartTables(t *testing.T) []pageTable {
 	t.Helper()
-	src, err := os.ReadFile(installPage)
+	src, err := os.ReadFile(chartPage)
 	require.NoError(t, err)
 	md := goldmark.New(goldmark.WithExtensions(extension.Table))
 	doc := md.Parser().Parse(text.NewReader(src))
