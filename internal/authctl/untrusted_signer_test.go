@@ -22,13 +22,6 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 )
 
-type builderIndexer struct{ b *fake.ClientBuilder }
-
-func (i builderIndexer) IndexField(_ context.Context, obj client.Object, field string, fn client.IndexerFunc) error {
-	i.b.WithIndex(obj, field, fn)
-	return nil
-}
-
 func seededPair(t *testing.T, prefix nkeys.PrefixByte) (kp nkeys.KeyPair, pub string, seed []byte) {
 	t.Helper()
 	kp, err := nkeys.CreatePair(prefix)
