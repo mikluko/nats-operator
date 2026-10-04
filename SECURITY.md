@@ -2,48 +2,73 @@
 
 ## Reporting a vulnerability
 
-Report a vulnerability privately through [GitHub's private vulnerability reporting](https://github.com/mikluko/nats-operator/security/advisories/new) on this repository, not in a public issue. A report is acknowledged within seven days.
+Report a vulnerability privately, through [GitHub's private vulnerability reporting](https://github.com/mikluko/nats-operator/security/advisories/new) on this repository.
+Do not open a public issue.
+You get an acknowledgement within seven days.
 
 ## Supported versions
 
-Only the latest release is supported; a security fix ships as a new release.
+Only the latest release is supported.
+A security fix ships as a new release.
 
 ## Trust boundaries
 
-Every kind is namespaced, and a reference crosses into another namespace only where a `NatsReferenceGrant` there admits it, as [design section 7](docs/design/v1.md#7-tenancy) states.
+Every kind is namespaced.
+A reference crosses into another namespace only where a `NatsReferenceGrant` in that namespace allows it.
+[Design section 7](docs/design/v1.md#7-tenancy) describes the tenancy model.
 
-- A namespace granted `NatsAccount`s to a `NatsOperator` has accounts signed under it with the limits it declares, and can take any account key no `NatsAccount` records yet.
-- A namespace granted `NatsUser`s to a `NatsAccount` can claim and revoke any user key of that account, keys issued outside the auth controller included.
-- A namespace granted a `NatsConnection` acts with its credentials, and for a leaf remote of the `NatsCluster` `<name>` holds a copy of them in the Secret `<name>-leaf-remotes`. Withdrawing the grant does not revoke a copy already handed out; rotating the credentials does. Any hold on the `NatsCluster` keeps a withdrawn remote's copy in that Secret until the hold clears.
-- Withdrawing a grant that admits a `NatsCluster` to a `NatsOperatorTrust` or a `NatsAccountTrust` holds the `NatsCluster` at its last render, since both carry only public material.
-- Whoever may write a `NatsOperator`, `NatsAccount` or `NatsSystemAccount` can sign with any seed stored in a Secret of its namespace, without permission to read Secrets: `keys.identity` and `keys.signing` may name any Secret there.
-- Whoever may write a `NatsCluster` runs pods in its namespace with any privilege that namespace admits: `spec.podTemplate` is merged over the rendered pod.
-- Whoever may write a `NatsCluster` in any watched namespace has the cluster controller request, from any ClusterIssuer, a certificate for any host its `gateway` and `leafnodes` name. Gateway trust that rests on the certificate alone belongs to an Issuer in the NATS cluster's own namespace, or behind cert-manager's approver-policy.
-- Each controller's ServiceAccount may get, list and watch every Secret in the namespaces it watches (all without `watchNamespaces`), data included; the auth and cluster controllers may also create, update and delete them. The controllers' metadata-only watch limits what they cache, not what they are permitted.
-- Whoever may write a `NatsConnection` has the JetStream controller dial any address `spec.servers` names, from the release namespace, outside any egress policy of the `NatsConnection`'s namespace, and reads from its `Ready` condition whether that address answered. The chart's `networkPolicy.egress` bounds where the controllers connect.
-- The chart's `watchNamespaces` confines every controller, and its RBAC, to the namespaces it names; it is the install for a Kubernetes cluster shared between tenants.
+- A namespace granted `NatsAccount`s to a `NatsOperator` gets accounts signed under that NATS operator with the limits its `NatsAccount`s declare.
+  It can also take any account key that no `NatsAccount` records yet.
+- A namespace granted `NatsUser`s to a `NatsAccount` can claim and revoke any user key of that account, including keys issued outside the auth controller.
+- A namespace granted a `NatsConnection` acts with that connection's credentials.
+  For a leaf remote of the `NatsCluster` `<name>`, the namespace holds a copy of them in the Secret `<name>-leaf-remotes`.
+  Withdrawing the grant does not revoke a copy already handed out; rotating the credentials does.
+  Any hold on the `NatsCluster` keeps a withdrawn remote's copy in that Secret until the hold clears.
+- Withdrawing a grant that allows a `NatsCluster` to reference a `NatsOperatorTrust` or a `NatsAccountTrust` holds the `NatsCluster` at its last render.
+  Both kinds contain only public material.
+- Anyone who can write a `NatsOperator`, `NatsAccount` or `NatsSystemAccount` can sign with any seed stored in a Secret in its namespace, without permission to read Secrets.
+  `keys.identity` and `keys.signing` can refer to any Secret in that namespace.
+- Anyone who can write a `NatsCluster` can run pods in its namespace with any privilege that the namespace allows.
+  `spec.podTemplate` is merged over the rendered pod.
+- Anyone who can write a `NatsCluster` in any watched namespace can have the cluster controller request a certificate from any ClusterIssuer, for any host that its `gateway` and `leafnodes` name.
+  Gateway trust that rests on the certificate alone must come from an Issuer in the NATS cluster's own namespace, or from an issuer behind cert-manager's approver-policy.
+- Each controller's ServiceAccount can get, list and watch every Secret, data included, in the namespaces the controller watches.
+  Without `watchNamespaces`, that is every namespace.
+  The auth and cluster controllers' ServiceAccounts can also create, update and delete those Secrets.
+  The controllers watch the metadata of Secrets only, which limits what they cache and not what their RBAC permits.
+- Anyone who can write a `NatsConnection` can have the JetStream controller dial any address in its `spec.servers`, and can read from its `Ready` condition whether that address answered.
+  The JetStream controller dials from the release namespace, outside any egress policy of the `NatsConnection`'s namespace.
+  The chart's `networkPolicy.egress` limits where the controllers connect.
+- The chart's `watchNamespaces` confines every controller, and its RBAC, to the namespaces it lists.
+  A Kubernetes cluster shared between tenants must be installed with it set.
 
 ## Verifying a release
 
-Each release's controller images and chart are signed keylessly with cosign by the release workflow. With `<version>` a release's version without the `v`, such as `0.1.0`:
+The release workflow signs each release's three controller images and its chart keylessly with cosign, and gives each a GitHub build provenance attestation.
+To verify them, you need [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) and the [GitHub CLI](https://cli.github.com/).
+In the commands below, replace `<version>` with a release's version without the `v`, such as `0.1.1`.
 
-```sh
-for c in cluster-controller auth-controller jetstream-controller; do
-  cosign verify "ghcr.io/mikluko/nats-operator/$c:<version>" \
-    --certificate-identity https://github.com/mikluko/nats-operator/.github/workflows/release.yml@refs/heads/main \
-    --certificate-oidc-issuer https://token.actions.githubusercontent.com
-done
+1. Verify the signatures of the images and the chart:
 
-cosign verify "ghcr.io/mikluko/nats-operator/charts/nats-operator:<version>" \
-  --certificate-identity https://github.com/mikluko/nats-operator/.github/workflows/release.yml@refs/heads/main \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com
-```
+   ```sh
+   for c in cluster-controller auth-controller jetstream-controller; do
+     cosign verify "ghcr.io/mikluko/nats-operator/$c:<version>" \
+       --certificate-identity https://github.com/mikluko/nats-operator/.github/workflows/release.yml@refs/heads/main \
+       --certificate-oidc-issuer https://token.actions.githubusercontent.com
+   done
 
-Each also carries a GitHub build provenance attestation:
+   cosign verify "ghcr.io/mikluko/nats-operator/charts/nats-operator:<version>" \
+     --certificate-identity https://github.com/mikluko/nats-operator/.github/workflows/release.yml@refs/heads/main \
+     --certificate-oidc-issuer https://token.actions.githubusercontent.com
+   ```
 
-```sh
-gh attestation verify "oci://ghcr.io/mikluko/nats-operator/cluster-controller:<version>" \
-  --repo mikluko/nats-operator \
-  --signer-workflow mikluko/nats-operator/.github/workflows/release.yml \
-  --source-ref refs/heads/main
-```
+1. Verify the build provenance attestation of the cluster controller's image:
+
+   ```sh
+   gh attestation verify "oci://ghcr.io/mikluko/nats-operator/cluster-controller:<version>" \
+     --repo mikluko/nats-operator \
+     --signer-workflow mikluko/nats-operator/.github/workflows/release.yml \
+     --source-ref refs/heads/main
+   ```
+
+   To verify another, replace `cluster-controller` with `auth-controller`, `jetstream-controller` or `charts/nats-operator`.
