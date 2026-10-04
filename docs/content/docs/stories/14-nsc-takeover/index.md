@@ -58,7 +58,8 @@ Write the whole spec before you apply it:
 - Set `limits` for connections, subscriptions, payload and JetStream.
   A limit that you omit is unlimited, and an account without `limits.jetstream` has no JetStream.
 - Declare every export under `exports`, and every import under `imports`.
-  Apply an account that exports before the accounts that import from it.
+  Apply an account that exports before the accounts that import from it: an import from a `NatsAccount` that does not exist is left out of the JWT.
+  While the exporting `NatsAccount` exists but has no public key yet, the importing account is not signed: its `NatsAccount` has the condition `Ready` False with the reason `ExporterPending`, and its JWT on the servers stays as it is.
 - Set `jwtTTL`.
   A JWT from `nsc` does not expire unless you gave it an expiry.
   A JWT from the auth controller expires after `jwtTTL`, 48h by default, and the auth controller signs it again before then.
