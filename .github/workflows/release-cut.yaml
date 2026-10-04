@@ -1,4 +1,4 @@
-name: release-cut
+name: Cut release
 
 on:
   push:

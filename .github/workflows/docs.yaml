@@ -1,4 +1,4 @@
-name: docs
+name: Documentation site
 
 # A push to main deploys the site. A pull request only builds it, and a manual
 # run uploads the build as a preview artifact; neither deploys.

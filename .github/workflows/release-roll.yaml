@@ -1,4 +1,4 @@
-name: release-roll
+name: Roll release
 run-name: ${{ github.event_name == 'push' && format('Releasing {0}', github.ref_name) || format('Dry run of a release from {0}', github.ref_name) }}
 
 on:
