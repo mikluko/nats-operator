@@ -68,6 +68,10 @@ const (
 	// NatsAccount no NatsReferenceGrant admits to its NatsOperator; the user
 	// is not signed.
 	ReasonAccountNotAdmitted = "AccountNotAdmitted"
+	// ReasonExporterPending is Ready's and ReferencesResolved's reason on a
+	// NatsAccount importing from a NatsAccount that has no public key yet;
+	// the importer is not signed until it has one.
+	ReasonExporterPending = "ExporterPending"
 	// ReasonReconcileError is Ready's reason on an object whose last
 	// reconcile failed with an error no other reason names.
 	ReasonReconcileError = "ReconcileError"
