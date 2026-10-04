@@ -1,0 +1,6 @@
+{{- /* The pages of a section in reading order: by weight, or by path in a section whose pages carry no weight. */ -}}
+{{- $pages := .Pages.ByWeight -}}
+{{- if not (where .Pages "Weight" "gt" 0) -}}
+  {{- $pages = sort .Pages "Path" -}}
+{{- end -}}
+{{- return $pages -}}

@@ -116,14 +116,6 @@
     },
     {
       "customType": "regex",
-      "description": "The site's vendored icon set; the PR fails ci until docs/assets/meteor-icons/icons.json and meteorIconsSHA256 are the new release's",
-      "managerFilePatterns": ["/^hack/site_test\\.go$/"],
-      "matchStrings": ["meteorIconsVersion\\s+= \"(?<currentValue>[^\"]+)\""],
-      "depNameTemplate": "meteor-icons",
-      "datasourceTemplate": "npm"
-    },
-    {
-      "customType": "regex",
       "description": "The controller images' base, a digest of its latest tag",
       "managerFilePatterns": ["/^\\.ko\\.yaml$/"],
       "matchStrings": ["defaultBaseImage: (?<depName>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]{64})"],

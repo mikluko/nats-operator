@@ -1,6 +1,8 @@
 ---
 title: Install
 weight: 1
+params:
+  eyebrow: Install · Helm chart
 description: Install the chart with all three controllers or a subset, check it, upgrade it and uninstall it.
 ---
 

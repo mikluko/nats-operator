@@ -1,0 +1,4 @@
+{{- /* A link with its destination as written; one to another site opens in a new tab. */ -}}
+{{- $scheme := lower (urls.Parse .Destination).Scheme -}}
+<a href="{{ .Destination | safeURL }}"{{ with .Title }} title="{{ . }}"{{ end }}{{ if in (slice "http" "https") $scheme }} target="_blank" rel="noreferrer noopener"{{ end }}>{{ .Text | safeHTML }}</a>
+{{- "" -}}

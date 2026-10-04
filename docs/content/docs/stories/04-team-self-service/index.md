@@ -2,6 +2,8 @@
 title: Let a team declare its own users and streams
 weight: 4
 params:
+  category: The auth plane
+  tags: [NatsReferenceGrant]
   e2e:
     after: 2
 ---

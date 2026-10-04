@@ -1,6 +1,9 @@
 ---
 title: Manage JetStream on a NATS cluster that you did not deploy
 weight: 3
+params:
+  category: JetStream
+  tags: [adoption]
 ---
 
 This guide shows you how to declare streams, consumers, a key-value bucket and an object store as Kubernetes resources on a NATS cluster that the cluster controller did not deploy, and how to take over streams that already exist without recreating them.

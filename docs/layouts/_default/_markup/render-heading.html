@@ -1,8 +1,8 @@
-{{- /* Hudocs' heading, except a level-one heading on a page with no front-matter title: partials/title.html takes that heading as the title, which the article header already renders. */ -}}
+{{- /* A heading with its anchor link and its leading section number set apart, except a level-one heading on a page with no front-matter title: partials/title.html takes that heading as the title, which the article header already renders. assets/json/search.json splits a page on the opening tag written here. */ -}}
 {{- if and (eq .Level 1) (not .Page.Title) -}}
 {{- else -}}
-<h{{ .Level }} id="{{ .Anchor | safeURL }}">
-  {{ .Text | safeHTML }}
-  <a class="article-anchor" aria-label='{{ printf "%s: %s" (i18n "anchor" | default "Anchor") (.Text | plainify) }}' href="#{{ .Anchor | safeURL }}">#</a>
-</h{{ .Level }}>
+{{- $parts := partial "numbered.html" .Text -}}
+<h{{ .Level }} id="{{ .Anchor }}">
+  {{- with $parts.num }}<span class="heading-num">{{ . }}</span> {{ end -}}
+  <span>{{ $parts.text | safeHTML }}</span><a class="anchor" aria-label="Anchor: {{ .PlainText }}" href="#{{ .Anchor }}">#</a></h{{ .Level }}>
 {{- end -}}

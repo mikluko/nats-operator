@@ -2,6 +2,8 @@
 title: Build a supercluster across Kubernetes clusters
 weight: 6
 params:
+  category: Several NATS clusters
+  tags: [gateways]
   e2e:
     waits:
       - {step: 1, wait: 3m, reason: "the gateways connect once both NATS clusters' servers are up"}

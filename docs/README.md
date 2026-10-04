@@ -1,6 +1,7 @@
 # docs
 
-This directory is the Hugo site published at <https://mikluko.github.io/nats-operator/>, on the [Hudocs](https://hudocs.com/) theme.
+This directory is the Hugo site published at <https://mikluko.github.io/nats-operator/>.
+Its theme is this directory's own `layouts/` and `assets/`, with the Geist Mono and Manrope fonts under `static/fonts/` beside their licenses.
 This guide shows you how to build the site and check it before you open a pull request.
 [`STYLE.md`](STYLE.md) is the writing style for the site's pages.
 
@@ -8,9 +9,8 @@ This guide shows you how to build the site and check it before you open a pull r
 
 You need:
 
-- Go on `PATH`. The theme is a Hugo module pinned in `go.mod`, and Hugo uses Go to download it.
-- Hugo extended.
-- `just`, to run the link check.
+- Hugo.
+- Go and `just`, to run the checks.
 
 `hugo.toml` mounts `design/` and `adr/` into the site's content under `content/docs/`.
 Edit a design document or an ADR in its own directory, not under `content/`.
@@ -39,13 +39,11 @@ From the repository root:
 
    - a page with more than one `h1`
    - a redirect to a page the site does not have
-   - a header that does not draw its logo icon
+   - a search index entry that addresses a page or fragment the site does not have
    - a page served from a story's `e2e/` directory
    - a page with no Markdown rendition, or no alternate link to it
    - a rendition that contains an unrendered shortcode
    - a page under `docs/` that `llms.txt` does not link
-
-   `TestSiteIconSet` fails when `assets/meteor-icons/icons.json` is not the pinned meteor-icons release's.
 
 1. Check the site's links and fragments with lychee:
 

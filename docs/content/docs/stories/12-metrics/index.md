@@ -2,6 +2,8 @@
 title: Scrape the controllers' metrics over verified TLS
 weight: 12
 params:
+  category: Metrics
+  tags: [ServiceMonitor]
   e2e:
     scrapeMetrics: true
 ---

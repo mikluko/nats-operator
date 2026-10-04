@@ -1,0 +1,13 @@
+{{- /* Every page under a section that is not a redirect, in reading order, each section ahead of its pages. */ -}}
+{{- $pages := slice -}}
+{{- range partial "ordered.html" . -}}
+  {{- if ne .Params.layout "redirect" -}}
+    {{- $pages = $pages | append . -}}
+  {{- end -}}
+  {{- if .IsSection -}}
+    {{- range partial "flat.html" . -}}
+      {{- $pages = $pages | append . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- return $pages -}}

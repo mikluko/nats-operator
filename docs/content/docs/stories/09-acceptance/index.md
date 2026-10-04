@@ -2,6 +2,8 @@
 title: Deploy a production supercluster of three NATS clusters
 weight: 9
 params:
+  category: Several NATS clusters
+  tags: [three NATS clusters]
   e2e:
     waits:
       - {step: 1, wait: 6m, reason: "eleven servers in three Kubernetes clusters start and join by gateways before the accounts are distributed to all of them"}

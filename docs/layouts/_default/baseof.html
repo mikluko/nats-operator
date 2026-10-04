@@ -1,0 +1,13 @@
+<!doctype html>
+{{- $landing := or .IsHome (eq .Kind "404") }}
+<html lang="{{ site.Language.Lang }}">
+  <head>
+    {{ partial "head.html" . }}
+  </head>
+  <body class="{{ if $landing }}is-landing{{ else }}is-docs{{ end }}">
+    <a class="skip" href="#main">Skip to content</a>
+    {{ partial "topbar.html" (dict "page" . "landing" $landing) }}
+    {{ block "main" . }}{{ end }}
+    {{ partialCached "search.html" . }}
+  </body>
+</html>

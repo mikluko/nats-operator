@@ -1,8 +1,7 @@
-{{- /* A story file: its name, its YAML, and the kubectl commands that apply or delete it. */ -}}
+{{- /* A story file: its YAML under its name, and the kubectl commands that apply or delete it. */ -}}
 {{- $name := .Get 0 -}}
 {{- $manifest := partial "manifest.html" (dict "page" .Page "name" $name) -}}
-<p><code>{{ $name }}</code></p>
-{{ highlight $manifest.yaml "yaml" "" }}
+{{ partial "code.html" (dict "code" $manifest.yaml "lang" "yaml" "name" $name) }}
 {{- with $manifest.commands }}
-{{ highlight (delimit . "\n") "sh" "" }}
+{{ partial "terminal.html" (delimit . "\n") }}
 {{- end -}}

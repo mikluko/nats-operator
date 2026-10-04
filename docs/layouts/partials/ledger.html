@@ -1,0 +1,46 @@
+{{- /* The pages of .section as a ledger, one row each: a record numbered by its file name and dated by its last edit, or a story numbered by its weight, the tutorial first and the rest under their params.category. .current, if set, is the page whose row is marked. */ -}}
+{{- $current := .current -}}
+{{- $pages := partial "ordered.html" .section -}}
+{{- if not (where $pages "Weight" "gt" 0) }}
+<div class="ledger ledger-adr">
+  {{- range $pages }}
+  <a class="ledger-row{{ if eq . $current }} is-current{{ end }}" href="{{ .RelPermalink }}"{{ if eq . $current }} aria-current="page"{{ end }}>
+    <span class="ledger-num">{{ index (findRE `^\d+` .File.ContentBaseName 1) 0 }}</span>
+    <span class="ledger-title">{{ partial "title.html" . }}</span>
+    <span class="ledger-tag">{{ if not .Lastmod.IsZero }}{{ .Lastmod.Format "2006-01-02" }}{{ end }}</span>
+  </a>
+  {{- end }}
+</div>
+{{- else }}
+  {{- $categories := slice }}
+  {{- range $pages }}
+    {{- if not .Params.tutorial }}
+      {{- $categories = $categories | append (.Params.category | default "") }}
+    {{- end }}
+  {{- end }}
+<div class="ledger">
+  {{- range $pages }}
+    {{- if .Params.tutorial }}
+  <a class="ledger-row is-featured" href="{{ .RelPermalink }}">
+    <span class="ledger-num">{{ printf "%02d" .Weight }}</span>
+    <span class="ledger-title">{{ .Title }}</span>
+    <span class="ledger-tag">Tutorial</span>
+  </a>
+    {{- end }}
+  {{- end }}
+  {{- range $category := uniq $categories }}
+    {{- with $category }}
+  <div class="ledger-cat">{{ . }}</div>
+    {{- end }}
+    {{- range $pages }}
+      {{- if and (not .Params.tutorial) (eq (.Params.category | default "") $category) }}
+  <a class="ledger-row" href="{{ .RelPermalink }}">
+    <span class="ledger-num">{{ printf "%02d" .Weight }}</span>
+    <span class="ledger-title">{{ .Title }}</span>
+    <span class="ledger-tag">{{ delimit (.Params.tags | default slice) " · " }}</span>
+  </a>
+      {{- end }}
+    {{- end }}
+  {{- end }}
+</div>
+{{- end }}

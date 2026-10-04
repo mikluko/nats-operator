@@ -2,6 +2,8 @@
 title: Add a NATS cluster to a supercluster that you did not deploy
 weight: 13
 params:
+  category: Several NATS clusters
+  tags: [auth.accountTrustRefs]
   e2e:
     waits:
       - {step: 0, wait: 2m, reason: "central's servers start"}

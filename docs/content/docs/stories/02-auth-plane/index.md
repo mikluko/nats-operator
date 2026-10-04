@@ -2,6 +2,8 @@
 title: Put a NATS cluster under a NATS operator
 weight: 2
 params:
+  category: The auth plane
+  tags: [NatsOperator, NatsUser]
   e2e:
     substitutions:
       - files: [01-natscluster.yaml]

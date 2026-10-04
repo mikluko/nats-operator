@@ -1,13 +1,11 @@
 baseURL = "https://mikluko.github.io/nats-operator/"
 title = "nats-operator"
 locale = "en"
-theme = "github.com/zkreations/hudocs"
 disableKinds = ["taxonomy", "term", "RSS", "sitemap"]
 enableGitInfo = true
 
 [params]
   description = "Three Kubernetes controllers that deploy NATS clusters, own their auth plane, and manage and balance JetStream."
-  docs_versions = false
 
 [outputs]
   home = ["html", "markdown", "llms"]
@@ -27,8 +25,6 @@ enableGitInfo = true
   name = "GitHub"
   url = "https://github.com/mikluko/nats-operator"
   weight = 2
-  [menus.main.params]
-    icon = "github"
 
 [markup.highlight]
   noClasses = false

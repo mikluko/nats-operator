@@ -1,0 +1,22 @@
+{{- /* The page's level-two and level-three headings as links; a page whose headings carry section numbers gets them in a column of their own. */ -}}
+{{- $entries := slice -}}
+{{- range .Fragments.Headings -}}
+  {{- range (cond (eq .Level 2) (slice .) .Headings) -}}
+    {{- $entries = $entries | append (dict "id" .ID "title" .Title "sub" false) -}}
+    {{- range .Headings -}}
+      {{- $entries = $entries | append (dict "id" .ID "title" .Title "sub" true) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $numbered := false -}}
+{{- range first 1 $entries -}}
+  {{- $numbered = ne (partial "numbered.html" .title).num "" -}}
+{{- end -}}
+<div class="toc-list{{ if $numbered }} is-numbered{{ end }}">
+  {{- range $entries }}
+    {{- $parts := partial "numbered.html" .title }}
+  <a href="#{{ .id }}"{{ if .sub }} class="is-sub"{{ end }}>
+    {{- if $numbered }}<span class="toc-num">{{ $parts.num }}</span><span>{{ $parts.text | safeHTML }}</span>{{ else }}{{ .title | safeHTML }}{{ end -}}
+  </a>
+  {{- end }}
+</div>

@@ -1,0 +1,2 @@
+{{- /* Shell text as a terminal block, a <placeholder> in it set apart. */ -}}
+<pre class="term"><code>{{ . | htmlEscape | replaceRE `(&lt;[a-z][a-z0-9-]*&gt;)` `<span class="ph">$1</span>` | safeHTML }}</code></pre>

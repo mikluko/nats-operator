@@ -2,6 +2,7 @@
 title: A NATS cluster with JetStream
 weight: 1
 params:
+  tutorial: true
   e2e:
     substitutions:
       - files: [01-natscluster.yaml]

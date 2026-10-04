@@ -1,0 +1,28 @@
+{{- /* The search index: one entry per documentation page and one per level-two or level-three heading in it, each with its address (u), title (t), breadcrumb (p) and text without code blocks (c). */ -}}
+{{- $docs := site.GetPage "/docs" -}}
+{{- $entries := slice -}}
+{{- range $page := partial "flat.html" $docs -}}
+  {{- $title := partial "title.html" $page -}}
+  {{- $section := "" -}}
+  {{- range $page.Ancestors -}}
+    {{- if eq .Parent $docs -}}{{- $section = .LinkTitle -}}{{- end -}}
+  {{- end -}}
+  {{- $html := string $page.Content | replaceRE `(?s)<pre.*?</pre>` "" | replaceRE `<a class="anchor".*?</a>` "" | replaceRE `<h[23] id="([^"]*)">` "@@SEC@@$1@@ID@@" -}}
+  {{- range $i, $chunk := split $html "@@SEC@@" -}}
+    {{- $url := $page.RelPermalink -}}
+    {{- $name := $title -}}
+    {{- $crumb := $section -}}
+    {{- $body := $chunk -}}
+    {{- if $i -}}
+      {{- $parts := split $chunk "@@ID@@" -}}
+      {{- $rest := index $parts 1 -}}
+      {{- $url = printf "%s#%s" $url (index $parts 0) -}}
+      {{- $name = index (split $rest "</h") 0 | plainify | htmlUnescape | replaceRE `\s+` " " | strings.TrimSpace -}}
+      {{- $crumb = cond (eq $section "") $title (printf "%s › %s" $section $title) -}}
+      {{- $body = replaceRE `(?s)^.*?</h[23]>` "" $rest -}}
+    {{- end -}}
+    {{- $text := $body | plainify | htmlUnescape | replaceRE `\s+` " " | strings.TrimSpace -}}
+    {{- $entries = $entries | append (dict "u" $url "t" $name "p" $crumb "c" $text) -}}
+  {{- end -}}
+{{- end -}}
+{{- $entries | jsonify -}}

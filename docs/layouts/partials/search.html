@@ -1,0 +1,16 @@
+{{- /* The search dialog, the same on every page; assets/js/search.js fetches the index named in data-index when it first opens. */ -}}
+{{- $index := resources.Get "json/search.json" | resources.ExecuteAsTemplate "search.json" site.Home | resources.Minify | resources.Fingerprint -}}
+<dialog class="search" id="search" aria-label="Search" data-index="{{ $index.RelPermalink }}">
+  <div class="search-input">
+    <span class="search-prompt" aria-hidden="true">›</span>
+    <input type="text" placeholder="Search in doc" aria-label="Search in doc" aria-controls="search-results" autocomplete="off" spellcheck="false">
+    <kbd>Esc</kbd>
+  </div>
+  <div class="search-count" aria-live="polite"></div>
+  <div class="search-results" id="search-results" role="listbox"></div>
+  <div class="search-foot">
+    <span><kbd>↓</kbd> <kbd>↑</kbd> Navigate</span>
+    <span><kbd>Enter</kbd> Select</span>
+    <span><kbd>Esc</kbd> Close</span>
+  </div>
+</dialog>

@@ -1,5 +1,6 @@
 ---
 title: Architecture decision records
+linkTitle: ADR
 weight: 5
 ---
 

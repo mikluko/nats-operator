@@ -2,6 +2,8 @@
 title: Join a NATS cluster to a hub as a leaf
 weight: 10
 params:
+  category: Several NATS clusters
+  tags: [NatsAccountTrust]
   e2e:
     waits:
       - {step: 1, wait: 4m, reason: "the hub and both leaves start before the leaf remotes connect"}
