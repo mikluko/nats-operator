@@ -372,6 +372,7 @@ func TestChains(t *testing.T) {
 			"payments-creds": "payments",
 		}}.check,
 		"13-join-supercluster": checkJoinSupercluster,
+		"14-nsc-takeover":      checkTakeover,
 	}
 	require.ElementsMatch(t, slices.Collect(maps.Keys(generators)), slices.Collect(maps.Keys(stories)))
 	for story, check := range stories {
@@ -385,12 +386,13 @@ func TestChains(t *testing.T) {
 
 // TestGenerate pins every story's generated files: each is readable by its
 // owner alone, and each patch file, named for the kind it targets and
-// optionally a qualifier after a hyphen, decodes strictly into that kind.
+// optionally a qualifier after a hyphen, decodes strictly into that kind and
+// patches its spec alone, or with the qualifier status its status alone.
 func TestGenerate(t *testing.T) {
 	scheme := fixtureScheme(t)
 	kinds := map[string]schema.GroupVersionKind{}
 	for gvk := range scheme.AllKnownTypes() {
-		if gvk.Group == natsv1beta1.GroupVersion.Group {
+		if gvk.Group == natsv1beta1.GroupVersion.Group || gvk.Group == authv1beta1.GroupVersion.Group {
 			kinds[strings.ToLower(gvk.Kind)] = gvk
 		}
 	}
@@ -412,14 +414,18 @@ func TestGenerate(t *testing.T) {
 			patches, err := filepath.Glob(filepath.Join(dir, "*.json"))
 			require.NoError(t, err)
 			for _, path := range patches {
-				kind, _, _ := strings.Cut(strings.TrimSuffix(filepath.Base(path), ".json"), "-")
+				kind, qualifier, _ := strings.Cut(strings.TrimSuffix(filepath.Base(path), ".json"), "-")
 				gvk, ok := kinds[kind]
-				require.True(t, ok, "%s names no kind of %s", path, natsv1beta1.GroupVersion.Group)
+				require.True(t, ok, "%s names no kind of %s or %s", path, natsv1beta1.GroupVersion.Group, authv1beta1.GroupVersion.Group)
+				patched := "spec"
+				if qualifier == "status" {
+					patched = "status"
+				}
 				raw, err := os.ReadFile(path)
 				require.NoError(t, err)
 				var patch map[string]any
 				require.NoError(t, json.Unmarshal(raw, &patch))
-				require.Equal(t, []string{"spec"}, slices.Sorted(maps.Keys(patch)), path)
+				require.Equal(t, []string{patched}, slices.Sorted(maps.Keys(patch)), path)
 				obj, err := scheme.New(gvk)
 				require.NoError(t, err)
 				require.NoError(t, yaml.UnmarshalStrict(raw, obj), path)

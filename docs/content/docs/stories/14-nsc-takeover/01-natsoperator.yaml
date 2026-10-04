@@ -1,0 +1,29 @@
+apiVersion: auth.nats-operator.io/v1beta1
+kind: NatsSystemAccount
+metadata:
+  name: sys
+  namespace: nats-system
+spec:
+  operatorRef:
+    name: acme
+  keys:
+    identity:
+      secretKeyRef: {name: sys-keys, key: identity}
+    signing:
+      - name: signing-1
+        secretKeyRef: {name: sys-keys, key: signing-1}
+---
+apiVersion: auth.nats-operator.io/v1beta1
+kind: NatsOperator
+metadata:
+  name: acme
+  namespace: nats-system
+spec:
+  systemAccountRef:
+    name: sys
+  keys:
+    identity:
+      secretKeyRef: {name: acme-operator-keys, key: identity}
+    signing:
+      - name: signing-1
+        secretKeyRef: {name: acme-operator-keys, key: signing-1}

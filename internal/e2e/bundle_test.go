@@ -25,7 +25,7 @@ func generated(t *testing.T) string {
 func TestLoadBundles_Stories(t *testing.T) {
 	bundles, err := LoadBundles(storiesDir, generated(t))
 	require.NoError(t, err)
-	require.Len(t, bundles, 13)
+	require.Len(t, bundles, 14)
 	skipped := map[string]string{}
 	for i, b := range bundles {
 		require.Equal(t, i+1, b.Number, b.Name)

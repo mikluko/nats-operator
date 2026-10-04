@@ -1,0 +1,25 @@
+apiVersion: auth.nats-operator.io/v1beta1
+kind: NatsAccount
+metadata:
+  name: orders
+  namespace: nats-system
+spec:
+  operatorRef:
+    name: acme
+  keys:
+    identity:
+      secretKeyRef: {name: orders-keys, key: identity}
+    signing:
+      - name: signing-1
+        secretKeyRef: {name: orders-keys, key: signing-1}
+  jwtTTL: 48h
+  limits:
+    jetstream:
+      memoryStorage: 1Gi
+      diskStorage: 10Gi
+      streams: 10
+      consumers: 100
+  exports:
+    - name: orders-events
+      type: Stream
+      subject: "orders.events.>"
