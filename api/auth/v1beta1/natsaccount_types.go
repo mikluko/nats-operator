@@ -65,7 +65,9 @@ type AccountLimits struct {
 	JetStream *AccountJetStreamLimits `json:"jetstream,omitempty"`
 }
 
-// AccountJetStreamLimits are an account's JetStream limits.
+// AccountJetStreamLimits are an account's JetStream limits, either for the
+// account as a whole or by tier.
+// +kubebuilder:validation:XValidation:rule="!has(self.tiers) || size(self.tiers) == 0 || !(has(self.memoryStorage) || has(self.diskStorage) || has(self.streams) || has(self.consumers) || has(self.maxAckPending) || has(self.memoryMaxStreamBytes) || has(self.diskMaxStreamBytes) || (has(self.maxBytesRequired) && self.maxBytesRequired))",message="jetstream limits are set either for the account or by tier"
 type AccountJetStreamLimits struct {
 	// MemoryStorage is the memory store limit.
 	// +optional
@@ -82,6 +84,70 @@ type AccountJetStreamLimits struct {
 	// Consumers is the maximum number of consumers.
 	// +optional
 	Consumers *int64 `json:"consumers,omitempty"`
+
+	// MaxAckPending is the highest max ack pending a consumer may set.
+	// +optional
+	MaxAckPending *int64 `json:"maxAckPending,omitempty"`
+
+	// MemoryMaxStreamBytes is the highest max bytes a memory stream may set.
+	// +optional
+	MemoryMaxStreamBytes *resource.Quantity `json:"memoryMaxStreamBytes,omitempty"`
+
+	// DiskMaxStreamBytes is the highest max bytes a file stream may set.
+	// +optional
+	DiskMaxStreamBytes *resource.Quantity `json:"diskMaxStreamBytes,omitempty"`
+
+	// MaxBytesRequired refuses a stream that sets no max bytes.
+	// +optional
+	MaxBytesRequired bool `json:"maxBytesRequired,omitempty"`
+
+	// Tiers are the limits by tier, in place of the limits for the account.
+	// nats-server refuses a stream whose tier is not listed.
+	// +optional
+	// +listType=map
+	// +listMapKey=name
+	Tiers []AccountJetStreamTier `json:"tiers,omitempty"`
+}
+
+// AccountJetStreamTier are an account's JetStream limits for one tier.
+type AccountJetStreamTier struct {
+	// Name is the tier.
+	// nats-server puts a stream in the tier named R followed by its replica
+	// count: R1, R3.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// MemoryStorage is the memory store limit.
+	// +optional
+	MemoryStorage *resource.Quantity `json:"memoryStorage,omitempty"`
+
+	// DiskStorage is the file store limit.
+	// +optional
+	DiskStorage *resource.Quantity `json:"diskStorage,omitempty"`
+
+	// Streams is the maximum number of streams.
+	// +optional
+	Streams *int64 `json:"streams,omitempty"`
+
+	// Consumers is the maximum number of consumers.
+	// +optional
+	Consumers *int64 `json:"consumers,omitempty"`
+
+	// MaxAckPending is the highest max ack pending a consumer may set.
+	// +optional
+	MaxAckPending *int64 `json:"maxAckPending,omitempty"`
+
+	// MemoryMaxStreamBytes is the highest max bytes a memory stream may set.
+	// +optional
+	MemoryMaxStreamBytes *resource.Quantity `json:"memoryMaxStreamBytes,omitempty"`
+
+	// DiskMaxStreamBytes is the highest max bytes a file stream may set.
+	// +optional
+	DiskMaxStreamBytes *resource.Quantity `json:"diskMaxStreamBytes,omitempty"`
+
+	// MaxBytesRequired refuses a stream that sets no max bytes.
+	// +optional
+	MaxBytesRequired bool `json:"maxBytesRequired,omitempty"`
 }
 
 // ExportPreset is a named set of exports.

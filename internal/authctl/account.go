@@ -390,12 +390,36 @@ func accountLimits(l *authv1beta1.AccountLimits) jwtplane.Limits {
 		Subscriptions: deref(l.Subscriptions),
 		Payload:       quantity(l.Payload),
 	}
-	if js := l.JetStream; js != nil {
-		out.JetStream = &jwtplane.JetStreamLimits{
-			MemoryStorage: quantity(js.MemoryStorage),
-			DiskStorage:   quantity(js.DiskStorage),
-			Streams:       deref(js.Streams),
-			Consumers:     deref(js.Consumers),
+	js := l.JetStream
+	if js == nil {
+		return out
+	}
+	global := jwtplane.JetStreamLimits{
+		MemoryStorage:        quantity(js.MemoryStorage),
+		DiskStorage:          quantity(js.DiskStorage),
+		Streams:              deref(js.Streams),
+		Consumers:            deref(js.Consumers),
+		MaxAckPending:        deref(js.MaxAckPending),
+		MemoryMaxStreamBytes: quantity(js.MemoryMaxStreamBytes),
+		DiskMaxStreamBytes:   quantity(js.DiskMaxStreamBytes),
+		MaxBytesRequired:     js.MaxBytesRequired,
+	}
+	if len(js.Tiers) == 0 || global != (jwtplane.JetStreamLimits{}) {
+		out.JetStream = &global
+	}
+	for _, t := range js.Tiers {
+		if out.JetStreamTiers == nil {
+			out.JetStreamTiers = map[string]jwtplane.JetStreamLimits{}
+		}
+		out.JetStreamTiers[t.Name] = jwtplane.JetStreamLimits{
+			MemoryStorage:        quantity(t.MemoryStorage),
+			DiskStorage:          quantity(t.DiskStorage),
+			Streams:              deref(t.Streams),
+			Consumers:            deref(t.Consumers),
+			MaxAckPending:        deref(t.MaxAckPending),
+			MemoryMaxStreamBytes: quantity(t.MemoryMaxStreamBytes),
+			DiskMaxStreamBytes:   quantity(t.DiskMaxStreamBytes),
+			MaxBytesRequired:     t.MaxBytesRequired,
 		}
 	}
 	return out

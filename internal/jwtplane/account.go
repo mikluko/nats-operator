@@ -49,16 +49,24 @@ type Limits struct {
 	Connections   int64
 	Subscriptions int64
 	Payload       int64
-	// JetStream nil disables JetStream for the account.
+	// JetStream are the limits for the account as a whole; nil with no
+	// JetStreamTiers disables JetStream for the account.
 	JetStream *JetStreamLimits
+	// JetStreamTiers are the limits by tier name. SignAccount refuses them
+	// beside JetStream, and a blank tier name.
+	JetStreamTiers map[string]JetStreamLimits
 }
 
 // JetStreamLimits are an account's JetStream limits. Zero is unlimited.
 type JetStreamLimits struct {
-	MemoryStorage int64
-	DiskStorage   int64
-	Streams       int64
-	Consumers     int64
+	MemoryStorage        int64
+	DiskStorage          int64
+	Streams              int64
+	Consumers            int64
+	MaxAckPending        int64
+	MemoryMaxStreamBytes int64
+	DiskMaxStreamBytes   int64
+	MaxBytesRequired     bool
 }
 
 // Export is a stream or service an account offers to others.
@@ -207,15 +215,60 @@ func applyLimits(dst *jwt.OperatorLimits, l Limits) error {
 		set(&dst.Subs, l.Subscriptions, "subscriptions"),
 		set(&dst.Payload, l.Payload, "payload"),
 	}
-	if js := l.JetStream; js != nil {
-		errs = append(errs,
-			set(&dst.MemoryStorage, js.MemoryStorage, "jetstream memory storage"),
-			set(&dst.DiskStorage, js.DiskStorage, "jetstream disk storage"),
-			set(&dst.Streams, js.Streams, "jetstream streams"),
-			set(&dst.Consumer, js.Consumers, "jetstream consumers"),
-		)
+	if l.JetStream != nil {
+		js, err := jetStreamLimits(*l.JetStream, "jetstream")
+		dst.JetStreamLimits = js
+		errs = append(errs, err)
+	}
+	for tier, tl := range l.JetStreamTiers {
+		js, err := jetStreamLimits(tl, "jetstream tier "+tier)
+		if dst.JetStreamTieredLimits == nil {
+			dst.JetStreamTieredLimits = jwt.JetStreamTieredLimits{}
+		}
+		dst.JetStreamTieredLimits[tier] = js
+		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
+}
+
+// jetStreamLimits are l as claims. An unset storage, stream or consumer limit
+// is written as jwt.NoLimit, since nats-server reads a zero storage limit as
+// no storage; the others stay zero, which it reads as unlimited.
+func jetStreamLimits(l JetStreamLimits, name string) (jwt.JetStreamLimits, error) {
+	unlimited := func(v int64) int64 {
+		if v == 0 {
+			return jwt.NoLimit
+		}
+		return v
+	}
+	out := jwt.JetStreamLimits{
+		MemoryStorage:        unlimited(l.MemoryStorage),
+		DiskStorage:          unlimited(l.DiskStorage),
+		Streams:              unlimited(l.Streams),
+		Consumer:             unlimited(l.Consumers),
+		MaxAckPending:        l.MaxAckPending,
+		MemoryMaxStreamBytes: l.MemoryMaxStreamBytes,
+		DiskMaxStreamBytes:   l.DiskMaxStreamBytes,
+		MaxBytesRequired:     l.MaxBytesRequired,
+	}
+	var errs []error
+	for _, f := range []struct {
+		field string
+		v     int64
+	}{
+		{"memory storage", l.MemoryStorage},
+		{"disk storage", l.DiskStorage},
+		{"streams", l.Streams},
+		{"consumers", l.Consumers},
+		{"max ack pending", l.MaxAckPending},
+		{"memory max stream bytes", l.MemoryMaxStreamBytes},
+		{"disk max stream bytes", l.DiskMaxStreamBytes},
+	} {
+		if f.v < 0 {
+			errs = append(errs, fmt.Errorf("%w: %s %s %d", ErrNegativeLimit, name, f.field, f.v))
+		}
+	}
+	return out, errors.Join(errs...)
 }
 
 func jwtExport(e Export) *jwt.Export {

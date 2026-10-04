@@ -169,6 +169,26 @@ func TestAccountLimits(t *testing.T) {
 		JetStream:   &jwtplane.JetStreamLimits{DiskStorage: 50 << 30, Streams: 20},
 	}, got)
 	require.Equal(t, jwtplane.Limits{}, accountLimits(nil))
+
+	require.Equal(t, jwtplane.Limits{JetStream: &jwtplane.JetStreamLimits{
+		MaxAckPending: 1000, MemoryMaxStreamBytes: 1 << 20, DiskMaxStreamBytes: 1 << 30, MaxBytesRequired: true,
+	}}, accountLimits(&authv1beta1.AccountLimits{JetStream: &authv1beta1.AccountJetStreamLimits{
+		MaxAckPending: n(1000), MemoryMaxStreamBytes: q("1Mi"), DiskMaxStreamBytes: q("1Gi"), MaxBytesRequired: true,
+	}}))
+
+	tiers := []authv1beta1.AccountJetStreamTier{
+		{Name: "R1", DiskStorage: q("10Gi"), Streams: n(10)},
+		{Name: "R3", MemoryStorage: q("1Gi"), Consumers: n(100), MaxAckPending: n(1000), MemoryMaxStreamBytes: q("1Mi"), DiskMaxStreamBytes: q("1Gi"), MaxBytesRequired: true},
+	}
+	wantTiers := map[string]jwtplane.JetStreamLimits{
+		"R1": {DiskStorage: 10 << 30, Streams: 10},
+		"R3": {MemoryStorage: 1 << 30, Consumers: 100, MaxAckPending: 1000, MemoryMaxStreamBytes: 1 << 20, DiskMaxStreamBytes: 1 << 30, MaxBytesRequired: true},
+	}
+	require.Equal(t, jwtplane.Limits{JetStreamTiers: wantTiers},
+		accountLimits(&authv1beta1.AccountLimits{JetStream: &authv1beta1.AccountJetStreamLimits{Tiers: tiers}}))
+	require.Equal(t, jwtplane.Limits{JetStream: &jwtplane.JetStreamLimits{Streams: 5}, JetStreamTiers: wantTiers},
+		accountLimits(&authv1beta1.AccountLimits{JetStream: &authv1beta1.AccountJetStreamLimits{Streams: n(5), Tiers: tiers}}),
+		"limits for the account beside tiers reach the signer, which refuses them")
 }
 
 func TestImportLabel(t *testing.T) {

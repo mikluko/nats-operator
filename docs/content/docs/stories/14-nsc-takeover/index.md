@@ -57,6 +57,7 @@ Write the whole spec before you apply it:
   A user whose JWT was signed by a key that the list leaves out can no longer connect, and the servers close its connections.
 - Set `limits` for connections, subscriptions, payload and JetStream.
   A limit that you omit is unlimited, and an account without `limits.jetstream` has no JetStream.
+  If the account has JetStream limits by tier, list each tier under `limits.jetstream.tiers` by its name, such as `R3`.
 - Declare every export under `exports`, and every import under `imports`.
   Apply an account that exports before the accounts that import from it: an import from a `NatsAccount` that does not exist is left out of the JWT.
   While the exporting `NatsAccount` exists but has no public key yet, the importing account is not signed: its `NatsAccount` has the condition `Ready` False with the reason `ExporterPending`, and its JWT on the servers stays as it is.
@@ -67,7 +68,6 @@ Write the whole spec before you apply it:
 
 The account loses these claims, because a `NatsAccount` has no field for them:
 
-- JetStream limits by tier. An account that has only tiered limits ends up without JetStream.
 - The scope of a scoped signing key. If you list the key, its users fail with `maximum subscriptions exceeded`.
 - Subject mappings, default permissions, and auth callout.
 - The latency sampling and the account token position of an export.

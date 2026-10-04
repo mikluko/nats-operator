@@ -258,11 +258,36 @@ spec:
                         description: Consumers is the maximum number of consumers.
                         format: int64
                         type: integer
+                      diskMaxStreamBytes:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: DiskMaxStreamBytes is the highest max bytes a
+                          file stream may set.
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
                       diskStorage:
                         anyOf:
                         - type: integer
                         - type: string
                         description: DiskStorage is the file store limit.
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      maxAckPending:
+                        description: MaxAckPending is the highest max ack pending
+                          a consumer may set.
+                        format: int64
+                        type: integer
+                      maxBytesRequired:
+                        description: MaxBytesRequired refuses a stream that sets no
+                          max bytes.
+                        type: boolean
+                      memoryMaxStreamBytes:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: MemoryMaxStreamBytes is the highest max bytes
+                          a memory stream may set.
                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                         x-kubernetes-int-or-string: true
                       memoryStorage:
@@ -276,7 +301,84 @@ spec:
                         description: Streams is the maximum number of streams.
                         format: int64
                         type: integer
+                      tiers:
+                        description: |-
+                          Tiers are the limits by tier, in place of the limits for the account.
+                          nats-server refuses a stream whose tier is not listed.
+                        items:
+                          description: AccountJetStreamTier are an account's JetStream
+                            limits for one tier.
+                          properties:
+                            consumers:
+                              description: Consumers is the maximum number of consumers.
+                              format: int64
+                              type: integer
+                            diskMaxStreamBytes:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              description: DiskMaxStreamBytes is the highest max bytes
+                                a file stream may set.
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            diskStorage:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              description: DiskStorage is the file store limit.
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            maxAckPending:
+                              description: MaxAckPending is the highest max ack pending
+                                a consumer may set.
+                              format: int64
+                              type: integer
+                            maxBytesRequired:
+                              description: MaxBytesRequired refuses a stream that
+                                sets no max bytes.
+                              type: boolean
+                            memoryMaxStreamBytes:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              description: MemoryMaxStreamBytes is the highest max
+                                bytes a memory stream may set.
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            memoryStorage:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              description: MemoryStorage is the memory store limit.
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            name:
+                              description: |-
+                                Name is the tier.
+                                nats-server puts a stream in the tier named R followed by its replica
+                                count: R1, R3.
+                              minLength: 1
+                              type: string
+                            streams:
+                              description: Streams is the maximum number of streams.
+                              format: int64
+                              type: integer
+                          required:
+                          - name
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
                     type: object
+                    x-kubernetes-validations:
+                    - message: jetstream limits are set either for the account or
+                        by tier
+                      rule: '!has(self.tiers) || size(self.tiers) == 0 || !(has(self.memoryStorage)
+                        || has(self.diskStorage) || has(self.streams) || has(self.consumers)
+                        || has(self.maxAckPending) || has(self.memoryMaxStreamBytes)
+                        || has(self.diskMaxStreamBytes) || (has(self.maxBytesRequired)
+                        && self.maxBytesRequired))'
                   payload:
                     anyOf:
                     - type: integer

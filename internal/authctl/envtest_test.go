@@ -237,6 +237,7 @@ func TestEnvtest(t *testing.T) {
 	t.Run("AuthPlaneSigned", e.testAuthPlaneSigned)
 	t.Run("ExportsImported", e.testExportsImported)
 	t.Run("ServedByNatsServer", e.testServed)
+	t.Run("TieredLimits", e.testTieredLimits)
 	t.Run("CrossNamespaceImport", e.testCrossNamespaceImport)
 	t.Run("ImportFromOtherOperator", e.testImportFromOtherOperator)
 	t.Run("ImporterWaitsForExporter", e.testImporterWaitsForExporter)
