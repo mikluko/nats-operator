@@ -44,13 +44,6 @@ func (u nscSystemUser) connect(url string) (*nats.Conn, error) {
 	return nats.Connect(url, nats.UserJWTAndSeed(u.jwt, string(u.seed)), nats.NoReconnect())
 }
 
-type builderIndexer struct{ b *fake.ClientBuilder }
-
-func (i builderIndexer) IndexField(_ context.Context, obj client.Object, field string, fn client.IndexerFunc) error {
-	i.b.WithIndex(obj, field, fn)
-	return nil
-}
-
 var (
 	takeoverOperator = types.NamespacedName{Namespace: "ns", Name: "op"}
 	takeoverSystem   = types.NamespacedName{Namespace: "ns", Name: "sys"}
