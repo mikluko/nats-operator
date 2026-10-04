@@ -1,5 +1,5 @@
 ---
-title: A production supercluster
+title: Deploy a production supercluster of three NATS clusters
 weight: 9
 params:
   e2e:
@@ -54,46 +54,168 @@ params:
         patch: {spec: {podTemplate: {spec: {nodeSelector: null}}}}
 ---
 
-Everything from the earlier stories at once, across three NATS clusters in three Kubernetes clusters: a five-server one in the home cluster, a development NATS cluster pinned to one zone, and a production NATS cluster in another region whose placement tag is not its name. Four services run in two environments, each service an account.
+This guide shows you how to deploy a supercluster for production: three NATS clusters in three Kubernetes clusters, under one NATS operator, with JetStream balanced.
+It combines the other guides, and each step links to the guide that has its options.
 
-## Trust roots and NATS clusters
+The manifests deploy these NATS clusters:
 
-The trust roots and the gateway list are the same in every Kubernetes cluster; GitOps keeps them alike. The gateway certificates come from the Issuer `nats-gateway-ca` in `nats-system` of each Kubernetes cluster, a private CA, as in [the supercluster story]({{< relref "/docs/stories/06-supercluster" >}}).
+- `prod-east`, five servers, in the home cluster.
+- `dev-east`, three servers, all in one zone.
+- `prod-west`, three servers, in another region.
 
-{{< manifest "01-natsoperatortrust.yaml" >}}
+Four services use the supercluster, and each service has its own account.
+The manifests have the accounts of the production environment.
+The accounts of the development environment are the same under `-dev` names, and are left out.
 
-{{< manifest "01-prod-east.yaml" >}}
+## Before you begin
 
-{{< manifest "01-dev-east.yaml" >}}
+You need:
 
-{{< manifest "01-prod-west.yaml" >}}
+- Three Kubernetes clusters, with kubeconfig contexts named `prod-east`, `dev-east` and `prod-west`.
+  Each manifest on this page is followed by the command that applies it with `--context`.
+- In each, the cluster controller and the JetStream controller, cert-manager, the namespace `nats-system`, the StorageClass `gp3`, and LoadBalancer Services that the other Kubernetes clusters can reach.
+  [Install]({{< relref "/docs/install" >}}) shows how to install the controllers.
+- In each, the Issuer `nats-gateway-ca` in `nats-system`, from a private CA.
+  See [Create the gateway CA]({{< relref "/docs/stories/06-supercluster#create-the-gateway-ca" >}}).
+- In `prod-east`, the auth controller and the namespace `monitoring`.
+- The DNS names `nats.prod-east.acme.example`, `nats.dev-east.acme.example` and `nats.prod-west.acme.example` pointing at the gateway Services, for example through external-dns.
 
-Each NatsCluster reports every other member's gateways connected.
+## Declare the NATS operator and the accounts
 
-{{< manifest "01-status-natscluster-prod-west.yaml" >}}
-
-## The auth plane
-
-The NATS operator, the system account, and the production account chain: checks exports a service to monitoring, which exports streams and services to core and to the collector. The development chain repeats it under `-dev` names and is left out.
+Apply the NATS operator `acme`, its system account `sys` and the four accounts in the home cluster, `prod-east`:
 
 {{< manifest "01-auth.yaml" >}}
 
-Every account reaches every server of the supercluster through the resolver.
+The accounts form a chain.
+`checks-prod` exports a service to `monitoring-prod`, and `monitoring-prod` exports streams and services to `core-prod` and `collector-prod`.
+[Share a stream and a service between accounts]({{< relref "/docs/stories/05-account-wiring" >}}) shows how to declare exports and imports.
 
-{{< manifest "01-status-natsaccount-monitoring-prod.yaml" >}}
+Declare the users of the home cluster's own controllers and the auth controller's connection as well.
+[Put a NATS cluster under a NATS operator]({{< relref "/docs/stories/02-auth-plane" >}}) shows them, with the Secrets `cluster-controller-creds` and `jetstream-controller-creds` that the manifests on this page refer to.
 
-Every account carries a `service` and a `readonly` user, and every other Kubernetes cluster two controller users.
+## Declare the users
+
+Apply the users in `prod-east`:
 
 {{< manifest "01-users.yaml" >}}
 
-## JetStream and balancing
+- Every account has a `service` user and a `readonly` user.
+  A `readonly` user sets the preset `readonly`, and a user with a preset cannot set `permissions`.
+  [readonly]({{< relref "/docs/reference/nats-permissions#readonly" >}}) in the NATS permissions reference lists the subjects of the preset.
+- The users of the monitoring team are in the namespace `monitoring`, and the `NatsReferenceGrant` lets them refer to the team's accounts in `nats-system`.
+  See [Let a team declare its own users and streams]({{< relref "/docs/stories/04-team-self-service" >}}).
+- Each of the other two Kubernetes clusters has two users, one for its cluster controller and one for its JetStream controller.
 
-The monitoring team adopts the streams its application created, pools them, and balances within its account; the platform team balances each NATS cluster.
+The auth controller writes the creds Secrets in `prod-east`.
+Deliver the Secrets of the controllers' users to `nats-system` in `dev-east` and `prod-west`, as [Build a supercluster across Kubernetes clusters]({{< relref "/docs/stories/06-supercluster" >}}) shows.
+
+## Copy the trust roots to every Kubernetes cluster
+
+Copy the NATS operator JWT and the system account JWT from the status of the `NatsOperator` into a `NatsOperatorTrust`, and apply the same one in all three Kubernetes clusters.
+Keep the copies alike with GitOps.
+
+{{< manifest "01-natsoperatortrust.yaml" >}}
+
+## Deploy the NATS clusters
+
+Apply one `NatsCluster` in each Kubernetes cluster.
+All three have the same `gateway.remotes`.
+
+{{< manifest "01-prod-east.yaml" >}}
+
+`jetstream.limits.maxMemoryStore` sets the size of the memory store.
+Without it, the cluster controller derives the size from `resources.limits.memory`.
+
+{{< manifest "01-dev-east.yaml" >}}
+
+`podTemplate` passes scheduling fields to the pods.
+Here, a `nodeSelector` puts every server of `dev-east` in one zone.
+
+{{< manifest "01-prod-west.yaml" >}}
+
+`serverTags` are yours to choose.
+The placement tag of `prod-west` is `cluster:west`, which is not its name.
+
+[NatsClusterSpec]({{< relref "/docs/reference/api#NatsClusterSpec" >}}) in the API reference lists every field.
+
+## Check the gateways
+
+Read the status of `prod-west`:
+
+```sh
+kubectl --context prod-west -n nats-system get natscluster prod-west -o yaml
+```
+
+The `status` in the output is similar to this:
+
+{{< manifest "01-status-natscluster-prod-west.yaml" >}}
+
+`GatewaysConnected` is True once both of the other members are connected.
+The status of every `NatsCluster` has an entry under `gateways` for each of the other members.
+
+## Check that the accounts reached every server
+
+Every account reaches every server of the supercluster through the resolver.
+Read the status of an account:
+
+```sh
+kubectl --context prod-east -n nats-system get natsaccount monitoring-prod -o yaml
+```
+
+The `status` in the output is similar to this:
+
+{{< manifest "01-status-natsaccount-monitoring-prod.yaml" >}}
+
+`distribution` counts the servers of all three NATS clusters.
+
+## Adopt the streams and balance them
+
+The application of the monitoring team created its streams `REQUESTS` and `RESPONSES` itself, before any `NatsStream` existed.
+Apply the manifest in `prod-east`:
 
 {{< manifest "02-jetstream.yaml" >}}
 
+- The two `NatsStream`s set `adoptionPolicy: Adopt`, so they take over the streams and keep their config.
+  See [Adopting streams]({{< relref "/docs/stories/03-unmanaged#adopting-streams" >}}).
+- The `NatsBalancer` balances the account of the monitoring team in two pools, which select the streams by label.
+- The `NatsSystemBalancer` balances every account of `prod-east`.
+  The platform team needs one for each NATS cluster, and the manifest has only the one for `prod-east`.
+
+[Balance JetStream leaders and copies]({{< relref "/docs/stories/07-balancing" >}}) describes both balancers.
+
+Read the status of an adopted stream:
+
+```sh
+kubectl --context prod-east -n monitoring get natsstream requests -o yaml
+```
+
+The `status` in the output is similar to this:
+
 {{< manifest "02-status-natsstream-requests.yaml" >}}
+
+Read the status of the account balancer:
+
+```sh
+kubectl --context prod-east -n monitoring get natsbalancer prod -o yaml
+```
+
+The `status` in the output is similar to this:
 
 {{< manifest "02-status-natsbalancer.yaml" >}}
 
+Each pool has one stream, so its `leaderSkew` is 1.
+Every stream of the account has a resource in a pool, so the status has no default pool.
+
+Read the status of the system balancer:
+
+```sh
+kubectl --context prod-east -n nats-system get natssystembalancer prod-east -o yaml
+```
+
+The `status` in the output is similar to this:
+
 {{< manifest "02-status-natssystembalancer.yaml" >}}
+
+`capabilities.leader` is None.
+`monitoring-prod` is the one account with streams in `prod-east`, and it has no `jetstream-stepdown` export, so the system balancer moves no leader.
+To let it, add the export as in [Let the system balancer move the leaders of an account]({{< relref "/docs/stories/07-balancing#let-the-system-balancer-move-the-leaders-of-an-account" >}}).
