@@ -733,6 +733,57 @@ func TestEnvtestReconcile(t *testing.T) {
 		require.Equal(t, "nats-west.example.net:7222", got.Status.Endpoints.Gateway)
 		require.Equal(t, nodePort, gatewayService(t).Spec.Ports[0].NodePort, "the node port was reallocated")
 
+		t.Run("the template's load balancer fields reach the Service", func(t *testing.T) {
+			got.Spec.Gateway.Service.LoadBalancerSourceRanges = []string{"10.20.0.0/16", "2001:db8:20::/56"}
+			require.NoError(t, c.Update(ctx, got))
+			_, got = reconcile(t, got)
+			require.Equal(t, []string{"10.20.0.0/16", "2001:db8:20::/56"}, gatewayService(t).Spec.LoadBalancerSourceRanges)
+
+			got.Spec.Gateway.Service.LoadBalancerClass = ptr.To("a.example/lb")
+			err := c.Update(ctx, got)
+			require.True(t, apierrors.IsInvalid(err), "%v", err)
+			require.ErrorContains(t, err, "loadBalancerClass cannot change while type stays LoadBalancer")
+
+			_, got = reconcile(t, got)
+			got.Spec.Gateway.Service.LoadBalancerSourceRanges = nil
+			require.NoError(t, c.Update(ctx, got))
+			_, got = reconcile(t, got)
+			require.Nil(t, gatewayService(t).Spec.LoadBalancerSourceRanges)
+		})
+
+		t.Run("a class Kubernetes refuses on the Service is reported", func(t *testing.T) {
+			template := got.Spec.Gateway.Service.DeepCopy()
+			got.Spec.Gateway.Service = nil
+			require.NoError(t, c.Update(ctx, got))
+			got.Spec.Gateway.Service = template
+			got.Spec.Gateway.Service.LoadBalancerClass = ptr.To("a.example/lb")
+			require.NoError(t, c.Update(ctx, got), "a template removed and set again between reconciles is no transition")
+
+			_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(got)})
+			require.ErrorContains(t, err, "may not change once set")
+			require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(got), got))
+			condition(t, got, ConditionProgressing, metav1.ConditionFalse, ReasonReconcileFailed)
+			require.Contains(t, meta.FindStatusCondition(got.Status.Conditions, ConditionProgressing).Message, "spec.loadBalancerClass")
+			require.Nil(t, gatewayService(t).Spec.LoadBalancerClass)
+
+			got.Spec.Gateway.Service = nil
+			require.NoError(t, c.Update(ctx, got))
+			_, got = reconcile(t, got)
+			got.Spec.Gateway.Service = template
+			got.Spec.Gateway.Service.LoadBalancerClass = ptr.To("a.example/lb")
+			require.NoError(t, c.Update(ctx, got))
+			_, got = reconcile(t, got)
+			require.Equal(t, ptr.To("a.example/lb"), gatewayService(t).Spec.LoadBalancerClass)
+
+			got.Spec.Gateway.Service.Type = corev1.ServiceTypeClusterIP
+			got.Spec.Gateway.Service.LoadBalancerClass = nil
+			require.NoError(t, c.Update(ctx, got))
+			_, got = reconcile(t, got)
+			svc := gatewayService(t)
+			require.Equal(t, corev1.ServiceTypeClusterIP, svc.Spec.Type)
+			require.Nil(t, svc.Spec.LoadBalancerClass, "the API server drops the class with the type")
+		})
+
 		t.Run("a remote change restarts", func(t *testing.T) {
 			got.Spec.Gateway.Remotes = append(got.Spec.Gateway.Remotes, clusterv1beta1.GatewayRemote{Name: "south", URL: "tls://nats-south.example.net:7222"})
 			require.NoError(t, c.Update(ctx, got))

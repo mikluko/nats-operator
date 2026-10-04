@@ -376,6 +376,7 @@ func (r *Reconciler) applyShared(ctx context.Context, nc *clusterv1beta1.NatsClu
 			svc.Spec.Selector = want.Spec.Selector
 			svc.Spec.Ports = want.Spec.Ports
 			svc.Spec.PublishNotReadyAddresses = want.Spec.PublishNotReadyAddresses
+			updateLoadBalancer(&svc.Spec, &want.Spec)
 		})); err != nil {
 			return fmt.Errorf("apply service %s: %w", want.Name, err)
 		}

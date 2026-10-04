@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -73,6 +74,15 @@ func TestRender_Hub(t *testing.T) {
 		nc.Spec.Leafnodes.Advertise = ""
 		spec := leafnodesCertificate(nc, &nc.Spec.Leafnodes.TLS.CertManager.IssuerRef).Object["spec"].(map[string]any)
 		require.Equal(t, []any{"prod-east-leafnodes.nats-system.svc", "prod-east-leafnodes.nats-system.svc.cluster.local"}, spec["dnsNames"])
+	})
+	t.Run("the template's source ranges and class reach the Service", func(t *testing.T) {
+		nc := nc.DeepCopy()
+		nc.Spec.Leafnodes.Service.LoadBalancerSourceRanges = []string{"10.20.0.0/16"}
+		nc.Spec.Leafnodes.Service.LoadBalancerClass = ptr.To("eks.amazonaws.com/nlb")
+		svc := leafnodesService(nc)
+		require.Equal(t, []string{"10.20.0.0/16"}, svc.Spec.LoadBalancerSourceRanges)
+		require.Equal(t, ptr.To("eks.amazonaws.com/nlb"), svc.Spec.LoadBalancerClass)
+		require.Nil(t, leafnodesService(storyLeafCluster(t, "hub.yaml", "prod-east")).Spec.LoadBalancerClass)
 	})
 	t.Run("without leafnodes there is no listener", func(t *testing.T) {
 		nc := nc.DeepCopy()

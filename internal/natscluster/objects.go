@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"slices"
 	"strconv"
 	"time"
 
@@ -518,7 +519,20 @@ func gatewayService(nc *clusterv1beta1.NatsCluster) *corev1.Service {
 			Selector:                 clusterSelector(nc),
 			Ports:                    []corev1.ServicePort{servicePort("gateway", PortGateway)},
 			PublishNotReadyAddresses: true,
+			LoadBalancerSourceRanges: slices.Clone(g.Service.LoadBalancerSourceRanges),
+			LoadBalancerClass:        g.Service.LoadBalancerClass,
 		},
+	}
+}
+
+// updateLoadBalancer copies want's load balancer source ranges onto have,
+// and its class when want sets one. A class want leaves unset is kept:
+// Kubernetes refuses to clear one, such as a defaulting webhook sets, while
+// the Service stays a LoadBalancer.
+func updateLoadBalancer(have, want *corev1.ServiceSpec) {
+	have.LoadBalancerSourceRanges = want.LoadBalancerSourceRanges
+	if want.LoadBalancerClass != nil {
+		have.LoadBalancerClass = want.LoadBalancerClass
 	}
 }
 
