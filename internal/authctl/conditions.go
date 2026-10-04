@@ -20,7 +20,8 @@ const (
 	ConditionDistributed = "Distributed"
 	// ConditionRevocationsUnrecovered is True on an account, or on a
 	// NatsOperator for its system account, signed after its status lost
-	// its JWT and revocations while not every server could be asked for them.
+	// its JWT and revocations while not every server could be asked for them;
+	// the JWT is not pushed while it is.
 	ConditionRevocationsUnrecovered = "RevocationsUnrecovered"
 )
 
