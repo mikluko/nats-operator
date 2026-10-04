@@ -184,7 +184,7 @@ jobs:
           just-version: 1.58.0
       - name: Install helm-unittest
         env:
-          HELM_UNITTEST_VERSION: v1.0.3
+          HELM_UNITTEST_VERSION: v1.1.2
           HELM_UNITTEST_SHA256: 9761f23d9509c98770c026e019e743b524b57010f4bc29175f78d2582ace0633
         run: |
           curl -fsSLo "$RUNNER_TEMP/helm-unittest.tgz" \
