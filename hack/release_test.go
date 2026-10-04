@@ -681,7 +681,7 @@ func TestKindPinnedOnce(t *testing.T) {
 // asset checked against a pinned sha256.
 func TestCI_HelmUnittestPinned(t *testing.T) {
 	var installs []step
-	for _, s := range readWorkflow(t, "ci.yml").Jobs["go"].Steps {
+	for _, s := range readWorkflow(t, "ci.yml").Jobs["helm"].Steps {
 		if s.Env["HELM_UNITTEST_VERSION"] != "" {
 			installs = append(installs, s)
 		}

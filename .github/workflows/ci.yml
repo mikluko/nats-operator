@@ -24,24 +24,8 @@ jobs:
       - uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # v3.1.0
         with:
           just-version: 1.58.0
-      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
-        with:
-          version: v4.3.0
-      - name: Install helm-unittest
-        env:
-          HELM_UNITTEST_VERSION: v1.0.3
-          HELM_UNITTEST_SHA256: 9761f23d9509c98770c026e019e743b524b57010f4bc29175f78d2582ace0633
-        run: |
-          curl -fsSLo "$RUNNER_TEMP/helm-unittest.tgz" \
-            "https://github.com/helm-unittest/helm-unittest/releases/download/${HELM_UNITTEST_VERSION}/helm-unittest-linux-amd64-${HELM_UNITTEST_VERSION#v}.tgz"
-          echo "$HELM_UNITTEST_SHA256  $RUNNER_TEMP/helm-unittest.tgz" | sha256sum -c --quiet
-          plugin="$(helm env HELM_PLUGINS)/helm-unittest"
-          mkdir -p "$plugin"
-          tar -xzf "$RUNNER_TEMP/helm-unittest.tgz" -C "$plugin"
-          helm unittest --help >/dev/null
       - uses: ./.github/actions/setup-hugo
       - run: just verify
-      - run: just chart
       - run: just build
       - run: just test
       - run: just envtest
@@ -109,7 +93,7 @@ jobs:
       stories: "1"
       watch-namespaces: ${{ matrix.watch-namespaces }}
 
-  chart-testing:
+  helm:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -119,6 +103,22 @@ jobs:
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
           version: v4.3.0
+      - uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # v3.1.0
+        with:
+          just-version: 1.58.0
+      - name: Install helm-unittest
+        env:
+          HELM_UNITTEST_VERSION: v1.0.3
+          HELM_UNITTEST_SHA256: 9761f23d9509c98770c026e019e743b524b57010f4bc29175f78d2582ace0633
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/helm-unittest.tgz" \
+            "https://github.com/helm-unittest/helm-unittest/releases/download/${HELM_UNITTEST_VERSION}/helm-unittest-linux-amd64-${HELM_UNITTEST_VERSION#v}.tgz"
+          echo "$HELM_UNITTEST_SHA256  $RUNNER_TEMP/helm-unittest.tgz" | sha256sum -c --quiet
+          plugin="$(helm env HELM_PLUGINS)/helm-unittest"
+          mkdir -p "$plugin"
+          tar -xzf "$RUNNER_TEMP/helm-unittest.tgz" -C "$plugin"
+          helm unittest --help >/dev/null
+      - run: just chart
       - uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f # v2.8.0
         with:
           version: 3.14.0
