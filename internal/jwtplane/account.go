@@ -148,12 +148,14 @@ type SystemAccount struct {
 }
 
 // SignSystemAccount returns the system account JWT, signed by the NATS
-// operator's active signing key. It never expires and has JetStream disabled.
+// operator's active signing key. It never expires, has JetStream disabled
+// and carries MonitoringExports.
 func SignSystemAccount(s SystemAccount, operator Keys) (string, error) {
 	c, err := accountClaims(s.Name, s.Keys, s.Revocations)
 	if err != nil {
 		return "", err
 	}
+	c.Exports = MonitoringExports()
 	for _, acc := range s.StepdownAccounts {
 		for _, i := range StepdownImports(acc) {
 			ji, err := jwtImport(i)
@@ -164,6 +166,16 @@ func SignSystemAccount(s SystemAccount, operator Keys) (string, error) {
 		}
 	}
 	return signAccountClaims(c, operator)
+}
+
+// MonitoringExports returns the two exports nsc gives a system account,
+// through which an importing account reaches the monitoring requests and
+// events of its own key and of no other.
+func MonitoringExports() jwt.Exports {
+	return jwt.Exports{
+		{Name: "account-monitoring-services", Subject: "$SYS.REQ.ACCOUNT.*.*", Type: jwt.Service, ResponseType: jwt.ResponseTypeStream, AccountTokenPosition: 4},
+		{Name: "account-monitoring-streams", Subject: "$SYS.ACCOUNT.*.>", Type: jwt.Stream, AccountTokenPosition: 3},
+	}
 }
 
 func accountClaims(name string, keys Keys, revs []Revocation) (*jwt.AccountClaims, error) {

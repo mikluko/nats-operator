@@ -78,7 +78,6 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 		return 0, err
 	}
 	st.DeletedAccounts = recordDeleting(st.DeletedAccounts, named.Items, refused)
-	signedBefore := st.JWT != ""
 	src, err := operatorKeySource(op)
 	if err != nil {
 		notReady(ReasonInvalidJWT, err.Error())
@@ -137,11 +136,7 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	if err != nil {
 		return 0, err
 	}
-	var lookup Distributor
-	if signedBefore {
-		lookup = r.Distributor
-	}
-	sd, err := recoverRevocations(ctx, lookup, client.ObjectKeyFromObject(op), sys.Status.Revocations, prevJWT, sysPub, sysSigning, users,
+	sd, err := recoverRevocations(ctx, r.Distributor, client.ObjectKeyFromObject(op), sys.Status.Revocations, prevJWT, sysPub, sysSigning, users,
 		unrecovered(st.Conditions), everDistributed(sys.Status.Distribution))
 	if err != nil {
 		recordHeld(r.Recorder, op, st.Conditions, err)
@@ -172,10 +167,14 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 		return 0, err
 	}
 	conditions.Set(&st.Conditions, op.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionTrue, Reason: ReasonSigned})
-	if next.IsZero() {
-		return 0, nil
+	var again time.Duration
+	if sd.unasked != nil {
+		again = distributionRecheck
 	}
-	return max(time.Until(next), time.Second), nil
+	if next.IsZero() {
+		return again, nil
+	}
+	return soonest(again, max(time.Until(next), time.Second)), nil
 }
 
 // deletes prunes op's deleted accounts and hands the Distributor the
