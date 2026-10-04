@@ -1,4 +1,3 @@
-# kubectl delete natscluster prod-east
 apiVersion: cluster.nats.mikluko.io/v1beta1
 kind: NatsCluster
 metadata:

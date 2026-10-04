@@ -7,13 +7,10 @@ status:
     - type: Holding
       status: "False"
       reason: Settled
-  # orders, from story 2, carries no jetstream-stepdown export: its leaders
-  # stay where they are, and the others move around them.
   capabilities:
     placement: true
     leader: Partial
     leaderReason: 1 of 2 accounts carry no jetstream-stepdown export; their leaders are not moved
-  # ORDERS, PAYMENTS and REQ_07, three copies each on three servers.
   servers:
     - name: demo-0
       leaders: 1
@@ -27,8 +24,6 @@ status:
   skew:
     leaders: 0
     replicas: 0
-  # Absent until a pass has moved something; where the streams' leaders
-  # landed decides whether one had to.
   lastMove: !any
     kind: Leader
     account: ABFAGFB4TX4F4GEPOPBDD4SUQR23BDIBE3NCLZFE3ZF3VP77JJHFHGQF

@@ -101,7 +101,7 @@ It points at the `NatsOperator`, and the auth controller writes the trust roots 
 {{< manifest "01-natsoperatortrust.yaml" >}}
 
 In a Kubernetes cluster where no auth controller runs, the `NatsOperatorTrust` contains the JWTs themselves.
-[Join NATS clusters in several Kubernetes clusters into a supercluster]({{< relref "/docs/stories/06-supercluster" >}}) shows that form.
+[Build a supercluster across Kubernetes clusters]({{< relref "/docs/stories/06-supercluster" >}}) shows that form.
 
 Apply the `NatsCluster`.
 `auth.trustRef` points at the trust roots, and `auth.systemCredentials` at the creds that the cluster controller connects with.

@@ -1,9 +1,3 @@
-# What lets the system balancer move this account's leaders. The preset
-# expands to two service exports, $JS.API.STREAM.LEADER.STEPDOWN.* and
-# $JS.API.CONSUMER.LEADER.STEPDOWN.*.*, and the auth controller adds the
-# matching imports to the system account's JWT under a per-account prefix.
-# The account is story 4's, limits and all; a manifest that left them out
-# would take them away.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsAccount
 metadata:

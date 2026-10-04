@@ -292,6 +292,6 @@ To do the tutorial again, start from [Create the namespace](#create-the-namespac
 
 ## What's next
 
-- This NATS cluster has no auth plane, so every client is in the global account. [Owning the auth plane]({{< relref "/docs/stories/02-auth-plane" >}}) puts a NATS cluster under a NATS operator, with accounts and users declared as resources.
+- This NATS cluster has no auth plane, so every client is in the global account. [Put a NATS cluster under a NATS operator]({{< relref "/docs/stories/02-auth-plane" >}}) shows how, with accounts and users declared as resources.
 - [Stories]({{< relref "/docs/stories" >}}) lists the guides for the other tasks.
 - The [API reference]({{< relref "/docs/reference/api#NatsCluster" >}}) has every field of `NatsCluster`, `NatsConnection` and `NatsStream`.

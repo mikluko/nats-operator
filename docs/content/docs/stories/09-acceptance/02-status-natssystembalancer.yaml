@@ -7,8 +7,6 @@ status:
     - type: Holding
       status: "False"
       reason: Settled
-  # monitoring-prod, the one account with streams in prod-east, carries no
-  # jetstream-stepdown export: no leader is moved.
   capabilities:
     placement: true
     leader: None

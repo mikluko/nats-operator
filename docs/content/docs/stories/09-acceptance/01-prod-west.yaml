@@ -19,7 +19,6 @@ spec:
         resources:
           requests:
             storage: 100Gi
-  # Tags are free: this NATS cluster's placement tag is not its name.
   serverTags:
     cluster: west
     region: us-west-2

@@ -1,16 +1,29 @@
 ---
-title: Metrics over verified TLS
+title: Scrape the controllers' metrics over verified TLS
 weight: 12
 params:
   e2e:
     scrapeMetrics: true
 ---
 
-A platform engineer has Prometheus, run by prometheus-operator in `monitoring`, scrape the controllers' metrics, and wants every scrape to verify the certificate it is served. The controllers are to connect to nothing but the API server, DNS and the NATS clusters in `nats-system`.
+This guide shows you how to have Prometheus scrape the metrics of the controllers and verify the certificate of every scrape.
+It also shows you how to limit the controllers to connections to the API server, DNS and the NATS clusters in `nats-system`.
 
-## The certificate
+## Before you begin
 
-Each controller serves its metrics under the certificate in one Secret in the release namespace, which must name every enabled controller's metrics Service. For the release `nats-operator` in `nats-operator`, a `Certificate` from `ca-issuer`, an existing cert-manager CA ClusterIssuer, which writes its CA to the Secret's `ca.crt`:
+You need:
+
+- The chart installed as the release `nats-operator` in the namespace `nats-operator`.
+  [Install]({{< relref "/docs/install" >}}) shows how.
+- Prometheus, run by prometheus-operator in the namespace `monitoring` under the ServiceAccount `prometheus`.
+- cert-manager, and a CA ClusterIssuer named `ca-issuer`.
+- The namespaces `nats-system` and `nats-outside`, and a StorageClass named `standard`.
+
+## Issue the certificate
+
+Every controller serves its metrics with the certificate in one Secret in the namespace of the release.
+The certificate must have the DNS name of the metrics Service of every controller that is enabled.
+Apply a `Certificate` from `ca-issuer`, which also writes its CA to `ca.crt` in the Secret:
 
 ```yaml
 apiVersion: cert-manager.io/v1
@@ -29,7 +42,9 @@ spec:
     - nats-operator-jetstream-controller-metrics.nats-operator.svc
 ```
 
-## The chart
+## Set the chart values
+
+Upgrade the release with these values:
 
 ```yaml
 metrics:
@@ -59,45 +74,116 @@ networkPolicy:
       ports: [{protocol: TCP, port: 4222}, {protocol: TCP, port: 8222}]
 ```
 
-Each ServiceMonitor scrapes with the Prometheus pod's token, which `metrics.scraper.serviceAccount` grants `/metrics`, and verifies the certificate against the Secret's `ca.crt` as its Service's DNS name, such as `nats-operator-cluster-controller-metrics.nats-operator.svc`.
+The first two egress rules are for the API server, and both addresses are examples.
+Replace them with the addresses of your Kubernetes cluster:
 
-The first two egress rules are the API server: the address of the `kubernetes` Service in `default`, and the addresses of its endpoints, which `kubectl -n default get endpointslices -l kubernetes.io/service-name=kubernetes` lists; both addresses above are examples. Port `4222` is the NATS cluster's client port, which a `NatsConnection` below names, and `8222` its servers' monitoring port, which the cluster controller reads.
+1. For the first rule, read the address of the Service `kubernetes`:
 
-## Under the policy
+   ```sh
+   kubectl -n default get service kubernetes
+   ```
 
-A NATS cluster and a stream, reconciled through those rules alone.
+1. For the second rule, read the addresses of its endpoints:
+
+   ```sh
+   kubectl -n default get endpointslices -l kubernetes.io/service-name=kubernetes
+   ```
+
+The last rule is for the NATS clusters in `nats-system`.
+Port 4222 is the client port, which a `NatsConnection` has in `spec.servers`, and port 8222 is the monitoring port of the servers, which the cluster controller reads.
+
+With these values, each ServiceMonitor scrapes with the token of the Prometheus pod, and `metrics.scraper.serviceAccount` allows that ServiceAccount to read `/metrics`.
+The ServiceMonitor verifies the certificate against `ca.crt` in the Secret, under the DNS name of the Service, such as `nats-operator-cluster-controller-metrics.nats-operator.svc`.
+[Metrics]({{< relref "/docs/install#metrics" >}}) on the install page describes the other values for metrics and the network policy.
+
+## Check that the controllers work under the policy
+
+Apply a NATS cluster in `nats-system`:
 
 {{< manifest "01-natscluster.yaml" >}}
 
+Read its status:
+
+```sh
+kubectl -n nats-system get natscluster demo -o yaml
+```
+
+The `status` in the output is similar to this:
+
 {{< manifest "01-status-natscluster-demo.yaml" >}}
+
+Apply a connection to the NATS cluster, and a stream on it:
 
 {{< manifest "02-natsconnection.yaml" >}}
 
 {{< manifest "02-natsstream.yaml" >}}
 
+Read the status of the stream:
+
+```sh
+kubectl -n nats-system get natsstream events -o yaml
+```
+
+The `status` in the output is similar to this:
+
 {{< manifest "02-status-natsstream.yaml" >}}
 
-## Outside the policy
+## Check that the policy blocks other destinations
 
-The controllers reach nothing the policy omits. A NATS cluster in `nats-outside`, which no egress rule admits, comes up, as the cluster controller deploys it through the API server; a `NatsConnection` to it stays unready, as the JetStream controller's dial is dropped.
+No egress rule allows the namespace `nats-outside`.
+Apply a NATS cluster there:
 
 {{< manifest "01-natscluster-outside.yaml" >}}
 
+Read its status:
+
+```sh
+kubectl -n nats-outside get natscluster outside -o yaml
+```
+
+The `status` in the output is similar to this:
+
 {{< manifest "01-status-natscluster-outside.yaml" >}}
+
+The NATS cluster is Ready, because the cluster controller deploys it through the API server.
+
+Apply a `NatsConnection` to it:
 
 {{< manifest "02-natsconnection-outside.yaml" >}}
 
-{{< manifest "02-status-natsconnection-outside.yaml" >}}
-
-## Scraping by hand
-
-As the ServiceMonitor does, through a port-forward to the cluster controller's metrics Service:
+Read its status:
 
 ```sh
-kubectl -n nats-operator get secret nats-operator-metrics-tls -o jsonpath='{.data.ca\.crt}' | base64 -d > ca.crt
-kubectl -n nats-operator port-forward svc/nats-operator-cluster-controller-metrics 8080 &
-curl --cacert ca.crt \
-  --resolve nats-operator-cluster-controller-metrics.nats-operator.svc:8080:127.0.0.1 \
-  -H "Authorization: Bearer $(kubectl -n monitoring create token prometheus)" \
-  https://nats-operator-cluster-controller-metrics.nats-operator.svc:8080/metrics
+kubectl -n nats-system get natsconnection outside -o yaml
 ```
+
+The `status` in the output is similar to this:
+
+{{< manifest "02-status-natsconnection-outside.yaml" >}}
+
+`Ready` stays False with the reason `ConnectFailed`, because the policy drops the connection from the JetStream controller.
+
+## Scrape by hand
+
+To scrape the cluster controller as its ServiceMonitor does:
+
+1. Write the CA to a file:
+
+   ```sh
+   kubectl -n nats-operator get secret nats-operator-metrics-tls -o jsonpath='{.data.ca\.crt}' | base64 -d > ca.crt
+   ```
+
+1. Forward the port of the metrics Service to your machine:
+
+   ```sh
+   kubectl -n nats-operator port-forward svc/nats-operator-cluster-controller-metrics 8080 &
+   ```
+
+1. Scrape with a token of the ServiceAccount `prometheus`:
+
+   ```sh
+   curl --cacert ca.crt \
+     --resolve nats-operator-cluster-controller-metrics.nats-operator.svc:8080:127.0.0.1 \
+     -H "Authorization: Bearer $(kubectl -n monitoring create token prometheus)" \
+     https://nats-operator-cluster-controller-metrics.nats-operator.svc:8080/metrics
+   ```

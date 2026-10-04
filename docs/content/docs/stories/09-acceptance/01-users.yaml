@@ -1,5 +1,3 @@
-# Every account carries the same two users, `service` and `readonly`. The
-# monitoring team's live in its own namespace, admitted by the grant below.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:
@@ -19,9 +17,6 @@ spec:
     secretKeyRef:
       name: nats-service-creds
 ---
-# The readonly preset: publish only to the JetStream introspection
-# subjects, and subscribe only to replies under `_INBOX.readonly`.
-# `permissions` is refused beside a preset.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:
@@ -133,7 +128,6 @@ spec:
     secretKeyRef:
       name: collector-prod-readonly-creds
 ---
-# The controllers of the remote Kubernetes clusters, two per remote (story 6).
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsUser
 metadata:
@@ -190,8 +184,6 @@ spec:
     secretKeyRef:
       name: prod-west-jetstream-controller-creds
 ---
-# What lets the monitoring namespace's users reach the accounts in
-# nats-system.
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsReferenceGrant
 metadata:

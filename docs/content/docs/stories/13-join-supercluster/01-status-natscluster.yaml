@@ -4,8 +4,6 @@ status:
     - type: Ready
       status: "True"
       reason: AllServersReady
-    # Settled over the supercluster's one JetStream meta group, which west's
-    # servers have joined beside central's.
     - type: Settled
       status: "True"
       reason: AllGroupsCurrent

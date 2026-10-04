@@ -1,4 +1,3 @@
-# All of it in the home cluster, prod-east.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsOperator
 metadata:
@@ -17,7 +16,6 @@ spec:
   operatorRef:
     name: acme
 ---
-# The production chain of four services; the development chain is left out.
 apiVersion: auth.nats.mikluko.io/v1beta1
 kind: NatsAccount
 metadata:

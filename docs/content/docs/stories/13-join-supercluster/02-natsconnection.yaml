@@ -5,8 +5,6 @@ metadata:
   namespace: orders
 spec:
   servers: ["nats://west.nats-system.svc:4222"]
-  # A user of the orders account, minted by whoever holds that account's
-  # signing key. west authenticates it against the preloaded account JWT.
   credentials:
     secretKeyRef:
       name: orders-creds

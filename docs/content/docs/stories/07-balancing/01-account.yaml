@@ -1,20 +1,11 @@
-# Owned by the payments team: evenness within pools of its own streams. It
-# yields to the system balancer: no move on a stream the system balancer has
-# pending, and none while the NATS cluster is not Settled.
 apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsBalancer
 metadata:
   name: payments
   namespace: payments
 spec:
-  # The account comes from the connection's credentials, as for streams.
   connectionRef:
     name: demo
-  # A pool selects NatsStream, NatsKeyValue and NatsObjectStore resources in
-  # this namespace by label; each stream's consumers go with it. Streams in no
-  # pool, and streams with no resource, form the default pool. With no pools
-  # declared the whole account is one pool. A stream matching several pools
-  # belongs to the first in this list, and status reports Overlapping.
   pools:
     - name: requests
       selector:
@@ -25,10 +16,9 @@ spec:
         matchLabels:
           traffic: responses
   moves:
-    leader: true       # on by default
-    placement: false   # opt-in
+    leader: true
+    placement: false
 ---
-# What the selectors match.
 apiVersion: jetstream.nats.mikluko.io/v1beta1
 kind: NatsStream
 metadata:

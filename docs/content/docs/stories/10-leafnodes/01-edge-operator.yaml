@@ -1,9 +1,3 @@
-# A second edge site that enforces the hub's accounts locally: it trusts the
-# hub's NATS operator, and its clients authenticate against the same accounts
-# as the hub's. Still not a supercluster member.
-#
-# The same NatsOperatorTrust the supercluster members read, copied here by
-# GitOps.
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsOperatorTrust
 metadata:
@@ -13,7 +7,6 @@ spec:
   operatorJWT: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...
   systemAccountJWT: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...
 ---
-# The creds are a hub user in the system account.
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsConnection
 metadata:
@@ -54,23 +47,15 @@ spec:
   auth:
     trustRef:
       name: acme
-    # resolver is omitted: a leaf that preloads accounts runs Full, on the
-    # JetStream volume; one that preloads nothing runs Cache. Memory is not
-    # offered.
   leafRemotes:
     - connectionRef:
         name: hub-system
-      # The leaf's system account, known from trustRef.
       localSystemAccount: true
     - connectionRef:
         name: hub-telemetry
       localAccountTrustRef:
         name: telemetry
 ---
-# The account the telemetry remote binds to. In the home Kubernetes cluster
-# this would be `accountRef: {name: telemetry}`, resolved from the live
-# NatsAccount; here, with no auth controller, the literal form, copied by
-# GitOps. `accountRef` and `publicKey` are exclusive.
 apiVersion: nats.mikluko.io/v1beta1
 kind: NatsAccountTrust
 metadata:
@@ -78,7 +63,4 @@ metadata:
   namespace: nats-system
 spec:
   publicKey: ATELEMETRY...
-  # Preloaded, so the account's clients authenticate while the leaf link is
-  # down or before it first connects. It expires with the account's jwtTTL
-  # (48h by default) unless the NatsAccount sets `jwtTTL: 0`.
   jwt: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...

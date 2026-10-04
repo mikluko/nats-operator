@@ -13,7 +13,7 @@ import (
 
 // ChartValuesHeading is the heading of the section of a story's page that
 // shows the chart values a story scraping metrics installs.
-const ChartValuesHeading = "The chart"
+const ChartValuesHeading = "Set the chart values"
 
 // readChartValues returns the one yaml code block of the section of the page
 // at path headed ChartValuesHeading, decoded.

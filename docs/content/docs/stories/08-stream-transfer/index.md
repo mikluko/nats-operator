@@ -12,14 +12,14 @@ params:
 This guide shows you how to move a stream from one NATS cluster of a supercluster to another, together with its consumers.
 The manifests move the stream `ORDERS` from the NATS cluster `east` to the NATS cluster `west`.
 
-To move every stream off a NATS cluster that you are retiring, see [Retiring a NATS cluster]({{< relref "/docs/stories/11-evacuation" >}}).
+To move every stream off a NATS cluster that you are retiring, see [Retire a NATS cluster]({{< relref "/docs/stories/11-evacuation" >}}).
 An evacuation leaves a stream whose `NatsStream` sets `placement.cluster` where it is, so move such a stream with this guide.
 
 ## Before you begin
 
 You need:
 
-- Both NATS clusters in one supercluster. [A supercluster across Kubernetes clusters]({{< relref "/docs/stories/06-supercluster" >}}) joins `east` and `west`.
+- Both NATS clusters in one supercluster. [Build a supercluster across Kubernetes clusters]({{< relref "/docs/stories/06-supercluster" >}}) joins `east` and `west`.
 - A `NatsStream` for the stream. If the stream has none, adopt it first: see [Adopting streams]({{< relref "/docs/stories/03-unmanaged#adopting-streams" >}}).
 
 ## Check where the stream is
