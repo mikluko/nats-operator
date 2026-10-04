@@ -1,0 +1,28 @@
+{{- /* The page served for an address the site lacks; assets/js/path.js writes the requested path into each data-path element. */ -}}
+{{ define "main" }}
+<main class="landing" id="main" tabindex="-1">
+  <section class="hero is-404">
+    <div>
+      <p class="eyebrow">HTTP 404</p>
+      <h1>No page at this path.</h1>
+      <p class="hero-lead">The address may be mistyped, or the page may have moved. Search covers every page of the documentation.</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="{{ (site.GetPage "/docs").RelPermalink }}">Documentation →</a>
+        <button class="btn btn-secondary" type="button" data-search-open>Search<kbd>Ctrl K</kbd></button>
+      </div>
+    </div>
+    <div class="readout">
+      <div class="readout-head"><span>$ kubectl get page <span data-path>&lt;path&gt;</span> -o yaml</span></div>
+      <pre>status:
+  <span class="key">conditions:</span>
+    - type: Found     status: <span class="pill pill-error">"False"</span>
+      reason: NotFound
+      message: no page at <span data-path>&lt;path&gt;</span>
+  <span class="key">suggestions:</span>
+{{- range slice "/docs/stories" "/docs/reference/api" "/docs/install" }}
+    - <a href="{{ (site.GetPage .).RelPermalink }}">{{ . }}/</a>
+{{- end }}</pre>
+    </div>
+  </section>
+</main>
+{{ end }}

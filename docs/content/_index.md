@@ -1,6 +1,14 @@
 ---
 title: nats-operator
 params:
+  eyebrow: Three controllers · Four API groups · v1beta1
+  headline:
+    - NATS on Kubernetes,
+    - declared as resources.
+  readout:
+    story: /docs/stories/01-quickstart
+    manifest: 01-natscluster.yaml
+    status: 01-status-natscluster-at-rest.yaml
   lead: nats-operator is three Kubernetes controllers that deploy NATS clusters, own their auth plane, and manage and balance JetStream. It is for platform engineers who run NATS on Kubernetes. You can install all three controllers or only the ones you need.
   actions:
     - name: Quickstart

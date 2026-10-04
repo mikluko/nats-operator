@@ -2,6 +2,8 @@
 title: Balancing JetStream
 weight: 7
 params:
+  category: JetStream
+  tags: [NatsBalancer, pools]
   e2e:
     waits:
       - {step: 1, wait: 3m, reason: "the balancers settle after story 4's streams move"}

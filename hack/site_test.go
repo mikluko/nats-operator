@@ -2,20 +2,16 @@ package hack_test
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
+	"encoding/json"
 	"io/fs"
-	"net"
 	"net/url"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/html"
@@ -24,12 +20,8 @@ import (
 // siteBase is the base URL the site is built under in tests.
 const siteBase = "https://site.test/base/"
 
-// siteRemote is the host hugo fetches the hudocs theme module from.
-const siteRemote = "github.com:443"
-
 // buildSite renders docs/ under siteBase and returns the output directory.
-// It skips the test when hugo is not on PATH, or when the build fails
-// while siteRemote is unreachable.
+// It skips the test when hugo is not on PATH.
 func buildSite(t *testing.T) string {
 	t.Helper()
 	hugo, err := exec.LookPath("hugo")
@@ -40,13 +32,6 @@ func buildSite(t *testing.T) string {
 	cmd := exec.Command(hugo, "--gc", "--minify", "--baseURL", siteBase, "--destination", out, "--panicOnWarning")
 	cmd.Dir = "../docs"
 	combined, err := cmd.CombinedOutput()
-	if err != nil {
-		conn, dialErr := net.DialTimeout("tcp", siteRemote, 5*time.Second)
-		if dialErr != nil {
-			t.Skipf("hugo failed with %s unreachable (%v): %s", siteRemote, dialErr, combined)
-		}
-		_ = conn.Close()
-	}
 	require.NoError(t, err, "%s", combined)
 	return out
 }
@@ -149,22 +134,11 @@ func resolves(root string, base, from *url.URL, link string) bool {
 	return err == nil
 }
 
-// The site's icon set is meteor-icons' exports/icons.json at this version,
-// vendored under docs/assets.
-const (
-	meteorIconsVersion = "4.5.0"
-	meteorIconsSHA256  = "afde42dcd2f33bd33e64598dc7386bf1af6daa1597525aa3cf8d3ed44497cd3c"
-)
-
 func TestSite(t *testing.T) {
 	out := buildSite(t)
 	require.Empty(t, siteProblems(t, out, siteBase))
 	require.Empty(t, renditionProblems(t, out, siteBase))
-	index, err := os.ReadFile(filepath.Join(out, "index.html"))
-	require.NoError(t, err)
-	doc, err := html.Parse(bytes.NewReader(index))
-	require.NoError(t, err)
-	require.True(t, drawsIcon(doc, "book-open"), "the header's logo icon is not drawn")
+	require.Empty(t, searchIndexProblems(t, out))
 
 	var fixtures []string
 	require.NoError(t, filepath.WalkDir(out, func(p string, d fs.DirEntry, err error) error {
@@ -176,28 +150,90 @@ func TestSite(t *testing.T) {
 	require.Empty(t, fixtures, "the site serves a story's e2e/ directory")
 }
 
-// drawsIcon reports whether doc holds the theme's svg for the named icon with
-// at least one shape in it.
-func drawsIcon(doc *html.Node, name string) bool {
+// searchIndexProblems returns a problem for each way the search index the
+// front page's dialog names fails the pages under root: it is missing, or an
+// entry has no title, or addresses a page root lacks or a fragment that page
+// lacks.
+func searchIndexProblems(t *testing.T, root string) []string {
+	t.Helper()
+	base, err := url.Parse(siteBase)
+	require.NoError(t, err)
+	index, err := os.ReadFile(filepath.Join(root, "index.html"))
+	require.NoError(t, err)
+	doc, err := html.Parse(bytes.NewReader(index))
+	require.NoError(t, err)
+	var address string
 	for n := range doc.Descendants() {
-		if n.Type != html.ElementNode || n.Data != "svg" {
-			continue
-		}
-		for _, a := range n.Attr {
-			if a.Key == "class" && slices.Contains(strings.Fields(a.Val), "i-"+name) && n.FirstChild != nil {
-				return true
+		if n.Type == html.ElementNode && n.Data == "dialog" {
+			for _, a := range n.Attr {
+				if a.Key == "data-index" {
+					address = a.Val
+				}
 			}
 		}
 	}
-	return false
+	rel, ok := strings.CutPrefix(address, base.Path)
+	if !ok {
+		return []string{"no search dialog names an index under " + base.Path}
+	}
+	b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+	require.NoError(t, err)
+	var entries []struct {
+		URL   string `json:"u"`
+		Title string `json:"t"`
+	}
+	require.NoError(t, json.Unmarshal(b, &entries))
+	if len(entries) == 0 {
+		return []string{"the search index is empty"}
+	}
+	ids := map[string]map[string]bool{}
+	var problems []string
+	for _, e := range entries {
+		if e.Title == "" {
+			problems = append(problems, e.URL+": no title")
+		}
+		u, err := url.Parse(e.URL)
+		require.NoError(t, err)
+		pagePath, ok := strings.CutPrefix(u.Path, base.Path)
+		if !ok {
+			problems = append(problems, e.URL+": not under "+base.Path)
+			continue
+		}
+		file := filepath.Join(root, filepath.FromSlash(pagePath), "index.html")
+		if _, seen := ids[file]; !seen {
+			ids[file] = pageIDs(file)
+		}
+		switch {
+		case ids[file] == nil:
+			problems = append(problems, e.URL+": no such page")
+		case u.Fragment != "" && !ids[file][u.Fragment]:
+			problems = append(problems, e.URL+": no such fragment")
+		}
+	}
+	sort.Strings(problems)
+	return problems
 }
 
-func TestSiteIconSet(t *testing.T) {
-	b, err := os.ReadFile("../docs/assets/meteor-icons/icons.json")
-	require.NoError(t, err)
-	sum := sha256.Sum256(b)
-	require.Equal(t, meteorIconsSHA256, hex.EncodeToString(sum[:]),
-		"docs/assets/meteor-icons/icons.json is not meteor-icons@%s exports/icons.json", meteorIconsVersion)
+// pageIDs returns the id of every element of the HTML file, or nil if it
+// cannot be read.
+func pageIDs(file string) map[string]bool {
+	b, err := os.ReadFile(file)
+	if err != nil {
+		return nil
+	}
+	doc, err := html.Parse(bytes.NewReader(b))
+	if err != nil {
+		return nil
+	}
+	ids := map[string]bool{}
+	for n := range doc.Descendants() {
+		for _, a := range n.Attr {
+			if a.Key == "id" {
+				ids[a.Val] = true
+			}
+		}
+	}
+	return ids
 }
 
 func TestSiteProblems(t *testing.T) {

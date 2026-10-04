@@ -1,0 +1,6 @@
+{{- /* A fenced block: shell commands as a terminal, anything else as a code panel headed by its language. */ -}}
+{{- if in (slice "sh" "bash" "shell" "console") .Type -}}
+{{ partial "terminal.html" .Inner }}
+{{- else -}}
+{{ partial "code.html" (dict "code" .Inner "lang" (.Type | default "text")) }}
+{{- end -}}

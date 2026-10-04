@@ -1,0 +1,56 @@
+{{- /* A documentation page in the shell: the navigation, the article and its contents. A section's pages are a ledger after its introduction, and a record of /docs/adr is shown under that ledger. */ -}}
+{{- $adr := site.GetPage "/docs/adr" -}}
+{{- $isRecord := and .IsPage (eq .Parent $adr) -}}
+{{- $title := partial "title.html" . -}}
+{{- $hasToc := gt (len .Fragments.Identifiers) 1 -}}
+{{- $numbered := false -}}
+{{- range first 1 (where .Fragments.Headings "Level" 1) -}}
+  {{- range first 1 .Headings -}}
+    {{- $numbered = ne (partial "numbered.html" .Title).num "" -}}
+  {{- end -}}
+{{- end -}}
+<div class="shell{{ if $numbered }} is-wide{{ end }}">
+  {{ partial "nav.html" . }}
+  <main class="article" id="main" tabindex="-1">
+    <p class="eyebrow">{{ partial "eyebrow.html" . }}</p>
+    {{- if $isRecord }}
+    <h1>{{ $adr.Title }}</h1>
+    {{ partial "ledger.html" (dict "section" $adr "current" .) }}
+    <div class="record-meta">
+      <span>ADR {{ index (findRE `^\d+` .File.ContentBaseName 1) 0 }}</span>
+      {{- if not .Lastmod.IsZero }}<span>Edited {{ .Lastmod.Format "2006-01-02" }}</span>{{ end }}
+    </div>
+    <h2 class="record-title">{{ $title }}</h2>
+    <div class="prose">{{ .Content }}</div>
+    {{- else }}
+    <h1>{{ $title }}</h1>
+      {{- if $hasToc }}
+    <details class="toc-inline">
+      <summary>Contents</summary>
+      {{ partial "toc.html" . }}
+    </details>
+      {{- end }}
+      {{- if and .IsSection .Pages }}
+        {{- $content := string .Content }}
+        {{- $intro := replaceRE `(?s)<h2.*$` "" $content }}
+    <div class="prose has-lead">{{ $intro | safeHTML }}</div>
+    {{ partial "ledger.html" (dict "section" .) }}
+    <div class="prose">{{ strings.TrimPrefix $intro $content | safeHTML }}</div>
+      {{- else }}
+    <div class="prose has-lead">{{ .Content }}</div>
+      {{- end }}
+    {{- end }}
+    {{ partial "prevnext.html" . }}
+  </main>
+  <aside class="toc">
+    <div class="toc-inner">
+      {{- if and $hasToc (not $isRecord) }}
+      <div class="toc-label">Contents</div>
+      <div data-toc>{{ partial "toc.html" . }}</div>
+      {{- end }}
+      {{- if not .Lastmod.IsZero }}
+      <div class="toc-edited">Edited {{ .Lastmod.Format "2006-01-02" }}</div>
+      {{- end }}
+    </div>
+  </aside>
+</div>

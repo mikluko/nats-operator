@@ -1,0 +1,38 @@
+{{- /* The top bar of .page: the brand, the search field and the main menu, or on a landing page (.landing) the front page's actions; then the color scheme switch. */ -}}
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="topbar-left">
+      {{- if not .landing }}
+      <button class="menu-toggle" type="button" data-nav-toggle aria-controls="nav" aria-expanded="false">Menu</button>
+      {{- end }}
+      <a class="brand" href='{{ "" | relLangURL }}'><span class="brand-mark"></span>{{ site.Title }}</a>
+    </div>
+    {{- if not .landing }}
+    <button class="search-field" type="button" data-search-open><span>Search in doc</span><kbd>Ctrl K</kbd></button>
+    {{- end }}
+    <nav class="topbar-links" aria-label="Site">
+      {{- if .landing }}
+        {{- range site.Home.Params.actions }}
+          {{- if .url }}
+      <a href="{{ .url }}" rel="noopener">{{ .name }} ↗</a>
+          {{- else }}
+      <a href="{{ (site.GetPage .page).RelPermalink }}">{{ .name }}</a>
+          {{- end }}
+        {{- end }}
+      {{- else }}
+        {{- range site.Menus.main }}
+          {{- if .Page }}
+      <a href="{{ .URL }}">{{ .Name }}</a>
+          {{- else }}
+      <a href="{{ .URL }}" rel="noopener">{{ .Name }} ↗</a>
+          {{- end }}
+        {{- end }}
+      {{- end }}
+      <div class="scheme" role="group" aria-label="Color scheme">
+        <button type="button" data-scheme-set="auto">AUTO</button>·
+        <button type="button" data-scheme-set="light">LIGHT</button>·
+        <button type="button" data-scheme-set="dark">DARK</button>
+      </div>
+    </nav>
+  </div>
+</header>

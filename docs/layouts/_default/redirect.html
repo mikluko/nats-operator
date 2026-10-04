@@ -1,0 +1,13 @@
+{{- /* A page that only sends the reader to params.redirect, a path relative to it. */ -}}
+{{- $target := ref . (strings.TrimPrefix "/" .Params.redirect) -}}
+<!doctype html>
+<html lang="{{ site.Language.Lang }}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Redirecting...</title>
+    <meta name="robots" content="noindex">
+    <link rel="canonical" href="{{ $target }}">
+    <meta http-equiv="refresh" content="0; url={{ $target }}">
+  </head>
+</html>

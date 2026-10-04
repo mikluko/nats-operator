@@ -1,8 +1,0 @@
-{{- /* Hudocs v2.0.0's resolve-link, except that an internal href is returned as written. The theme passes it through relLangURL, which doubles a relref's base path and resolves a relative link against the site root rather than the page. */ -}}
-{{- $href := .href -}}
-{{- $u := urls.Parse $href -}}
-{{- $scheme := lower $u.Scheme -}}
-{{- $isExternal := or (in (slice "http" "https") $scheme) (hasPrefix $href "//") -}}
-{{- $rel := .rel | default (cond $isExternal "noreferrer noopener" "") -}}
-{{- $target := cond $isExternal "_blank" "" -}}
-{{- return (dict "url" $href "isExternal" $isExternal "rel" $rel "target" $target) -}}

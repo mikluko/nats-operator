@@ -1,4 +1,4 @@
-{{- /* Hudocs' type shortcode as Markdown: the type's label in a code span. */ -}}
+{{- /* A type's name as Markdown, in a code span. */ -}}
 {{- $raw := .Get 0 -}}
 {{- if .IsNamedParams -}}
 {{- $raw = .Get "name" | default (.Get "type") -}}

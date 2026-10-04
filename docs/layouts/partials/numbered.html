@@ -1,0 +1,8 @@
+{{- /* A heading's text split at a leading section number: "4.4 Rollout" is num "4.4" and text "Rollout"; a heading without one has an empty num. */ -}}
+{{- $num := "" -}}
+{{- $text := . -}}
+{{- with findRESubmatch `^(\d+(?:\.\d+)*)\.?\s+(.*)$` . 1 -}}
+  {{- $num = index . 0 1 -}}
+  {{- $text = index . 0 2 -}}
+{{- end -}}
+{{- return (dict "num" $num "text" $text) -}}

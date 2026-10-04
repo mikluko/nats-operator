@@ -1,0 +1,24 @@
+{{- /* The documentation's navigation: every page under /docs, a section as a group that starts open when it holds the current page. */ -}}
+{{- $current := . -}}
+<nav class="nav" id="nav" aria-label="Documentation">
+  <div class="nav-inner">
+    {{- range partial "ordered.html" (site.GetPage "/docs") }}
+      {{- $label := .LinkTitle | default (partial "title.html" .) }}
+      {{- if .IsSection }}
+        {{- $isCurrent := eq . $current }}
+    <details class="nav-group"{{ if or $isCurrent (.IsAncestor $current) }} open{{ end }}>
+      <summary{{ if $isCurrent }} class="is-current"{{ end }}>
+        {{- if eq .Params.layout "redirect" }}{{ $label }}{{ else }}<a href="{{ .RelPermalink }}"{{ if $isCurrent }} aria-current="page"{{ end }}>{{ $label }}</a>{{ end -}}
+      </summary>
+      <div class="nav-children">
+        {{- range partial "ordered.html" . }}
+        <a href="{{ .RelPermalink }}"{{ if eq . $current }} aria-current="page"{{ end }}>{{ .LinkTitle | default (partial "title.html" .) }}</a>
+        {{- end }}
+      </div>
+    </details>
+      {{- else }}
+    <a class="nav-page" href="{{ .RelPermalink }}"{{ if eq . $current }} aria-current="page"{{ end }}>{{ $label }}</a>
+      {{- end }}
+    {{- end }}
+  </div>
+</nav>

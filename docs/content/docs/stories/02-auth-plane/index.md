@@ -2,6 +2,8 @@
 title: Owning the auth plane
 weight: 2
 params:
+  category: The auth plane
+  tags: [NatsOperator, NatsUser]
   e2e:
     substitutions:
       - files: [01-natscluster.yaml]

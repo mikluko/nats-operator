@@ -1,6 +1,9 @@
 ---
 title: JetStream on a NATS cluster you did not deploy
 weight: 3
+params:
+  category: JetStream
+  tags: [adoption]
 ---
 
 An application team runs on a NATS cluster someone else deployed, a Helm release in `messaging`, and wants the streams its services created at runtime declared as resources without recreating them.

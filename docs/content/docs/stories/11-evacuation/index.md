@@ -2,6 +2,8 @@
 title: Retiring a NATS cluster
 weight: 11
 params:
+  category: JetStream
+  tags: [NatsClusterEvacuation]
   e2e:
     waits:
       - {step: 1, wait: 4m, reason: "six servers start before streams move off prod-east"}

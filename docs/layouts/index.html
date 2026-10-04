@@ -1,70 +1,79 @@
-{{- /* The front page: what the project is, a card per controller, the install how-to from its content, what each documentation area contains, and the story list. */ -}}
+{{- /* The front page: what the project is beside a NatsCluster's status from the quickstart, a column per controller, the install how-to from its content, and what each documentation area contains. */ -}}
 {{ define "main" }}
-<main class="main-section landing" id="main-content" tabindex="-1">
-  <div class="container">
-    <section class="landing-hero">
-      <h1 class="landing-title">{{ .Title }}</h1>
-      <p class="landing-lead">{{ .Params.lead }}</p>
-      <div class="landing-actions">
-        {{- range .Params.actions }}
-          {{- $href := .url -}}
-          {{- with .page }}{{ $href = (site.GetPage .).RelPermalink }}{{ end }}
-          <a class="btn{{ if .primary }} landing-cta{{ end }}" href="{{ $href }}"{{ if .url }} rel="noopener"{{ end }}>
-            {{- partial "svg" (dict "icon" .icon) -}}
-            {{- .name -}}
-          </a>
+<main class="landing" id="main" tabindex="-1">
+  <section class="hero">
+    <div>
+      <p class="eyebrow">{{ .Params.eyebrow }}</p>
+      <h1>{{ range $i, $line := .Params.headline }}{{ if $i }}<br>{{ end }}{{ $line }}{{ end }}</h1>
+      <p class="hero-lead">{{ .Params.lead }}</p>
+      <div class="hero-actions">
+        {{- $classes := slice "btn-primary" "btn-secondary" }}
+        {{- range $i, $action := where .Params.actions "page" "!=" nil }}
+        <a class="btn {{ index $classes $i | default "" }}" href="{{ (site.GetPage .page).RelPermalink }}">{{ .name }}{{ if not $i }} →{{ end }}</a>
         {{- end }}
       </div>
-    </section>
-
-    <section class="landing-section" aria-labelledby="landing-controllers">
-      <h2 class="landing-heading" id="landing-controllers">{{ .Params.controllersHeading }}</h2>
-      <div class="landing-grid">
-        {{- range .Params.controllers }}
-          {{- $story := site.GetPage .story }}
-          <article class="landing-card">
-            <span class="landing-card-icon">{{ partial "svg" (dict "icon" .icon) }}</span>
-            <h3 class="landing-card-title">{{ .name }}</h3>
-            <p>{{ .text | $.RenderString }}</p>
-            <p class="landing-kinds">
-              {{- range .kinds }}<code>{{ . }}</code>{{ end -}}
-            </p>
-            <a class="landing-card-link has-icon" href="{{ $story.RelPermalink }}">
-              {{- $story.Title -}}
-              {{- partial "svg" (dict "icon" "arrow-right") -}}
-            </a>
-          </article>
-        {{- end }}
+    </div>
+    {{- with .Params.readout }}
+      {{- $story := site.GetPage .story }}
+      {{- $object := (partial "manifest.html" (dict "page" $story "name" .manifest)).yaml | transform.Unmarshal }}
+      {{- $status := ((partial "manifest.html" (dict "page" $story "name" .status)).yaml | transform.Unmarshal).status }}
+    <div class="readout">
+      <div class="readout-head">
+        <span>$ kubectl -n {{ $object.metadata.namespace }} get {{ lower $object.kind }} {{ $object.metadata.name }} -o yaml</span>
+        <span class="readout-live">live</span>
       </div>
-    </section>
-
-    {{- with .Content }}
-    <section class="landing-section landing-install article-body markdown">
-      {{ . }}
-    </section>
+      <pre>status:
+  <span class="key">version:</span> {{ $status.version }}
+  <span class="key">replicas:</span> {{ $status.replicas }}
+  <span class="key">readyReplicas:</span> {{ $status.readyReplicas }}
+  <span class="key">conditions:</span>
+{{- range $status.conditions }}
+    - type: {{ printf "%-12s" .type }} status: <span class="pill pill-{{ lower .status }}">"{{ .status }}"</span>
+{{- end }}
+  <span class="key">endpoints:</span>
+    client: {{ $status.endpoints.client }}
+  <span class="key">jetstream:</span>
+    metaLeader: {{ $status.jetstream.metaLeader }}
+  <span class="key">servers:</span>
+{{- range $status.servers }}
+    - {{ .name }}   ready: {{ .ready }}   rev: {{ .configRevision }}
+{{- end }}</pre>
+    </div>
     {{- end }}
+  </section>
 
-    <section class="landing-section" aria-labelledby="landing-areas">
-      <h2 class="landing-heading" id="landing-areas">{{ .Params.areasHeading }}</h2>
-      <dl class="landing-areas">
+  <section class="band" aria-labelledby="landing-controllers">
+    <h2 class="band-title" id="landing-controllers">{{ .Params.controllersHeading }}</h2>
+    <div class="controllers">
+      {{- range $i, $controller := .Params.controllers }}
+      <article class="controller">
+        <div class="controller-num">{{ printf "%02d" (add $i 1) }}</div>
+        <h3>{{ .name }}</h3>
+        <p>{{ .text | $.RenderString }}</p>
+        <ul class="chips">
+          {{- range .kinds }}<li>{{ . }}</li>{{ end -}}
+        </ul>
+      </article>
+      {{- end }}
+    </div>
+  </section>
+
+  <div class="band band-split">
+    <section class="prose">
+      {{ .Content }}
+    </section>
+    <section aria-labelledby="landing-areas">
+      <h2 class="band-title" id="landing-areas">{{ .Params.areasHeading }}</h2>
+      <dl class="areas">
         {{- range .Params.areas }}
           {{- $page := site.GetPage .page }}
-          <dt><a href="{{ $page.RelPermalink }}">{{ partial "title.html" $page }}</a></dt>
+        <div>
+          <dt><a href="{{ $page.RelPermalink }}">{{ $page.LinkTitle | default (partial "title.html" $page) }}</a></dt>
           <dd>{{ .text | $.RenderString }}</dd>
+        </div>
         {{- end }}
       </dl>
     </section>
-
-    {{- with site.GetPage "/docs/stories" }}
-    <section class="landing-section" aria-labelledby="landing-stories">
-      <h2 class="landing-heading" id="landing-stories">{{ $.Params.storiesHeading }}</h2>
-      <ol class="landing-stories">
-        {{- range .Pages.ByWeight }}
-          <li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>
-        {{- end }}
-      </ol>
-    </section>
-    {{- end }}
   </div>
 </main>
 {{ end }}

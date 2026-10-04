@@ -1,0 +1,13 @@
+{{- /* .code in .lang as a panel with a copy button, headed by .name if it is a file's and by the language otherwise. */ -}}
+<div class="code">
+  <div class="code-head">
+    {{- with .name }}
+    <span>{{ . }}</span>
+    <span>{{ $.lang }} · <button type="button" data-copy>copy</button></span>
+    {{- else }}
+    <span>{{ .lang }}</span>
+    <button type="button" data-copy>copy</button>
+    {{- end }}
+  </div>
+  {{ highlight .code .lang "" }}
+</div>

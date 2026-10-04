@@ -2,6 +2,8 @@
 title: Move a stream to another NATS cluster
 weight: 8
 params:
+  category: JetStream
+  tags: [placement]
   e2e:
     after: 6
     waits:

@@ -2,6 +2,8 @@
 title: Wiring accounts together
 weight: 5
 params:
+  category: The auth plane
+  tags: [exports, imports]
   e2e:
     after: 2
 ---

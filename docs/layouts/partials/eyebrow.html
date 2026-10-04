@@ -1,0 +1,22 @@
+{{- /* The label above a page's title: params.eyebrow, or else the story's number and category, the story count on the stories index, or the title of the section under /docs the page is in. */ -}}
+{{- $eyebrow := .Params.eyebrow -}}
+{{- $docs := site.GetPage "/docs" -}}
+{{- $stories := site.GetPage "/docs/stories" -}}
+{{- if not $eyebrow -}}
+  {{- if eq . $stories -}}
+    {{- $eyebrow = printf "%s · %d guides" .Title (len .Pages) -}}
+  {{- else if eq .Parent $stories -}}
+    {{- $eyebrow = printf "Story %02d" .Weight -}}
+    {{- with cond (default false .Params.tutorial) "Tutorial" .Params.category -}}
+      {{- $eyebrow = printf "%s · %s" $eyebrow . -}}
+    {{- end -}}
+  {{- else -}}
+    {{- $eyebrow = partial "title.html" . -}}
+    {{- range .Ancestors -}}
+      {{- if eq .Parent $docs -}}
+        {{- $eyebrow = .Title -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- return $eyebrow -}}
