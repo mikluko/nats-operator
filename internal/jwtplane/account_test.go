@@ -111,8 +111,42 @@ func TestSignAccountLimits(t *testing.T) {
 			},
 		},
 		{
+			name: "JetStream with stream and consumer bounds",
+			limits: jwtplane.Limits{JetStream: &jwtplane.JetStreamLimits{
+				MaxAckPending: 1000, MemoryMaxStreamBytes: 1 << 20, DiskMaxStreamBytes: 1 << 30, MaxBytesRequired: true,
+			}},
+			want: jwt.OperatorLimits{
+				NatsLimits:    jwt.NatsLimits{Subs: -1, Data: -1, Payload: -1},
+				AccountLimits: jwt.AccountLimits{Imports: -1, Exports: -1, WildcardExports: true, Conn: -1, LeafNodeConn: -1},
+				JetStreamLimits: jwt.JetStreamLimits{
+					MemoryStorage: -1, DiskStorage: -1, Streams: -1, Consumer: -1,
+					MaxAckPending: 1000, MemoryMaxStreamBytes: 1 << 20, DiskMaxStreamBytes: 1 << 30, MaxBytesRequired: true,
+				},
+			},
+		},
+		{
+			name: "JetStream by tier",
+			limits: jwtplane.Limits{JetStreamTiers: map[string]jwtplane.JetStreamLimits{
+				"R1": {DiskStorage: 10 << 30, Streams: 10},
+				"R3": {MemoryStorage: 1 << 30, DiskStorage: 50 << 30, Consumers: 100, MaxAckPending: 1000, DiskMaxStreamBytes: 1 << 30, MaxBytesRequired: true},
+			}},
+			want: jwt.OperatorLimits{
+				NatsLimits:    jwt.NatsLimits{Subs: -1, Data: -1, Payload: -1},
+				AccountLimits: jwt.AccountLimits{Imports: -1, Exports: -1, WildcardExports: true, Conn: -1, LeafNodeConn: -1},
+				JetStreamTieredLimits: jwt.JetStreamTieredLimits{
+					"R1": {MemoryStorage: -1, DiskStorage: 10 << 30, Streams: 10, Consumer: -1},
+					"R3": {MemoryStorage: 1 << 30, DiskStorage: 50 << 30, Streams: -1, Consumer: 100, MaxAckPending: 1000, DiskMaxStreamBytes: 1 << 30, MaxBytesRequired: true},
+				},
+			},
+		},
+		{
 			name:    "negative",
 			limits:  jwtplane.Limits{Connections: -5},
+			wantErr: jwtplane.ErrNegativeLimit,
+		},
+		{
+			name:    "negative in a tier",
+			limits:  jwtplane.Limits{JetStreamTiers: map[string]jwtplane.JetStreamLimits{"R1": {MaxAckPending: -1}}},
 			wantErr: jwtplane.ErrNegativeLimit,
 		},
 	}
@@ -129,8 +163,20 @@ func TestSignAccountLimits(t *testing.T) {
 			require.Equal(t, tt.want.NatsLimits, c.Limits.NatsLimits)
 			require.Equal(t, tt.want.AccountLimits, c.Limits.AccountLimits)
 			require.Equal(t, tt.want.JetStreamLimits, c.Limits.JetStreamLimits)
+			require.Equal(t, tt.want.JetStreamTieredLimits, c.Limits.JetStreamTieredLimits)
 		})
 	}
+}
+
+func TestSignAccountTiersBesideAccountLimits(t *testing.T) {
+	op := newKeys(t, nkeys.PrefixByteOperator, "s")
+	acc := newKeys(t, nkeys.PrefixByteAccount, "s")
+	limits := jwtplane.Limits{
+		JetStream:      &jwtplane.JetStreamLimits{},
+		JetStreamTiers: map[string]jwtplane.JetStreamLimits{"R1": {}},
+	}
+	_, err := jwtplane.SignAccount(jwtplane.Account{Keys: acc, Limits: limits}, op, time.Now())
+	require.ErrorContains(t, err, "mutually exclusive")
 }
 
 func TestSignAccountExports(t *testing.T) {

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `NatsAccount.spec.limits.jetstream.tiers` sets an account's JetStream limits by tier, `R1` to `R5` after the replica count of a stream, in place of limits for the account as a whole.
+- `NatsAccount.spec.limits.jetstream`, and each of its tiers, takes `maxAckPending`, `memoryMaxStreamBytes`, `diskMaxStreamBytes` and `maxBytesRequired`.
+
 ### Changed
 
 - Each release's images and chart are signed with the certificate identity `https://github.com/mikluko/nats-operator/.github/workflows/release-roll.yaml@refs/tags/v<version>`, and their build provenance attestations name the signer workflow `release-roll.yaml` and the source ref `refs/tags/v<version>`; `SECURITY.md` has the commands for these and for releases 0.1.0 through 0.3.1.

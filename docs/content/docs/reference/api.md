@@ -18,7 +18,7 @@ The auth.nats-operator.io API group, owned by the auth controller.
 | [NatsUser](#NatsUser) | NatsUser is a user of an account. |
 
 ### AccountJetStreamLimits {#AccountJetStreamLimits}
-AccountJetStreamLimits are an account's JetStream limits.\
+AccountJetStreamLimits are an account's JetStream limits, either for the account as a whole or by tier.\
 Appears on: [AccountLimits](#AccountLimits).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
@@ -26,6 +26,26 @@ Appears on: [AccountLimits](#AccountLimits).
 | `diskStorage` | [{{< type "Quantity" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity) | No | DiskStorage is the file store limit. |
 | `streams` | {{< type "int64" >}} | No | Streams is the maximum number of streams. |
 | `consumers` | {{< type "int64" >}} | No | Consumers is the maximum number of consumers. |
+| `maxAckPending` | {{< type "int64" >}} | No | MaxAckPending is the highest max ack pending a consumer may set. |
+| `memoryMaxStreamBytes` | [{{< type "Quantity" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity) | No | MemoryMaxStreamBytes is the highest max bytes a memory stream may set. |
+| `diskMaxStreamBytes` | [{{< type "Quantity" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity) | No | DiskMaxStreamBytes is the highest max bytes a file stream may set. |
+| `maxBytesRequired` | {{< type "bool" >}} | No | MaxBytesRequired refuses a stream that sets no max bytes. |
+| `tiers` | [{{< type "[]AccountJetStreamTier" >}}](#AccountJetStreamTier) | No | Tiers are the limits by tier, in place of the limits for the account. nats-server refuses a stream whose tier is not listed. |
+
+### AccountJetStreamTier {#AccountJetStreamTier}
+AccountJetStreamTier are an account's JetStream limits for one tier.\
+Appears on: [AccountJetStreamLimits](#AccountJetStreamLimits).
+| Field | Type | Required | Description |
+| :---- | :--- | :------: | :---------- |
+| `name` | [{{< type "JetStreamTierName" >}}](#JetStreamTierName) | Yes | Name is the tier the limits apply to. |
+| `memoryStorage` | [{{< type "Quantity" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity) | No | MemoryStorage is the memory store limit. |
+| `diskStorage` | [{{< type "Quantity" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity) | No | DiskStorage is the file store limit. |
+| `streams` | {{< type "int64" >}} | No | Streams is the maximum number of streams. |
+| `consumers` | {{< type "int64" >}} | No | Consumers is the maximum number of consumers. |
+| `maxAckPending` | {{< type "int64" >}} | No | MaxAckPending is the highest max ack pending a consumer may set. |
+| `memoryMaxStreamBytes` | [{{< type "Quantity" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity) | No | MemoryMaxStreamBytes is the highest max bytes a memory stream may set. |
+| `diskMaxStreamBytes` | [{{< type "Quantity" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity) | No | DiskMaxStreamBytes is the highest max bytes a file stream may set. |
+| `maxBytesRequired` | {{< type "bool" >}} | No | MaxBytesRequired refuses a stream that sets no max bytes. |
 
 ### AccountKind {#AccountKind}
 AccountKind is a kind that answers an account reference.\
@@ -159,6 +179,18 @@ Appears on: [NatsAccountStatus](#NatsAccountStatus).
 | `localSubject` | {{< type "string" >}} | No | LocalSubject is where the import appears in this account. |
 | `type` | [{{< type "ExportType" >}}](#ExportType) | No | Type is the type of the export taken. |
 | `activation` | [{{< type "ActivationState" >}}](#ActivationState) | No | Activation is the state of the activation token of a Private export. |
+
+### JetStreamTierName {#JetStreamTierName}
+JetStreamTierName names a JetStream tier: R followed by the replica count of the streams nats-server puts in it.\
+Type: {{< type "string" >}}\
+Appears on: [AccountJetStreamTier](#AccountJetStreamTier).
+| Value | Description |
+| :---- | :---------- |
+| `R1` |  |
+| `R2` |  |
+| `R3` |  |
+| `R4` |  |
+| `R5` |  |
 
 ### Keys {#Keys}
 Keys adopts existing seeds; omitted, the auth controller generates keys into Secrets that outlive the object.\
