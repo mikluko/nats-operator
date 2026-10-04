@@ -1,0 +1,10 @@
+apiVersion: nats-operator.io/v1beta1
+kind: NatsConnection
+metadata:
+  name: auth-controller
+  namespace: nats-system
+spec:
+  servers: ["nats://nats.messaging.svc:4222"]
+  credentials:
+    secretKeyRef:
+      name: auth-controller-creds

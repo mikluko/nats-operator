@@ -1,0 +1,35 @@
+# The users nsc issued, against the account as the auth controller signs it:
+# the limit the story raises has reached the servers, the stream is still
+# there, both users connect, and the revoked user is refused.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: after-takeover
+  namespace: messaging
+spec:
+  backoffLimit: 20
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: nats
+          image: natsio/nats-box:0.20.0
+          env:
+            - {name: NATS_URL, value: "nats://nats.messaging.svc:4222"}
+          command:
+            - sh
+            - -ec
+            - |
+              nats --creds /nsc/orders-app.creds req '$JS.API.INFO' '' | grep -q '"max_streams":20,'
+              nats --creds /nsc/orders-app.creds stream info ORDERS >/dev/null
+              nats --creds /nsc/orders-worker.creds pub orders.created '{"id": 2}'
+              if refused=$(nats --creds /nsc/orders-old.creds pub orders.created '{"id": 0}' 2>&1); then
+                echo "the revoked user published"
+                exit 1
+              fi
+              echo "$refused" | grep -qi 'authorization violation'
+          volumeMounts:
+            - {name: nsc, mountPath: /nsc}
+      volumes:
+        - name: nsc
+          secret: {secretName: nsc}

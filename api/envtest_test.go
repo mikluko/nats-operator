@@ -98,6 +98,7 @@ var apiVersions = map[string]string{
 var statusSpecs = map[string]string{
 	"NatsCluster":           "{version: 2.15.0, replicas: 1}",
 	"NatsOperator":          "{systemAccountRef: {name: sys}}",
+	"NatsSystemAccount":     "{operatorRef: {name: o}}",
 	"NatsAccount":           "{operatorRef: {name: o}}",
 	"NatsUser":              "{accountRef: {kind: NatsAccount, name: a}}",
 	"NatsConnection":        "{servers: [nats://c:4222]}",

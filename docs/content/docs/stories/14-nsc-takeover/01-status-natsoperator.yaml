@@ -1,0 +1,14 @@
+status:
+  observedGeneration: 1
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Signed
+  publicKey: !any OACME...IDENTITY
+  signingKeys:
+    - !any OACME...SIGNING1
+  jwt: !any eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...
+  systemAccount:
+    name: sys
+    publicKey: !any ASYS...
+    jwt: !any eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...

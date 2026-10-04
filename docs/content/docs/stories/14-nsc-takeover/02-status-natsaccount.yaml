@@ -1,0 +1,25 @@
+status:
+  observedGeneration: 1
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Distributed
+    - type: ReferencesResolved
+      status: "True"
+      reason: AllImportsResolved
+    - type: Distributed
+      status: "True"
+      reason: AllServersCurrent
+      message: 3 of 3 servers hold this JWT
+  publicKey: !any AORDERS...
+  jwt: !any eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...
+  jwtHash: !any 9c41e7
+  distribution:
+    servers: 3
+    current: 3
+    lastPushTime: !any "2026-10-04T18:03:40Z"
+  revocations:
+    - publicKey: !any UOLD...
+      at: !any "2026-10-04T17:41:09Z"
+      issuers:
+        - !any AORDERS...SIGNING1
