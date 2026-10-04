@@ -62,8 +62,9 @@ func (n *needs) UnmarshalJSON(b []byte) error {
 }
 
 type workflow struct {
-	Env  map[string]string `json:"env"`
-	Jobs map[string]struct {
+	Env         map[string]string `json:"env"`
+	Permissions map[string]string `json:"permissions"`
+	Jobs        map[string]struct {
 		If          string            `json:"if"`
 		Needs       needs             `json:"needs"`
 		Permissions map[string]string `json:"permissions"`
@@ -87,29 +88,17 @@ func readWorkflow(t *testing.T, name string) workflow {
 	return wf
 }
 
+// TestRelease_FailOnAndCIName holds cut and release to a changelog action that
+// fails on an invalid CHANGELOG.md.
 func TestRelease_FailOnAndCIName(t *testing.T) {
-	changelog := stepByID(t, readWorkflow(t, "release.yml").Jobs["plan"].Steps, "changelog")
-	require.True(t, strings.HasPrefix(changelog.Uses, "mikluko/action-changelog@"), changelog.Uses)
-	require.Contains(t, []string{"", "error"}, changelog.With["fail-on"])
-
-	var release struct {
-		On struct {
-			WorkflowRun struct {
-				Workflows []string `yaml:"workflows"`
-			} `yaml:"workflow_run"`
-		} `yaml:"on"`
+	for _, tc := range []struct{ workflow, job string }{
+		{"release-cut.yaml", "cut"},
+		{"release-roll.yaml", "plan"},
+	} {
+		changelog := stepByID(t, readWorkflow(t, tc.workflow).Jobs[tc.job].Steps, "changelog")
+		require.True(t, strings.HasPrefix(changelog.Uses, "mikluko/action-changelog@"), changelog.Uses)
+		require.Contains(t, []string{"", "error"}, changelog.With["fail-on"], tc.workflow)
 	}
-	b, err := os.ReadFile("../.github/workflows/release.yml")
-	require.NoError(t, err)
-	require.NoError(t, yamlv3.Unmarshal(b, &release))
-
-	var ci struct {
-		Name string `yaml:"name"`
-	}
-	b, err = os.ReadFile("../.github/workflows/ci.yml")
-	require.NoError(t, err)
-	require.NoError(t, yamlv3.Unmarshal(b, &ci))
-	require.Equal(t, []string{ci.Name}, release.On.WorkflowRun.Workflows)
 }
 
 // TestE2E_Nightly pins that e2e runs two Kubernetes clusters on its daily
@@ -132,7 +121,7 @@ func TestE2E_Nightly(t *testing.T) {
 			} `yaml:"workflow_dispatch"`
 		} `yaml:"on"`
 	}
-	b, err := os.ReadFile("../.github/workflows/e2e.yml")
+	b, err := os.ReadFile("../.github/workflows/e2e.yaml")
 	require.NoError(t, err)
 	require.NoError(t, yamlv3.Unmarshal(b, &e2eWorkflow))
 	require.Len(t, e2eWorkflow.On.Schedule, 2)
@@ -149,7 +138,7 @@ func TestE2E_Nightly(t *testing.T) {
 	require.Equal(t, "1", clusters.Default)
 
 	var run step
-	for _, s := range readWorkflow(t, "e2e.yml").Jobs["stories"].Steps {
+	for _, s := range readWorkflow(t, "e2e.yaml").Jobs["stories"].Steps {
 		if s.Name == "Stories" {
 			run = s
 		}
@@ -195,7 +184,7 @@ func controllers(t *testing.T) []string {
 }
 
 func TestRelease_PublishesWhatTheChartPulls(t *testing.T) {
-	wf := readWorkflow(t, "release.yml")
+	wf := readWorkflow(t, "release-roll.yaml")
 
 	b, err := os.ReadFile("../charts/nats-operator/values.yaml")
 	require.NoError(t, err)
@@ -221,7 +210,7 @@ func TestRelease_PublishesWhatTheChartPulls(t *testing.T) {
 // TestRelease_ChartPinsImageDigests holds the packaged chart to the digests
 // the images job builds, on dry runs too, under a values key per controller.
 func TestRelease_ChartPinsImageDigests(t *testing.T) {
-	wf := readWorkflow(t, "release.yml")
+	wf := readWorkflow(t, "release-roll.yaml")
 	images := wf.Jobs["images"]
 	require.Equal(t, "${{ steps.digests.outputs.digests }}", images.Outputs["digests"])
 	require.Empty(t, stepByID(t, images.Steps, "digests").If)
@@ -257,7 +246,7 @@ func TestRelease_ChartPinsImageDigests(t *testing.T) {
 }
 
 func TestRelease_OneDigestList(t *testing.T) {
-	wf := readWorkflow(t, "release.yml")
+	wf := readWorkflow(t, "release-roll.yaml")
 	images := wf.Jobs["images"]
 	require.Equal(t, map[string]string{"digests": "${{ steps.digests.outputs.digests }}"}, images.Outputs)
 
@@ -280,7 +269,7 @@ func TestRelease_OneDigestList(t *testing.T) {
 // TestDocs_BuildJob holds the Pages build job to the permission
 // configure-pages reads the site with, and to one Hugo build on a pull request.
 func TestDocs_BuildJob(t *testing.T) {
-	build := readWorkflow(t, "docs.yml").Jobs["build"]
+	build := readWorkflow(t, "docs.yaml").Jobs["build"]
 	require.Equal(t, map[string]string{"contents": "read", "pages": "read"}, build.Permissions)
 
 	var hugo []step
@@ -305,14 +294,14 @@ func TestDocs_Deploy(t *testing.T) {
 			} `yaml:"push"`
 		} `yaml:"on"`
 	}
-	b, err := os.ReadFile("../.github/workflows/docs.yml")
+	b, err := os.ReadFile("../.github/workflows/docs.yaml")
 	require.NoError(t, err)
 	require.NoError(t, yamlv3.Unmarshal(b, &docs))
 	require.Equal(t, []string{"main"}, docs.On.Push.Branches)
-	require.Equal(t, "github.event_name == 'push'", readWorkflow(t, "docs.yml").Jobs["deploy"].If)
+	require.Equal(t, "github.event_name == 'push'", readWorkflow(t, "docs.yaml").Jobs["deploy"].If)
 
-	for name, job := range readWorkflow(t, "release.yml").Jobs {
-		require.NotContains(t, job.Uses, "docs.yml", name)
+	for name, job := range readWorkflow(t, "release-roll.yaml").Jobs {
+		require.NotContains(t, job.Uses, "docs.yaml", name)
 		require.NotContains(t, job.Permissions, "pages", name)
 	}
 }
@@ -330,7 +319,7 @@ func TestControllerList(t *testing.T) {
 const setupHugo = "./.github/actions/setup-hugo"
 
 func TestHugoInstalledOnce(t *testing.T) {
-	b, err := os.ReadFile("../.github/actions/setup-hugo/action.yml")
+	b, err := os.ReadFile("../.github/actions/setup-hugo/action.yaml")
 	require.NoError(t, err)
 	var action struct {
 		Runs struct {
@@ -344,8 +333,8 @@ func TestHugoInstalledOnce(t *testing.T) {
 	require.Contains(t, action.Runs.Steps[0].Run, "sha256sum -c")
 
 	for _, tc := range []struct{ workflow, job string }{
-		{"ci.yml", "go"},
-		{"docs.yml", "build"},
+		{"ci.yaml", "go"},
+		{"docs.yaml", "build"},
 	} {
 		t.Run(tc.workflow, func(t *testing.T) {
 			wf := readWorkflow(t, tc.workflow)
@@ -370,7 +359,7 @@ func TestGoToolchainOnce(t *testing.T) {
 	require.NoError(t, json.Unmarshal(out, &mod))
 	require.Regexp(t, `^go1\.\d+\.\d+$`, mod.Toolchain)
 
-	files, err := filepath.Glob("../.github/workflows/*.yml")
+	files, err := filepath.Glob("../.github/workflows/*.yaml")
 	require.NoError(t, err)
 	var setups int
 	for _, f := range files {
@@ -380,7 +369,7 @@ func TestGoToolchainOnce(t *testing.T) {
 					setups++
 					require.Equal(t, "go.mod", s.With["go-version-file"], "%s job %s", f, job)
 					require.Empty(t, s.With["go-version"], "%s job %s", f, job)
-					if filepath.Base(f) == "ci.yml" && s.With["cache"] != "false" {
+					if filepath.Base(f) == "ci.yaml" && s.With["cache"] != "false" {
 						require.Equal(t, []string{"go.sum", filepath.Join(filepath.Dir(toolsModfile), "go.sum")},
 							strings.Fields(s.With["cache-dependency-path"]), "%s job %s", f, job)
 					}
@@ -394,7 +383,7 @@ func TestGoToolchainOnce(t *testing.T) {
 // TestHelmVersionOnce holds every job that installs Helm to the one release
 // ci tests the chart with.
 func TestHelmVersionOnce(t *testing.T) {
-	files, err := filepath.Glob("../.github/workflows/*.yml")
+	files, err := filepath.Glob("../.github/workflows/*.yaml")
 	require.NoError(t, err)
 	versions := map[string]bool{}
 	for _, f := range files {
@@ -427,11 +416,11 @@ func TestKoBasePinned(t *testing.T) {
 	require.Regexp(t, `^\S+@sha256:[0-9a-f]{64}$`, ko.DefaultBaseImage)
 }
 
-// TestRelease_GoUncached holds every Go toolchain release.yml sets up to
+// TestRelease_GoUncached holds every Go toolchain release-roll.yaml sets up to
 // running without the Actions cache, which ci on main writes under the same key.
 func TestRelease_GoUncached(t *testing.T) {
 	var setups int
-	for job, j := range readWorkflow(t, "release.yml").Jobs {
+	for job, j := range readWorkflow(t, "release-roll.yaml").Jobs {
 		for _, s := range j.Steps {
 			if strings.HasPrefix(s.Uses, "actions/setup-go@") {
 				setups++
@@ -443,7 +432,7 @@ func TestRelease_GoUncached(t *testing.T) {
 }
 
 func TestRelease_AttestsBeforeRelease(t *testing.T) {
-	wf := readWorkflow(t, "release.yml")
+	wf := readWorkflow(t, "release-roll.yaml")
 	require.Subset(t, wf.Jobs["release"].Needs, []string{"images", "provenance", "chart"})
 	for _, job := range []string{"provenance", "chart"} {
 		var attests bool
@@ -461,7 +450,7 @@ const toolsModfile = "hack/tools/go.mod"
 // the golangci-lint toolsModfile requires, the one pin of its version.
 func TestCI_LintsWithToolsPin(t *testing.T) {
 	var lints int
-	files, err := filepath.Glob("../.github/workflows/*.yml")
+	files, err := filepath.Glob("../.github/workflows/*.yaml")
 	require.NoError(t, err)
 	for _, f := range files {
 		for job, j := range readWorkflow(t, filepath.Base(f)).Jobs {
@@ -595,7 +584,7 @@ func TestRenovate_WatchesToolPins(t *testing.T) {
 		{"helm/kind-action@", "version", "kubernetes-sigs/kind"},
 		{"helm/kind-action@", "node_image", "kindest/node"},
 	}
-	files, err := filepath.Glob("../.github/workflows/*.yml")
+	files, err := filepath.Glob("../.github/workflows/*.yaml")
 	require.NoError(t, err)
 	pinned := map[string]int{}
 	for _, f := range files {
@@ -665,7 +654,7 @@ func TestKindPinnedOnce(t *testing.T) {
 	require.NoError(t, err)
 
 	var runs int
-	for _, j := range readWorkflow(t, "ci.yml").Jobs {
+	for _, j := range readWorkflow(t, "ci.yaml").Jobs {
 		for _, s := range j.Steps {
 			if strings.HasPrefix(s.Uses, "helm/kind-action@") {
 				runs++
@@ -681,7 +670,7 @@ func TestKindPinnedOnce(t *testing.T) {
 // asset checked against a pinned sha256.
 func TestCI_HelmUnittestPinned(t *testing.T) {
 	var installs []step
-	for _, s := range readWorkflow(t, "ci.yml").Jobs["helm"].Steps {
+	for _, s := range readWorkflow(t, "ci.yaml").Jobs["helm"].Steps {
 		if s.Env["HELM_UNITTEST_VERSION"] != "" {
 			installs = append(installs, s)
 		}
@@ -767,7 +756,7 @@ func stringVar(t *testing.T, dir, name string) bool {
 // TestKo_BuildsSetVersion holds every ko build ci, release and the Justfile
 // run to setting VERSION, which .ko.yaml's ldflags read.
 func TestKo_BuildsSetVersion(t *testing.T) {
-	files, err := filepath.Glob("../.github/workflows/*.yml")
+	files, err := filepath.Glob("../.github/workflows/*.yaml")
 	require.NoError(t, err)
 	var builds int
 	for _, f := range files {
@@ -781,7 +770,7 @@ func TestKo_BuildsSetVersion(t *testing.T) {
 		}
 	}
 	require.NotZero(t, builds)
-	require.Equal(t, "${{ needs.plan.outputs.version }}", stepByName(t, readWorkflow(t, "release.yml").Jobs["images"].Steps, "Build").Env["VERSION"])
+	require.Equal(t, "${{ needs.plan.outputs.version }}", stepByName(t, readWorkflow(t, "release-roll.yaml").Jobs["images"].Steps, "Build").Env["VERSION"])
 
 	just, err := exec.LookPath("just")
 	if err != nil {
@@ -831,7 +820,7 @@ var renovateVersion = regexp.MustCompile(`^renovate@\d+\.\d+\.\d+$`)
 // config.
 func TestCI_ValidatesRenovateConfig(t *testing.T) {
 	var runs int
-	for job, j := range readWorkflow(t, "ci.yml").Jobs {
+	for job, j := range readWorkflow(t, "ci.yaml").Jobs {
 		for _, s := range j.Steps {
 			args := strings.Fields(s.Run)
 			if !slices.Contains(args, "renovate-config-validator") {
