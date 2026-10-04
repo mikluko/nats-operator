@@ -7,7 +7,7 @@ params:
 ---
 
 This guide shows you how to let a team declare NATS users and streams in its own namespace, in an account that the platform team owns in `nats-system`.
-The team never reads `nats-system`.
+The team needs no access to `nats-system`.
 The manifests give the payments team the account `payments` and the namespace `payments`.
 
 ## Before you begin
@@ -45,7 +45,7 @@ As the payments team, apply the users, the connection and the stream in `payment
 
 {{< manifest "01-team.yaml" >}}
 
-Each `accountRef` names the namespace `nats-system`, which the grant `payments-users` admits.
+Each `accountRef` sets the namespace `nats-system`, and the grant `payments-users` allows the reference.
 The creds Secrets are written beside the users, in `payments`.
 
 ## Check a user that no grant admits

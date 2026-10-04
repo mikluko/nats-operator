@@ -79,7 +79,8 @@ A ClusterIssuer gives a gateway certificate, and with it a place in the superclu
 
 Apply the `NatsCluster` `east`.
 Its name is its gateway name.
-`gateway.remotes` lists every member of the supercluster, itself included, and every member carries the same list.
+`gateway.remotes` lists every member of the supercluster, itself included.
+Give every member the same list.
 
 {{< manifest "01-east.yaml" >}}
 

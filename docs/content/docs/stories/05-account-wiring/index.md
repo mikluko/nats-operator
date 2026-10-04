@@ -30,7 +30,7 @@ Apply the account `monitoring` with two exports:
 ## Declare the imports
 
 Apply the account `core`.
-Each import names the account and the export it takes.
+Each import refers to an account and to the name of an export.
 The subject and the type come from the export.
 
 {{< manifest "01-importer.yaml" >}}

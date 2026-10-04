@@ -26,7 +26,7 @@ The other stories are how-to guides:
    In a story that spans Kubernetes clusters, create them in each one.
 
 1. Apply each manifest with the `kubectl` command that follows it on the page.
-   A command that applies a manifest to one of several Kubernetes clusters names its kubeconfig context with `--context`.
+   In a story that spans Kubernetes clusters, the command sets the kubeconfig context of its Kubernetes cluster with `--context`.
 
 1. Compare what `kubectl get -o yaml` shows with the status file on the page.
    A value that differs from one Kubernetes cluster to the next is an example.

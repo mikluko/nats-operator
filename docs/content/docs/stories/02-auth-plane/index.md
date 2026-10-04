@@ -26,7 +26,7 @@ You need:
 ## Create the NATS operator
 
 Apply the `NatsOperator`.
-It names `sys` as its system account.
+Its system account is `sys`.
 
 {{< manifest "01-natsoperator.yaml" >}}
 
@@ -44,7 +44,7 @@ The `status` in the output is similar to this:
 
 {{< manifest "01-status-natsoperator.yaml" >}}
 
-`seedSecrets` names the Secrets that hold the seeds.
+`seedSecrets` lists the Secrets that contain the seeds.
 
 ## Declare the accounts
 
@@ -82,11 +82,11 @@ The `status` in the output is similar to this:
 
 {{< manifest "01-status-natsuser-orders-batch.yaml" >}}
 
-Pair `status.jwt` with the seed that the client holds.
+Give `status.jwt` to the client, which already has the seed.
 
 ## Connect the auth controller to the servers
 
-The auth controller pushes account JWTs to the servers through the `NatsConnection` that `auth.systemConnection` names.
+The auth controller pushes account JWTs to the servers through the `NatsConnection` set in `auth.systemConnection`.
 Apply it, with the creds of the user `auth-controller`:
 
 {{< manifest "01-natsconnection-auth-controller.yaml" >}}
@@ -100,11 +100,11 @@ It points at the `NatsOperator`, and the auth controller writes the trust roots 
 
 {{< manifest "01-natsoperatortrust.yaml" >}}
 
-In a Kubernetes cluster where no auth controller runs, the `NatsOperatorTrust` holds the JWTs themselves.
+In a Kubernetes cluster where no auth controller runs, the `NatsOperatorTrust` contains the JWTs themselves.
 [Join NATS clusters in several Kubernetes clusters into a supercluster]({{< relref "/docs/stories/06-supercluster" >}}) shows that form.
 
 Apply the `NatsCluster`.
-`auth.trustRef` names the trust roots, and `auth.systemCredentials` names the creds that the cluster controller connects with.
+`auth.trustRef` points at the trust roots, and `auth.systemCredentials` at the creds that the cluster controller connects with.
 
 {{< manifest "01-natscluster.yaml" >}}
 
