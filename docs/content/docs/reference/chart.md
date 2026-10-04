@@ -47,7 +47,7 @@ Table: The values that apply to every controller.
 | `extraArgs` | `[]` | Flags appended to the flags of every controller, after the chart's own. When a flag is given twice, the last one applies. An entry that sets `--leader-elect` or `--leader-election-id` fails the render. |
 | `env` | `[]` | Environment of every controller's container. |
 
-### `cluster`
+### Values under `cluster`
 
 Table: The values of the cluster controller.
 
@@ -71,7 +71,7 @@ Table: The values of the cluster controller.
 | `cluster.extraArgs` | `[]` | Flags appended after `extraArgs`. An entry that sets `--leader-elect` or `--leader-election-id` fails the render. |
 | `cluster.env` | `[]` | Environment of the container. An entry replaces the entry of the same name in `env`. |
 
-### `auth`
+### Values under `auth`
 
 Table: The values of the auth controller.
 
@@ -95,7 +95,7 @@ Table: The values of the auth controller.
 | `auth.extraArgs` | `[]` | Flags appended after `extraArgs`. An entry that sets `--leader-elect` or `--leader-election-id` fails the render. |
 | `auth.env` | `[]` | Environment of the container. An entry replaces the entry of the same name in `env`. |
 
-### `jetstream`
+### Values under `jetstream`
 
 Table: The values of the JetStream controller.
 
@@ -118,7 +118,7 @@ Table: The values of the JetStream controller.
 | `jetstream.extraArgs` | `[]` | Flags appended after `extraArgs`. An entry that sets `--leader-elect` or `--leader-election-id` fails the render. |
 | `jetstream.env` | `[]` | Environment of the container. An entry replaces the entry of the same name in `env`. |
 
-### `metrics`
+### Values under `metrics`
 
 Table: The values of the metrics endpoints. [Metrics](#metrics) describes the endpoints.
 
@@ -134,7 +134,7 @@ Table: The values of the metrics endpoints. [Metrics](#metrics) describes the en
 | `metrics.serviceMonitor.authorization` | `{}` | `{credentials: {name, key}}`, as in the `authorization` of a ServiceMonitor endpoint: a key of a Secret in the release namespace. Each ServiceMonitor scrapes the port `metrics` with the bearer token in that key, in place of `bearerTokenFile`. The type is always `Bearer`. |
 | `metrics.serviceMonitor.caSecret` | `{}` | `{name, key}`, a key of a Secret in the release namespace that contains the CA that each ServiceMonitor verifies the metrics certificate against. When the value is empty, the CA is `ca.crt` of `metrics.tls.secretName`. Requires `metrics.tls.secretName`. |
 
-### `networkPolicy`
+### Values under `networkPolicy`
 
 Table: The values of the controllers' NetworkPolicies. [Network policy](#network-policy) describes the policies.
 
@@ -144,7 +144,7 @@ Table: The values of the controllers' NetworkPolicies. [Network policy](#network
 | `networkPolicy.from` | `[]` | The NetworkPolicy peers admitted to ports `8080` and `9464`. When the list is empty, no peer is admitted. |
 | `networkPolicy.egress` | `[]` | NetworkPolicy egress rules, each `{to, ports}`, rendered as given into the NetworkPolicy of each controller. The policy then admits no other egress, so the API server, DNS, and the client and monitoring ports of the NATS clusters each need a rule. Requires `networkPolicy.enabled`. When the list is empty, egress is unrestricted. |
 
-### `tests`
+### Values under `tests`
 
 Table: The values of the `helm test` pods. [Helm test](#helm-test) describes the pods.
 
@@ -162,6 +162,7 @@ The chart runs every controller with these flags, followed by `extraArgs` and th
 - `--leader-elect`, set from `leaderElection.enabled`.
 - `--leader-election-id`, set to `<release>-<API group>`, such as `nats-operator-cluster.nats.mikluko.io`.
 - Metrics on `:8080`, the container port `metrics`.
+  The chart renders a Service for that port only while `metrics.service.enabled` is set.
 - Health probes on `:8081`, at `/healthz` and `/readyz`.
 
 Of the other flags, the chart sets only these four:
