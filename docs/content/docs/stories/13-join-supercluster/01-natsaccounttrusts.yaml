@@ -1,0 +1,22 @@
+# The accounts the existing members preload, copied the same way: each one's
+# public key and its JWT as the NATS operator signed it. A copy is good until
+# that JWT expires: one the auth controller signs expires with its NatsAccount's
+# jwtTTL (48h by default, none with `jwtTTL: 0`), and one signed elsewhere
+# whenever its signer chose.
+apiVersion: nats.mikluko.io/v1beta1
+kind: NatsAccountTrust
+metadata:
+  name: orders
+  namespace: nats-system
+spec:
+  publicKey: AORDERS...
+  jwt: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...
+---
+apiVersion: nats.mikluko.io/v1beta1
+kind: NatsAccountTrust
+metadata:
+  name: payments
+  namespace: nats-system
+spec:
+  publicKey: APAYMENTS...
+  jwt: eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ...
