@@ -12,11 +12,11 @@ Three Kubernetes controllers that deploy NATS clusters, own their auth plane, an
 
 ## Releases
 
-The changelog decides the version. Cutting one is renaming `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and opening a fresh `[Unreleased]` above it. `mikluko/action-changelog` validates the file on every pull request. Once ci passes on a push to `main`, the release workflow tags and publishes the newest entry neither tagged nor with its chart in the registry, and fails on one whose chart is in the registry but untagged; run by hand, it builds a due version without publishing. Nothing else sets a version.
+The changelog decides the version. Cutting one is renaming `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and opening a fresh `[Unreleased]` above it. `mikluko/action-changelog` validates the file on every pull request. A push to `main` runs `release-cut`: it runs ci, then tags the pushed commit `vX.Y.Z` as the releaser GitHub App where `mikluko/action-changelog` reports the newest entry due: it names a version, no tag names it, and it is not a prerelease. ci runs on `main` only as that job. The pushed tag starts `release-roll`, which fails unless the tag is the newest entry of `CHANGELOG.md` at that commit, then builds, signs and publishes the images and the chart, and creates the GitHub release last. A tag whose `release-roll` run failed is not cut again: re-run that run. Run by hand, `release-roll` builds the changelog's newest version if it is due, a prerelease included, and publishes nothing. Nothing else sets a version.
 
 Before the first release is announced, a human:
 
-- runs `release` by hand on a branch whose `CHANGELOG.md` has the version cut, before cutting it on `main`; the run publishes nothing and proves the plan
+- runs `release-roll` by hand on a branch whose `CHANGELOG.md` has the version cut, before cutting it on `main`; the run publishes nothing and proves the plan
 - makes the ghcr packages `nats-operator/cluster-controller`, `nats-operator/auth-controller`, `nats-operator/jetstream-controller` and `nats-operator/charts/nats-operator` public; new packages of a personal account are private
 - sets the repository's Pages source to GitHub Actions, before the first push to `main` deploys the site
 - turns on private vulnerability reporting, which `SECURITY.md` links to

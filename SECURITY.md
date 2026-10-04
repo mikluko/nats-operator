@@ -48,17 +48,21 @@ The release workflow signs each release's three controller images and its chart 
 To verify them, you need [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) and the [GitHub CLI](https://cli.github.com/).
 In the commands below, replace `<version>` with a release's version without the `v`, such as `0.1.1`.
 
+The commands verify a release later than 0.3.1, which is built from its tag.
+Releases 0.1.0 through 0.3.1 were built from `main` by another workflow file.
+To verify one of them, see [Releases 0.1.0 through 0.3.1](#releases-010-through-031).
+
 1. Verify the signatures of the images and the chart:
 
    ```sh
    for c in cluster-controller auth-controller jetstream-controller; do
      cosign verify "ghcr.io/mikluko/nats-operator/$c:<version>" \
-       --certificate-identity https://github.com/mikluko/nats-operator/.github/workflows/release.yml@refs/heads/main \
+       --certificate-identity "https://github.com/mikluko/nats-operator/.github/workflows/release-roll.yaml@refs/tags/v<version>" \
        --certificate-oidc-issuer https://token.actions.githubusercontent.com
    done
 
    cosign verify "ghcr.io/mikluko/nats-operator/charts/nats-operator:<version>" \
-     --certificate-identity https://github.com/mikluko/nats-operator/.github/workflows/release.yml@refs/heads/main \
+     --certificate-identity "https://github.com/mikluko/nats-operator/.github/workflows/release-roll.yaml@refs/tags/v<version>" \
      --certificate-oidc-issuer https://token.actions.githubusercontent.com
    ```
 
@@ -67,8 +71,15 @@ In the commands below, replace `<version>` with a release's version without the 
    ```sh
    gh attestation verify "oci://ghcr.io/mikluko/nats-operator/cluster-controller:<version>" \
      --repo mikluko/nats-operator \
-     --signer-workflow mikluko/nats-operator/.github/workflows/release.yml \
-     --source-ref refs/heads/main
+     --signer-workflow mikluko/nats-operator/.github/workflows/release-roll.yaml \
+     --source-ref "refs/tags/v<version>"
    ```
 
    To verify another, replace `cluster-controller` with `auth-controller`, `jetstream-controller` or `charts/nats-operator`.
+
+### Releases 0.1.0 through 0.3.1
+
+Run the same commands with these arguments changed:
+
+- For `cosign verify`, the value of `--certificate-identity` is `https://github.com/mikluko/nats-operator/.github/workflows/release.yml@refs/heads/main`.
+- For `gh attestation verify`, the value of `--signer-workflow` is `mikluko/nats-operator/.github/workflows/release.yml`, and the value of `--source-ref` is `refs/heads/main`.

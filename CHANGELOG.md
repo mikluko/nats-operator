@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Each release's images and chart are signed with the certificate identity `https://github.com/mikluko/nats-operator/.github/workflows/release-roll.yaml@refs/tags/v<version>`, and their build provenance attestations name the signer workflow `release-roll.yaml` and the source ref `refs/tags/v<version>`; `SECURITY.md` has the commands for these and for releases 0.1.0 through 0.3.1.
+
 ## [0.3.1] - 2026-10-04
 
 ### Changed

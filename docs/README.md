@@ -53,7 +53,7 @@ From the repository root:
 
 ## Publish the site
 
-`.github/workflows/docs.yml` builds the site on every pull request and deploys it on every push to `main`.
+`.github/workflows/docs.yaml` builds the site on every pull request and deploys it on every push to `main`.
 Run by hand, the workflow keeps the build as the run's `github-pages` artifact and deploys nothing.
 
 The deployment needs one repository setting, made once: **Settings > Pages > Build and deployment > Source: GitHub Actions**.

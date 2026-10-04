@@ -1,0 +1,6 @@
+paths:
+  .github/workflows/release-cut.yaml:
+    ignore:
+      # actionlint v1.7.12 carries the inputs of create-github-app-token@v3 from before it took client-id.
+      - 'missing input "app-id" which is required by action "actions/create-github-app-token@v3".+'
+      - 'input "client-id" is not defined in action "actions/create-github-app-token@v3".+'
