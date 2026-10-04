@@ -94,7 +94,8 @@ type Distribution struct {
 
 // Revocation is a user key an account revokes.
 type Revocation struct {
-	// PublicKey is the revoked user's key.
+	// PublicKey is the revoked user's key, or `*` for every user of the
+	// account.
 	// +required
 	PublicKey string `json:"publicKey"`
 

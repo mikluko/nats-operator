@@ -78,7 +78,7 @@ The account loses these claims, because a `NatsAccount` has no field for them:
 
 Revocations carry over: the auth controller reads them from the JWT on the servers.
 An account that has no signing key keeps its revocations too, and rotating a signing key later does not drop them.
-An account that revokes every user, with the key `*`, is not signed: its `NatsAccount` has the condition `Ready` False with the reason `InvalidJWT`, and its JWT on the servers stays as it is.
+An account that revokes every user, with the key `*`, keeps that revocation too: users whose JWTs were issued at or before its time stay refused.
 
 The system account keeps its revocations too, until you rotate its signing keys: its revocations list signing keys alone as their `issuers`.
 It keeps the two exports that `nsc` gives it, `account-monitoring-services` and `account-monitoring-streams`, which the auth controller signs into every system account.
