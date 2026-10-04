@@ -416,10 +416,42 @@ spec:
                           type: string
                         description: Annotations set on the Service.
                         type: object
+                      loadBalancerClass:
+                        description: |-
+                          LoadBalancerClass names the load balancer implementation, set only
+                          when type is LoadBalancer. It cannot change while type stays
+                          LoadBalancer, since Kubernetes refuses that change on the Service.
+                        minLength: 1
+                        type: string
+                      loadBalancerSourceRanges:
+                        description: |-
+                          LoadBalancerSourceRanges are the CIDRs the load balancer accepts
+                          clients from, set only when type is LoadBalancer.
+                        items:
+                          maxLength: 43
+                          type: string
+                          x-kubernetes-validations:
+                          - message: a source range must be a CIDR
+                            rule: isCIDR(self)
+                        maxItems: 256
+                        type: array
+                        x-kubernetes-list-type: atomic
                       type:
                         description: Type of the Service, ClusterIP when omitted.
                         type: string
                     type: object
+                    x-kubernetes-validations:
+                    - message: loadBalancerSourceRanges is set only when type is LoadBalancer
+                      rule: '!has(self.loadBalancerSourceRanges) || size(self.loadBalancerSourceRanges)
+                        == 0 || (has(self.type) && self.type == ''LoadBalancer'')'
+                    - message: loadBalancerClass is set only when type is LoadBalancer
+                      rule: '!has(self.loadBalancerClass) || (has(self.type) && self.type
+                        == ''LoadBalancer'')'
+                    - message: loadBalancerClass cannot change while type stays LoadBalancer
+                      rule: '!has(oldSelf.type) || oldSelf.type != ''LoadBalancer''
+                        || !has(self.type) || self.type != ''LoadBalancer'' || (has(self.loadBalancerClass)
+                        == has(oldSelf.loadBalancerClass) && (!has(self.loadBalancerClass)
+                        || self.loadBalancerClass == oldSelf.loadBalancerClass))'
                   tls:
                     description: |-
                       TLS on the gateway listener. The certificate's Secret must hold
@@ -807,10 +839,42 @@ spec:
                           type: string
                         description: Annotations set on the Service.
                         type: object
+                      loadBalancerClass:
+                        description: |-
+                          LoadBalancerClass names the load balancer implementation, set only
+                          when type is LoadBalancer. It cannot change while type stays
+                          LoadBalancer, since Kubernetes refuses that change on the Service.
+                        minLength: 1
+                        type: string
+                      loadBalancerSourceRanges:
+                        description: |-
+                          LoadBalancerSourceRanges are the CIDRs the load balancer accepts
+                          clients from, set only when type is LoadBalancer.
+                        items:
+                          maxLength: 43
+                          type: string
+                          x-kubernetes-validations:
+                          - message: a source range must be a CIDR
+                            rule: isCIDR(self)
+                        maxItems: 256
+                        type: array
+                        x-kubernetes-list-type: atomic
                       type:
                         description: Type of the Service, ClusterIP when omitted.
                         type: string
                     type: object
+                    x-kubernetes-validations:
+                    - message: loadBalancerSourceRanges is set only when type is LoadBalancer
+                      rule: '!has(self.loadBalancerSourceRanges) || size(self.loadBalancerSourceRanges)
+                        == 0 || (has(self.type) && self.type == ''LoadBalancer'')'
+                    - message: loadBalancerClass is set only when type is LoadBalancer
+                      rule: '!has(self.loadBalancerClass) || (has(self.type) && self.type
+                        == ''LoadBalancer'')'
+                    - message: loadBalancerClass cannot change while type stays LoadBalancer
+                      rule: '!has(oldSelf.type) || oldSelf.type != ''LoadBalancer''
+                        || !has(self.type) || self.type != ''LoadBalancer'' || (has(self.loadBalancerClass)
+                        == has(oldSelf.loadBalancerClass) && (!has(self.loadBalancerClass)
+                        || self.loadBalancerClass == oldSelf.loadBalancerClass))'
                   tls:
                     description: |-
                       TLS on the leafnode listener; absent, leaf connections run in the
