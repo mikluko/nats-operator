@@ -3,6 +3,7 @@ package sysobs
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"testing"
@@ -28,7 +29,7 @@ func (f fakeServer) serve(t *testing.T, nc *nats.Conn, total int) {
 		if err == nil {
 			err = m.Respond(data)
 		}
-		if err != nil {
+		if err != nil && !errors.Is(err, nats.ErrConnectionClosed) {
 			t.Errorf("respond as %s: %v", f.name, err)
 		}
 	}
