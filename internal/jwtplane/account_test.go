@@ -287,6 +287,10 @@ func TestSignSystemAccount(t *testing.T) {
 	require.Zero(t, c.Expires)
 	require.False(t, c.Limits.IsJSEnabled())
 	require.Equal(t, pub(t, op.Signing[0].Pair), c.Issuer)
+	require.ElementsMatch(t, jwt.Exports{
+		{Name: "account-monitoring-services", Subject: "$SYS.REQ.ACCOUNT.*.*", Type: jwt.Service, ResponseType: jwt.ResponseTypeStream, AccountTokenPosition: 4},
+		{Name: "account-monitoring-streams", Subject: "$SYS.ACCOUNT.*.>", Type: jwt.Stream, AccountTokenPosition: 3},
+	}, c.Exports)
 
 	type got struct {
 		Subject jwt.Subject
