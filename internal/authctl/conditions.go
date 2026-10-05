@@ -23,6 +23,10 @@ const (
 	// its JWT and revocations while not every server could be asked for them;
 	// the JWT is not pushed while it is.
 	ConditionRevocationsUnrecovered = "RevocationsUnrecovered"
+	// ConditionSigningKeyUntrusted is True on a NatsOperator while a server
+	// trusting it does not list its active signing key in the NATS operator
+	// JWT it runs under.
+	ConditionSigningKeyUntrusted = "SigningKeyUntrusted"
 )
 
 // The reasons those conditions carry.
@@ -52,8 +56,11 @@ const (
 	ReasonUnobserved         = "Unobserved"
 	// ReasonUntrustedSigner is Distributed's reason on an account whose JWT
 	// is signed by a key that a server does not list in the NATS operator
-	// JWT it runs under; such a server is not counted current.
+	// JWT it runs under, where such a server is not counted current, and
+	// SigningKeyUntrusted's reason while it is True.
 	ReasonUntrustedSigner = "UntrustedSigner"
+	// ReasonSignerTrusted is SigningKeyUntrusted's reason while it is False.
+	ReasonSignerTrusted = "SignerTrusted"
 	// ReasonRecovering is Ready's reason on an account whose status lost
 	// its JWT and its revocations but records it distributed, while no
 	// server can be asked for the JWT they are recovered from.
@@ -63,8 +70,9 @@ const (
 	// gone; no identity is generated in its place.
 	ReasonSeedLost = "SeedLost"
 	// ReasonNoSystemConnection is Distributed's reason on an account or
-	// user while the auth controller runs without --system-connection: no
-	// JWT reaches a server and a deleted user's connections stay open.
+	// user, and SigningKeyUntrusted's on a NatsOperator, while the auth
+	// controller runs without --system-connection: no JWT reaches a server
+	// and a deleted user's connections stay open.
 	ReasonNoSystemConnection = "NoSystemConnection"
 	// ReasonPublicKeyInUse is Ready's reason on an account or user whose
 	// public key another holds under the same NatsOperator or account.

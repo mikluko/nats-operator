@@ -20,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
@@ -40,6 +41,9 @@ type OperatorReconciler struct {
 	Distributor Distributor
 	// Recorder records system account JWTs held; nil records none.
 	Recorder events.EventRecorder
+	// RosterChanges receives a NatsOperator whose servers changed, which is
+	// reconciled. Nil receives nothing.
+	RosterChanges <-chan event.GenericEvent
 }
 
 var _ reconcile.Reconciler = (*OperatorReconciler)(nil)
@@ -176,14 +180,14 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	}
 
 	setRetiringCondition(op, retiring, append([]string{st.SystemAccount.JWT}, accountJWTs(accounts)...))
+	again := setSignerCondition(ctx, r.Distributor, op, issuer(sysJWT))
 	next, err := r.deletes(ctx, op, keys.Keys, named.Items, refused)
 	if err != nil {
 		return 0, err
 	}
 	conditions.Set(&st.Conditions, op.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionTrue, Reason: ReasonSigned})
-	var again time.Duration
 	if sd.unasked != nil {
-		again = distributionRecheck
+		again = soonest(again, distributionRecheck)
 	}
 	if next.IsZero() {
 		return again, nil
@@ -305,10 +309,43 @@ func setRetiringCondition(op *authv1beta1.NatsOperator, retiring, jwts []string)
 
 }
 
+// setSignerCondition sets SigningKeyUntrusted on op from how many servers
+// trusting it d finds not listing key, its active signing key, and returns
+// how soon to look again; d may be nil.
+func setSignerCondition(ctx context.Context, d Distributor, op *authv1beta1.NatsOperator, key string) time.Duration {
+	set := func(status metav1.ConditionStatus, reason, msg string) {
+		conditions.Set(&op.Status.Conditions, op.Generation, metav1.Condition{Type: ConditionSigningKeyUntrusted, Status: status, Reason: reason, Message: msg})
+	}
+	if d == nil {
+		set(metav1.ConditionUnknown, ReasonNoSystemConnection, "the auth controller runs without --system-connection: no server is asked which keys it trusts")
+		return 0
+	}
+	servers, distrusting, err := d.Distrusting(ctx, client.ObjectKeyFromObject(op), key)
+	switch {
+	case errors.Is(err, ErrUnreachable):
+		set(metav1.ConditionUnknown, ReasonUnreachable, err.Error())
+		return distributionRecheck
+	case err != nil:
+		set(metav1.ConditionUnknown, ReasonUnobserved, err.Error())
+		return distributionRecheck
+	}
+	msg := fmt.Sprintf("%d of %d servers do not list signing key %s in their NATS operator JWT", distrusting, servers, key)
+	if distrusting == 0 {
+		set(metav1.ConditionFalse, ReasonSignerTrusted, msg)
+		return 0
+	}
+	set(metav1.ConditionTrue, ReasonUntrustedSigner, msg)
+	return distributionRecheck
+}
+
 // SetupWithManager registers r with mgr, which must already hold Setup's indexes.
 func (r *OperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c := mgr.GetClient()
-	return ctrl.NewControllerManagedBy(mgr).
+	b := ctrl.NewControllerManagedBy(mgr)
+	if r.RosterChanges != nil {
+		b = b.WatchesRawSource(source.Channel(r.RosterChanges, &handler.EnqueueRequestForObject{}))
+	}
+	return b.
 		Named("natsoperator").
 		For(&authv1beta1.NatsOperator{}).
 		WatchesMetadata(&corev1.Secret{}, refindex.EnqueueByField(c, &authv1beta1.NatsOperatorList{}, seedSecretField)).
