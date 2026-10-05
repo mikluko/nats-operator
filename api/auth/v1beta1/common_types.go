@@ -170,9 +170,9 @@ type Revocation struct {
 	At metav1.Time `json:"at"`
 
 	// Issuers are the keys that may have signed a revoked JWT: the account's
-	// signing keys when the revocation was recorded, or, for a revocation a
-	// NatsAccount took from a JWT the servers held, that JWT's signing keys
-	// and the account's identity key. The revocation is dropped once none
+	// signing keys when the revocation was recorded, or, for a revocation
+	// taken from a JWT the servers held, that JWT's signing keys and the
+	// account's identity key. The revocation is dropped once none
 	// of them is the account's identity key or among its signing keys.
 	// +optional
 	Issuers []string `json:"issuers,omitempty"`

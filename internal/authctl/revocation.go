@@ -26,6 +26,8 @@ import (
 // pub, and those of users revoked in the account and of the keys they
 // replaced, less any none of whose issuers is pub or in signing. A revoked
 // user's key is issued by signing, and by pub too where the user claimed it.
+// Of two revocations of a key at the same time, the first in recorded keeps
+// its issuers.
 func accountRevocations(recorded []authv1beta1.Revocation, prev, pub string, signing []string, users []authv1beta1.NatsUser) []authv1beta1.Revocation {
 	byKey := map[string]*authv1beta1.Revocation{}
 	revoke := func(key string, at time.Time, issuers []string) {

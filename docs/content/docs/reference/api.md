@@ -430,12 +430,12 @@ Appears on: [Export](#Export).
 
 ### Revocation {#Revocation}
 Revocation is a user key an account revokes.\
-Appears on: [NatsAccountStatus](#NatsAccountStatus), [NatsSystemAccountStatus](#NatsSystemAccountStatus).
+Appears on: [NatsAccountStatus](#NatsAccountStatus), [NatsSystemAccountStatus](#NatsSystemAccountStatus), [SystemAccountStatus](#SystemAccountStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `publicKey` | {{< type "string" >}} | Yes | PublicKey is the revoked user's key, or `*` for every user of the account. |
 | `at` | [{{< type "Time" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Time) | Yes | At revokes the user's JWTs issued at or before it. |
-| `issuers` | {{< type "[]string" >}} | No | Issuers are the keys that may have signed a revoked JWT: the account's signing keys when the revocation was recorded, or, for a revocation a NatsAccount took from a JWT the servers held, that JWT's signing keys and the account's identity key. The revocation is dropped once none of them is the account's identity key or among its signing keys. |
+| `issuers` | {{< type "[]string" >}} | No | Issuers are the keys that may have signed a revoked JWT: the account's signing keys when the revocation was recorded, or, for a revocation taken from a JWT the servers held, that JWT's signing keys and the account's identity key. The revocation is dropped once none of them is the account's identity key or among its signing keys. |
 
 ### SeedSecretKeySelector {#SeedSecretKeySelector}
 SeedSecretKeySelector selects an nkey seed from a Secret in the referrer's namespace.\
@@ -489,6 +489,7 @@ Appears on: [NatsOperatorStatus](#NatsOperatorStatus).
 | `name` | {{< type "string" >}} | No | Name of the NatsSystemAccount spec.systemAccountRef resolves to. |
 | `publicKey` | {{< type "string" >}} | No | PublicKey of the system account. |
 | `jwt` | {{< type "string" >}} | No | JWT of the system account. |
+| `revocations` | [{{< type "[]Revocation" >}}](#Revocation) | No | Revocations the JWT carries, each with its issuers. |
 
 ### UserLimits {#UserLimits}
 UserLimits are the limits of one user's connection.\

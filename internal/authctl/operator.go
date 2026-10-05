@@ -133,14 +133,16 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	}
 	prev := st.SystemAccount
 	var prevJWT string
+	recorded := sys.Status.Revocations
 	if prev != nil && prev.Name == sys.Name {
 		prevJWT = prev.JWT
+		recorded = append(slices.Clone(prev.Revocations), recorded...)
 	}
 	sysSigning, _, err := sysKeys.signingPublicKeys()
 	if err != nil {
 		return 0, err
 	}
-	sd, err := recoverRevocations(ctx, r.Distributor, client.ObjectKeyFromObject(op), sys.Status.Revocations, prevJWT, sysPub, sysSigning, users,
+	sd, err := recoverRevocations(ctx, r.Distributor, client.ObjectKeyFromObject(op), recorded, prevJWT, sysPub, sysSigning, users,
 		unrecovered(st.Conditions) || adoptionRefused(st.Conditions), everDistributed(sys.Status.Distribution))
 	if err != nil {
 		recordHeld(r.Recorder, op, st.Conditions, err)
@@ -178,6 +180,7 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	if resign {
 		st.SystemAccount = &authv1beta1.SystemAccountStatus{Name: sys.Name, PublicKey: sysPub, JWT: sysJWT}
 	}
+	st.SystemAccount.Revocations = sd.revocations
 
 	setRetiringCondition(op, retiring, append([]string{st.SystemAccount.JWT}, accountJWTs(accounts)...))
 	again := setSignerCondition(ctx, r.Distributor, op, issuer(sysJWT))

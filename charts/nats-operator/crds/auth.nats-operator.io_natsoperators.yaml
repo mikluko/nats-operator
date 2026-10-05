@@ -364,6 +364,36 @@ spec:
                   publicKey:
                     description: PublicKey of the system account.
                     type: string
+                  revocations:
+                    description: Revocations the JWT carries, each with its issuers.
+                    items:
+                      description: Revocation is a user key an account revokes.
+                      properties:
+                        at:
+                          description: At revokes the user's JWTs issued at or before
+                            it.
+                          format: date-time
+                          type: string
+                        issuers:
+                          description: |-
+                            Issuers are the keys that may have signed a revoked JWT: the account's
+                            signing keys when the revocation was recorded, or, for a revocation
+                            taken from a JWT the servers held, that JWT's signing keys and the
+                            account's identity key. The revocation is dropped once none
+                            of them is the account's identity key or among its signing keys.
+                          items:
+                            type: string
+                          type: array
+                        publicKey:
+                          description: |-
+                            PublicKey is the revoked user's key, or `*` for every user of the
+                            account.
+                          type: string
+                      required:
+                      - at
+                      - publicKey
+                      type: object
+                    type: array
                 type: object
             type: object
         required:

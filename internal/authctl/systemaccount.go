@@ -3,6 +3,7 @@ package authctl
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -118,7 +119,7 @@ func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta
 	if err != nil {
 		return 0, err
 	}
-	st.Revocations = accountRevocations(st.Revocations, signed.JWT, pub, signing, users)
+	st.Revocations = accountRevocations(append(slices.Clone(signed.Revocations), st.Revocations...), signed.JWT, pub, signing, users)
 	held := unrecovered(op.Status.Conditions)
 	if hash := JWTHash(signed.JWT); hash != st.JWTHash {
 		var err error
