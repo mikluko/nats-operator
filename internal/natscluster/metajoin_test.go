@@ -1,9 +1,12 @@
 package natscluster
 
 import (
+	"context"
+	"net/http"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -231,5 +234,63 @@ func TestReconcile_ClaimOlderThanNatsCluster(t *testing.T) {
 		got := reconcileObserved(t, c, nc, unobservable{})
 		requireProgressingCondition(t, got, metav1.ConditionTrue, ReasonCreating)
 		require.Equal(t, 3, sets(t, c))
+	})
+}
+
+// endpointObserver observes the in-process servers at eps over their
+// monitoring ports.
+type endpointObserver struct {
+	unobservable
+	eps []sysobs.Endpoint
+}
+
+func (o endpointObserver) Observe(ctx context.Context, _ *clusterv1beta1.NatsCluster) (*sysobs.Snapshot, error) {
+	return sysobs.NewMonitor(http.DefaultClient, 0).Observe(ctx, o.eps)
+}
+
+// TestMetaJoinHold_Live pins the hold against nats-server 2.15.0: story 1's
+// servers, running JetStream with no gateway, lead a meta group of their
+// own, and a reconcile adding gateway remotes holds them; story 6's west,
+// in a meta group with east, is not judged own.
+func TestMetaJoinHold_Live(t *testing.T) {
+	t.Run("standalone", func(t *testing.T) {
+		nc := storyCluster(t)
+		nc.Generation = 1
+		nc.Spec.JetStream.Limits = &clusterv1beta1.JetStreamLimits{MaxMemoryStore: quantity("256Mi"), MaxFileStore: quantity("1Gi")}
+		eps, _, _, _ := startRendered(t, nc, nil, "r1")
+		obs := endpointObserver{eps: eps}
+		require.Eventually(t, func() bool {
+			s, err := obs.Observe(t.Context(), nc)
+			return err == nil && s.MetaLeader() != ""
+		}, 30*time.Second, 200*time.Millisecond, "no meta leader")
+
+		c := fake.NewClientBuilder().WithScheme(leafScheme(t)).WithObjects(nc).WithStatusSubresource(nc).Build()
+		reconcileObserved(t, c, nc, obs)
+		cur := &clusterv1beta1.NatsCluster{}
+		require.NoError(t, c.Get(t.Context(), client.ObjectKeyFromObject(nc), cur))
+		cur.Spec.Gateway = quickstartWithGateway(t).Spec.Gateway
+		cur.Generation++
+		require.NoError(t, c.Update(t.Context(), cur))
+		before := serverObjects(t, c, nc)
+		got := reconcileObserved(t, c, nc, obs)
+		requireProgressingCondition(t, got, metav1.ConditionFalse, ReasonOwnMetaGroup, "demo-0, demo-1, demo-2")
+		require.Equal(t, before, serverObjects(t, c, nc))
+	})
+
+	t.Run("supercluster member", func(t *testing.T) {
+		east, west := supercluster(t, func(_, _ *clusterv1beta1.NatsCluster) {})
+		west.eventuallyStatus(t, gatewaysConnected)
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
+			var outside []string
+			for _, m := range []*member{east, west} {
+				snap, err := m.sys.Observe(t.Context(), m.nc)
+				require.NoError(c, err)
+				own, known, why := ownMeta(snap, serverNames(m.nc))
+				require.True(c, known, "%s: %s", m.nc.Name, why)
+				require.False(c, own, "%s: %+v", m.nc.Name, snap.Groups)
+				outside = append(outside, snap.Groups[0].Outside...)
+			}
+			require.NotEmpty(c, outside, "the leader reports no peer of the other member")
+		}, 60*time.Second, 250*time.Millisecond)
 	})
 }
