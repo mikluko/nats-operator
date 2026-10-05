@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The revocation of a deleted or denied `NatsUser` whose `status.publicKey` is the `publicKey` of its spec lists the account's identity key among its `issuers`, and is kept after every signing key it lists is rotated out.
 
+### Changed
+
+- **Breaking:** a server whose `VARZ` reports no NATS operator JWT, as one configured by `trusted_keys` does, or that does not answer `VARZ` is no longer counted in `status.distribution.current`, and the `NatsAccount` or `NatsSystemAccount` reads `Distributed` False with the reason `TrustUnknown` naming how many servers do not say; a system user of the `auth-controller` preset signed before 0.4.0 lacks the `VARZ` permission until its creds are reissued, and a `trusted_keys` server reads so until it runs under a NATS operator JWT.
+- A `NatsOperator` reads `SigningKeyUntrusted` Unknown with the reason `TrustUnknown` while no server is known not to list its active signing key and a server does not say.
+
 ## [0.4.0] - 2026-10-05
 
 ### Added
