@@ -112,6 +112,19 @@ cluster:
 
 ## Deploy the new member
 
+The servers of `west` must start with no JetStream state.
+They then join the JetStream meta group of the supercluster.
+Servers that bring a meta group of their own do not merge with it, and either side can lose its streams.
+Use new claims: if a `NatsCluster` named `west` ran in `nats-system` before, without these gateways or with a `jetstream.domain`, delete its data volume claims first:
+
+```sh
+kubectl -n nats-system delete pvc data-west-0-0 data-west-1-0 data-west-2-0
+```
+
+The cluster controller creates no server whose claim is older than the `NatsCluster`, and reads `Progressing` False with the reason `OwnMetaGroup` instead.
+It also refuses to add gateway remotes to servers that already lead a meta group of their own.
+[Trust, resolver, gateways, leaf nodes]({{< relref "/docs/design/v1#43-trust-resolver-gateways-leaf-nodes" >}}) in the design describes what it checks.
+
 Apply the `NatsCluster` `west`:
 
 {{< manifest "01-west.yaml" >}}
@@ -142,7 +155,38 @@ The `status` in the output is similar to this:
 {{< manifest "01-status-natscluster.yaml" >}}
 
 `GatewaysConnected` is True, and `gateways` has an entry for `central`.
-A supercluster has one JetStream meta group, so `Settled` is True once the servers of `west` have joined that group beside the servers of `central`.
+A supercluster has one JetStream meta group, so `Settled` is True once the servers of `west` are among the peers of the meta leader.
+
+To check that `west` joined the meta group of `central`, read `meta_cluster` from `/jsz` on a server of each, on the monitoring port 8222:
+
+```sh
+kubectl -n nats-system port-forward pod/west-0-0 8222:8222
+curl -s localhost:8222/jsz | jq .meta_cluster
+```
+
+In one meta group, every server reports the same `leader` and the same `cluster_size`, which counts the servers of `west` and of `central`.
+If the servers of `west` report a leader among themselves and a `cluster_size` that counts only them, `west` runs a meta group of its own beside that of `central`.
+Stop `west` at once: while both groups run, either can delete the streams of the other.
+
+## Recover from a meta group of its own
+
+1. Stop `west`.
+   Set the annotation `cluster.nats-operator.io/force-delete` on it, since the deletion otherwise waits for its streams, and delete it:
+
+   ```sh
+   kubectl -n nats-system annotate natscluster west cluster.nats-operator.io/force-delete=true
+   kubectl -n nats-system delete natscluster west
+   ```
+
+2. On a server of `central`, check that its streams are still listed.
+   A stream that is gone comes back only from a backup.
+3. Delete the data volume claims of `west`:
+
+   ```sh
+   kubectl -n nats-system delete pvc data-west-0-0 data-west-1-0 data-west-2-0
+   ```
+
+4. Apply the `NatsCluster` `west` again.
 
 ## Create a stream on the new member
 
