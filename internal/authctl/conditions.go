@@ -61,6 +61,11 @@ const (
 	ReasonUntrustedSigner = "UntrustedSigner"
 	// ReasonSignerTrusted is SigningKeyUntrusted's reason while it is False.
 	ReasonSignerTrusted = "SignerTrusted"
+	// ReasonTrustUnknown is Distributed's reason on an account whose JWT
+	// was sent while a server reports no NATS operator JWT on VARZ, or does
+	// not answer it, where such a server is not counted current, and
+	// SigningKeyUntrusted's while it is Unknown for such a server.
+	ReasonTrustUnknown = "TrustUnknown"
 	// ReasonRecovering is Ready's reason on an account whose status lost
 	// its JWT and its revocations but records it distributed, while no
 	// server can be asked for the JWT they are recovered from.

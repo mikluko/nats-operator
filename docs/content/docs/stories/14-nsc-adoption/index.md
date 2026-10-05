@@ -134,6 +134,11 @@ The first signing key that you list for the NATS operator signs every account, s
 If it is not, the auth controller sends the servers no JWT, and the system account and each account read `Distributed` False with the reason `UntrustedSigner`.
 The `NatsOperator` reads `SigningKeyUntrusted` True with the same reason, and its message names the key and how many servers do not list it.
 
+The auth controller reads which keys a server trusts from its `VARZ`.
+A server that does not report a NATS operator JWT there is not counted current in `status.distribution`, and each account reads `Distributed` False with the reason `TrustUnknown`, which names how many servers do not say; the `NatsOperator` reads `SigningKeyUntrusted` Unknown with the same reason.
+A server configured with `trusted_keys` in place of `operator` reports none, and reads so until its config names the NATS operator JWT.
+A server answers no `VARZ` while the creds of the auth controller come from a user of the `auth-controller` preset signed before 0.4.0; issue those creds again.
+
 If you keep an identity seed offline, leave `keys.identity` out.
 Set `jwt` of the `NatsOperator` to the NATS operator JWT, or `publicKey` of the account to its public key, and list at least one signing key.
 

@@ -34,11 +34,14 @@ func distribute(ctx context.Context, d Distributor, operator types.NamespacedNam
 		return prev, cond(metav1.ConditionFalse, ReasonNoSystemConnection, "the auth controller runs without --system-connection: no server receives this JWT"), 0, nil
 	}
 	got, err := d.Current(ctx, operator, token)
-	var untrusted error
+	var untrusted, unknown error
 	if err == nil && got.Current < got.Servers {
 		err = d.Push(ctx, operator, token)
-		if errors.Is(err, ErrUntrustedSigner) {
+		switch {
+		case errors.Is(err, ErrUntrustedSigner):
 			untrusted, err = err, nil
+		case errors.Is(err, ErrTrustUnknown):
+			unknown, err = err, nil
 		}
 		if err == nil {
 			got, err = d.Current(ctx, operator, token)
@@ -55,6 +58,9 @@ func distribute(ctx context.Context, d Distributor, operator types.NamespacedNam
 	}
 	if untrusted != nil {
 		return &got, cond(metav1.ConditionFalse, ReasonUntrustedSigner, untrusted.Error()), distributionRecheck, nil
+	}
+	if unknown != nil {
+		return &got, cond(metav1.ConditionFalse, ReasonTrustUnknown, unknown.Error()), distributionRecheck, nil
 	}
 	msg := fmt.Sprintf("%d of %d servers hold this JWT", got.Current, got.Servers)
 	if got.Servers == 0 || got.Current < got.Servers {
@@ -117,14 +123,19 @@ func ignoreUnreachable(err error) error {
 	return err
 }
 
-// ignoreUndelivered is err, or nil when err is ErrUnreachable or
-// ErrUntrustedSigner: the JWT stands and distribute reports why no server
-// serves it.
+// ignoreUndelivered is err, or nil when err is ErrUnreachable,
+// ErrUntrustedSigner or ErrTrustUnknown: the JWT stands and distribute
+// reports why a server is not counted current.
 func ignoreUndelivered(err error) error {
-	if errors.Is(err, ErrUntrustedSigner) {
+	if errors.Is(err, ErrUntrustedSigner) || errors.Is(err, ErrTrustUnknown) {
 		return nil
 	}
 	return ignoreUnreachable(err)
+}
+
+// pushSent reports whether a push that returned err sent the JWT.
+func pushSent(err error) bool {
+	return err == nil || errors.Is(err, ErrTrustUnknown)
 }
 
 // soonest is the earlier of two requeue delays, zero being none.

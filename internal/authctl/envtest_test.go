@@ -78,8 +78,8 @@ func (r *recorder) Current(context.Context, types.NamespacedName, string) (authv
 }
 
 // Distrusting answers ErrUnreachable: a recorder reaches no server.
-func (r *recorder) Distrusting(context.Context, types.NamespacedName, string) (int, int, error) {
-	return 0, 0, authctl.ErrUnreachable
+func (r *recorder) Distrusting(context.Context, types.NamespacedName, string) (int, int, int, error) {
+	return 0, 0, 0, authctl.ErrUnreachable
 }
 
 // Lookup answers the newest JWT for account pushed for operator, standing

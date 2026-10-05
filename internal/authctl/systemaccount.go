@@ -128,7 +128,7 @@ func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta
 				return 0, fmt.Errorf("push system account JWT: %w", err)
 			}
 		}
-		sent := !held && r.Distributor != nil && err == nil
+		sent := !held && r.Distributor != nil && pushSent(err)
 		if sent {
 			telemetry.Emit(r.Recorder, sys, telemetry.JWTPushed, "system account JWT of %s pushed", pub)
 		}

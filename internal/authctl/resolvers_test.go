@@ -428,6 +428,77 @@ func TestResolvers_UntrustedSigner(t *testing.T) {
 	requireDistribution(t, r, token, 3, 1)
 }
 
+// TestResolvers_TrustedKeys pins that a server configured by trusted_keys,
+// routed to a server under the NATS operator JWT, is not counted current and
+// makes a push read ErrTrustUnknown. nats-server starts no full or cache
+// resolver without a NATS operator JWT, so it runs a memory resolver.
+func TestResolvers_TrustedKeys(t *testing.T) {
+	p := newPlane(t)
+	c := startFullCluster(t, p, 1)
+	var keys []string
+	for _, kp := range []nkeys.KeyPair{p.op.Identity, p.op.Signing[0].Pair} {
+		pub, err := kp.PublicKey()
+		require.NoError(t, err)
+		keys = append(keys, pub)
+	}
+	mem := &server.MemAccResolver{}
+	require.NoError(t, mem.Store(p.sysPub, p.sysJWT))
+	s, err := server.NewServer(&server.Options{ServerName: "s1", Host: "127.0.0.1", Port: -1,
+		TrustedKeys: keys, SystemAccount: p.sysPub, AccountResolver: mem, NoLog: true, NoSigs: true,
+		Cluster: server.ClusterOpts{Name: "c", Host: "127.0.0.1", Port: -1},
+		Routes:  server.RoutesFromStr("nats://" + c.srvs[0].ClusterAddr().String())})
+	require.NoError(t, err)
+	go s.Start()
+	t.Cleanup(s.Shutdown)
+	require.True(t, s.ReadyForConnections(10*time.Second))
+
+	r := resolversOn(t, c, testOperator)
+	acc, pub := newAccount(t)
+	token := signAccount(t, p, acc, "orders")
+	require.EventuallyWithT(t, func(ct *assert.CollectT) {
+		assert.NoError(ct, r.PollOperator(t.Context(), testOperator))
+		d, err := r.Current(t.Context(), testOperator, token)
+		if assert.NoError(ct, err) {
+			assert.Equal(ct, int32(2), d.Servers, "the trusted_keys server answers STATSZ")
+		}
+	}, 10*time.Second, 50*time.Millisecond)
+
+	require.ErrorIs(t, r.Push(t.Context(), testOperator, token), authctl.ErrTrustUnknown)
+	require.Equal(t, token, c.held(0, pub))
+	requireDistribution(t, r, token, 2, 1)
+	requireDistrusting(t, r, p.op, 2, 0, 1)
+}
+
+// requireDistrusting requires that r's Distrusting of signer's first signing
+// key reports servers, distrusting and unknown.
+func requireDistrusting(t *testing.T, r *authctl.Resolvers, signer jwtplane.Keys, servers, distrusting, unknown int) {
+	t.Helper()
+	key, err := signer.Signing[0].Pair.PublicKey()
+	require.NoError(t, err)
+	s, d, u, err := r.Distrusting(t.Context(), testOperator, key)
+	require.NoError(t, err)
+	require.Equal(t, [3]int{servers, distrusting, unknown}, [3]int{s, d, u})
+}
+
+// TestResolvers_NoVarzPermission pins that a server the system user may not
+// ask for VARZ is sent a JWT and not counted current.
+func TestResolvers_NoVarzPermission(t *testing.T) {
+	p := newPlane(t)
+	c := startFullCluster(t, p, 2)
+	nc, _ := dial(t, c.srvs[0].ClientURL(), jwtplane.User{Name: "auth-controller", SystemAccount: true,
+		Permissions: &jwtplane.Permissions{Publish: jwtplane.SubjectPermissions{Deny: []string{"$SYS.REQ.SERVER.PING.VARZ"}}}}, p.sys)
+	r := &authctl.Resolvers{Conn: func(context.Context, types.NamespacedName) (*nats.Conn, error) { return nc, nil }, Wait: 500 * time.Millisecond}
+
+	keys, pub := newAccount(t)
+	token := signAccount(t, p, keys, "orders")
+	require.ErrorIs(t, r.Push(t.Context(), testOperator, token), authctl.ErrTrustUnknown)
+	for i := range c.srvs {
+		require.Equal(t, token, c.held(i, pub), "server %d was sent the JWT", i)
+	}
+	requireDistribution(t, r, token, 2, 0)
+	requireDistrusting(t, r, p.op, 2, 0, 2)
+}
+
 // TestResolvers_SystemAccountKeyPushed pins that nats-server takes an account
 // JWT the NATS operator signed for the system account's key, listing another
 // party's signing keys, in place of the system account's own, closes the

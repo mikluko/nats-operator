@@ -194,7 +194,7 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 				return fmt.Errorf("push account JWT: %w", err)
 			}
 		}
-		sent := !held && r.Distributor != nil && err == nil
+		sent := !held && r.Distributor != nil && pushSent(err)
 		st.JWT = token
 		st.JWTHash = JWTHash(token)
 		st.Distribution = pushed(st.Distribution, now, sent)

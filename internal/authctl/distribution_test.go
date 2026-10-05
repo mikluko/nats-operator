@@ -22,14 +22,14 @@ import (
 
 // countingDistributor answers Current with current until a Push, and with
 // after once pushed; Push answers pushErr, and Distrusting current's servers
-// with distrusting and distrustErr.
+// with distrusting, unknown and distrustErr.
 type countingDistributor struct {
-	current, after authv1beta1.Distribution
-	currentErr     error
-	pushErr        error
-	pushes         int
-	distrusting    int
-	distrustErr    error
+	current, after       authv1beta1.Distribution
+	currentErr           error
+	pushErr              error
+	pushes               int
+	distrusting, unknown int
+	distrustErr          error
 }
 
 func (d *countingDistributor) Push(context.Context, types.NamespacedName, string) error {
@@ -50,8 +50,8 @@ func (*countingDistributor) Lookup(context.Context, types.NamespacedName, string
 
 func (*countingDistributor) Delete(context.Context, types.NamespacedName, string) error { return nil }
 
-func (d *countingDistributor) Distrusting(context.Context, types.NamespacedName, string) (int, int, error) {
-	return int(d.current.Servers), d.distrusting, d.distrustErr
+func (d *countingDistributor) Distrusting(context.Context, types.NamespacedName, string) (int, int, int, error) {
+	return int(d.current.Servers), d.distrusting, d.unknown, d.distrustErr
 }
 
 func TestDistribute(t *testing.T) {
@@ -94,6 +94,13 @@ func TestDistribute(t *testing.T) {
 				after: authv1beta1.Distribution{Servers: 3}, pushErr: fmt.Errorf("%w: 3 of 3", ErrUntrustedSigner)},
 			token: "jwt", wantDist: &authv1beta1.Distribution{Servers: 3, LastPushTime: pushedAt},
 			wantStatus: metav1.ConditionFalse, wantReason: ReasonUntrustedSigner, wantAgain: distributionRecheck, wantPushes: 1,
+		},
+		{
+			name: "a server not known to trust the signer is a reason, not an error",
+			d: &countingDistributor{current: authv1beta1.Distribution{Servers: 3},
+				after: authv1beta1.Distribution{Servers: 3, Current: 2}, pushErr: fmt.Errorf("%w: 1 of 3", ErrTrustUnknown)},
+			token: "jwt", wantDist: &authv1beta1.Distribution{Servers: 3, Current: 2, LastPushTime: pushedAt},
+			wantStatus: metav1.ConditionFalse, wantReason: ReasonTrustUnknown, wantAgain: distributionRecheck, wantPushes: 1,
 		},
 		{
 			name: "a refused push is an error",

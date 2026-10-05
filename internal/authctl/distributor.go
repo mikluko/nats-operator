@@ -23,6 +23,11 @@ var (
 	// that a server does not list in the NATS operator JWT it runs under;
 	// the JWT was sent unless no server lists the key.
 	ErrUntrustedSigner = errors.New("the servers do not trust the signer")
+
+	// ErrTrustUnknown is wrapped by Push's error for a JWT sent while a
+	// server reports no NATS operator JWT on VARZ, or does not answer it, so
+	// whether it trusts the signer is unknown.
+	ErrTrustUnknown = errors.New("whether the servers trust the signer is unknown")
 )
 
 // Distributor carries account JWTs, and deletes of accounts, to the
@@ -35,7 +40,7 @@ type Distributor interface {
 	Push(ctx context.Context, operator types.NamespacedName, accountJWT string) error
 
 	// Current returns how many servers trust operator, how many of them
-	// hold accountJWT and trust its signer, and when a server last
+	// hold accountJWT and are known to trust its signer, and when a server last
 	// acknowledged a push for its account, if one did.
 	Current(ctx context.Context, operator types.NamespacedName, accountJWT string) (authv1beta1.Distribution, error)
 
@@ -50,9 +55,10 @@ type Distributor interface {
 	// none.
 	Delete(ctx context.Context, operator types.NamespacedName, request string) error
 
-	// Distrusting returns how many servers trust operator and how many of
-	// them do not list key in the NATS operator JWT they run under.
-	Distrusting(ctx context.Context, operator types.NamespacedName, key string) (servers, distrusting int, err error)
+	// Distrusting returns how many servers trust operator, how many of
+	// them do not list key in the NATS operator JWT they run under, and how
+	// many report no such JWT or do not say.
+	Distrusting(ctx context.Context, operator types.NamespacedName, key string) (servers, distrusting, unknown int, err error)
 }
 
 // push hands token to d, which may be nil.
