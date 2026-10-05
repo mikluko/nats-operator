@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Adding or removing `auth` on a running `NatsCluster` holds every server on the config it runs, with `Progressing` False and the reason `AuthChangeBlocked`, in place of a rollout that stalled at its first server.
+- A server's startup probe is `/healthz?js-meta-only=true` in place of `/healthz`, and passes once its JetStream is current with a meta leader; the change restarts every server of every `NatsCluster` once, one at a time through the rollout gate.
 - The revocation of a deleted or denied `NatsUser` whose `status.publicKey` is the `publicKey` of its spec lists the account's identity key among its `issuers`, and is kept after every signing key it lists is rotated out.
 - A revocation that a `NatsSystemAccount` takes from the JWT the servers hold lists the system account's identity key among its `issuers`, and is kept after its signing keys are rotated out.
 

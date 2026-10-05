@@ -375,7 +375,7 @@ func natsContainer(nc *clusterv1beta1.NatsCluster, limits Limits) corev1.Contain
 			{Name: "pid", MountPath: pidDir},
 		},
 		StartupProbe: &corev1.Probe{
-			ProbeHandler:     healthz("/healthz"),
+			ProbeHandler:     healthz("/healthz?js-meta-only=true"),
 			PeriodSeconds:    10,
 			FailureThreshold: 90,
 		},

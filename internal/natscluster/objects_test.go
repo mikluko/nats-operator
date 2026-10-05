@@ -307,6 +307,42 @@ func TestRender_PodTemplate(t *testing.T) {
 	require.Equal(t, map[string]string{"backup": "yes", LabelCluster: "demo", LabelServer: "demo-0"}, pvc.Labels)
 }
 
+func TestRender_Probes(t *testing.T) {
+	p, err := Render(storyCluster(t), Inputs{})
+	require.NoError(t, err)
+	nats := container(t, p.Servers[0].StatefulSet, "nats")
+
+	require.Equal(t, "/healthz?js-meta-only=true", nats.StartupProbe.HTTPGet.Path, "the full /healthz looks up every account the meta group has streams for")
+	require.Equal(t, "/healthz?js-server-only=true", nats.ReadinessProbe.HTTPGet.Path)
+	require.Equal(t, "/healthz?js-enabled-only=true", nats.LivenessProbe.HTTPGet.Path)
+	for _, pr := range []*corev1.Probe{nats.StartupProbe, nats.ReadinessProbe, nats.LivenessProbe} {
+		require.Equal(t, intstr.FromString("monitor"), pr.HTTPGet.Port)
+	}
+}
+
+func TestRender_PodTemplateProbes(t *testing.T) {
+	nc := storyCluster(t)
+	nc.Spec.PodTemplate = &clusterv1beta1.PodTemplate{Spec: &corev1.PodSpec{Containers: []corev1.Container{{
+		Name: "nats",
+		StartupProbe: &corev1.Probe{
+			ProbeHandler:   corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromString("monitor")}},
+			TimeoutSeconds: 10,
+		},
+		LivenessProbe: &corev1.Probe{FailureThreshold: 5},
+	}}}}
+	p, err := Render(nc, Inputs{})
+	require.NoError(t, err)
+	nats := container(t, p.Servers[0].StatefulSet, "nats")
+
+	require.Equal(t, "/healthz", nats.StartupProbe.HTTPGet.Path)
+	require.Equal(t, intstr.FromString("monitor"), nats.StartupProbe.HTTPGet.Port)
+	require.Equal(t, int32(10), nats.StartupProbe.TimeoutSeconds)
+	require.Equal(t, int32(90), nats.StartupProbe.FailureThreshold)
+	require.Equal(t, int32(5), nats.LivenessProbe.FailureThreshold)
+	require.Equal(t, "/healthz?js-enabled-only=true", nats.LivenessProbe.HTTPGet.Path)
+	require.Equal(t, "/healthz?js-server-only=true", nats.ReadinessProbe.HTTPGet.Path)
+}
+
 func TestRender_Volumes(t *testing.T) {
 	tests := []struct {
 		name   string
