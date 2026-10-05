@@ -144,7 +144,7 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 		return reconcile.Result{}, err
 	}
 	sd, err := recoverRevocations(ctx, r.Distributor, opKey, st.Revocations, st.JWT, pub, signing, users,
-		unrecovered(st.Conditions), everDistributed(st.Distribution))
+		unrecovered(st.Conditions) || takeoverRefused(st.Conditions), everDistributed(st.Distribution))
 	if err != nil {
 		recordHeld(r.Recorder, acc, st.Conditions, err)
 		again, err := recoveryFailed(err, notReady)
@@ -171,6 +171,17 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 	if err != nil {
 		notReady(ReasonInvalidJWT, err.Error())
 		return reconcile.Result{}, nil
+	}
+	if sd.held != "" {
+		refused, err := refuseTakeover(sd.held, token, acc.Spec.Takeover, notReady)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		if refused {
+			st.JWT, st.JWTHash, st.Distribution = "", "", nil
+			meta.RemoveStatusCondition(&st.Conditions, ConditionDistributed)
+			return reconcile.Result{}, nil
+		}
 	}
 	held := sd.unasked != nil
 	adopt := func() error {

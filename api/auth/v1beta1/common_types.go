@@ -121,6 +121,28 @@ type AccountReference struct {
 	natsv1beta1.ObjectReference `json:",inline"`
 }
 
+// Takeover is how an account made elsewhere is taken over: what the first
+// JWT signed for it does where the servers hold a JWT for its key.
+type Takeover struct {
+	// DroppedClaims is what the first signing does where the JWT the servers
+	// hold carries a claim the signed JWT would not: Refuse, the default,
+	// signs nothing and sets Ready False naming each; Accept signs without
+	// them.
+	// +optional
+	DroppedClaims TakeoverDroppedClaims `json:"droppedClaims,omitempty"`
+}
+
+// TakeoverDroppedClaims is what a takeover does with the claims it would
+// drop.
+// +kubebuilder:validation:Enum=Refuse;Accept
+type TakeoverDroppedClaims string
+
+// What a takeover does with the claims it would drop.
+const (
+	TakeoverRefuseDroppedClaims TakeoverDroppedClaims = "Refuse"
+	TakeoverAcceptDroppedClaims TakeoverDroppedClaims = "Accept"
+)
+
 // Distribution is how many servers hold an account's current JWT.
 type Distribution struct {
 	// Servers is how many servers trust the account's NATS operator.

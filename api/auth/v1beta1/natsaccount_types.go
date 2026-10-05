@@ -44,6 +44,11 @@ type NatsAccountSpec struct {
 	// Imports are exports of other accounts this one takes.
 	// +optional
 	Imports []Import `json:"imports,omitempty"`
+
+	// Takeover is how an account the servers already hold a JWT for is taken
+	// over at the first signing.
+	// +optional
+	Takeover *Takeover `json:"takeover,omitempty"`
 }
 
 // AccountLimits are an account's limits.

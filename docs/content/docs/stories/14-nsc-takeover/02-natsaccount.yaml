@@ -19,7 +19,3 @@ spec:
       diskStorage: 10Gi
       streams: 10
       consumers: 100
-  exports:
-    - name: orders-events
-      type: Stream
-      subject: "orders.events.>"
