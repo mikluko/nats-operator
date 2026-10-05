@@ -11,11 +11,11 @@ import (
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
 
-// TestCompareTakeover pins what the first JWT signed from spec loses of the
+// TestCompareAdoption pins what the first JWT signed from spec loses of the
 // one the servers hold: each claim nsc can write that no spec expresses, and
 // each expressible claim the spec leaves out, is named; one the spec sets to
 // another value is not.
-func TestCompareTakeover(t *testing.T) {
+func TestCompareAdoption(t *testing.T) {
 	op := testKeys(t, nkeys.PrefixByteOperator, false)
 	acc := testKeys(t, nkeys.PrefixByteAccount, false, false)
 	other := testKeys(t, nkeys.PrefixByteAccount, false)
@@ -207,7 +207,7 @@ func TestCompareTakeover(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			loss, err := compareTakeover(held(t, tc.held), spec(t, tc.spec))
+			loss, err := compareAdoption(held(t, tc.held), spec(t, tc.spec))
 			require.NoError(t, err)
 			require.Equal(t, tc.drops, loss.drops)
 			require.Equal(t, tc.tiers, loss.tiers)

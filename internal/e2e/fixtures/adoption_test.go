@@ -16,12 +16,12 @@ import (
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 )
 
-// checkTakeover requires that story 14's existing NATS cluster runs a full
+// checkAdoption requires that story 14's existing NATS cluster runs a full
 // resolver preloading the system account alone, that its NATS operator,
 // system account, account and users are what nsc makes and chain to the
 // seeds the story adopts, that the system account and the account each
 // revoke one of their users and no other, and that the status patches name the keys of those seeds.
-func checkTakeover(t *testing.T, dir string) {
+func checkAdoption(t *testing.T, dir string) {
 	t.Helper()
 	t.Setenv("POD_NAME", "nats-0")
 	d := decodeDir(t, dir)

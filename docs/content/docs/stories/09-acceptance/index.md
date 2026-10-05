@@ -177,7 +177,7 @@ Apply the manifest in `prod-east`:
 
 {{< manifest "02-jetstream.yaml" >}}
 
-- The two `NatsStream`s set `adoptionPolicy: Adopt`, so they take over the streams and keep their config.
+- The two `NatsStream`s set `adoptionPolicy: Adopt`, so they adopt the streams and keep their config.
   See [Adopting streams]({{< relref "/docs/stories/03-unmanaged#adopting-streams" >}}).
 - The `NatsBalancer` balances the account of the monitoring team in two pools, which select the streams by label.
 - The `NatsSystemBalancer` balances every account of `prod-east`.

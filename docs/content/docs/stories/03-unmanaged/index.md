@@ -6,7 +6,7 @@ params:
   tags: [adoption]
 ---
 
-This guide shows you how to declare streams, consumers, a key-value bucket and an object store as Kubernetes resources on a NATS cluster that the cluster controller did not deploy, and how to take over streams that already exist without recreating them.
+This guide shows you how to declare streams, consumers, a key-value bucket and an object store as Kubernetes resources on a NATS cluster that the cluster controller did not deploy, and how to adopt streams that already exist without recreating them.
 The manifests reach a NATS cluster in the namespace `messaging` and declare everything in the namespace `payments`.
 
 ## Before you begin
@@ -35,10 +35,10 @@ Apply three `NatsStream`s.
 Each one takes a different path with a stream that it did not create:
 
 - `payments` sets `adoptionPolicy: Adopt`.
-  Use `Adopt` to take over a stream that exists and keep its config: the spec needs only the fields that identify the stream.
+  Use `Adopt` to adopt a stream that exists and keep its config: the spec needs only the fields that identify the stream.
   If the stream does not exist, the resource waits with `Adopted` False, reason `NotFound`, and does not create it.
 - `refunds` sets `adoptionPolicy: AdoptOrCreate`.
-  Use `AdoptOrCreate` to take over the stream if it exists and create it if not.
+  Use `AdoptOrCreate` to adopt the stream if it exists and create it if not.
   The JetStream controller applies the spec as written either way.
 - `ledger` leaves `adoptionPolicy` at its default, `Never`, and sets `terminalPolicy: Retry`.
 

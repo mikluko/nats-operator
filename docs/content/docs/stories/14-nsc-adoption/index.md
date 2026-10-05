@@ -1,5 +1,5 @@
 ---
-title: Take over a NATS operator and accounts made with nsc
+title: Adopt a NATS operator and accounts made with nsc
 weight: 14
 params:
   category: The auth plane
@@ -21,7 +21,7 @@ params:
 ---
 
 This guide shows you how to hand a NATS operator, its system account and an account that you made with `nsc` to the auth controller, on a NATS cluster that already runs under them.
-The manifests take over the NATS operator `acme`, the system account `SYS` and the account `orders`, and then raise a limit of `orders` from its `NatsAccount`.
+The manifests adopt the NATS operator `acme`, the system account `SYS` and the account `orders`, and then raise a limit of `orders` from its `NatsAccount`.
 
 Each account keeps its public key, so the creds of its users keep working.
 The claims of each account do not carry over: the auth controller signs a new JWT from the spec of the `NatsAccount` and pushes it over the one that `nsc` signed, and refuses to sign while the spec would drop a claim that the JWT on the servers carries.
@@ -36,7 +36,7 @@ You need:
   The manifests use the client address `nats://nats.messaging.svc:4222`.
 - A Kubernetes cluster with the auth controller installed, the chart value `auth.systemConnection` set to `nats-system/auth-controller`, and the namespace `nats-system`.
   [Install]({{< relref "/docs/install" >}}) shows how.
-- The `nsc` store and keystore of that NATS operator, with the seeds of the identity key and of every signing key of the NATS operator, of the system account and of each account that you take over.
+- The `nsc` store and keystore of that NATS operator, with the seeds of the identity key and of every signing key of the NATS operator, of the system account and of each account that you adopt.
 - The creds of a user of the system account, issued by `nsc`.
 - The [NATS CLI](https://github.com/nats-io/natscli).
 
@@ -44,9 +44,9 @@ You need:
 
 The first JWT that the auth controller signs for an account replaces the one on the servers, and holds what the spec of the `NatsAccount` says.
 Before it signs, the auth controller compares the two JWTs.
-If the one on the servers carries a claim that the new one would not, the auth controller signs nothing, and the `NatsAccount` has the condition `Ready` False with the reason `TakeoverDropsClaims`, naming each such claim by its field in the JWT.
+If the one on the servers carries a claim that the new one would not, the auth controller signs nothing, and the `NatsAccount` has the condition `Ready` False with the reason `AdoptionDropsClaims`, naming each such claim by its field in the JWT.
 A claim that the spec sets to another value passes.
-[Take over the account](#take-over-the-account) shows a refusal.
+[Adopt the account](#adopt-the-account) shows a refusal.
 
 Print the claims of each account, and of the NATS operator:
 
@@ -65,13 +65,13 @@ Write the whole spec before you apply it:
   A limit that you omit is unlimited, and an account without `limits.jetstream` has no JetStream.
   If the account has JetStream limits by tier, list each tier under `limits.jetstream.tiers` by its name.
   The names are `R1` to `R5`: `R` and the replica count of the streams that the tier limits.
-  The auth controller refuses to take over an account with a tier under any other name, with the reason `TierInexpressible`, whatever `takeover` says: nats-server never read such a tier, so remove it from the JWT and push the account before you take it over.
+  The auth controller refuses to adopt an account with a tier under any other name, with the reason `TierInexpressible`, whatever `adoption` says: nats-server never read such a tier, so remove it from the JWT and push the account before you take it over.
 - Declare every export under `exports`, and every import under `imports`.
   Apply an account that exports before the accounts that import from it: an import from a `NatsAccount` that does not exist is left out of the JWT.
   While the exporting `NatsAccount` exists but has no public key yet, the importing account is not signed: its `NatsAccount` has the condition `Ready` False with the reason `ExporterPending`, and its JWT on the servers stays as it is.
 - Declare an import from the system account with `accountRef` of kind `NatsSystemAccount`.
   The export is `account-monitoring-services` or `account-monitoring-streams`, and the auth controller puts the public key of the account where `nsc` put it.
-- Declare an import from an account that you do not take over, or that another NATS operator signs, with `publicKey` in place of `accountRef`, and copy the `subject` and the `type` of the import from the claims.
+- Declare an import from an account that you do not adopt, or that another NATS operator signs, with `publicKey` in place of `accountRef`, and copy the `subject` and the `type` of the import from the claims.
   `nsc describe account orders --json` prints them under `nats.imports`, with the activation `token` of an import of a private export.
   Put that token in a Secret and name it under `activation.secretKeyRef`.
   An import whose token does not fit is left out of the JWT, and the condition `ReferencesResolved` of the `NatsAccount` says why.
@@ -88,7 +88,7 @@ No `NatsAccount` can keep these claims:
 - The latency sampling and the account token position of an export.
 - The description and the tags.
 
-To take over an account that has one of them, set `takeover.droppedClaims` to `Accept` in the spec of the `NatsAccount`.
+To adopt an account that has one of them, set `adoption.droppedClaims` to `Accept` in the spec of the `NatsAccount`.
 The auth controller then signs the account without the claims that the condition named, and pushes the JWT.
 The field has no effect after the first JWT is signed.
 
@@ -98,8 +98,8 @@ An account that revokes every user, with the key `*`, keeps that revocation too:
 
 The system account keeps its revocations too, until you rotate its signing keys: its revocations list signing keys alone as their `issuers`.
 It keeps the two exports that `nsc` gives it, `account-monitoring-services` and `account-monitoring-streams`, which the auth controller signs into every system account.
-No `NatsSystemAccount` can keep any other export, or an import: the auth controller refuses to sign a system account that has one, in the same way, and the `NatsOperator` and the `NatsSystemAccount` both have the condition `Ready` False with the reason `TakeoverDropsClaims`.
-Set `takeover.droppedClaims` to `Accept` in the spec of the `NatsSystemAccount` to accept the loss.
+No `NatsSystemAccount` can keep any other export, or an import: the auth controller refuses to sign a system account that has one, in the same way, and the `NatsOperator` and the `NatsSystemAccount` both have the condition `Ready` False with the reason `AdoptionDropsClaims`.
+Set `adoption.droppedClaims` to `Accept` in the spec of the `NatsSystemAccount` to accept the loss.
 
 [AccountLimits]({{< relref "/docs/reference/api#AccountLimits" >}}), [Export]({{< relref "/docs/reference/api#Export" >}}) and [Import]({{< relref "/docs/reference/api#Import" >}}) in the API reference list every field.
 
@@ -149,7 +149,7 @@ Apply the `NatsConnection`:
 
 {{< manifest "01-natsconnection.yaml" >}}
 
-## Take over the NATS operator and the system account
+## Adopt the NATS operator and the system account
 
 Apply the `NatsSystemAccount` and the `NatsOperator`.
 Each one names its seeds under `keys`.
@@ -189,7 +189,7 @@ When `Distributed` is True, the auth controller can ask every server for the JWT
 If you apply an account before that, the auth controller signs its JWT and does not push it.
 The `NatsAccount` reads `RevocationsUnrecovered` True and `Distributed` False, with the reason `Unreachable`, until every server has answered.
 
-## Take over the account
+## Adopt the account
 
 To see what a refusal looks like, apply the `NatsAccount` `orders` first with a spec that leaves its export out:
 

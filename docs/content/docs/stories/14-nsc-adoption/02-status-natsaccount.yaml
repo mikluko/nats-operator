@@ -3,8 +3,8 @@ status:
   conditions:
     - type: Ready
       status: "False"
-      reason: TakeoverDropsClaims
-      message: "the JWT the servers hold carries claims the one signed from spec would not: exports[0]; declare them in spec, or set spec.takeover.droppedClaims to Accept to sign without them"
+      reason: AdoptionDropsClaims
+      message: "the JWT the servers hold carries claims the one signed from spec would not: exports[0]; declare them in spec, or set spec.adoption.droppedClaims to Accept to sign without them"
   publicKey: !any AORDERS...
   revocations:
     - publicKey: !any UOLD...

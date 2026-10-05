@@ -12,9 +12,9 @@ import (
 	"github.com/nats-io/nkeys"
 )
 
-// takeoverData is what takeoverMessagingTemplate and takeoverSeedsTemplate
+// adoptionData is what adoptionMessagingTemplate and adoptionSeedsTemplate
 // render.
-type takeoverData struct {
+type adoptionData struct {
 	OperatorJWT, SystemPub, SystemJWT, OrdersJWT string
 	// Operator, System and Orders are each an identity seed and a signing
 	// seed, in that order.
@@ -23,14 +23,14 @@ type takeoverData struct {
 	Sys, SysOld, App, Worker, Old []string
 }
 
-// takeover writes story 14's fixtures into dir: a NATS cluster with a full
+// adoption writes story 14's fixtures into dir: a NATS cluster with a full
 // resolver whose NATS operator, system account, account and users have the
 // claims nsc gives them, the system account and the account each revoking
 // one user, the seeds and the sys user's creds the story hands
 // to the auth controller, and the public keys its status files must show as
 // patch files.
-func takeover(dir string) error {
-	var d takeoverData
+func adoption(dir string) error {
+	var d adoptionData
 	op, err := nscKeys(nkeys.PrefixByteOperator)
 	if err != nil {
 		return err
@@ -94,10 +94,10 @@ func takeover(dir string) error {
 		return err
 	}
 
-	if err := writeTemplate(dir, "00-messaging.yaml", takeoverMessagingTemplate, d); err != nil {
+	if err := writeTemplate(dir, "00-messaging.yaml", adoptionMessagingTemplate, d); err != nil {
 		return err
 	}
-	if err := writeTemplate(dir, "00-seeds.yaml", takeoverSeedsTemplate, d); err != nil {
+	if err := writeTemplate(dir, "00-seeds.yaml", adoptionSeedsTemplate, d); err != nil {
 		return err
 	}
 	if err := writeStatusPatch(dir, "natsoperator-status.json", map[string]any{
@@ -197,13 +197,13 @@ func writeStatusPatch(dir, name string, status map[string]any) error {
 	return os.WriteFile(filepath.Join(dir, name), append(raw, '\n'), 0o600)
 }
 
-var takeoverSeedsTemplate = parseFixture("takeover-seeds", `# The seeds nsc keeps in its keystore, and the creds of the sys user it made.
+var adoptionSeedsTemplate = parseFixture("adoption-seeds", `# The seeds nsc keeps in its keystore, and the creds of the sys user it made.
 {{template "keys" (dict "name" "acme-operator" "identity" (index .Operator 0) "signing" (index .Operator 1))}}---
 {{template "keys" (dict "name" "sys" "identity" (index .System 0) "signing" (index .System 1))}}---
 {{template "keys" (dict "name" "orders" "identity" (index .Orders 0) "signing" (index .Orders 1))}}---
 {{template "secret" (secret "auth-controller-creds" "nats-system" .Sys)}}`)
 
-var takeoverMessagingTemplate = parseFixture("takeover-messaging", `# The existing NATS cluster: the config nsc generates for a full resolver,
+var adoptionMessagingTemplate = parseFixture("adoption-messaging", `# The existing NATS cluster: the config nsc generates for a full resolver,
 # preloading the system account alone, and a Job that pushes the account
 # orders as nsc push does, creates a stream in it and checks that its
 # revoked user and the system account's are refused.

@@ -404,7 +404,7 @@ func TestObjectStoreAdopt(t *testing.T) {
 	require.Equal(t, "payments", cfg.Metadata["team"])
 }
 
-// TestObjectStoreNotABucket pins that a NatsObjectStore does not take over a
+// TestObjectStoreNotABucket pins that a NatsObjectStore does not adopt a
 // stream OBJ_<bucket> lacking the store's subjects or rollups, and goes
 // Terminal with reason NotABucket.
 func TestObjectStoreNotABucket(t *testing.T) {

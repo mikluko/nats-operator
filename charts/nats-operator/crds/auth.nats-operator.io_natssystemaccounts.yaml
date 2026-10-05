@@ -48,6 +48,22 @@ spec:
           spec:
             description: NatsSystemAccountSpec is the desired state of a system account.
             properties:
+              adoption:
+                description: |-
+                  Adoption is how a system account the servers already hold a JWT for
+                  is adopted at the first signing.
+                properties:
+                  droppedClaims:
+                    description: |-
+                      DroppedClaims is what the first signing does where the JWT the servers
+                      hold carries a claim the signed JWT would not: Refuse, the default,
+                      signs nothing and sets Ready False naming each; Accept signs without
+                      them.
+                    enum:
+                    - Refuse
+                    - Accept
+                    type: string
+                type: object
               keys:
                 description: Keys adopts existing seeds.
                 properties:
@@ -222,22 +238,6 @@ spec:
                   offline.
                 minLength: 1
                 type: string
-              takeover:
-                description: |-
-                  Takeover is how a system account the servers already hold a JWT for
-                  is taken over at the first signing.
-                properties:
-                  droppedClaims:
-                    description: |-
-                      DroppedClaims is what the first signing does where the JWT the servers
-                      hold carries a claim the signed JWT would not: Refuse, the default,
-                      signs nothing and sets Ready False naming each; Accept signs without
-                      them.
-                    enum:
-                    - Refuse
-                    - Accept
-                    type: string
-                type: object
             required:
             - operatorRef
             type: object

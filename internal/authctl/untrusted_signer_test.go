@@ -33,11 +33,11 @@ func seededPair(t *testing.T, prefix nkeys.PrefixByte) (kp nkeys.KeyPair, pub st
 	return kp, pub, seed
 }
 
-// TestTakeover_UntrustedSigner takes over, with the identity seeds and a
+// TestAdoption_UntrustedSigner adopts, with the identity seeds and a
 // NATS operator signing key the servers' NATS operator JWT does not list, a
 // NATS operator whose server holds an account made elsewhere: the server
 // keeps the JWTs it serves and both accounts say why.
-func TestTakeover_UntrustedSigner(t *testing.T) {
+func TestAdoption_UntrustedSigner(t *testing.T) {
 	opID, opPub, opIDSeed := seededPair(t, nkeys.PrefixByteOperator)
 	listed, listedPub, _ := seededPair(t, nkeys.PrefixByteOperator)
 	_, _, unlistedSeed := seededPair(t, nkeys.PrefixByteOperator)
