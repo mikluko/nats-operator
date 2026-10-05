@@ -168,8 +168,9 @@ The `status` in the output is similar to this:
 
 `revocations` lists the user that the system account revoked under `nsc`.
 
-Wait until `Distributed` is True before you apply an account.
-The auth controller can then ask every server for the JWT that it holds, which is where the revocations of an account come from.
+When `Distributed` is True, the auth controller can ask every server for the JWT that it holds, which is where the revocations of an account come from.
+If you apply an account before that, the auth controller signs its JWT and does not push it.
+The `NatsAccount` reads `RevocationsUnrecovered` True and `Distributed` False, with the reason `Unreachable`, until every server has answered.
 
 ## Take over the account
 

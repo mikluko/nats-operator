@@ -94,7 +94,8 @@ type recoveredRevocations struct {
 	// asked is set when the servers answered.
 	asked bool
 	// unasked is why not every server could be asked for an account signed
-	// regardless; it wraps ErrUnreachable.
+	// regardless; it wraps ErrUnreachable. The JWT signed is not to be
+	// pushed: a server not asked may hold revocations it lacks.
 	unasked error
 }
 
@@ -125,7 +126,7 @@ func recordRecovery(conds *[]metav1.Condition, gen int64, s recoveredRevocations
 	case s.unasked != nil:
 		conditions.Set(conds, gen, metav1.Condition{Type: ConditionRevocationsUnrecovered, Status: metav1.ConditionTrue, Reason: ReasonUnreachable,
 			Message: "status held neither a JWT nor revocations and not every server could be asked for the JWT to recover them from; " +
-				"signed with the revocations its users give, and asked again once a server answers: " + s.unasked.Error()})
+				"signed with the revocations its users give and not pushed until every server answers: " + s.unasked.Error()})
 	case s.asked:
 		meta.RemoveStatusCondition(conds, ConditionRevocationsUnrecovered)
 	}

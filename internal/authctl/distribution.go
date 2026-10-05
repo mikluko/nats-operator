@@ -63,7 +63,14 @@ func distribute(ctx context.Context, d Distributor, operator types.NamespacedNam
 	return &got, cond(metav1.ConditionTrue, ReasonAllServersCurrent, msg), 0, nil
 }
 
-// recordDistribution sets cond, from distribute, on conds at gen; with
+// pushHeld is the Distributed condition of an account whose JWT is not
+// pushed because unasked, from recoverRevocations, left a server unasked.
+func pushHeld(unasked error) metav1.Condition {
+	return metav1.Condition{Type: ConditionDistributed, Status: metav1.ConditionFalse, Reason: ReasonUnreachable,
+		Message: "not pushed until every server answers for the JWT it holds: " + unasked.Error()}
+}
+
+// recordDistribution sets cond, from distribute or pushHeld, on conds at gen; with
 // every server current, a Ready True gets reason Distributed. A cond with
 // no Type sets nothing.
 func recordDistribution(conds *[]metav1.Condition, gen int64, cond metav1.Condition) {

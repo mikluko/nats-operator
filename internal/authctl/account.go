@@ -172,15 +172,20 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 		notReady(ReasonInvalidJWT, err.Error())
 		return reconcile.Result{}, nil
 	}
+	held := sd.unasked != nil
 	adopt := func() error {
-		err := push(ctx, r.Distributor, opKey, token)
-		if err := ignoreUndelivered(err); err != nil {
-			return fmt.Errorf("push account JWT: %w", err)
+		var err error
+		if !held {
+			err = push(ctx, r.Distributor, opKey, token)
+			if err := ignoreUndelivered(err); err != nil {
+				return fmt.Errorf("push account JWT: %w", err)
+			}
 		}
+		sent := !held && r.Distributor != nil && err == nil
 		st.JWT = token
 		st.JWTHash = JWTHash(token)
-		st.Distribution = pushed(st.Distribution, now, r.Distributor != nil && err == nil)
-		if r.Distributor != nil && err == nil {
+		st.Distribution = pushed(st.Distribution, now, sent)
+		if sent {
 			telemetry.Emit(r.Recorder, acc, telemetry.JWTPushed, "account JWT of %s pushed", pub)
 		}
 		return nil
@@ -202,6 +207,12 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 	} else {
 		conditions.Set(&st.Conditions, acc.Generation, metav1.Condition{Type: grant.ConditionReferencesResolved, Status: metav1.ConditionTrue, Reason: ReasonAllImportsResolved})
 		conditions.Set(&st.Conditions, acc.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionTrue, Reason: ReasonSigned})
+	}
+	if held {
+		recordDistribution(&st.Conditions, acc.Generation, pushHeld(sd.unasked))
+		res := requeueAtRenewal(st.JWT, now)
+		res.RequeueAfter = soonest(res.RequeueAfter, distributionRecheck)
+		return res, nil
 	}
 	dist, cond, again, err := distribute(ctx, r.Distributor, opKey, st.JWT, st.Distribution)
 	if errors.Is(err, ErrStaleJWT) && st.JWT != token {
