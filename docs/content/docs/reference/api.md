@@ -301,7 +301,7 @@ Appears on: [NatsOperator](#NatsOperator).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `observedGeneration` | {{< type "int64" >}} | No | ObservedGeneration is the generation the status describes. |
-| `conditions` | [{{< type "[]Condition" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Condition) | No | Conditions: Ready, ReferencesResolved, RetiringKeysInUse, and where it applies RevocationsUnrecovered. |
+| `conditions` | [{{< type "[]Condition" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Condition) | No | Conditions: Ready, ReferencesResolved, RetiringKeysInUse, SigningKeyUntrusted, and where it applies RevocationsUnrecovered. |
 | `publicKey` | {{< type "string" >}} | No | PublicKey is the identity key's public key. |
 | `signingKeys` | {{< type "[]string" >}} | No | SigningKeys are the signing keys' public keys. |
 | `seedSecrets` | [{{< type "SeedSecrets" >}}](#SeedSecrets) | No | SeedSecrets name the Secrets holding the generated seeds. |
