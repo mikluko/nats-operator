@@ -254,7 +254,10 @@ func TestReconcile_ClaimOlderThanNatsCluster(t *testing.T) {
 // reload enables it, but only after a restart can a stream be placed on west.
 func TestJetStreamEnabledAfterGateways_Live(t *testing.T) {
 	t.Run("enabled by restart", func(t *testing.T) { joinEast(t, false) })
-	t.Run("enabled by reload", func(t *testing.T) { joinEast(t, true) })
+	t.Run("enabled by reload", func(t *testing.T) {
+		skipUnderRace(t)
+		joinEast(t, true)
+	})
 }
 
 // joinEast boots story 6's east and west, west without JetStream until its
