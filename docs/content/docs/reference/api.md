@@ -75,6 +75,21 @@ Appears on: [Export](#Export), [Import](#Import), [NatsUserSpec](#NatsUserSpec).
 | `name` | {{< type "string" >}} | Yes | Name of the referenced object. |
 | `namespace` | {{< type "string" >}} | No | Namespace of the referenced object, the referrer's own when omitted. Another namespace is admitted only by a NatsReferenceGrant there. |
 
+### Activation {#Activation}
+Activation is where an activation token is read from.\
+Appears on: [Import](#Import).
+| Field | Type | Required | Description |
+| :---- | :--- | :------: | :---------- |
+| `secretKeyRef` | [{{< type "ActivationSecretKeySelector" >}}](#ActivationSecretKeySelector) | Yes | SecretKeyRef selects the token. |
+
+### ActivationSecretKeySelector {#ActivationSecretKeySelector}
+ActivationSecretKeySelector selects an activation token from a Secret in the referrer's namespace.\
+Appears on: [Activation](#Activation).
+| Field | Type | Required | Description |
+| :---- | :--- | :------: | :---------- |
+| `name` | {{< type "string" >}} | Yes | Name of a Secret in the referrer's namespace. |
+| `key` | {{< type "string" >}} | Yes | Key within the Secret. |
+
 ### ActivationState {#ActivationState}
 ActivationState is the state of an import's activation token.\
 Type: {{< type "string" >}}\
@@ -82,6 +97,7 @@ Appears on: [ImportStatus](#ImportStatus).
 | Value | Description |
 | :---- | :---------- |
 | `Signed` | ActivationSigned is an activation token the auth controller minted. |
+| `Supplied` | ActivationSupplied is an activation token read from the Secret the import names. |
 
 ### ConnectionType {#ConnectionType}
 ConnectionType is a NATS connection type a user may connect as.\
@@ -147,7 +163,7 @@ Appears on: [Export](#Export).
 ### ExportType {#ExportType}
 ExportType is the type of an export.\
 Type: {{< type "string" >}}\
-Appears on: [Export](#Export), [ImportStatus](#ImportStatus).
+Appears on: [Export](#Export), [Import](#Import), [ImportStatus](#ImportStatus).
 | Value | Description |
 | :---- | :---------- |
 | `Stream` |  |
@@ -161,20 +177,26 @@ Appears on: [Keys](#Keys).
 | `secretKeyRef` | [{{< type "SeedSecretKeySelector" >}}](#SeedSecretKeySelector) | Yes | SecretKeyRef selects the seed. |
 
 ### Import {#Import}
-Import takes another account's export by name.\
+Import takes another account's export by name, from a NatsAccount or NatsSystemAccount under this account's NatsOperator, or from an account named by public key.\
 Appears on: [NatsAccountSpec](#NatsAccountSpec).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `accountRef` | [{{< type "AccountReference" >}}](#AccountReference) | Yes | AccountRef names the exporting account. |
+| `accountRef` | [{{< type "AccountReference" >}}](#AccountReference) | No | AccountRef names the exporting NatsAccount or NatsSystemAccount. |
+| `publicKey` | {{< type "string" >}} | No | PublicKey names the exporting account where no NatsAccount or NatsSystemAccount under this account's NatsOperator describes it. |
 | `export` | {{< type "string" >}} | Yes | Export is the name of the export taken. |
+| `subject` | {{< type "string" >}} | No | Subject is the exported subject, for an import by publicKey. |
+| `type` | [{{< type "ExportType" >}}](#ExportType) | No | Type is the export's type, for an import by publicKey. |
+| `activation` | [{{< type "Activation" >}}](#Activation) | No | Activation is the token the exporter issued this account for a Private export, for an import by publicKey. |
 | `localSubject` | {{< type "string" >}} | No | LocalSubject is where the import appears in this account, the exported subject when omitted. |
+| `share` | {{< type "bool" >}} | No | Share lets the exporter of a Service import sample this account's request latency. |
+| `allowTrace` | {{< type "bool" >}} | No | AllowTrace lets message traces cross a Stream import. |
 
 ### ImportStatus {#ImportStatus}
 ImportStatus is a resolved import.\
 Appears on: [NatsAccountStatus](#NatsAccountStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `export` | {{< type "string" >}} | No | Export is the export taken, as account/export, or namespace/account/export from another namespace. |
+| `export` | {{< type "string" >}} | No | Export is the export taken, as account/export, or namespace/account/export from another namespace, or publicKey/export from an account named by public key. |
 | `subject` | {{< type "string" >}} | No | Subject is the exported subject. |
 | `localSubject` | {{< type "string" >}} | No | LocalSubject is where the import appears in this account. |
 | `type` | [{{< type "ExportType" >}}](#ExportType) | No | Type is the type of the export taken. |

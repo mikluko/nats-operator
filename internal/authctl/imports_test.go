@@ -118,7 +118,7 @@ func importingAccount(name string, exports []string, importsFrom ...string) *aut
 	}
 	for _, from := range importsFrom {
 		acc.Spec.Imports = append(acc.Spec.Imports, authv1beta1.Import{
-			AccountRef: authv1beta1.AccountReference{Kind: authv1beta1.AccountKindAccount, ObjectReference: natsv1beta1.ObjectReference{Name: from}},
+			AccountRef: &authv1beta1.AccountReference{Kind: authv1beta1.AccountKindAccount, ObjectReference: natsv1beta1.ObjectReference{Name: from}},
 			Export:     "events",
 		})
 	}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/nats-io/jwt/v2"
@@ -93,9 +94,15 @@ type Import struct {
 	// LocalSubject is where the import appears; empty is the export's
 	// subject.
 	LocalSubject string
-	// Token is the activation token SignActivation minted; required for a
-	// private export, ignored for a public one.
+	// Token is the activation token SignActivation minted, or one the
+	// exporter issued elsewhere; required for a private export, ignored for
+	// a public one.
 	Token string
+	// Share lets the exporter sample the importer's request latency; valid
+	// on a service import only.
+	Share bool
+	// AllowTrace lets message traces cross; valid on a stream import only.
+	AllowTrace bool
 }
 
 // Revocation revokes a user's JWTs issued at or before At.
@@ -306,10 +313,12 @@ func jwtImport(i Import) (*jwt.Import, error) {
 		return nil, fmt.Errorf("%w: import from %q, not an account public key", ErrWrongKeyType, i.Account)
 	}
 	ji := &jwt.Import{
-		Name:    i.Export.Name,
-		Account: i.Account,
-		Subject: jwt.Subject(i.Export.Subject),
-		Type:    i.Export.Type,
+		Name:       i.Export.Name,
+		Account:    i.Account,
+		Subject:    jwt.Subject(i.Export.Subject),
+		Type:       i.Export.Type,
+		Share:      i.Share,
+		AllowTrace: i.AllowTrace,
 	}
 	if i.LocalSubject != "" && i.LocalSubject != i.Export.Subject {
 		ji.LocalSubject = jwt.RenamingSubject(i.LocalSubject)
@@ -321,6 +330,41 @@ func jwtImport(i Import) (*jwt.Import, error) {
 		ji.Token = i.Token
 	}
 	return ji, nil
+}
+
+// ValidateImport returns the reasons jwt would refuse i in the JWT of the
+// account importer, its activation token checked against both accounts, the
+// subject and the type; nil where there are none.
+func ValidateImport(i Import, importer string) error {
+	ji, err := jwtImport(i)
+	if err != nil {
+		return err
+	}
+	vr := jwt.CreateValidationResults()
+	ji.Validate(importer, vr)
+	if vr.IsBlocking(true) {
+		return errors.Join(vr.Errors()...)
+	}
+	return nil
+}
+
+// MonitoringImport returns the import by importer of the system account's
+// monitoring export named name, which nats-server serves only with the
+// importer's public key at the position the export fixes. ok is false
+// where MonitoringExports has no export so named.
+func MonitoringImport(name, systemAccount, importer string) (Import, bool) {
+	for _, e := range MonitoringExports() {
+		if e.Name != name {
+			continue
+		}
+		tokens := strings.Split(string(e.Subject), ".")
+		tokens[e.AccountTokenPosition-1] = importer
+		return Import{
+			Account: systemAccount,
+			Export:  Export{Name: e.Name, Type: e.Type, Subject: strings.Join(tokens, "."), ResponseType: e.ResponseType},
+		}, true
+	}
+	return Import{}, false
 }
 
 // SignActivation returns the activation token admitting importer to the

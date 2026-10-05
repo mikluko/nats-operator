@@ -467,78 +467,197 @@ type resolvedImports struct {
 // is a failure to read, never an import that does not resolve.
 func (r *AccountReconciler) resolveImports(ctx context.Context, acc *authv1beta1.NatsAccount, pub string) (resolvedImports, error) {
 	var out resolvedImports
-	for _, imp := range acc.Spec.Imports {
-		exKey := imp.AccountRef.ObjectKey(acc.Namespace)
-		label := importLabel(acc.Namespace, exKey, imp.Export)
-		skip := func(format string, args ...any) {
-			out.unresolved = append(out.unresolved, label+": "+fmt.Sprintf(format, args...))
+	for i := range acc.Spec.Imports {
+		imp := &acc.Spec.Imports[i]
+		var res importResolution
+		var err error
+		switch {
+		case imp.AccountRef == nil:
+			res, err = r.resolveKeyImport(ctx, acc, imp, pub)
+		case imp.AccountRef.Kind == authv1beta1.AccountKindSystemAccount:
+			res, err = r.resolveSystemImport(ctx, acc, imp, pub)
+		default:
+			res, err = r.resolveAccountImport(ctx, acc, imp, pub)
 		}
-		cond, err := admit(ctx, r.Client, authGroup, "NatsAccount", acc, string(imp.AccountRef.Kind), exKey)
 		if err != nil {
 			return out, err
 		}
-		if cond != nil {
-			out.notPermitted = true
-			skip("%s", cond.Message)
-			continue
-		}
-		if imp.AccountRef.Kind != authv1beta1.AccountKindAccount {
-			skip("a %s has no exports", imp.AccountRef.Kind)
-			continue
-		}
-		var exporter authv1beta1.NatsAccount
-		if err := r.Get(ctx, exKey, &exporter); err != nil {
-			if apierrors.IsNotFound(err) {
-				skip("NatsAccount %s does not exist", exKey)
-				continue
+		if res.reason == "" {
+			if err := importFlagsFit(imp, res.imp.Export.Type); err != nil {
+				res.reason = err.Error()
 			}
-			return out, err
 		}
-		if exOp, op := exporter.Spec.OperatorRef.ObjectKey(exporter.Namespace), acc.Spec.OperatorRef.ObjectKey(acc.Namespace); exOp != op {
-			skip("NatsAccount %s is signed by NatsOperator %s, not %s", exKey, exOp, op)
-			continue
+		switch {
+		case res.pending:
+			out.pending = append(out.pending, res.label+": "+res.reason)
+		case res.reason != "":
+			out.unresolved = append(out.unresolved, res.label+": "+res.reason)
+			out.notPermitted = out.notPermitted || res.notPermitted
+		default:
+			res.imp.LocalSubject, res.imp.Share, res.imp.AllowTrace = imp.LocalSubject, imp.Share, imp.AllowTrace
+			res.status.Export, res.status.LocalSubject = res.label, imp.LocalSubject
+			res.status.Subject, res.status.Type = res.imp.Export.Subject, exportTypeOf(res.imp.Export.Type)
+			out.imports = append(out.imports, res.imp)
+			out.statuses = append(out.statuses, res.status)
 		}
-		if exporter.Status.PublicKey == "" {
-			out.pending = append(out.pending, fmt.Sprintf("%s: NatsAccount %s has no public key yet", label, exKey))
-			continue
-		}
-		exports, err := accountExports(&exporter)
-		if err != nil {
-			skip("%v", err)
-			continue
-		}
-		e, found := findExport(exports, imp.Export)
-		if !found {
-			skip("NatsAccount %s has no export %q", exKey, imp.Export)
-			continue
-		}
-		ji := jwtplane.Import{Account: exporter.Status.PublicKey, Export: e.Export, LocalSubject: imp.LocalSubject}
-		status := authv1beta1.ImportStatus{
-			Export:       label,
-			Subject:      e.Subject,
-			LocalSubject: imp.LocalSubject,
-			Type:         exportTypeOf(e.Type),
-		}
-		if e.Private {
-			if !listsImporter(e.importers, exporter.Namespace, acc) {
-				skip("the export does not list this account among its importers")
-				continue
-			}
-			token, err := r.activation(ctx, &exporter, e.Export, pub)
-			if err != nil {
-				if errors.Is(err, errKeysPending) || errors.Is(err, errInvalidSeed) {
-					skip("%v", err)
-					continue
-				}
-				return out, err
-			}
-			ji.Token = token
-			status.Activation = authv1beta1.ActivationSigned
-		}
-		out.imports = append(out.imports, ji)
-		out.statuses = append(out.statuses, status)
 	}
 	return out, nil
+}
+
+// importResolution is one import resolved, or the reason it is not. A
+// pending one waits for its exporter; any other with a reason is left out.
+type importResolution struct {
+	label        string
+	imp          jwtplane.Import
+	status       authv1beta1.ImportStatus
+	reason       string
+	pending      bool
+	notPermitted bool
+}
+
+// importFlagsFit returns why imp's share or allowTrace does not fit an
+// import of type t, or nil.
+func importFlagsFit(imp *authv1beta1.Import, t jwt.ExportType) error {
+	if imp.Share && t != jwt.Service {
+		return errors.New("share is set on a Stream import")
+	}
+	if imp.AllowTrace && t != jwt.Stream {
+		return errors.New("allowTrace is set on a Service import")
+	}
+	return nil
+}
+
+// admitImport asks whether acc may reference the exporter of imp, filling
+// res with the refusal where it may not.
+func (r *AccountReconciler) admitImport(ctx context.Context, acc *authv1beta1.NatsAccount, imp *authv1beta1.Import, exKey types.NamespacedName, res *importResolution) error {
+	cond, err := admit(ctx, r.Client, authGroup, "NatsAccount", acc, string(imp.AccountRef.Kind), exKey)
+	if err != nil {
+		return err
+	}
+	if cond != nil {
+		res.reason, res.notPermitted = cond.Message, true
+	}
+	return nil
+}
+
+// resolveAccountImport resolves an import from a NatsAccount under acc's
+// NatsOperator, minting the activation token of a private export.
+func (r *AccountReconciler) resolveAccountImport(ctx context.Context, acc *authv1beta1.NatsAccount, imp *authv1beta1.Import, pub string) (importResolution, error) {
+	exKey := imp.AccountRef.ObjectKey(acc.Namespace)
+	res := importResolution{label: importLabel(acc.Namespace, exKey, imp.Export)}
+	if err := r.admitImport(ctx, acc, imp, exKey, &res); err != nil || res.reason != "" {
+		return res, err
+	}
+	var exporter authv1beta1.NatsAccount
+	if err := r.Get(ctx, exKey, &exporter); err != nil {
+		if apierrors.IsNotFound(err) {
+			res.reason = fmt.Sprintf("NatsAccount %s does not exist", exKey)
+			return res, nil
+		}
+		return res, err
+	}
+	if exOp, op := exporter.Spec.OperatorRef.ObjectKey(exporter.Namespace), acc.Spec.OperatorRef.ObjectKey(acc.Namespace); exOp != op {
+		res.reason = fmt.Sprintf("NatsAccount %s is signed by NatsOperator %s, not %s", exKey, exOp, op)
+		return res, nil
+	}
+	if exporter.Status.PublicKey == "" {
+		res.reason, res.pending = fmt.Sprintf("NatsAccount %s has no public key yet", exKey), true
+		return res, nil
+	}
+	exports, err := accountExports(&exporter)
+	if err != nil {
+		res.reason = err.Error()
+		return res, nil
+	}
+	e, found := findExport(exports, imp.Export)
+	if !found {
+		res.reason = fmt.Sprintf("NatsAccount %s has no export %q", exKey, imp.Export)
+		return res, nil
+	}
+	res.imp = jwtplane.Import{Account: exporter.Status.PublicKey, Export: e.Export}
+	if !e.Private {
+		return res, nil
+	}
+	if !listsImporter(e.importers, exporter.Namespace, acc) {
+		res.reason = "the export does not list this account among its importers"
+		return res, nil
+	}
+	token, err := r.activation(ctx, &exporter, e.Export, pub)
+	if err != nil {
+		if errors.Is(err, errKeysPending) || errors.Is(err, errInvalidSeed) {
+			res.reason = err.Error()
+			return res, nil
+		}
+		return res, err
+	}
+	res.imp.Token, res.status.Activation = token, authv1beta1.ActivationSigned
+	return res, nil
+}
+
+// resolveSystemImport resolves an import of one of the monitoring exports
+// of the NatsSystemAccount under acc's NatsOperator.
+func (r *AccountReconciler) resolveSystemImport(ctx context.Context, acc *authv1beta1.NatsAccount, imp *authv1beta1.Import, pub string) (importResolution, error) {
+	exKey := imp.AccountRef.ObjectKey(acc.Namespace)
+	res := importResolution{label: importLabel(acc.Namespace, exKey, imp.Export)}
+	if err := r.admitImport(ctx, acc, imp, exKey, &res); err != nil || res.reason != "" {
+		return res, err
+	}
+	var sys authv1beta1.NatsSystemAccount
+	if err := r.Get(ctx, exKey, &sys); err != nil {
+		if apierrors.IsNotFound(err) {
+			res.reason = fmt.Sprintf("NatsSystemAccount %s does not exist", exKey)
+			return res, nil
+		}
+		return res, err
+	}
+	if exOp, op := sys.Spec.OperatorRef.ObjectKey(sys.Namespace), acc.Spec.OperatorRef.ObjectKey(acc.Namespace); exOp != op {
+		res.reason = fmt.Sprintf("NatsSystemAccount %s is signed by NatsOperator %s, not %s", exKey, exOp, op)
+		return res, nil
+	}
+	if sys.Status.PublicKey == "" {
+		res.reason, res.pending = fmt.Sprintf("NatsSystemAccount %s has no public key yet", exKey), true
+		return res, nil
+	}
+	ji, ok := jwtplane.MonitoringImport(imp.Export, sys.Status.PublicKey, pub)
+	if !ok {
+		res.reason = fmt.Sprintf("NatsSystemAccount %s has no export %q", exKey, imp.Export)
+		return res, nil
+	}
+	res.imp = ji
+	return res, nil
+}
+
+// resolveKeyImport resolves an import from the account imp names by public
+// key, reading the activation token of a private export from the Secret
+// imp names in acc's namespace and checking it fits the import.
+func (r *AccountReconciler) resolveKeyImport(ctx context.Context, acc *authv1beta1.NatsAccount, imp *authv1beta1.Import, pub string) (importResolution, error) {
+	res := importResolution{label: imp.PublicKey + "/" + imp.Export}
+	res.imp = jwtplane.Import{
+		Account: imp.PublicKey,
+		Export:  jwtplane.Export{Name: imp.Export, Type: exportType(imp.Type), Subject: imp.Subject, Private: imp.Activation != nil},
+	}
+	if imp.Activation != nil {
+		ref := imp.Activation.SecretKeyRef
+		var secret corev1.Secret
+		if err := r.Get(ctx, types.NamespacedName{Namespace: acc.Namespace, Name: ref.Name}, &secret); err != nil {
+			if apierrors.IsNotFound(err) {
+				res.reason = fmt.Sprintf("Secret %s/%s does not exist", acc.Namespace, ref.Name)
+				return res, nil
+			}
+			return res, err
+		}
+		token, ok := secret.Data[ref.Key]
+		if !ok {
+			res.reason = fmt.Sprintf("Secret %s/%s has no key %q", acc.Namespace, ref.Name, ref.Key)
+			return res, nil
+		}
+		res.imp.Token = strings.TrimSpace(string(token))
+		res.status.Activation = authv1beta1.ActivationSupplied
+	}
+	if err := jwtplane.ValidateImport(res.imp, pub); err != nil {
+		res.reason = err.Error()
+	}
+	return res, nil
 }
 
 // activation mints the token admitting importer to exporter's private
@@ -559,6 +678,18 @@ func importLabel(namespace string, exporter types.NamespacedName, export string)
 		return exporter.Name + "/" + export
 	}
 	return exporter.Namespace + "/" + exporter.Name + "/" + export
+}
+
+// activationSecretNames are the Secrets acc's imports read activation
+// tokens from.
+func activationSecretNames(acc *authv1beta1.NatsAccount) []string {
+	var out []string
+	for _, imp := range acc.Spec.Imports {
+		if imp.Activation != nil {
+			out = append(out, imp.Activation.SecretKeyRef.Name)
+		}
+	}
+	return out
 }
 
 func findExport(exports []specExport, name string) (specExport, bool) {

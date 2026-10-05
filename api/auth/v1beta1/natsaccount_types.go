@@ -240,22 +240,78 @@ type Export struct {
 	Importers []AccountReference `json:"importers,omitempty"`
 }
 
-// Import takes another account's export by name.
+// Import takes another account's export by name, from a NatsAccount or
+// NatsSystemAccount under this account's NatsOperator, or from an account
+// named by public key.
+// +kubebuilder:validation:XValidation:rule="has(self.accountRef) != has(self.publicKey)",message="an import names its exporter by accountRef or by publicKey"
+// +kubebuilder:validation:XValidation:rule="has(self.publicKey) ? has(self.subject) && has(self.type) : !has(self.subject) && !has(self.type) && !has(self.activation)",message="subject and type are set with publicKey and only then; activation only with publicKey"
+// +kubebuilder:validation:XValidation:rule="!has(self.share) || !self.share || !has(self.type) || self.type == 'Service'",message="share is set only on a Service import"
+// +kubebuilder:validation:XValidation:rule="!has(self.allowTrace) || !self.allowTrace || !has(self.type) || self.type == 'Stream'",message="allowTrace is set only on a Stream import"
 type Import struct {
-	// AccountRef names the exporting account.
-	// +required
-	AccountRef AccountReference `json:"accountRef"`
+	// AccountRef names the exporting NatsAccount or NatsSystemAccount.
+	// +optional
+	AccountRef *AccountReference `json:"accountRef,omitempty"`
+
+	// PublicKey names the exporting account where no NatsAccount or
+	// NatsSystemAccount under this account's NatsOperator describes it.
+	// +optional
+	// +kubebuilder:validation:MinLength=1
+	PublicKey string `json:"publicKey,omitempty"`
 
 	// Export is the name of the export taken.
 	// +required
 	// +kubebuilder:validation:MinLength=1
 	Export string `json:"export"`
 
+	// Subject is the exported subject, for an import by publicKey.
+	// +optional
+	// +kubebuilder:validation:MinLength=1
+	Subject string `json:"subject,omitempty"`
+
+	// Type is the export's type, for an import by publicKey.
+	// +optional
+	Type ExportType `json:"type,omitempty"`
+
+	// Activation is the token the exporter issued this account for a
+	// Private export, for an import by publicKey.
+	// +optional
+	Activation *Activation `json:"activation,omitempty"`
+
 	// LocalSubject is where the import appears in this account, the
 	// exported subject when omitted.
 	// +optional
 	// +kubebuilder:validation:MinLength=1
 	LocalSubject string `json:"localSubject,omitempty"`
+
+	// Share lets the exporter of a Service import sample this account's
+	// request latency.
+	// +optional
+	Share bool `json:"share,omitempty"`
+
+	// AllowTrace lets message traces cross a Stream import.
+	// +optional
+	AllowTrace bool `json:"allowTrace,omitempty"`
+}
+
+// Activation is where an activation token is read from.
+type Activation struct {
+	// SecretKeyRef selects the token.
+	// +required
+	SecretKeyRef ActivationSecretKeySelector `json:"secretKeyRef"`
+}
+
+// ActivationSecretKeySelector selects an activation token from a Secret in
+// the referrer's namespace.
+type ActivationSecretKeySelector struct {
+	// Name of a Secret in the referrer's namespace.
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// Key within the Secret.
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	Key string `json:"key"`
 }
 
 // NatsAccountStatus is the observed state of an account.
@@ -304,7 +360,8 @@ type NatsAccountStatus struct {
 // ImportStatus is a resolved import.
 type ImportStatus struct {
 	// Export is the export taken, as account/export, or
-	// namespace/account/export from another namespace.
+	// namespace/account/export from another namespace, or
+	// publicKey/export from an account named by public key.
 	// +optional
 	Export string `json:"export,omitempty"`
 
@@ -326,13 +383,16 @@ type ImportStatus struct {
 }
 
 // ActivationState is the state of an import's activation token.
-// +kubebuilder:validation:Enum=Signed
+// +kubebuilder:validation:Enum=Signed;Supplied
 type ActivationState string
 
 // Activation states.
 const (
 	// ActivationSigned is an activation token the auth controller minted.
 	ActivationSigned ActivationState = "Signed"
+	// ActivationSupplied is an activation token read from the Secret the
+	// import names.
+	ActivationSupplied ActivationState = "Supplied"
 )
 
 // +kubebuilder:object:root=true
