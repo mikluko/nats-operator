@@ -80,6 +80,17 @@ const (
 	// ReasonReconcileError is Ready's reason on an object whose last
 	// reconcile failed with an error no other reason names.
 	ReasonReconcileError = "ReconcileError"
+	// ReasonTakeoverDropsClaims is Ready's reason on an account, or on a
+	// NatsOperator for its system account, whose first signing would drop
+	// claims the JWT the servers hold carries, named in the message; nothing
+	// is signed until spec declares them or spec.takeover.droppedClaims
+	// accepts the loss.
+	ReasonTakeoverDropsClaims = "TakeoverDropsClaims"
+	// ReasonTierInexpressible is Ready's reason on an account, or on a
+	// NatsOperator for its system account, whose first signing would drop a
+	// JetStream tier of the JWT the servers hold that no spec names; nothing
+	// is signed, whatever spec.takeover says.
+	ReasonTierInexpressible = "TierInexpressible"
 )
 
 // observe records the outcome err of reconciling generation gen: success sets

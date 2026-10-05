@@ -23,6 +23,11 @@ type NatsSystemAccountSpec struct {
 	// +optional
 	// +kubebuilder:validation:MinLength=1
 	PublicKey string `json:"publicKey,omitempty"`
+
+	// Takeover is how a system account the servers already hold a JWT for
+	// is taken over at the first signing.
+	// +optional
+	Takeover *Takeover `json:"takeover,omitempty"`
 }
 
 // NatsSystemAccountStatus is the observed state of a system account.
