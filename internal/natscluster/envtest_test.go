@@ -733,6 +733,16 @@ func TestEnvtestReconcile(t *testing.T) {
 		require.Equal(t, "nats-west.example.net:7222", got.Status.Endpoints.Gateway)
 		require.Equal(t, nodePort, gatewayService(t).Spec.Ports[0].NodePort, "the node port was reallocated")
 
+		t.Run("an existing Service is made to publish servers that are not Ready", func(t *testing.T) {
+			svc := gatewayService(t)
+			require.True(t, svc.Spec.PublishNotReadyAddresses)
+			svc.Spec.PublishNotReadyAddresses = false
+			require.NoError(t, c.Update(ctx, svc))
+			require.False(t, gatewayService(t).Spec.PublishNotReadyAddresses)
+			_, got = reconcile(t, got)
+			require.True(t, gatewayService(t).Spec.PublishNotReadyAddresses, "members gateway back to a server before it is Ready")
+		})
+
 		t.Run("the template's load balancer fields reach the Service", func(t *testing.T) {
 			got.Spec.Gateway.Service.LoadBalancerSourceRanges = []string{"10.20.0.0/16", "2001:db8:20::/56"}
 			require.NoError(t, c.Update(ctx, got))

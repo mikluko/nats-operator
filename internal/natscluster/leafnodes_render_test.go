@@ -61,6 +61,7 @@ func TestRender_Hub(t *testing.T) {
 	require.Equal(t, "leaf.prod-east.acme.example", svc.Annotations["external-dns.alpha.kubernetes.io/hostname"])
 	require.Equal(t, []corev1.ServicePort{servicePort("leafnodes", PortLeafnodes)}, svc.Spec.Ports)
 	require.Equal(t, clusterSelector(nc), svc.Spec.Selector)
+	require.False(t, svc.Spec.PublishNotReadyAddresses, "leaves reach Ready servers only")
 
 	cert := leafnodesCertificate(nc, &nc.Spec.Leafnodes.TLS.CertManager.IssuerRef)
 	spec := cert.Object["spec"].(map[string]any)

@@ -78,6 +78,10 @@ resolver_preload: {
 `central` has its accounts as preloads under a `MEMORY` resolver.
 Its gateway has no TLS and no `authorization`.
 
+The servers of `west` reach the gateways of `central` through the Service behind `nats-central.example.net`.
+If a server of `central` is Ready only once its JetStream reaches a meta leader, that Service must also publish servers that are not Ready, with `publishNotReadyAddresses: true`.
+The meta group spans both NATS clusters, so `central` alone may not hold a majority of it, and a server of `central` that `west` cannot reach may never become Ready.
+
 ## Copy the trust roots
 
 Copy the NATS operator JWT and the system account JWT into a `NatsOperatorTrust`, and apply it:
@@ -118,6 +122,8 @@ Apply the `NatsCluster` `west`:
   A change to the list, or to the JWT in a `NatsAccountTrust` on it, restarts the servers.
 - `gateway.remotes` lists every member of the existing supercluster, and `west` itself.
 - `gateway` has no `tls`, because the gateways of the existing members have none.
+- `gateway.service` renders the Service `west-gateway`, which publishes the servers of `west` before they are Ready.
+  A server of `west` is Ready once its JetStream reaches the meta leader, and the gateways of `central` reach it through this Service.
 
 The servers run a `Full` resolver on the JetStream volume.
 If you remove an account from `auth.accountTrustRefs`, the account stays in the directory of the resolver, and the servers still serve it after the restart.
