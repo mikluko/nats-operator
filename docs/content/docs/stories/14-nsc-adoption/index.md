@@ -65,7 +65,7 @@ Write the whole spec before you apply it:
   A limit that you omit is unlimited, and an account without `limits.jetstream` has no JetStream.
   If the account has JetStream limits by tier, list each tier under `limits.jetstream.tiers` by its name.
   The names are `R1` to `R5`: `R` and the replica count of the streams that the tier limits.
-  The auth controller refuses to adopt an account with a tier under any other name, with the reason `TierInexpressible`, whatever `adoption` says: nats-server never read such a tier, so remove it from the JWT and push the account before you take it over.
+  The auth controller refuses to adopt an account with a tier under any other name, with the reason `TierInexpressible`, whatever `adoption` says: nats-server never read such a tier, so remove it from the JWT and push the account before you adopt it.
 - Declare every export under `exports`, and every import under `imports`.
   Apply an account that exports before the accounts that import from it: an import from a `NatsAccount` that does not exist is left out of the JWT.
   While the exporting `NatsAccount` exists but has no public key yet, the importing account is not signed: its `NatsAccount` has the condition `Ready` False with the reason `ExporterPending`, and its JWT on the servers stays as it is.
