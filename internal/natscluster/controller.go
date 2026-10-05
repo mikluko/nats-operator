@@ -284,7 +284,11 @@ func (r *Reconciler) reconcile(ctx context.Context, nc *clusterv1beta1.NatsClust
 	if obs.ClaimTerminating, err = r.finishDeletions(ctx, nc, plan, stsByName); err != nil {
 		return ctrl.Result{}, err
 	}
-	if certWait == "" {
+	obs.Snapshot, obs.ObserveErr = r.Observer.Observe(ctx, nc)
+	if obs.Held, err = r.metaJoinHold(ctx, nc, plan, stsByName, obs.Snapshot, obs.ObserveErr); err != nil {
+		return ctrl.Result{}, err
+	}
+	if certWait == "" && obs.Held == nil {
 		for _, s := range plan.Servers {
 			if stsByName[s.Name] != nil || slices.Contains(obs.ClaimTerminating, s.Name) {
 				continue
@@ -305,8 +309,7 @@ func (r *Reconciler) reconcile(ctx context.Context, nc *clusterv1beta1.NatsClust
 			obs.Created = append(obs.Created, s.Name)
 		}
 	}
-	obs.Snapshot, obs.ObserveErr = r.Observer.Observe(ctx, nc)
-	if certWait == "" {
+	if certWait == "" && obs.Held == nil {
 		if obs.Apply, err = r.applyConfig(ctx, nc, plan, stsByName, obs.Snapshot); err != nil {
 			return ctrl.Result{}, err
 		}

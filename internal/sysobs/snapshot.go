@@ -82,6 +82,10 @@ type Group struct {
 	// Leader, whether or not the leader counts it as a peer.
 	FromFollowers bool
 
+	// Outside names, sorted, the peers a meta group's leader in the roster
+	// reports that are not roster servers; it is nil on any other group.
+	Outside []string
+
 	// Placement is the stream's declared placement, nil where it declares
 	// none; a consumer group carries its stream's.
 	Placement *Placement
@@ -283,6 +287,7 @@ func merge(roster []Server, reports map[string]*wireJSInfo) *Snapshot {
 				groups[groupKey{kind: KindMeta}] = &groupAcc{led: true, group: Group{
 					Kind: KindMeta, Leader: server,
 					Members: leaderView(server, info.Meta.Replicas, inRoster),
+					Outside: outside(info.Meta.Replicas, inRoster),
 				}}
 			}
 		}
@@ -343,6 +348,19 @@ func leaderView(leader string, replicas []wirePeer, keep map[string]bool) []Memb
 	}
 	slices.SortFunc(ms, func(a, b Member) int { return cmp.Compare(a.Server, b.Server) })
 	return ms
+}
+
+// outside returns, sorted, the replicas not in roster, nil when there are
+// none.
+func outside(replicas []wirePeer, roster map[string]bool) []string {
+	var out []string
+	for _, r := range replicas {
+		if !roster[r.Name] {
+			out = append(out, r.Name)
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 func placementOf(c *wireStreamConfig) *Placement {
