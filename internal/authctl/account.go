@@ -610,8 +610,21 @@ func (r *AccountReconciler) resolveSystemImport(ctx context.Context, acc *authv1
 		}
 		return res, err
 	}
-	if exOp, op := sys.Spec.OperatorRef.ObjectKey(sys.Namespace), acc.Spec.OperatorRef.ObjectKey(acc.Namespace); exOp != op {
-		res.reason = fmt.Sprintf("NatsSystemAccount %s is signed by NatsOperator %s, not %s", exKey, exOp, op)
+	opKey := acc.Spec.OperatorRef.ObjectKey(acc.Namespace)
+	if exOp := sys.Spec.OperatorRef.ObjectKey(sys.Namespace); exOp != opKey {
+		res.reason = fmt.Sprintf("NatsSystemAccount %s is signed by NatsOperator %s, not %s", exKey, exOp, opKey)
+		return res, nil
+	}
+	var op authv1beta1.NatsOperator
+	if err := r.Get(ctx, opKey, &op); err != nil {
+		if apierrors.IsNotFound(err) {
+			res.reason = fmt.Sprintf("NatsOperator %s does not exist", opKey)
+			return res, nil
+		}
+		return res, err
+	}
+	if op.Spec.SystemAccountRef.ObjectKey(op.Namespace) != exKey {
+		res.reason = fmt.Sprintf("NatsSystemAccount %s is not the system account of NatsOperator %s", exKey, opKey)
 		return res, nil
 	}
 	if sys.Status.PublicKey == "" {
