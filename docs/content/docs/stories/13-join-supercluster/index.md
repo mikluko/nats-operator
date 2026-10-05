@@ -166,27 +166,7 @@ curl -s localhost:8222/jsz | jq .meta_cluster
 
 In one meta group, every server reports the same `leader` and the same `cluster_size`, which counts the servers of `west` and of `central`.
 If the servers of `west` report a leader among themselves and a `cluster_size` that counts only them, `west` runs a meta group of its own beside that of `central`.
-Stop `west` at once: while both groups run, either can delete the streams of the other.
-
-## Recover from a meta group of its own
-
-1. Stop `west`.
-   Set the annotation `cluster.nats-operator.io/force-delete` on it, since the deletion otherwise waits for its streams, and delete it:
-
-   ```sh
-   kubectl -n nats-system annotate natscluster west cluster.nats-operator.io/force-delete=true
-   kubectl -n nats-system delete natscluster west
-   ```
-
-2. On a server of `central`, check that its streams are still listed.
-   A stream that is gone comes back only from a backup.
-3. Delete the data volume claims of `west`:
-
-   ```sh
-   kubectl -n nats-system delete pvc data-west-0-0 data-west-1-0 data-west-2-0
-   ```
-
-4. Apply the `NatsCluster` `west` again.
+Stop `west` at once, as [Recover from a meta group of its own](#recover-from-a-meta-group-of-its-own) shows: while both groups run, either can delete the streams of the other.
 
 ## Create a stream on the new member
 
@@ -210,3 +190,23 @@ The `status` in the output is similar to this:
 {{< manifest "02-status-natsstream.yaml" >}}
 
 `server.leader` and `server.replicas` are servers of `west`.
+
+## Recover from a meta group of its own
+
+1. Stop `west`.
+   Set the annotation `cluster.nats-operator.io/force-delete` on it, since the deletion otherwise waits for its streams, and delete it:
+
+   ```sh
+   kubectl -n nats-system annotate natscluster west cluster.nats-operator.io/force-delete=true
+   kubectl -n nats-system delete natscluster west
+   ```
+
+2. On a server of `central`, check that its streams are still listed.
+   A stream that is gone comes back only from a backup.
+3. Delete the data volume claims of `west`:
+
+   ```sh
+   kubectl -n nats-system delete pvc data-west-0-0 data-west-1-0 data-west-2-0
+   ```
+
+4. Apply the `NatsCluster` `west` again.
