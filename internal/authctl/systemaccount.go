@@ -102,7 +102,7 @@ func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta
 	}
 	signed := op.Status.SystemAccount
 	if signed == nil || signed.Name != sys.Name || signed.PublicKey != pub {
-		if takeoverRefused(op.Status.Conditions) {
+		if adoptionRefused(op.Status.Conditions) {
 			c := meta.FindStatusCondition(op.Status.Conditions, ConditionReady)
 			notReady(c.Reason, c.Message)
 			return 0, nil

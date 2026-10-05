@@ -48,6 +48,12 @@ _Avoid_: upstream, parent
 The one Kubernetes cluster in a supercluster whose auth controller holds the NATS operator signing key and where accounts are declared.
 _Avoid_: primary, hub, control plane
 
+### Resources
+
+**Adopt**:
+A resource taking charge of what already exists in NATS, made outside this project: a stream, a consumer or a bucket, or the keys of a NATS operator or an account and the JWT the servers hold for it.
+_Avoid_: take over, import
+
 ### Auth plane
 
 **Auth plane**:

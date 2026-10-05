@@ -50,7 +50,7 @@ const (
 	ReasonRejected = "Rejected"
 
 	// ReasonFoundUnowned is Adopted's reason once an unowned object is
-	// taken over.
+	// adopted.
 	ReasonFoundUnowned = "FoundUnowned"
 	// ReasonNotFound is Adopted's and Ready's reason while adoptionPolicy is
 	// Adopt and the object does not exist.

@@ -14,11 +14,11 @@ import (
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 )
 
-// TestAccountTakeover_HeldThenRefused pins that an account signed while a
+// TestAccountAdoption_HeldThenRefused pins that an account signed while a
 // server was silent, and so held, is refused once the servers answer with a
 // JWT the signing would drop claims of: the JWT signed while held leaves
 // status, and the account is signed and pushed once the loss is accepted.
-func TestAccountTakeover_HeldThenRefused(t *testing.T) {
+func TestAccountAdoption_HeldThenRefused(t *testing.T) {
 	e := newImportsEnv(t, importingAccount("orders", nil))
 	d := &silentServer{}
 	e.acc.Distributor = d
@@ -48,7 +48,7 @@ func TestAccountTakeover_HeldThenRefused(t *testing.T) {
 	st = reconciled()
 	ready := meta.FindStatusCondition(st.Conditions, ConditionReady)
 	require.Equal(t, metav1.ConditionFalse, ready.Status)
-	require.Equal(t, ReasonTakeoverDropsClaims, ready.Reason)
+	require.Equal(t, ReasonAdoptionDropsClaims, ready.Reason)
 	require.Contains(t, ready.Message, "tags")
 	require.Empty(t, st.JWT, "the JWT signed while held leaves status")
 	require.Nil(t, meta.FindStatusCondition(st.Conditions, ConditionRevocationsUnrecovered))
@@ -57,7 +57,7 @@ func TestAccountTakeover_HeldThenRefused(t *testing.T) {
 
 	var acc authv1beta1.NatsAccount
 	require.NoError(t, e.c.Get(t.Context(), k, &acc))
-	acc.Spec.Takeover = &authv1beta1.Takeover{DroppedClaims: authv1beta1.TakeoverAcceptDroppedClaims}
+	acc.Spec.Adoption = &authv1beta1.Adoption{DroppedClaims: authv1beta1.AdoptionAcceptDroppedClaims}
 	require.NoError(t, e.c.Update(t.Context(), &acc))
 	st = reconciled()
 	requireReady(t, st, metav1.ConditionTrue, ReasonDistributed, ReasonAllImportsResolved)

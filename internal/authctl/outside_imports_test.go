@@ -31,12 +31,12 @@ func userOf(t *testing.T, pub string, signer nkeys.KeyPair) nscSystemUser {
 	return nscSystemUser{pub: userPub, jwt: token, seed: seed}
 }
 
-// TestTakeover_OutsideImports pins, on an in-process server, that a
+// TestAdoption_OutsideImports pins, on an in-process server, that a
 // NatsAccount's import from an account the auth controller does not manage,
 // by public key with the activation token the exporter issued, and its
 // import of a monitoring service of the system account both carry
 // messages, the latter for the account's own key only.
-func TestTakeover_OutsideImports(t *testing.T) {
+func TestAdoption_OutsideImports(t *testing.T) {
 	x := newOutsideExporter(t)
 	billingSK := x.keys.Signing[0].Pair
 	bc := jwt.NewAccountClaims(x.pub)
@@ -52,12 +52,12 @@ func TestTakeover_OutsideImports(t *testing.T) {
 	orders := &authv1beta1.NatsAccount{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "orders", UID: "orders"},
 		Spec: authv1beta1.NatsAccountSpec{
-			OperatorRef: natsv1beta1.ObjectReference{Name: takeoverOperator.Name},
+			OperatorRef: natsv1beta1.ObjectReference{Name: adoptionOperator.Name},
 			Keys: &authv1beta1.Keys{
 				Identity: &authv1beta1.IdentityKey{SecretKeyRef: ref("identity")},
 				Signing:  []authv1beta1.SigningKey{{Name: "signing-1", SecretKeyRef: ref("signing")}},
 			},
-			Imports: []authv1beta1.Import{keyImport(x, true), systemImport(takeoverSystem.Name, "account-monitoring-services")},
+			Imports: []authv1beta1.Import{keyImport(x, true), systemImport(adoptionSystem.Name, "account-monitoring-services")},
 		},
 	}
 	n := newNscSystem(t, orders)
@@ -84,7 +84,7 @@ func TestTakeover_OutsideImports(t *testing.T) {
 	}
 	require.NoError(t, n.c.Get(t.Context(), client.ObjectKeyFromObject(orders), orders))
 	requireReady(t, orders.Status, metav1.ConditionTrue, ReasonDistributed, ReasonAllImportsResolved)
-	held, err := d.Lookup(t.Context(), takeoverOperator, ordersPub)
+	held, err := d.Lookup(t.Context(), adoptionOperator, ordersPub)
 	require.NoError(t, err)
 	require.Equal(t, orders.Status.JWT, held)
 

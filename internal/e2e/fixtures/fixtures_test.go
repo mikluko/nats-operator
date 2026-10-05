@@ -372,7 +372,7 @@ func TestChains(t *testing.T) {
 			"payments-creds": "payments",
 		}}.check,
 		"13-join-supercluster": checkJoinSupercluster,
-		"14-nsc-takeover":      checkTakeover,
+		"14-nsc-adoption":      checkAdoption,
 	}
 	require.ElementsMatch(t, slices.Collect(maps.Keys(generators)), slices.Collect(maps.Keys(stories)))
 	for story, check := range stories {

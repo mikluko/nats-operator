@@ -14,12 +14,12 @@ import (
 	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
 )
 
-// takeoverField is the spec field that accepts the claims a takeover drops.
-const takeoverField = "spec.takeover.droppedClaims"
+// adoptionField is the spec field that accepts the claims an adoption drops.
+const adoptionField = "spec.adoption.droppedClaims"
 
-// takeoverLoss is what the first JWT signed for an account would lose of the
+// adoptionLoss is what the first JWT signed for an account would lose of the
 // JWT the servers hold for its key.
-type takeoverLoss struct {
+type adoptionLoss struct {
 	// drops are the JWT field paths, sorted, of the claims the held JWT
 	// carries and the signed one would not.
 	drops []string
@@ -28,12 +28,12 @@ type takeoverLoss struct {
 	tiers []string
 }
 
-// refuseTakeover compares held, the JWT the servers hold, with signed, the
+// refuseAdoption compares held, the JWT the servers hold, with signed, the
 // first JWT signed from spec for the same key, and sets Ready False through
 // notReady where signing would lose claims t does not accept losing,
 // reporting whether it did.
-func refuseTakeover(held, signed string, t *authv1beta1.Takeover, notReady func(reason, msg string)) (bool, error) {
-	loss, err := compareTakeover(held, signed)
+func refuseAdoption(held, signed string, t *authv1beta1.Adoption, notReady func(reason, msg string)) (bool, error) {
+	loss, err := compareAdoption(held, signed)
 	if err != nil {
 		return false, err
 	}
@@ -42,38 +42,38 @@ func refuseTakeover(held, signed string, t *authv1beta1.Takeover, notReady func(
 		notReady(ReasonTierInexpressible, fmt.Sprintf("the JWT the servers hold limits JetStream by tiers no spec can name: %s; "+
 			"nats-server reads a tier by the replica count of a stream, R1 to R5, and no other", strings.Join(loss.tiers, ", ")))
 		return true, nil
-	case len(loss.drops) > 0 && (t == nil || t.DroppedClaims != authv1beta1.TakeoverAcceptDroppedClaims):
-		notReady(ReasonTakeoverDropsClaims, fmt.Sprintf("the JWT the servers hold carries claims the one signed from spec would not: %s; "+
-			"declare them in spec, or set %s to Accept to sign without them", strings.Join(loss.drops, ", "), takeoverField))
+	case len(loss.drops) > 0 && (t == nil || t.DroppedClaims != authv1beta1.AdoptionAcceptDroppedClaims):
+		notReady(ReasonAdoptionDropsClaims, fmt.Sprintf("the JWT the servers hold carries claims the one signed from spec would not: %s; "+
+			"declare them in spec, or set %s to Accept to sign without them", strings.Join(loss.drops, ", "), adoptionField))
 		return true, nil
 	}
 	return false, nil
 }
 
-// takeoverRefused reports whether conds say the last signing was refused as
-// a takeover, so the servers are asked for their JWT again.
-func takeoverRefused(conds []metav1.Condition) bool {
+// adoptionRefused reports whether conds say the last signing was refused as
+// an adoption, so the servers are asked for their JWT again.
+func adoptionRefused(conds []metav1.Condition) bool {
 	c := meta.FindStatusCondition(conds, ConditionReady)
-	return c != nil && c.Status == metav1.ConditionFalse && (c.Reason == ReasonTakeoverDropsClaims || c.Reason == ReasonTierInexpressible)
+	return c != nil && c.Status == metav1.ConditionFalse && (c.Reason == ReasonAdoptionDropsClaims || c.Reason == ReasonTierInexpressible)
 }
 
-// compareTakeover returns what signed would lose of held, two account JWTs
+// compareAdoption returns what signed would lose of held, two account JWTs
 // of one key. A claim is lost where held carries it and signed does not; one
 // signed with another value is kept. A NATS or account limit is carried
 // where it is not the default of jwt.NewAccountClaims, a JetStream limit
 // where it is not zero, and a JetStream storage, stream or consumer limit
 // signed as jwt.NoLimit against a held bound is lost. Exports are matched
 // by subject and type, imports by account, subject and type.
-func compareTakeover(held, signed string) (takeoverLoss, error) {
+func compareAdoption(held, signed string) (adoptionLoss, error) {
 	hc, err := jwt.DecodeAccountClaims(held)
 	if err != nil {
-		return takeoverLoss{}, fmt.Errorf("decode the JWT the servers hold: %w", err)
+		return adoptionLoss{}, fmt.Errorf("decode the JWT the servers hold: %w", err)
 	}
 	sc, err := jwt.DecodeAccountClaims(signed)
 	if err != nil {
-		return takeoverLoss{}, fmt.Errorf("decode the signed JWT: %w", err)
+		return adoptionLoss{}, fmt.Errorf("decode the signed JWT: %w", err)
 	}
-	var loss takeoverLoss
+	var loss adoptionLoss
 	for tier := range hc.Limits.JetStreamTieredLimits {
 		if !knownTier(tier) {
 			loss.tiers = append(loss.tiers, tier)
@@ -226,7 +226,7 @@ func droppedImports(h, s jwt.Imports) []string {
 }
 
 // claimTree is c as JSON, its nats claims at the top level beside its
-// standard ones, without what compareTakeover reads apart or what differs
+// standard ones, without what compareAdoption reads apart or what differs
 // between any two signings: the issuer, the issue time, the ID and the
 // subject, and the expiry beyond whether there is one.
 func claimTree(c *jwt.AccountClaims) map[string]any {

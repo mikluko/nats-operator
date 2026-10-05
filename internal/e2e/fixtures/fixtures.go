@@ -27,7 +27,7 @@ var generators = map[string]func(dir string) error{
 	"10-leafnodes":         leafnodes,
 	"11-evacuation":        evacuation,
 	"13-join-supercluster": joinSupercluster,
-	"14-nsc-takeover":      takeover,
+	"14-nsc-adoption":      adoption,
 }
 
 // Generate writes every story's fixtures into root/<story>/e2e, root laid

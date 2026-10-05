@@ -99,6 +99,22 @@ Appears on: [ImportStatus](#ImportStatus).
 | `Signed` | ActivationSigned is an activation token the auth controller minted. |
 | `Supplied` | ActivationSupplied is an activation token read from the Secret the import names. |
 
+### Adoption {#Adoption}
+Adoption is how an account made elsewhere is adopted: what the first JWT signed for it does where the servers hold a JWT for its key.\
+Appears on: [NatsAccountSpec](#NatsAccountSpec), [NatsSystemAccountSpec](#NatsSystemAccountSpec).
+| Field | Type | Required | Description |
+| :---- | :--- | :------: | :---------- |
+| `droppedClaims` | [{{< type "AdoptionDroppedClaims" >}}](#AdoptionDroppedClaims) | No | DroppedClaims is what the first signing does where the JWT the servers hold carries a claim the signed JWT would not: Refuse, the default, signs nothing and sets Ready False naming each; Accept signs without them. |
+
+### AdoptionDroppedClaims {#AdoptionDroppedClaims}
+AdoptionDroppedClaims is what an adoption does with the claims it would drop.\
+Type: {{< type "string" >}}\
+Appears on: [Adoption](#Adoption).
+| Value | Description |
+| :---- | :---------- |
+| `Refuse` |  |
+| `Accept` |  |
+
 ### ConnectionType {#ConnectionType}
 ConnectionType is a NATS connection type a user may connect as.\
 Type: {{< type "string" >}}\
@@ -244,7 +260,7 @@ Appears on: [NatsAccount](#NatsAccount).
 | `limits` | [{{< type "AccountLimits" >}}](#AccountLimits) | No | Limits are signed into the account JWT; an omitted limit is unlimited. |
 | `exports` | [{{< type "[]Export" >}}](#Export) | No | Exports are what other accounts may import from this one. |
 | `imports` | [{{< type "[]Import" >}}](#Import) | No | Imports are exports of other accounts this one takes. |
-| `takeover` | [{{< type "Takeover" >}}](#Takeover) | No | Takeover is how an account the servers already hold a JWT for is taken over at the first signing. |
+| `adoption` | [{{< type "Adoption" >}}](#Adoption) | No | Adoption is how an account the servers already hold a JWT for is adopted at the first signing. |
 
 ### NatsAccountStatus {#NatsAccountStatus}
 NatsAccountStatus is the observed state of an account.\
@@ -311,7 +327,7 @@ Appears on: [NatsSystemAccount](#NatsSystemAccount).
 | `operatorRef` | [{{< type "ObjectReference" >}}](#ObjectReference) | Yes | OperatorRef names the NatsOperator that signs this account. |
 | `keys` | [{{< type "Keys" >}}](#Keys) | No | Keys adopts existing seeds. |
 | `publicKey` | {{< type "string" >}} | No | PublicKey is the account's identity, keeping its identity key offline. |
-| `takeover` | [{{< type "Takeover" >}}](#Takeover) | No | Takeover is how a system account the servers already hold a JWT for is taken over at the first signing. |
+| `adoption` | [{{< type "Adoption" >}}](#Adoption) | No | Adoption is how a system account the servers already hold a JWT for is adopted at the first signing. |
 
 ### NatsSystemAccountStatus {#NatsSystemAccountStatus}
 NatsSystemAccountStatus is the observed state of a system account.\
@@ -446,22 +462,6 @@ Appears on: [NatsOperatorStatus](#NatsOperatorStatus).
 | `name` | {{< type "string" >}} | No | Name of the NatsSystemAccount spec.systemAccountRef resolves to. |
 | `publicKey` | {{< type "string" >}} | No | PublicKey of the system account. |
 | `jwt` | {{< type "string" >}} | No | JWT of the system account. |
-
-### Takeover {#Takeover}
-Takeover is how an account made elsewhere is taken over: what the first JWT signed for it does where the servers hold a JWT for its key.\
-Appears on: [NatsAccountSpec](#NatsAccountSpec), [NatsSystemAccountSpec](#NatsSystemAccountSpec).
-| Field | Type | Required | Description |
-| :---- | :--- | :------: | :---------- |
-| `droppedClaims` | [{{< type "TakeoverDroppedClaims" >}}](#TakeoverDroppedClaims) | No | DroppedClaims is what the first signing does where the JWT the servers hold carries a claim the signed JWT would not: Refuse, the default, signs nothing and sets Ready False naming each; Accept signs without them. |
-
-### TakeoverDroppedClaims {#TakeoverDroppedClaims}
-TakeoverDroppedClaims is what a takeover does with the claims it would drop.\
-Type: {{< type "string" >}}\
-Appears on: [Takeover](#Takeover).
-| Value | Description |
-| :---- | :---------- |
-| `Refuse` |  |
-| `Accept` |  |
 
 ### UserLimits {#UserLimits}
 UserLimits are the limits of one user's connection.\

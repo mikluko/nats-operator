@@ -33,7 +33,7 @@ Its system account is `sys`.
 {{< manifest "01-natsoperator.yaml" >}}
 
 The manifest has no `keys`, so the auth controller generates the identity key and a signing key, and keeps each seed in a Secret.
-To adopt seeds that you already have, set `keys` instead, as [Take over a NATS operator and accounts made with nsc]({{< relref "/docs/stories/14-nsc-takeover" >}}) does.
+To adopt seeds that you already have, set `keys` instead, as [Adopt a NATS operator and accounts made with nsc]({{< relref "/docs/stories/14-nsc-adoption" >}}) does.
 [Keys and trust]({{< relref "/docs/design/v1#51-keys-and-trust" >}}) in the design describes both, and how to rotate a key.
 
 Read the status:

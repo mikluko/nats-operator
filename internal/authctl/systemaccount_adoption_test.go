@@ -48,8 +48,8 @@ func (u nscSystemUser) connect(url string) (*nats.Conn, error) {
 }
 
 var (
-	takeoverOperator = types.NamespacedName{Namespace: "ns", Name: "op"}
-	takeoverSystem   = types.NamespacedName{Namespace: "ns", Name: "sys"}
+	adoptionOperator = types.NamespacedName{Namespace: "ns", Name: "op"}
+	adoptionSystem   = types.NamespacedName{Namespace: "ns", Name: "sys"}
 )
 
 func newNscSystem(t *testing.T, accounts ...*authv1beta1.NatsAccount) *nscSystem {
@@ -115,12 +115,12 @@ func newNscSystemWith(t *testing.T, edit func(c *jwt.AccountClaims), accounts ..
 		}
 	}
 	op := &authv1beta1.NatsOperator{
-		ObjectMeta: metav1.ObjectMeta{Namespace: takeoverOperator.Namespace, Name: takeoverOperator.Name, UID: "op"},
-		Spec:       authv1beta1.NatsOperatorSpec{Keys: keys("op"), SystemAccountRef: natsv1beta1.ObjectReference{Name: takeoverSystem.Name}},
+		ObjectMeta: metav1.ObjectMeta{Namespace: adoptionOperator.Namespace, Name: adoptionOperator.Name, UID: "op"},
+		Spec:       authv1beta1.NatsOperatorSpec{Keys: keys("op"), SystemAccountRef: natsv1beta1.ObjectReference{Name: adoptionSystem.Name}},
 	}
 	sys := &authv1beta1.NatsSystemAccount{
-		ObjectMeta: metav1.ObjectMeta{Namespace: takeoverSystem.Namespace, Name: takeoverSystem.Name, UID: "sys"},
-		Spec:       authv1beta1.NatsSystemAccountSpec{Keys: keys("sys"), OperatorRef: natsv1beta1.ObjectReference{Name: takeoverOperator.Name}},
+		ObjectMeta: metav1.ObjectMeta{Namespace: adoptionSystem.Namespace, Name: adoptionSystem.Name, UID: "sys"},
+		Spec:       authv1beta1.NatsSystemAccountSpec{Keys: keys("sys"), OperatorRef: natsv1beta1.ObjectReference{Name: adoptionOperator.Name}},
 	}
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "nsc"},
@@ -169,26 +169,26 @@ func (n *nscSystem) serve(t *testing.T, accountJWTs ...string) string {
 
 func (n *nscSystem) reconcileOperator(t *testing.T, d Distributor) (reconcile.Result, *authv1beta1.NatsOperator) {
 	t.Helper()
-	res, err := (&OperatorReconciler{Client: n.c, Distributor: d}).Reconcile(t.Context(), reconcile.Request{NamespacedName: takeoverOperator})
+	res, err := (&OperatorReconciler{Client: n.c, Distributor: d}).Reconcile(t.Context(), reconcile.Request{NamespacedName: adoptionOperator})
 	require.NoError(t, err)
 	op := &authv1beta1.NatsOperator{}
-	require.NoError(t, n.c.Get(t.Context(), takeoverOperator, op))
+	require.NoError(t, n.c.Get(t.Context(), adoptionOperator, op))
 	return res, op
 }
 
 func (n *nscSystem) reconcileSystemAccount(t *testing.T, d Distributor) *authv1beta1.NatsSystemAccount {
 	t.Helper()
-	_, err := (&SystemAccountReconciler{Client: n.c, Distributor: d}).Reconcile(t.Context(), reconcile.Request{NamespacedName: takeoverSystem})
+	_, err := (&SystemAccountReconciler{Client: n.c, Distributor: d}).Reconcile(t.Context(), reconcile.Request{NamespacedName: adoptionSystem})
 	require.NoError(t, err)
 	sys := &authv1beta1.NatsSystemAccount{}
-	require.NoError(t, n.c.Get(t.Context(), takeoverSystem, sys))
+	require.NoError(t, n.c.Get(t.Context(), adoptionSystem, sys))
 	return sys
 }
 
-// TestSystemAccountTakeover pins that the first JWT signed for a system
+// TestSystemAccountAdoption pins that the first JWT signed for a system
 // account made with nsc keeps the revocations of the JWT the servers hold
 // and the two monitoring exports, so a user revoked under nsc stays refused.
-func TestSystemAccountTakeover(t *testing.T) {
+func TestSystemAccountAdoption(t *testing.T) {
 	n := newNscSystem(t)
 	url := n.serve(t)
 	_, err := n.old.connect(url)
@@ -203,7 +203,7 @@ func TestSystemAccountTakeover(t *testing.T) {
 	require.Nil(t, meta.FindStatusCondition(op.Status.Conditions, ConditionRevocationsUnrecovered))
 	sys := n.reconcileSystemAccount(t, d)
 
-	held, err := d.Lookup(t.Context(), takeoverOperator, n.sysPub)
+	held, err := d.Lookup(t.Context(), adoptionOperator, n.sysPub)
 	require.NoError(t, err)
 	require.Equal(t, op.Status.SystemAccount.JWT, held)
 	require.NotEqual(t, n.sysJWT, held)
@@ -216,7 +216,7 @@ func TestSystemAccountTakeover(t *testing.T) {
 	require.Equal(t, []string{n.sysSigningPub}, sys.Status.Revocations[0].Issuers)
 
 	_, err = n.old.connect(url)
-	require.ErrorIs(t, err, nats.ErrAuthorization, "revoked after the takeover")
+	require.ErrorIs(t, err, nats.ErrAuthorization, "revoked after the adoption")
 	again, err := n.sys.connect(url)
 	require.NoError(t, err)
 	again.Close()
@@ -233,12 +233,12 @@ func (d *lookupDistributor) Lookup(context.Context, types.NamespacedName, string
 	return d.held, d.err
 }
 
-// TestSystemAccountTakeover_DropsClaims pins that a system account whose
+// TestSystemAccountAdoption_DropsClaims pins that a system account whose
 // JWT on the servers carries a claim no NatsSystemAccount expresses is not
 // signed, its NatsOperator and the NatsSystemAccount both reading Ready
-// False with the claim named, until spec.takeover.droppedClaims accepts the
+// False with the claim named, until spec.adoption.droppedClaims accepts the
 // loss; and that a changed name is not a drop.
-func TestSystemAccountTakeover_DropsClaims(t *testing.T) {
+func TestSystemAccountAdoption_DropsClaims(t *testing.T) {
 	n := newNscSystemWith(t, func(c *jwt.AccountClaims) { c.Description = "made with nsc" })
 	d := &lookupDistributor{held: n.sysJWT}
 
@@ -246,7 +246,7 @@ func TestSystemAccountTakeover_DropsClaims(t *testing.T) {
 	require.Zero(t, res.RequeueAfter)
 	ready := meta.FindStatusCondition(op.Status.Conditions, ConditionReady)
 	require.Equal(t, metav1.ConditionFalse, ready.Status)
-	require.Equal(t, ReasonTakeoverDropsClaims, ready.Reason)
+	require.Equal(t, ReasonAdoptionDropsClaims, ready.Reason)
 	require.Contains(t, ready.Message, "NatsSystemAccount ns/sys: ")
 	require.Contains(t, ready.Message, "description")
 	require.NotContains(t, ready.Message, "name")
@@ -256,10 +256,10 @@ func TestSystemAccountTakeover_DropsClaims(t *testing.T) {
 	require.Equal(t, ready, meta.FindStatusCondition(sys.Status.Conditions, ConditionReady), "mirrored on the NatsSystemAccount")
 
 	_, op = n.reconcileOperator(t, d)
-	require.Equal(t, ReasonTakeoverDropsClaims, meta.FindStatusCondition(op.Status.Conditions, ConditionReady).Reason, "refused again while spec stands")
+	require.Equal(t, ReasonAdoptionDropsClaims, meta.FindStatusCondition(op.Status.Conditions, ConditionReady).Reason, "refused again while spec stands")
 
-	require.NoError(t, n.c.Get(t.Context(), takeoverSystem, sys))
-	sys.Spec.Takeover = &authv1beta1.Takeover{DroppedClaims: authv1beta1.TakeoverAcceptDroppedClaims}
+	require.NoError(t, n.c.Get(t.Context(), adoptionSystem, sys))
+	sys.Spec.Adoption = &authv1beta1.Adoption{DroppedClaims: authv1beta1.AdoptionAcceptDroppedClaims}
 	require.NoError(t, n.c.Update(t.Context(), sys))
 	_, op = n.reconcileOperator(t, d)
 	require.True(t, meta.IsStatusConditionTrue(op.Status.Conditions, ConditionReady))
@@ -272,10 +272,10 @@ func TestSystemAccountTakeover_DropsClaims(t *testing.T) {
 	require.True(t, meta.IsStatusConditionTrue(sys.Status.Conditions, ConditionReady))
 }
 
-// TestSystemAccountTakeover_ServersSilent pins that a system account first
+// TestSystemAccountAdoption_ServersSilent pins that a system account first
 // signed while its servers cannot be asked is not pushed, and is asked for
 // and signed again with their revocations once they answer.
-func TestSystemAccountTakeover_ServersSilent(t *testing.T) {
+func TestSystemAccountAdoption_ServersSilent(t *testing.T) {
 	n := newNscSystem(t)
 	d := &lookupDistributor{err: fmt.Errorf("%w: down", ErrUnreachable)}
 

@@ -21,14 +21,14 @@ import (
 	"github.com/mikluko/nats-operator/internal/jwtplane"
 )
 
-// TestAccountReconciler_RefusesATakeoverThatDropsClaims pins, on a server
+// TestAccountReconciler_RefusesAAdoptionThatDropsClaims pins, on a server
 // with a full resolver holding JWTs made elsewhere, that the first signing
 // of an account is refused where it would drop a claim that JWT carries,
-// goes through once spec.takeover.droppedClaims accepts the loss, goes
+// goes through once spec.adoption.droppedClaims accepts the loss, goes
 // through at once where the spec only changes a value, and is refused
-// whatever spec.takeover says where that JWT limits a JetStream tier no
+// whatever spec.adoption says where that JWT limits a JetStream tier no
 // spec names.
-func TestAccountReconciler_RefusesATakeoverThatDropsClaims(t *testing.T) {
+func TestAccountReconciler_RefusesAAdoptionThatDropsClaims(t *testing.T) {
 	p := newPlane(t)
 	c := startFullCluster(t, p, 1)
 	r := resolversOn(t, c, testOperator)
@@ -96,7 +96,7 @@ func TestAccountReconciler_RefusesATakeoverThatDropsClaims(t *testing.T) {
 		t.Helper()
 		var acc authv1beta1.NatsAccount
 		require.NoError(t, kc.Get(t.Context(), client.ObjectKey{Namespace: testOperator.Namespace, Name: name}, &acc))
-		acc.Spec.Takeover = &authv1beta1.Takeover{DroppedClaims: authv1beta1.TakeoverAcceptDroppedClaims}
+		acc.Spec.Adoption = &authv1beta1.Adoption{DroppedClaims: authv1beta1.AdoptionAcceptDroppedClaims}
 		require.NoError(t, kc.Update(t.Context(), &acc))
 	}
 	pubOf := func(acc authv1beta1.NatsAccount) string { return acc.Status.PublicKey }
@@ -104,14 +104,14 @@ func TestAccountReconciler_RefusesATakeoverThatDropsClaims(t *testing.T) {
 	acc := reconciled("mapped")
 	ready := meta.FindStatusCondition(acc.Status.Conditions, authctl.ConditionReady)
 	require.Equal(t, metav1.ConditionFalse, ready.Status)
-	require.Equal(t, authctl.ReasonTakeoverDropsClaims, ready.Reason)
+	require.Equal(t, authctl.ReasonAdoptionDropsClaims, ready.Reason)
 	require.Contains(t, ready.Message, "mappings")
 	require.NotContains(t, ready.Message, "limits.subs", "a limit set to another value is a change")
 	require.Empty(t, acc.Status.JWT)
 	require.Equal(t, made["mapped"], c.held(0, pubOf(acc)), "the servers keep the JWT made elsewhere")
 
 	acc = reconciled("mapped")
-	require.Equal(t, authctl.ReasonTakeoverDropsClaims, meta.FindStatusCondition(acc.Status.Conditions, authctl.ConditionReady).Reason, "refused again while spec stands")
+	require.Equal(t, authctl.ReasonAdoptionDropsClaims, meta.FindStatusCondition(acc.Status.Conditions, authctl.ConditionReady).Reason, "refused again while spec stands")
 	accept("mapped")
 	acc = reconciled("mapped")
 	require.True(t, meta.IsStatusConditionTrue(acc.Status.Conditions, authctl.ConditionReady))

@@ -20,9 +20,9 @@ import (
 	"github.com/mikluko/nats-operator/internal/authctl"
 )
 
-// testScopedSigningKey pins that an account taken over with a scoped signing
+// testScopedSigningKey pins that an account adopted with a scoped signing
 // key keeps the scope in its JWT, that a user the key signed before the
-// takeover and a NatsUser of the scope's role are both held to it by a
+// adoption and a NatsUser of the scope's role are both held to it by a
 // nats-server, and that the schema refuses a scope on a NATS operator's key
 // and a role beside permissions.
 func (e *env) testScopedSigningKey(t *testing.T) {
@@ -180,7 +180,7 @@ spec:
 	require.True(t, srv.ReadyForConnections(10*time.Second))
 
 	for name, u := range map[string][2]string{
-		"signed before the takeover": {beforeJWT, string(beforeSeed)},
+		"signed before the adoption": {beforeJWT, string(beforeSeed)},
 		"NatsUser of the role":       {readerJWT, readerSeed},
 	} {
 		t.Run(name, func(t *testing.T) {
