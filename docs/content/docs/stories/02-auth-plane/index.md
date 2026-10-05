@@ -159,3 +159,20 @@ The `status` in the output is similar to this:
 
 `distribution` counts the servers that hold the current JWT.
 [Distribution]({{< relref "/docs/design/v1#52-distribution" >}}) in the design describes how the auth controller finds that out.
+
+## Put a running NATS cluster under the NATS operator
+
+This guide deploys a new NATS cluster under the NATS operator.
+To add `auth` to a `NatsCluster` that already runs without it, know that its servers cannot restart one at a time: a server with `auth` and a server without it cannot route to each other.
+The cluster controller keeps every server on the config it runs, and the `NatsCluster` reads `Progressing` False with the reason `AuthChangeBlocked`.
+Removing `auth` from a running `NatsCluster` is held the same way.
+
+Take one of the two ways out:
+
+- Set the annotation `cluster.nats-operator.io/restart-all` on the `NatsCluster`, with any value, together with the change or after it.
+  The cluster controller restarts every server at once on the new config, and removes the annotation.
+  The NATS cluster serves no client until its servers are back.
+- Delete the `NatsCluster`, and apply it again with the change.
+  You lose the JetStream data on every claim that you delete with it.
+
+[Rollout]({{< relref "/docs/design/v1#44-rollout" >}}) in the design describes why the servers cannot route to each other.

@@ -54,6 +54,7 @@ const (
 	ReasonReplacingServer     = "ReplacingServer"
 	ReasonScaleDownBlocked    = "ScaleDownBlocked"
 	ReasonReplacementBlocked  = "ReplacementBlocked"
+	ReasonAuthChangeBlocked   = "AuthChangeBlocked"
 	ReasonUnsupportedSpec     = "UnsupportedSpec"
 	ReasonReconcileFailed     = "ReconcileFailed"
 	ReasonClientCertNotReady  = "ClientCertificateNotReady"

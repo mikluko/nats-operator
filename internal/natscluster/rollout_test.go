@@ -17,15 +17,17 @@ import (
 // decisions it takes: a stepped server goes down and comes back only when
 // the test says so.
 type fakeCluster struct {
-	target    string
-	servers   []rolloutServer
-	meta      string
-	unsettled []sysobs.Unsettled
-	silent    []string
-	paused    bool
-	force     string
-	prev      *clusterv1beta1.RolloutStatus
-	now       time.Time
+	target     string
+	servers    []rolloutServer
+	meta       string
+	unsettled  []sysobs.Unsettled
+	silent     []string
+	paused     bool
+	force      string
+	adding     bool
+	restartAll string
+	prev       *clusterv1beta1.RolloutStatus
+	now        time.Time
 }
 
 // newFakeCluster is n servers, all Ready and Settled on revision "old",
@@ -47,7 +49,7 @@ func (f *fakeCluster) state() rolloutState {
 	v := sysobs.Verdict{Unsettled: f.unsettled, Silent: f.silent}
 	return rolloutState{
 		Target: f.target, Servers: slices.Clone(f.servers), MetaLeader: f.meta, Verdict: &v,
-		Paused: f.paused, ForceStep: f.force, Prev: f.prev, Now: f.now,
+		Paused: f.paused, ForceStep: f.force, AddingAuth: f.adding, RestartAll: f.restartAll, Prev: f.prev, Now: f.now,
 	}
 }
 
@@ -59,10 +61,18 @@ func (f *fakeCluster) decide() rolloutDecision {
 	if d.ClearForceStep {
 		f.force = ""
 	}
+	if d.ClearRestartAll {
+		f.restartAll = ""
+	}
 	if d.Step != "" {
 		s := f.server(d.Step)
 		s.OnTarget, s.Restart, s.Ready, s.Revision = true, false, false, ""
 		f.silent = []string{d.Step}
+	}
+	for _, name := range d.RestartAll {
+		s := f.server(name)
+		s.OnTarget, s.Restart, s.AcrossAuth, s.Ready, s.Revision = true, false, false, false, ""
+		f.silent = append(f.silent, name)
 	}
 	return d
 }
@@ -318,6 +328,109 @@ func TestDecide_ForceStep(t *testing.T) {
 		d := f.decide()
 		require.Nil(t, d.Status)
 		require.True(t, d.ClearForceStep)
+	})
+}
+
+// acrossAuth marks every server of f as waiting for a restart that adds
+// auth, or removes it when adding is false.
+func acrossAuth(f *fakeCluster, adding bool) {
+	f.adding = adding
+	for i := range f.servers {
+		f.servers[i].AcrossAuth = true
+	}
+}
+
+func TestDecide_AuthChange(t *testing.T) {
+	t.Run("is held without the annotation", func(t *testing.T) {
+		for _, tt := range []struct {
+			adding bool
+			change string
+		}{{true, "adding auth"}, {false, "removing auth"}} {
+			t.Run(tt.change, func(t *testing.T) {
+				f := newFakeCluster(3, "demo-0")
+				acrossAuth(f, tt.adding)
+				for range 2 {
+					d := f.decide()
+					require.Empty(t, d.Step)
+					require.Empty(t, d.RestartAll)
+					require.Equal(t, &clusterv1beta1.RolloutStatus{TargetRevision: "new", Pending: []string{"demo-2", "demo-1", "demo-0"}}, d.Status)
+					require.Equal(t, metav1.ConditionFalse, d.Progressing.Status)
+					require.Equal(t, ReasonAuthChangeBlocked, d.Progressing.Reason)
+					require.Equal(t, tt.change+" cannot roll out one server at a time, as a server with auth and one without cannot route to each other: "+
+						"annotate the NatsCluster cluster.nats-operator.io/restart-all to restart demo-2, demo-1, demo-0 together, or recreate it", d.Progressing.Message)
+				}
+			})
+		}
+	})
+	t.Run("holds through force-step and an open gate", func(t *testing.T) {
+		f := newFakeCluster(3, "demo-0")
+		acrossAuth(f, true)
+		f.force = "demo-1"
+		d := f.decide()
+		require.Empty(t, d.Step)
+		require.True(t, d.ClearForceStep)
+		require.Equal(t, ReasonAuthChangeBlocked, d.Progressing.Reason)
+	})
+	t.Run("holds a cluster split by an earlier step", func(t *testing.T) {
+		f := newFakeCluster(3, "demo-0")
+		acrossAuth(f, true)
+		*f.server("demo-2") = rolloutServer{Name: "demo-2", OnTarget: true}
+		f.silent = []string{"demo-2"}
+		f.prev = &clusterv1beta1.RolloutStatus{TargetRevision: "new", Current: "demo-2", Pending: []string{"demo-1", "demo-0"}}
+		d := f.decide()
+		require.Empty(t, d.Step)
+		require.Equal(t, &clusterv1beta1.RolloutStatus{TargetRevision: "new", Updated: []string{"demo-2"}, Pending: []string{"demo-1", "demo-0"}}, d.Status)
+		require.Equal(t, ReasonAuthChangeBlocked, d.Progressing.Reason)
+	})
+	t.Run("the annotation restarts every server together", func(t *testing.T) {
+		f := newFakeCluster(3, "demo-0")
+		acrossAuth(f, true)
+		f.paused = true
+		f.server("demo-1").Ready = false
+		f.restartAll = "true"
+		d := f.decide()
+		require.Empty(t, d.Step)
+		require.Equal(t, []string{"demo-2", "demo-1", "demo-0"}, d.RestartAll, "through a closed gate and paused")
+		require.True(t, d.ClearRestartAll)
+		require.Equal(t, &clusterv1beta1.RolloutStatus{
+			TargetRevision: "new",
+			Updated:        []string{"demo-2", "demo-1"},
+			Current:        "demo-0",
+			Gate:           &clusterv1beta1.RolloutGate{WaitingFor: GateSettled, Since: &metav1.Time{Time: f.now}},
+		}, d.Status)
+		requireProgressing(t, d, ReasonRollingRestart, "adding auth: restarting demo-2, demo-1, demo-0 together; waiting for Settled")
+
+		f.paused = false
+		d = f.decide()
+		require.Empty(t, d.Step)
+		require.Empty(t, d.RestartAll)
+		require.False(t, d.ClearRestartAll)
+		require.Equal(t, "demo-0", d.Status.Current)
+		require.Equal(t, GateSettled, d.Status.Gate.WaitingFor)
+
+		for _, s := range []string{"demo-0", "demo-1", "demo-2"} {
+			f.recover(s)
+		}
+		d = f.decide()
+		require.Nil(t, d.Status, "the rollout did not finish once every server was back")
+	})
+	t.Run("the annotation restarts only the servers off the target", func(t *testing.T) {
+		f := newFakeCluster(3, "demo-0")
+		acrossAuth(f, true)
+		*f.server("demo-2") = rolloutServer{Name: "demo-2", OnTarget: true}
+		f.restartAll = "true"
+		d := f.decide()
+		require.Equal(t, []string{"demo-1", "demo-0"}, d.RestartAll)
+		require.Equal(t, []string{"demo-2", "demo-1"}, d.Status.Updated)
+		require.Equal(t, "demo-0", d.Status.Current)
+	})
+	t.Run("the annotation without an auth change is cleared and ignored", func(t *testing.T) {
+		f := newFakeCluster(3, "demo-0")
+		f.restartAll = "true"
+		d := f.decide()
+		require.Equal(t, "demo-2", d.Step)
+		require.Empty(t, d.RestartAll)
+		require.True(t, d.ClearRestartAll)
 	})
 }
 
