@@ -3,6 +3,7 @@ package authctl
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -26,10 +27,11 @@ import (
 
 // nscSystem is a NATS operator and a system account as nsc makes them: the
 // system account has a signing key, the two monitoring exports, a user sys
-// and a revoked user old, both signed by the signing key.
+// and a revoked user old, both signed by the signing key, and a revoked user
+// oldIdentity signed by the identity key.
 type nscSystem struct {
 	opJWT, sysJWT, sysPub, sysSigningPub string
-	sys, old                             nscSystemUser
+	sys, old, oldIdentity                nscSystemUser
 	// opSigning is the NATS operator's signing key, which signed sysJWT.
 	opSigning nkeys.KeyPair
 	// c holds the NatsOperator op and the NatsSystemAccount sys of namespace
@@ -72,7 +74,7 @@ func newNscSystemWith(t *testing.T, edit func(c *jwt.AccountClaims), accounts ..
 	}
 	opID, opPub, opSeed := pair(nkeys.PrefixByteOperator)
 	opSK, opSKPub, opSKSeed := pair(nkeys.PrefixByteOperator)
-	_, sysPub, sysSeed := pair(nkeys.PrefixByteAccount)
+	sysID, sysPub, sysSeed := pair(nkeys.PrefixByteAccount)
 	sysSK, sysSKPub, sysSKSeed := pair(nkeys.PrefixByteAccount)
 	n := &nscSystem{sysPub: sysPub, sysSigningPub: sysSKPub, opSigning: opSK}
 
@@ -84,21 +86,24 @@ func newNscSystemWith(t *testing.T, edit func(c *jwt.AccountClaims), accounts ..
 	n.opJWT, err = oc.Encode(opID)
 	require.NoError(t, err)
 
-	user := func() nscSystemUser {
+	user := func(issuer nkeys.KeyPair) nscSystemUser {
 		_, pub, seed := pair(nkeys.PrefixByteUser)
 		uc := jwt.NewUserClaims(pub)
-		uc.IssuerAccount = sysPub
-		token, err := uc.Encode(sysSK)
+		if issuer != sysID {
+			uc.IssuerAccount = sysPub
+		}
+		token, err := uc.Encode(issuer)
 		require.NoError(t, err)
 		return nscSystemUser{pub: pub, jwt: token, seed: seed}
 	}
-	n.sys, n.old = user(), user()
+	n.sys, n.old, n.oldIdentity = user(sysSK), user(sysSK), user(sysID)
 
 	sc := jwt.NewAccountClaims(sysPub)
 	sc.Name = "SYS"
 	sc.SigningKeys.Add(sysSKPub)
 	sc.Exports = jwtplane.MonitoringExports()
 	sc.Revoke(n.old.pub)
+	sc.Revoke(n.oldIdentity.pub)
 	edit(sc)
 	n.sysJWT, err = sc.Encode(opSK)
 	require.NoError(t, err)
@@ -140,9 +145,16 @@ func newNscSystemWith(t *testing.T, edit func(c *jwt.AccountClaims), accounts ..
 // and accountJWTs, and returns its client URL.
 func (n *nscSystem) serve(t *testing.T, accountJWTs ...string) string {
 	t.Helper()
+	return n.serveSystem(t, n.sysJWT, accountJWTs...)
+}
+
+// serveSystem is serve with sysJWT in place of the system account JWT nsc
+// made.
+func (n *nscSystem) serveSystem(t *testing.T, sysJWT string, accountJWTs ...string) string {
+	t.Helper()
 	res, err := server.NewDirAccResolver(t.TempDir(), 0, time.Hour, server.HardDelete)
 	require.NoError(t, err)
-	require.NoError(t, res.Store(n.sysPub, n.sysJWT))
+	require.NoError(t, res.Store(n.sysPub, sysJWT))
 	for _, token := range accountJWTs {
 		c, err := jwt.DecodeAccountClaims(token)
 		require.NoError(t, err)
@@ -193,6 +205,8 @@ func TestSystemAccountAdoption(t *testing.T) {
 	url := n.serve(t)
 	_, err := n.old.connect(url)
 	require.ErrorIs(t, err, nats.ErrAuthorization, "revoked under nsc")
+	_, err = n.oldIdentity.connect(url)
+	require.ErrorIs(t, err, nats.ErrAuthorization, "revoked under nsc")
 	nc, err := n.sys.connect(url)
 	require.NoError(t, err)
 	t.Cleanup(nc.Close)
@@ -210,16 +224,60 @@ func TestSystemAccountAdoption(t *testing.T) {
 	c, err := jwt.DecodeAccountClaims(held)
 	require.NoError(t, err)
 	require.Contains(t, c.Revocations, n.old.pub)
+	require.Contains(t, c.Revocations, n.oldIdentity.pub)
 	require.ElementsMatch(t, jwtplane.MonitoringExports(), c.Exports)
-	require.Len(t, sys.Status.Revocations, 1)
-	require.Equal(t, n.old.pub, sys.Status.Revocations[0].PublicKey)
-	require.Equal(t, []string{n.sysSigningPub}, sys.Status.Revocations[0].Issuers)
+	require.Len(t, sys.Status.Revocations, 2)
+	for _, r := range sys.Status.Revocations {
+		require.ElementsMatch(t, []string{n.sysPub, n.sysSigningPub}, r.Issuers, "recovered from the servers")
+	}
 
 	_, err = n.old.connect(url)
+	require.ErrorIs(t, err, nats.ErrAuthorization, "revoked after the adoption")
+	_, err = n.oldIdentity.connect(url)
 	require.ErrorIs(t, err, nats.ErrAuthorization, "revoked after the adoption")
 	again, err := n.sys.connect(url)
 	require.NoError(t, err)
 	again.Close()
+}
+
+// TestSystemAccountAdoption_SigningKeysRotated pins that a revocation
+// recovered from the servers for a system account lists its identity key as
+// an issuer, so a user the identity key signed stays refused once every
+// signing key is rotated out.
+func TestSystemAccountAdoption_SigningKeysRotated(t *testing.T) {
+	n := newNscSystem(t)
+	d := &lookupDistributor{held: n.sysJWT}
+	n.reconcileOperator(t, d)
+	n.reconcileSystemAccount(t, d)
+
+	kp, err := nkeys.CreateAccount()
+	require.NoError(t, err)
+	seed, err := kp.Seed()
+	require.NoError(t, err)
+	var secret corev1.Secret
+	require.NoError(t, n.c.Get(t.Context(), types.NamespacedName{Namespace: "ns", Name: "nsc"}, &secret))
+	secret.Data["sys-signing-2"] = seed
+	require.NoError(t, n.c.Update(t.Context(), &secret))
+	sys := &authv1beta1.NatsSystemAccount{}
+	require.NoError(t, n.c.Get(t.Context(), adoptionSystem, sys))
+	sys.Spec.Keys.Signing = []authv1beta1.SigningKey{{Name: "signing-2", SecretKeyRef: authv1beta1.SeedSecretKeySelector{Name: "nsc", Key: "sys-signing-2"}}}
+	require.NoError(t, n.c.Update(t.Context(), sys))
+
+	for range 2 {
+		n.reconcileOperator(t, d)
+		sys = n.reconcileSystemAccount(t, d)
+	}
+	_, op := n.reconcileOperator(t, d)
+	c, err := jwt.DecodeAccountClaims(op.Status.SystemAccount.JWT)
+	require.NoError(t, err)
+	require.NotContains(t, c.SigningKeys.Keys(), n.sysSigningPub, "rotated out")
+	require.Contains(t, c.Revocations, n.oldIdentity.pub)
+	i := slices.IndexFunc(sys.Status.Revocations, func(r authv1beta1.Revocation) bool { return r.PublicKey == n.oldIdentity.pub })
+	require.GreaterOrEqual(t, i, 0)
+	require.Contains(t, sys.Status.Revocations[i].Issuers, n.sysPub)
+
+	_, err = n.oldIdentity.connect(n.serveSystem(t, op.Status.SystemAccount.JWT))
+	require.ErrorIs(t, err, nats.ErrAuthorization)
 }
 
 // lookupDistributor answers Lookup with held, or with err where it is set.
