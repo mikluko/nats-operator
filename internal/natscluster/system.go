@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -23,7 +24,8 @@ const PoolKind = "NatsCluster"
 var ErrNoSystemUser = errors.New("no system user: auth.systemCredentials is not set")
 
 // SystemConnections reaches a NatsCluster's servers as the system user its
-// auth.systemCredentials names, and one without that user through Fallback.
+// auth.systemCredentials names, and one without that user, or whose
+// servers do not all answer it, through Fallback.
 type SystemConnections struct {
 	Client   client.Reader
 	Pool     *natsconn.Pool
@@ -41,17 +43,45 @@ var (
 	_ AdminFunc    = (*SystemConnections)(nil).Admin
 )
 
-// Observe observes nc over $SYS when it names a system user, and through
-// Fallback otherwise.
+// Observe observes nc over $SYS when it names a system user and every
+// server spec.replicas names answers there, and through Fallback otherwise,
+// as while servers still run a config without that user. A $SYS
+// observation that fails is masked whenever Fallback succeeds.
 func (s *SystemConnections) Observe(ctx context.Context, nc *clusterv1beta1.NatsCluster) (*sysobs.Snapshot, error) {
 	if !hasSystemUser(nc) {
 		return s.Fallback.Observe(ctx, nc)
 	}
+	snap, err := s.observeSystem(ctx, nc)
+	if err == nil && observesAll(snap, serverNames(nc)) {
+		return snap, nil
+	}
+	fb, fbErr := s.Fallback.Observe(ctx, nc)
+	switch {
+	case fbErr == nil:
+		return fb, nil
+	case err == nil:
+		return snap, nil
+	}
+	return nil, fmt.Errorf("%w; through the monitoring port: %w", err, fbErr)
+}
+
+func (s *SystemConnections) observeSystem(ctx context.Context, nc *clusterv1beta1.NatsCluster) (*sysobs.Snapshot, error) {
 	o, err := s.client(ctx, nc)
 	if err != nil {
 		return nil, err
 	}
 	return o.Observe(ctx)
+}
+
+// observesAll reports whether every server in servers is in snap's roster
+// and not Silent.
+func observesAll(snap *sysobs.Snapshot, servers []string) bool {
+	for _, name := range servers {
+		if slices.Contains(snap.Silent, name) || !slices.ContainsFunc(snap.Servers, func(s sysobs.Server) bool { return s.Name == name }) {
+			return false
+		}
+	}
+	return true
 }
 
 // Reloader reloads nc's servers over $SYS, and returns ErrNoSystemUser

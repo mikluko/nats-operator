@@ -541,17 +541,43 @@ func (r *Reconciler) applyOwned(ctx context.Context, nc *clusterv1beta1.NatsClus
 	return nil
 }
 
-// ObserveLeafs reads LEAFZ over $SYS when nc names a system user, and
-// through Fallback otherwise.
+// ObserveLeafs reads LEAFZ over $SYS when nc names a system user and every
+// server spec.replicas names answers there, and through Fallback
+// otherwise, as Observe does.
 func (s *SystemConnections) ObserveLeafs(ctx context.Context, nc *clusterv1beta1.NatsCluster) (map[string][]sysobs.Leaf, error) {
 	if !hasSystemUser(nc) {
 		return s.Fallback.ObserveLeafs(ctx, nc)
 	}
+	servers := serverNames(nc)
+	leafs, err := s.leafzSystem(ctx, nc, servers)
+	if err == nil && leafzAll(leafs, servers) {
+		return leafs, nil
+	}
+	fb, fbErr := s.Fallback.ObserveLeafs(ctx, nc)
+	switch {
+	case fbErr == nil:
+		return fb, nil
+	case err == nil:
+		return leafs, nil
+	}
+	return nil, fmt.Errorf("%w; through the monitoring port: %w", err, fbErr)
+}
+
+func (s *SystemConnections) leafzSystem(ctx context.Context, nc *clusterv1beta1.NatsCluster, servers []string) (map[string][]sysobs.Leaf, error) {
 	o, err := s.client(ctx, nc)
 	if err != nil {
 		return nil, err
 	}
-	return o.Leafz(ctx, serverNames(nc))
+	return o.Leafz(ctx, servers)
+}
+
+func leafzAll(leafs map[string][]sysobs.Leaf, servers []string) bool {
+	for _, name := range servers {
+		if _, ok := leafs[name]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // observeLeafs sets st's leafRemotes and LeafnodesConnected from what

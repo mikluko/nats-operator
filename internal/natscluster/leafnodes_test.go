@@ -470,9 +470,10 @@ func TestLeaf_OperatorMode(t *testing.T) {
 	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetClusterController))
 	t.Cleanup(pool.Close)
 	hubSys := &SystemConnections{
-		Client:  fake.NewClientBuilder().WithScheme(leafScheme(t)).WithObjects(credsSecret(h.nc.Namespace, h.nc.Spec.Auth.SystemCredentials.SecretKeyRef.Name, h.p.systemCreds(t, jwtplane.PresetClusterController))).Build(),
-		Pool:    pool,
-		Servers: func(*clusterv1beta1.NatsCluster) []string { return []string{h.clientURL(0)} },
+		Client:   fake.NewClientBuilder().WithScheme(leafScheme(t)).WithObjects(credsSecret(h.nc.Namespace, h.nc.Spec.Auth.SystemCredentials.SecretKeyRef.Name, h.p.systemCreds(t, jwtplane.PresetClusterController))).Build(),
+		Pool:     pool,
+		Fallback: &fakeObserver{},
+		Servers:  func(*clusterv1beta1.NatsCluster) []string { return []string{h.clientURL(0)} },
 	}
 	require.Eventually(t, func() bool {
 		leafs, err := hubSys.ObserveLeafs(context.Background(), h.nc)

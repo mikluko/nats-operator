@@ -3,6 +3,7 @@ package natscluster
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -354,9 +355,10 @@ func startAuthCluster(t *testing.T) *authCluster {
 	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetClusterController))
 	t.Cleanup(pool.Close)
 	a.sys = &SystemConnections{
-		Client:  fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build(),
-		Pool:    pool,
-		Servers: func(*clusterv1beta1.NatsCluster) []string { return []string{a.url} },
+		Client:   fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build(),
+		Pool:     pool,
+		Fallback: &fakeObserver{},
+		Servers:  func(*clusterv1beta1.NatsCluster) []string { return []string{a.url} },
 	}
 	require.Eventually(t, func() bool {
 		s, err := a.sys.Observe(context.Background(), a.nc)
@@ -459,11 +461,92 @@ func TestSystemConnections_NoSystemUser(t *testing.T) {
 		})
 	}
 	t.Run("credentials Secret missing", func(t *testing.T) {
-		_, err := sys.Observe(ctx, storyAuthCluster(t))
-		require.ErrorIs(t, err, natsconn.ErrSecretNotFound)
+		snap, err := sys.Observe(ctx, storyAuthCluster(t))
+		require.NoError(t, err)
+		require.Equal(t, "demo-0", snap.Servers[0].Name)
 		_, err = sys.Reloader(ctx, storyAuthCluster(t))
 		require.ErrorIs(t, err, natsconn.ErrSecretNotFound)
 	})
+	t.Run("credentials Secret missing and fallback fails", func(t *testing.T) {
+		failing := &SystemConnections{Client: sys.Client, Pool: pool, Fallback: &fakeObserver{}}
+		_, err := failing.Observe(ctx, storyAuthCluster(t))
+		require.ErrorIs(t, err, natsconn.ErrSecretNotFound)
+		require.ErrorIs(t, err, sysobs.ErrNoServers)
+	})
+}
+
+// monitorAt observes through the monitoring endpoints of the servers
+// spec.replicas names, as PodMonitor does.
+type monitorAt []sysobs.Endpoint
+
+func (m monitorAt) of(nc *clusterv1beta1.NatsCluster) []sysobs.Endpoint {
+	names := serverNames(nc)
+	return slices.DeleteFunc(slices.Clone(m), func(e sysobs.Endpoint) bool { return !slices.Contains(names, e.Name) })
+}
+
+func (m monitorAt) Observe(ctx context.Context, nc *clusterv1beta1.NatsCluster) (*sysobs.Snapshot, error) {
+	return sysobs.NewMonitor(http.DefaultClient, 0).Observe(ctx, m.of(nc))
+}
+
+func (m monitorAt) ObserveLeafs(ctx context.Context, nc *clusterv1beta1.NatsCluster) (map[string][]sysobs.Leaf, error) {
+	return sysobs.NewMonitor(http.DefaultClient, 0).Leafz(ctx, m.of(nc))
+}
+
+// TestSystemConnections_AuthNotRunning pins that a NatsCluster naming a
+// system user whose servers still run a config without auth, which answer
+// nothing on $SYS, is observed Settled through the fallback.
+func TestSystemConnections_AuthNotRunning(t *testing.T) {
+	p := mintPlane(t)
+	nc := storyAuthCluster(t)
+	plain := nc.DeepCopy()
+	plain.Spec.Auth = nil
+	eps, _, url, _ := startRendered(t, plain, nil, "r1")
+
+	scheme := runtime.NewScheme()
+	require.NoError(t, clientgoscheme.AddToScheme(scheme))
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Namespace: nc.Namespace, Name: nc.Spec.Auth.SystemCredentials.SecretKeyRef.Name},
+		Data:       map[string][]byte{natsconn.DefaultCredentialsKey: p.systemCreds(t, jwtplane.PresetClusterController)},
+	}
+	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetClusterController))
+	t.Cleanup(pool.Close)
+	sys := &SystemConnections{
+		Client:   fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build(),
+		Pool:     pool,
+		Fallback: monitorAt(eps),
+		Servers:  func(*clusterv1beta1.NatsCluster) []string { return []string{url} },
+		Wait:     500 * time.Millisecond,
+	}
+	ctx := context.Background()
+
+	_, err := sys.observeSystem(ctx, nc)
+	require.Error(t, err, "observed over $SYS of servers running no auth")
+	require.Eventually(t, func() bool {
+		snap, err := sys.Observe(ctx, nc)
+		return err == nil && len(snap.Servers) == 3 && snap.Verdict().Settled()
+	}, 30*time.Second, 200*time.Millisecond, "not observed Settled through the fallback")
+	leafs, err := sys.ObserveLeafs(ctx, nc)
+	require.NoError(t, err)
+	require.Len(t, leafs, 3)
+}
+
+// TestSystemConnections_ServerNotAnswering pins that a NatsCluster one of
+// whose servers does not answer on $SYS, as one restarted onto a config
+// with another system account, is observed through the fallback.
+func TestSystemConnections_ServerNotAnswering(t *testing.T) {
+	a := startAuthCluster(t)
+	nc := a.nc.DeepCopy()
+	nc.Spec.Replicas = 4
+	fallback := &fakeObserver{}
+	fallback.set(&sysobs.Snapshot{Servers: []sysobs.Server{{Name: "fallback"}}})
+	a.sys.Fallback = fallback
+
+	snap, err := a.sys.Observe(context.Background(), nc)
+	require.NoError(t, err)
+	require.Equal(t, "fallback", snap.Servers[0].Name)
+	snap, err = a.sys.Observe(context.Background(), a.nc)
+	require.NoError(t, err)
+	require.Len(t, snap.Servers, 3)
 }
 
 // TestOperatorReload_ResolverLosesPushedAccounts pins the nats-server 2.15
