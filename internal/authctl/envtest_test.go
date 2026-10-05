@@ -241,6 +241,7 @@ func TestEnvtest(t *testing.T) {
 	t.Run("CrossNamespaceImport", e.testCrossNamespaceImport)
 	t.Run("ImportFromOtherOperator", e.testImportFromOtherOperator)
 	t.Run("ImporterWaitsForExporter", e.testImporterWaitsForExporter)
+	t.Run("OutsideImports", e.testOutsideImports)
 	t.Run("NoExpiryAndAccountTrust", e.testNoExpiryAndAccountTrust)
 	t.Run("Rotation", e.testRotation)
 	t.Run("OfflineIdentities", e.testOfflineIdentities)
