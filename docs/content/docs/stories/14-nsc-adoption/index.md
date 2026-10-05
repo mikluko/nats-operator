@@ -100,7 +100,7 @@ Revocations carry over: the auth controller reads them from the JWT on the serve
 An account that has no signing key keeps its revocations too, and rotating a signing key later does not drop them.
 An account that revokes every user, with the key `*`, keeps that revocation too: users whose JWTs were issued at or before its time stay refused.
 
-The system account keeps its revocations too, until you rotate its signing keys: its revocations list signing keys alone as their `issuers`.
+The system account keeps its revocations on the same terms, and rotating its signing keys later does not drop them.
 It keeps the two exports that `nsc` gives it, `account-monitoring-services` and `account-monitoring-streams`, which the auth controller signs into every system account.
 No `NatsSystemAccount` can keep any other export, or an import: the auth controller refuses to sign a system account that has one, in the same way, and the `NatsOperator` and the `NatsSystemAccount` both have the condition `Ready` False with the reason `AdoptionDropsClaims`.
 Set `adoption.droppedClaims` to `Accept` in the spec of the `NatsSystemAccount` to accept the loss.
@@ -182,6 +182,7 @@ The `status` in the output is similar to this:
 `publicKey`, `signingKeys` and `systemAccount.publicKey` are the keys that `nsc describe` printed.
 `jwt` is a NATS operator JWT that the auth controller signed with the identity key.
 The servers keep the one in their config, and do not restart.
+`systemAccount.revocations` lists the revocations in the system account JWT that the auth controller signed.
 
 Read the status of the `NatsSystemAccount`:
 
@@ -194,6 +195,13 @@ The `status` in the output is similar to this:
 {{< manifest "01-status-natssystemaccount.yaml" >}}
 
 `revocations` lists the user that the system account revoked under `nsc`.
+Its `issuers` are the identity key and the signing key of the system account, since either may have signed that user's JWT.
+
+The config of the servers still preloads the system account JWT that `nsc` signed, under `resolver_preload`.
+A server that restarts with its resolver `dir` intact keeps the JWT that the auth controller pushed, because the server stores a preloaded JWT only over an older one.
+A server that starts with an empty `dir`, such as an `emptyDir` volume in a pod that was recreated, serves the JWT from `nsc` until the auth controller pushes its own again, about one roster poll later.
+Until then, users that the new JWT revokes can connect, and users signed by keys that only the new JWT lists cannot.
+To close that gap, replace the preloaded system account JWT in the config with `status.systemAccount.jwt` of the `NatsOperator`, or keep the resolver `dir` on a persistent volume.
 
 When `Distributed` is True, the auth controller can ask every server for the JWT that it holds, which is where the revocations of an account come from.
 If you apply an account before that, the auth controller signs its JWT and does not push it.
