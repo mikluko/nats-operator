@@ -45,6 +45,8 @@ type rolloutServer struct {
 	OnTarget bool
 	// Restart is true when its revision waits for a restart.
 	Restart bool
+	// AcrossAuth is true when that restart adds or removes auth.
+	AcrossAuth bool
 	// Ready is true when its pod is Ready at its StatefulSet's template.
 	Ready bool
 	// Missing is true when it has no StatefulSet, as a replaced server
@@ -69,6 +71,8 @@ type rolloutState struct {
 	Removal    removalState
 	Paused     bool
 	ForceStep  string
+	AddingAuth bool
+	RestartAll string
 	Prev       *clusterv1beta1.RolloutStatus
 	Now        time.Time
 }
@@ -85,6 +89,11 @@ type rolloutDecision struct {
 	// ClearForceStep is true when a force-step annotation was read; it is
 	// cleared whether or not it named a server that could be stepped.
 	ClearForceStep bool
+	// RestartAll are the servers to restart together now.
+	RestartAll []string
+	// ClearRestartAll is true when a restart-all annotation was read; it is
+	// cleared whether or not an auth change was waiting for it.
+	ClearRestartAll bool
 	// Status is status.rollout, nil when no server waits for a restart.
 	Status *clusterv1beta1.RolloutStatus
 	// Progressing is the Progressing condition while Status is not nil.
@@ -102,14 +111,16 @@ func (g gateState) open() bool { return g.waitingFor == "" }
 
 // decide takes one rollout decision, of at most one step.
 func decide(st rolloutState) rolloutDecision {
-	d := rolloutDecision{ClearForceStep: st.ForceStep != ""}
+	d := rolloutDecision{ClearForceStep: st.ForceStep != "", ClearRestartAll: st.RestartAll != ""}
 	rm := st.Removal
 	var restarts, onTarget, missing []string
+	acrossAuth := false
 	for _, s := range st.Servers {
 		switch {
 		case s.Name == rm.Removing || slices.Contains(rm.Replace, s.Name):
 		case s.Restart:
 			restarts = append(restarts, s.Name)
+			acrossAuth = acrossAuth || s.AcrossAuth
 		case s.OnTarget:
 			onTarget = append(onTarget, s.Name)
 		case s.Missing:
@@ -129,6 +140,9 @@ func decide(st rolloutState) rolloutDecision {
 		d.Blocked = &metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: ReasonReplacementBlocked,
 			Message: fmt.Sprintf("cannot replace %s: cannot evacuate servers: %s", strings.Join(replace, ", "), rm.NoAdmin)}
 		replace = nil
+	}
+	if acrossAuth && rm.Removing == "" {
+		return decideAuthChange(st, d, onTarget, rolloutOrder(restarts, st.MetaLeader))
 	}
 	pending := slices.Concat(surplus, rolloutOrder(restarts, st.MetaLeader), replace)
 
@@ -190,6 +204,34 @@ func decide(st rolloutState) rolloutDecision {
 		d.Status.Gate = &clusterv1beta1.RolloutGate{WaitingFor: gate.waitingFor, Since: &metav1.Time{Time: since}}
 	}
 	d.Progressing = rolloutCondition(d.Status, gate, st.Paused, st.Now.Sub(since), st.kindOf)
+	return d
+}
+
+// decideAuthChange holds restarts, in rollout order, that add or remove
+// auth, or restarts them all at once when st carries the restart-all
+// annotation: a server with auth and one without cannot route to each other,
+// so no one-at-a-time rollout across that change can finish.
+func decideAuthChange(st rolloutState, d rolloutDecision, onTarget, restarts []string) rolloutDecision {
+	change := "removing auth"
+	if st.AddingAuth {
+		change = "adding auth"
+	}
+	d.Status = &clusterv1beta1.RolloutStatus{TargetRevision: st.Target, Updated: slices.Clone(onTarget)}
+	if st.RestartAll == "" {
+		d.Status.Pending = restarts
+		d.Progressing = metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionFalse, Reason: ReasonAuthChangeBlocked,
+			Message: fmt.Sprintf("%s cannot roll out one server at a time, as a server with auth and one without cannot route to each other: "+
+				"annotate the NatsCluster %s to restart %s together, or recreate it",
+				change, clusterv1beta1.AnnotationRestartAll, strings.Join(restarts, ", "))}
+		return d
+	}
+	last := len(restarts) - 1
+	d.RestartAll = restarts
+	d.Status.Updated = append(d.Status.Updated, restarts[:last]...)
+	d.Status.Current = restarts[last]
+	d.Status.Gate = &clusterv1beta1.RolloutGate{WaitingFor: GateSettled, Since: &metav1.Time{Time: st.Now}}
+	d.Progressing = metav1.Condition{Type: ConditionProgressing, Status: metav1.ConditionTrue, Reason: ReasonRollingRestart,
+		Message: fmt.Sprintf("%s: restarting %s together; waiting for %s", change, strings.Join(restarts, ", "), GateSettled)}
 	return d
 }
 
@@ -312,10 +354,12 @@ func podReady(sts *appsv1.StatefulSet) bool {
 // rolloutState collects what decide reads from one reconcile.
 func (r *Reconciler) rolloutState(nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed) rolloutState {
 	st := rolloutState{
-		Target:    plan.Revision,
-		ForceStep: nc.Annotations[clusterv1beta1.AnnotationForceStep],
-		Prev:      nc.Status.Rollout,
-		Now:       r.now(),
+		Target:     plan.Revision,
+		ForceStep:  nc.Annotations[clusterv1beta1.AnnotationForceStep],
+		AddingAuth: nc.Spec.Auth != nil,
+		RestartAll: nc.Annotations[clusterv1beta1.AnnotationRestartAll],
+		Prev:       nc.Status.Rollout,
+		Now:        r.now(),
 	}
 	if ro := nc.Spec.Rollout; ro != nil {
 		st.Paused = ro.Paused
@@ -346,19 +390,20 @@ func (r *Reconciler) rolloutState(nc *clusterv1beta1.NatsCluster, plan *Plan, o 
 		sts := o.StatefulSets[s.Name]
 		_, restart := o.Apply.Restart[s.Name]
 		st.Servers = append(st.Servers, rolloutServer{
-			Name:     s.Name,
-			OnTarget: sts != nil && sts.Annotations[AnnotationConfigRevision] == plan.Revision,
-			Restart:  restart,
-			Ready:    podReady(sts),
-			Missing:  sts == nil,
-			Revision: reported[s.Name],
+			Name:       s.Name,
+			OnTarget:   sts != nil && sts.Annotations[AnnotationConfigRevision] == plan.Revision,
+			Restart:    restart,
+			Ready:      podReady(sts),
+			Missing:    sts == nil,
+			Revision:   reported[s.Name],
+			AcrossAuth: slices.Contains(o.Apply.AcrossAuth, s.Name),
 		})
 	}
 	return st
 }
 
 // rollout takes one rollout decision and carries it out, clearing the
-// force-step and replace-server annotations it read.
+// force-step, restart-all and replace-server annotations it read.
 func (r *Reconciler) rollout(ctx context.Context, nc *clusterv1beta1.NatsCluster, plan *Plan, o Observed) (rolloutDecision, error) {
 	if err := r.requestReplacement(ctx, nc, plan, o.StatefulSets); err != nil {
 		return rolloutDecision{}, err
@@ -397,8 +442,24 @@ func (r *Reconciler) rollout(ctx context.Context, nc *clusterv1beta1.NatsCluster
 		o.StatefulSets[d.Step] = sts
 		telemetry.Emit(r.Recorder, nc, telemetry.RolloutStep, "restarting %s", d.Step)
 	}
+	for _, name := range d.RestartAll {
+		i := slices.IndexFunc(plan.Servers, func(s Server) bool { return s.Name == name })
+		sts, err := r.restartServer(ctx, nc, plan.Servers[i], o.StatefulSets[name], o.Apply.Restart[name])
+		if err != nil {
+			return d, err
+		}
+		o.StatefulSets[name] = sts
+	}
+	if len(d.RestartAll) > 0 {
+		telemetry.Emit(r.Recorder, nc, telemetry.RolloutStep, "restarting %s together", strings.Join(d.RestartAll, ", "))
+	}
 	if d.ClearForceStep {
 		if err := r.clearAnnotation(ctx, nc, clusterv1beta1.AnnotationForceStep, st.ForceStep); err != nil {
+			return d, err
+		}
+	}
+	if d.ClearRestartAll {
+		if err := r.clearAnnotation(ctx, nc, clusterv1beta1.AnnotationRestartAll, st.RestartAll); err != nil {
 			return d, err
 		}
 	}

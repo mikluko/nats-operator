@@ -9,13 +9,17 @@ import (
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
 )
 
-// Imperatives on a NatsCluster. The cluster controller clears force-step and
-// replace-server once it has acted; force-delete it reads only while the
-// NatsCluster is being deleted, and never clears.
+// Imperatives on a NatsCluster. The cluster controller clears force-step,
+// restart-all and replace-server once it has acted; force-delete it reads
+// only while the NatsCluster is being deleted, and never clears.
 const (
 	// AnnotationForceStep pushes the rollout step for the named server
 	// through its gate.
 	AnnotationForceStep = "cluster.nats-operator.io/force-step"
+	// AnnotationRestartAll restarts together, past the gate, every server
+	// whose restart adds or removes auth; whatever its value, it is cleared
+	// once read, so it is set with or after that change.
+	AnnotationRestartAll = "cluster.nats-operator.io/restart-all"
 	// AnnotationReplaceServer replaces the named server under the rollout
 	// gate.
 	AnnotationReplaceServer = "cluster.nats-operator.io/replace-server"

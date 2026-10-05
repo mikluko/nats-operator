@@ -2,6 +2,7 @@ package natscluster
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -40,6 +41,9 @@ const reloadWindow = 3 * time.Minute
 type configApply struct {
 	// Restart maps each server whose revision needs a restart to why.
 	Restart map[string]string
+	// AcrossAuth are the servers in Restart whose restart adds or removes
+	// auth.
+	AcrossAuth []string
 	// Reloading are the servers whose reload is not yet confirmed.
 	Reloading []string
 	// Reloaded are the servers a reload moved to the revision.
@@ -111,6 +115,9 @@ func (r *Reconciler) applyConfig(ctx context.Context, nc *clusterv1beta1.NatsClu
 			}
 			if reason != "" {
 				a.restart(s.Name, reason)
+				if underOperator(cm.Data[configFile]) != underOperator(s.ConfigMap.Data[configFile]) {
+					a.AcrossAuth = append(a.AcrossAuth, s.Name)
+				}
 				continue
 			}
 			if err := r.writeForReload(ctx, cm, s, plan.Revision); err != nil {
@@ -160,6 +167,15 @@ func changeRestartReason(nc *clusterv1beta1.NatsCluster, cur *appsv1.StatefulSet
 		return "the StatefulSet spec is restart-only"
 	}
 	return restartReason(nc.Spec.Version, []byte(cm.Data[configFile]), []byte(s.ConfigMap.Data[configFile]))
+}
+
+// underOperator reports whether config, a rendered config file, puts its
+// server under a NATS operator; one that does not decode does not.
+func underOperator(config string) bool {
+	var c struct {
+		Operator string `json:"operator"`
+	}
+	return json.Unmarshal([]byte(config), &c) == nil && c.Operator != ""
 }
 
 // runningVersion is the image tag of sts's nats container, or "" when the
