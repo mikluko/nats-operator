@@ -100,6 +100,8 @@ type Import struct {
 
 // Revocation revokes a user's JWTs issued at or before At.
 type Revocation struct {
+	// PublicKey is the user's public key, or jwt.All for every user of the
+	// account.
 	PublicKey string
 	At        time.Time
 }
@@ -191,8 +193,8 @@ func accountClaims(name string, keys Keys, revs []Revocation) (*jwt.AccountClaim
 	c.Name = name
 	c.SigningKeys.Add(signing...)
 	for _, r := range revs {
-		if !nkeys.IsValidPublicUserKey(r.PublicKey) {
-			return nil, fmt.Errorf("%w: revoked %q is not a user public key", ErrWrongKeyType, r.PublicKey)
+		if r.PublicKey != jwt.All && !nkeys.IsValidPublicUserKey(r.PublicKey) {
+			return nil, fmt.Errorf("%w: revoked %q is neither a user public key nor %q", ErrWrongKeyType, r.PublicKey, jwt.All)
 		}
 		c.RevokeAt(r.PublicKey, r.At)
 	}

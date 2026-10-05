@@ -365,7 +365,7 @@ Revocation is a user key an account revokes.\
 Appears on: [NatsAccountStatus](#NatsAccountStatus), [NatsSystemAccountStatus](#NatsSystemAccountStatus).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
-| `publicKey` | {{< type "string" >}} | Yes | PublicKey is the revoked user's key. |
+| `publicKey` | {{< type "string" >}} | Yes | PublicKey is the revoked user's key, or `*` for every user of the account. |
 | `at` | [{{< type "Time" >}}](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Time) | Yes | At revokes the user's JWTs issued at or before it. |
 | `issuers` | {{< type "[]string" >}} | No | Issuers are the keys that may have signed a revoked JWT: the account's signing keys when the revocation was recorded, or, for a revocation a NatsAccount took from a JWT the servers held, that JWT's signing keys and the account's identity key. The revocation is dropped once none of them is the account's identity key or among its signing keys. |
 

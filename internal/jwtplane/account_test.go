@@ -311,11 +311,12 @@ func TestSignAccountRevocations(t *testing.T) {
 	tok, err := jwtplane.SignAccount(jwtplane.Account{Keys: acc, Revocations: []jwtplane.Revocation{
 		{PublicKey: current, At: now},
 		{PublicKey: earlier, At: now.Add(-2 * time.Hour)},
+		{PublicKey: jwt.All, At: now.Add(-time.Hour)},
 	}}, op, now)
 	require.NoError(t, err)
 	c, err := jwt.DecodeAccountClaims(tok)
 	require.NoError(t, err)
-	require.Equal(t, jwt.RevocationList{current: now.Unix(), earlier: now.Add(-2 * time.Hour).Unix()}, c.Revocations)
+	require.Equal(t, jwt.RevocationList{current: now.Unix(), earlier: now.Add(-2 * time.Hour).Unix(), jwt.All: now.Add(-time.Hour).Unix()}, c.Revocations)
 
 	_, err = jwtplane.SignAccount(jwtplane.Account{Keys: acc, Revocations: []jwtplane.Revocation{{PublicKey: pub(t, acc.Identity), At: now}}}, op, now)
 	require.ErrorIs(t, err, jwtplane.ErrWrongKeyType)

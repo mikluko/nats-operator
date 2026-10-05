@@ -253,7 +253,9 @@ spec:
                         type: string
                       type: array
                     publicKey:
-                      description: PublicKey is the revoked user's key.
+                      description: |-
+                        PublicKey is the revoked user's key, or `*` for every user of the
+                        account.
                       type: string
                   required:
                   - at
