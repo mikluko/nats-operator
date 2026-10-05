@@ -63,6 +63,13 @@ Write the whole spec before you apply it:
 - Declare every export under `exports`, and every import under `imports`.
   Apply an account that exports before the accounts that import from it: an import from a `NatsAccount` that does not exist is left out of the JWT.
   While the exporting `NatsAccount` exists but has no public key yet, the importing account is not signed: its `NatsAccount` has the condition `Ready` False with the reason `ExporterPending`, and its JWT on the servers stays as it is.
+- Declare an import from the system account with `accountRef` of kind `NatsSystemAccount`.
+  The export is `account-monitoring-services` or `account-monitoring-streams`, and the auth controller puts the public key of the account where `nsc` put it.
+- Declare an import from an account that you do not take over, or that another NATS operator signs, with `publicKey` in place of `accountRef`, and copy the `subject` and the `type` of the import from the claims.
+  `nsc describe account orders --json` prints them under `nats.imports`, with the activation `token` of an import of a private export.
+  Put that token in a Secret and name it under `activation.secretKeyRef`.
+  An import whose token does not fit is left out of the JWT, and the condition `ReferencesResolved` of the `NatsAccount` says why.
+- Set `share` on an import of a service and `allowTrace` on an import of a stream if the claims set them.
 - Set `jwtTTL`.
   A JWT from `nsc` does not expire unless you gave it an expiry.
   A JWT from the auth controller expires after `jwtTTL`, 48h by default, and the auth controller signs it again before then.
@@ -73,7 +80,6 @@ The account loses these claims, because a `NatsAccount` has no field for them:
 - The scope of a scoped signing key. If you list the key, its users fail with `maximum subscriptions exceeded`.
 - Subject mappings, default permissions, and auth callout.
 - The latency sampling and the account token position of an export.
-- An import from an account of another NATS operator, and an import from the system account.
 - The description and the tags.
 
 Revocations carry over: the auth controller reads them from the JWT on the servers.
@@ -84,7 +90,7 @@ The system account keeps its revocations too, until you rotate its signing keys:
 It keeps the two exports that `nsc` gives it, `account-monitoring-services` and `account-monitoring-streams`, which the auth controller signs into every system account.
 It loses any other export and every import, because a `NatsSystemAccount` has no field for them.
 
-[AccountLimits]({{< relref "/docs/reference/api#AccountLimits" >}}) and [Export]({{< relref "/docs/reference/api#Export" >}}) in the API reference list every field.
+[AccountLimits]({{< relref "/docs/reference/api#AccountLimits" >}}), [Export]({{< relref "/docs/reference/api#Export" >}}) and [Import]({{< relref "/docs/reference/api#Import" >}}) in the API reference list every field.
 
 ## Put the seeds in Secrets
 
