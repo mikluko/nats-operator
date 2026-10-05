@@ -17,7 +17,7 @@ spec:
     jetstream:
       memoryStorage: 1Gi
       diskStorage: 10Gi
-      streams: 10
+      streams: 20
       consumers: 100
   exports:
     - name: orders-events
