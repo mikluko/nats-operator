@@ -76,6 +76,13 @@ func TestAccountRevocations(t *testing.T) {
 		}
 	}
 
+	claim := func(mutate func(*authv1beta1.NatsUser)) func(*authv1beta1.NatsUser) {
+		return func(u *authv1beta1.NatsUser) {
+			u.Spec.PublicKey = u.Status.PublicKey
+			mutate(u)
+		}
+	}
+
 	tests := []struct {
 		name     string
 		recorded []authv1beta1.Revocation
@@ -128,6 +135,25 @@ func TestAccountRevocations(t *testing.T) {
 				rev(carried, t0, keyA),
 				rev(deleting, t0.Add(2*time.Hour), keyA, keyB),
 				rev(denied, t0.Add(3*time.Hour), keyA, keyB),
+			},
+		},
+		{
+			name:    "a deleted or denied user that claimed its key is revoked by the identity key too",
+			signing: []string{keyA, keyB},
+			users: []authv1beta1.NatsUser{
+				user(deleting, claim(deleted(t0.Add(2*time.Hour), true))),
+				user(denied, claim(noGrant(t0.Add(3*time.Hour)))),
+				user(carried, deleted(t0.Add(time.Hour), true)),
+				user(admitted, func(u *authv1beta1.NatsUser) {
+					u.Spec.PublicKey = carried
+					deleted(t0, true)(u)
+				}),
+			},
+			want: []authv1beta1.Revocation{
+				rev(carried, t0.Add(time.Hour), keyA, keyB),
+				rev(deleting, t0.Add(2*time.Hour), accPub, keyA, keyB),
+				rev(denied, t0.Add(3*time.Hour), accPub, keyA, keyB),
+				rev(admitted, t0, keyA, keyB),
 			},
 		},
 		{
@@ -184,6 +210,16 @@ func TestAccountRevocations(t *testing.T) {
 			require.Equal(t, tt.want, accountRevocations(tt.recorded, tt.prev, accPub, tt.signing, tt.users))
 		})
 	}
+
+	t.Run("a claimed key's revocation survives every signing key rotating out, an issued key's does not", func(t *testing.T) {
+		users := []authv1beta1.NatsUser{
+			user(deleting, claim(deleted(t0, true))),
+			user(denied, deleted(t0, true)),
+		}
+		recorded := accountRevocations(nil, "", accPub, []string{keyA}, users)
+		require.Equal(t, []authv1beta1.Revocation{rev(deleting, t0, accPub, keyA)},
+			accountRevocations(recorded, "", accPub, []string{keyC}, nil))
+	})
 }
 
 // lookupOnly is a Distributor whose Lookup answers with jwt and err, and

@@ -228,6 +228,8 @@ It is similar to this:
 
 From here on, change the account in its `NatsAccount`.
 The auth controller creates the creds of a new user from a `NatsUser`, as [Put a NATS cluster under a NATS operator]({{< relref "/docs/stories/02-auth-plane" >}}) shows.
+A `NatsUser` that sets `publicKey` to the public key of a user that `nsc` issued claims that user.
+When you delete it, the auth controller revokes the key under the identity key of the account as well as its signing keys, so rotating the signing keys later does not let the user back in.
 
 ## Check the users that nsc issued
 
