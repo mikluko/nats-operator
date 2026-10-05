@@ -105,6 +105,10 @@ type SystemAccountStatus struct {
 	// JWT of the system account.
 	// +optional
 	JWT string `json:"jwt,omitempty"`
+
+	// Revocations the JWT carries, each with its issuers.
+	// +optional
+	Revocations []Revocation `json:"revocations,omitempty"`
 }
 
 // +kubebuilder:object:root=true

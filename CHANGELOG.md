@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A `NatsOperator` has the condition `SigningKeyUntrusted`, True with the reason `UntrustedSigner` while a server does not list its active signing key in the NATS operator JWT it runs under, naming the key and how many servers do not list it, and False with the reason `SignerTrusted` otherwise.
 - An importer of a private export of a `NatsAccount` takes `publicKey` in place of `kind` and `name`, for an account no `NatsAccount` describes; the auth controller mints its activation token into `status.exports[].importers[].activationToken`. A key it mints no token for leaves `Ready` False with the reason `ActivationsUnsigned`.
+- A `NatsOperator` lists the revocations of the system account JWT it signs, each with its `issuers`, in `status.systemAccount.revocations`.
 
 ### Changed
 
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - The revocation of a deleted or denied `NatsUser` whose `status.publicKey` is the `publicKey` of its spec lists the account's identity key among its `issuers`, and is kept after every signing key it lists is rotated out.
+- A revocation that a `NatsSystemAccount` takes from the JWT the servers hold lists the system account's identity key among its `issuers`, and is kept after its signing keys are rotated out.
 
 ## [0.4.0] - 2026-10-05
 

@@ -98,7 +98,9 @@ func checkAdoption(t *testing.T, dir string) {
 	require.Len(t, sys.Status.Revocations, 1)
 	require.Equal(t, sysOld.Subject, sys.Status.Revocations[0].PublicKey)
 	require.Equal(t, sc.Revocations[sysOld.Subject], sys.Status.Revocations[0].At.Unix())
-	require.Equal(t, []string{systemSigning}, sys.Status.Revocations[0].Issuers)
+	require.True(t, slices.IsSorted(sys.Status.Revocations[0].Issuers))
+	require.ElementsMatch(t, []string{system, systemSigning}, sys.Status.Revocations[0].Issuers)
+	require.Equal(t, sys.Status.Revocations, op.Status.SystemAccount.Revocations)
 	var acc authv1beta1.NatsAccount
 	readStatusPatch(t, dir, "natsaccount-status.json", &acc)
 	require.Equal(t, orders, acc.Status.PublicKey)

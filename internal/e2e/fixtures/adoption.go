@@ -100,18 +100,21 @@ func adoption(dir string) error {
 	if err := writeTemplate(dir, "00-seeds.yaml", adoptionSeedsTemplate, d); err != nil {
 		return err
 	}
+	sysIssuers := []string{sys.identityPub, sys.signingPub}
+	slices.Sort(sysIssuers)
+	sysRevocations := []map[string]any{
+		{"publicKey": sysOldPub, "at": revokedAt.UTC().Format(time.RFC3339), "issuers": sysIssuers},
+	}
 	if err := writeStatusPatch(dir, "natsoperator-status.json", map[string]any{
 		"publicKey":     op.identityPub,
 		"signingKeys":   []string{op.signingPub},
-		"systemAccount": map[string]string{"publicKey": sys.identityPub},
+		"systemAccount": map[string]any{"publicKey": sys.identityPub, "revocations": sysRevocations},
 	}); err != nil {
 		return err
 	}
 	if err := writeStatusPatch(dir, "natssystemaccount-status.json", map[string]any{
-		"publicKey": sys.identityPub,
-		"revocations": []map[string]any{
-			{"publicKey": sysOldPub, "at": revokedAt.UTC().Format(time.RFC3339), "issuers": []string{sys.signingPub}},
-		},
+		"publicKey":   sys.identityPub,
+		"revocations": sysRevocations,
 	}); err != nil {
 		return err
 	}
