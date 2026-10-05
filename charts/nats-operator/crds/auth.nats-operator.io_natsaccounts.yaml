@@ -134,10 +134,13 @@ spec:
               imports:
                 description: Imports are exports of other accounts this one takes.
                 items:
-                  description: Import takes another account's export by name.
+                  description: |-
+                    Import takes another account's export by name, from a NatsAccount or
+                    NatsSystemAccount under this account's NatsOperator, or from an account
+                    named by public key.
                   properties:
                     accountRef:
-                      description: AccountRef names the exporting account.
+                      description: AccountRef names the exporting NatsAccount or NatsSystemAccount.
                       properties:
                         kind:
                           description: Kind of the account.
@@ -158,6 +161,32 @@ spec:
                       - kind
                       - name
                       type: object
+                    activation:
+                      description: |-
+                        Activation is the token the exporter issued this account for a
+                        Private export, for an import by publicKey.
+                      properties:
+                        secretKeyRef:
+                          description: SecretKeyRef selects the token.
+                          properties:
+                            key:
+                              description: Key within the Secret.
+                              minLength: 1
+                              type: string
+                            name:
+                              description: Name of a Secret in the referrer's namespace.
+                              minLength: 1
+                              type: string
+                          required:
+                          - key
+                          - name
+                          type: object
+                      required:
+                      - secretKeyRef
+                      type: object
+                    allowTrace:
+                      description: AllowTrace lets message traces cross a Stream import.
+                      type: boolean
                     export:
                       description: Export is the name of the export taken.
                       minLength: 1
@@ -168,10 +197,44 @@ spec:
                         exported subject when omitted.
                       minLength: 1
                       type: string
+                    publicKey:
+                      description: |-
+                        PublicKey names the exporting account where no NatsAccount or
+                        NatsSystemAccount under this account's NatsOperator describes it.
+                      minLength: 1
+                      type: string
+                    share:
+                      description: |-
+                        Share lets the exporter of a Service import sample this account's
+                        request latency.
+                      type: boolean
+                    subject:
+                      description: Subject is the exported subject, for an import
+                        by publicKey.
+                      minLength: 1
+                      type: string
+                    type:
+                      description: Type is the export's type, for an import by publicKey.
+                      enum:
+                      - Stream
+                      - Service
+                      type: string
                   required:
-                  - accountRef
                   - export
                   type: object
+                  x-kubernetes-validations:
+                  - message: an import names its exporter by accountRef or by publicKey
+                    rule: has(self.accountRef) != has(self.publicKey)
+                  - message: subject and type are set with publicKey and only then;
+                      activation only with publicKey
+                    rule: 'has(self.publicKey) ? has(self.subject) && has(self.type)
+                      : !has(self.subject) && !has(self.type) && !has(self.activation)'
+                  - message: share is set only on a Service import
+                    rule: '!has(self.share) || !self.share || !has(self.type) || self.type
+                      == ''Service'''
+                  - message: allowTrace is set only on a Stream import
+                    rule: '!has(self.allowTrace) || !self.allowTrace || !has(self.type)
+                      || self.type == ''Stream'''
                 type: array
               jwtTTL:
                 default: 48h
@@ -518,11 +581,13 @@ spec:
                         of a Private export.
                       enum:
                       - Signed
+                      - Supplied
                       type: string
                     export:
                       description: |-
                         Export is the export taken, as account/export, or
-                        namespace/account/export from another namespace.
+                        namespace/account/export from another namespace, or
+                        publicKey/export from an account named by public key.
                       type: string
                     localSubject:
                       description: LocalSubject is where the import appears in this

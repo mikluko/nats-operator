@@ -25,7 +25,8 @@ const (
 	// accountField indexes NatsAccountTrust by its NatsAccount.
 	accountField = "auth.nats-operator.io/account"
 	// seedSecretField indexes NatsOperator, NatsSystemAccount and
-	// NatsAccount by the seed Secrets they read, generated ones included.
+	// NatsAccount by the seed Secrets they read, generated ones included,
+	// and NatsAccount by the activation token Secrets its imports read too.
 	seedSecretField = "auth.nats-operator.io/seed-secret"
 	// userAccountField indexes NatsUser by its account.
 	userAccountField = "auth.nats-operator.io/user-account"
@@ -82,7 +83,7 @@ func indexes(ctx context.Context, idx client.FieldIndexer) error {
 		{&authv1beta1.NatsAccount{}, exporterField, func(o client.Object) []string {
 			var out []string
 			for _, imp := range o.(*authv1beta1.NatsAccount).Spec.Imports {
-				if imp.AccountRef.Kind == authv1beta1.AccountKindAccount {
+				if imp.AccountRef != nil && imp.AccountRef.Kind == authv1beta1.AccountKindAccount {
 					out = append(out, nsOf(o, imp.AccountRef.ObjectReference)...)
 				}
 			}
@@ -100,7 +101,12 @@ func indexes(ctx context.Context, idx client.FieldIndexer) error {
 			return secrets(o, systemAccountKeySource(o.(*authv1beta1.NatsSystemAccount)))
 		}},
 		{&authv1beta1.NatsAccount{}, seedSecretField, func(o client.Object) []string {
-			return secrets(o, accountKeySource(o.(*authv1beta1.NatsAccount)))
+			acc := o.(*authv1beta1.NatsAccount)
+			out := secrets(o, accountKeySource(acc))
+			for _, name := range activationSecretNames(acc) {
+				out = append(out, keyValue(types.NamespacedName{Namespace: acc.Namespace, Name: name}))
+			}
+			return out
 		}},
 	}
 	for _, i := range all {
@@ -122,7 +128,9 @@ func indexes(ctx context.Context, idx client.FieldIndexer) error {
 			acc := o.(*authv1beta1.NatsAccount)
 			out := []string{acc.Spec.OperatorRef.Namespace}
 			for _, imp := range acc.Spec.Imports {
-				out = append(out, imp.AccountRef.Namespace)
+				if imp.AccountRef != nil {
+					out = append(out, imp.AccountRef.Namespace)
+				}
 			}
 			return out
 		}},

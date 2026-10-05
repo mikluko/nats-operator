@@ -30,8 +30,11 @@ import (
 type nscSystem struct {
 	opJWT, sysJWT, sysPub, sysSigningPub string
 	sys, old                             nscSystemUser
+	// opSigning is the NATS operator's signing key, which signed sysJWT.
+	opSigning nkeys.KeyPair
 	// c holds the NatsOperator op and the NatsSystemAccount sys of namespace
-	// ns, adopting the keys through the Secret nsc.
+	// ns, adopting the keys through the Secret nsc, and the accounts given
+	// to newNscSystem.
 	c client.Client
 }
 
@@ -49,7 +52,7 @@ var (
 	takeoverSystem   = types.NamespacedName{Namespace: "ns", Name: "sys"}
 )
 
-func newNscSystem(t *testing.T) *nscSystem {
+func newNscSystem(t *testing.T, accounts ...*authv1beta1.NatsAccount) *nscSystem {
 	t.Helper()
 	pair := func(prefix nkeys.PrefixByte) (nkeys.KeyPair, string, []byte) {
 		kp, err := nkeys.CreatePair(prefix)
@@ -64,7 +67,7 @@ func newNscSystem(t *testing.T) *nscSystem {
 	opSK, opSKPub, opSKSeed := pair(nkeys.PrefixByteOperator)
 	_, sysPub, sysSeed := pair(nkeys.PrefixByteAccount)
 	sysSK, sysSKPub, sysSKSeed := pair(nkeys.PrefixByteAccount)
-	n := &nscSystem{sysPub: sysPub, sysSigningPub: sysSKPub}
+	n := &nscSystem{sysPub: sysPub, sysSigningPub: sysSKPub, opSigning: opSK}
 
 	oc := jwt.NewOperatorClaims(opPub)
 	oc.Name = "nsc"
@@ -115,19 +118,28 @@ func newNscSystem(t *testing.T) *nscSystem {
 		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "nsc"},
 		Data:       map[string][]byte{"op-identity": opSeed, "op-signing": opSKSeed, "sys-identity": sysSeed, "sys-signing": sysSKSeed},
 	}
-	b := fake.NewClientBuilder().WithScheme(s).WithObjects(op, sys, secret).WithStatusSubresource(op, sys)
+	withStatus := []client.Object{op, sys}
+	for _, a := range accounts {
+		withStatus = append(withStatus, a)
+	}
+	b := fake.NewClientBuilder().WithScheme(s).WithObjects(append(withStatus, secret)...).WithStatusSubresource(withStatus...)
 	require.NoError(t, indexes(t.Context(), builderIndexer{b}))
 	n.c = b.Build()
 	return n
 }
 
 // serve starts a server with a full resolver holding the system account
-// and returns its client URL.
-func (n *nscSystem) serve(t *testing.T) string {
+// and accountJWTs, and returns its client URL.
+func (n *nscSystem) serve(t *testing.T, accountJWTs ...string) string {
 	t.Helper()
 	res, err := server.NewDirAccResolver(t.TempDir(), 0, time.Hour, server.HardDelete)
 	require.NoError(t, err)
 	require.NoError(t, res.Store(n.sysPub, n.sysJWT))
+	for _, token := range accountJWTs {
+		c, err := jwt.DecodeAccountClaims(token)
+		require.NoError(t, err)
+		require.NoError(t, res.Store(c.Subject, token))
+	}
 	oc, err := jwt.DecodeOperatorClaims(n.opJWT)
 	require.NoError(t, err)
 	s, err := server.NewServer(&server.Options{

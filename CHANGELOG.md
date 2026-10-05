@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `NatsAccount.spec.limits.jetstream.tiers` sets an account's JetStream limits by tier, `R1` to `R5` after the replica count of a stream, in place of limits for the account as a whole.
 - `NatsAccount.spec.limits.jetstream`, and each of its tiers, takes `maxAckPending`, `memoryMaxStreamBytes`, `diskMaxStreamBytes` and `maxBytesRequired`.
+- An import of a `NatsAccount` names the `NatsSystemAccount` of its `NatsOperator` under `accountRef`, taking `account-monitoring-services` or `account-monitoring-streams` with the account's own public key in the subject.
+- An import of a `NatsAccount` names its exporter by `publicKey` in place of `accountRef`, with the export's `subject` and `type`, and for a private export `activation.secretKeyRef` selecting the activation token the exporter issued; `status.imports[].activation` then reads `Supplied`.
+- An import of a `NatsAccount` takes `share` on a Service import and `allowTrace` on a Stream import.
 
 ### Changed
 
