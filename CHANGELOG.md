@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-05
+
 ### Added
 
 - A `NatsOperator` has the condition `SigningKeyUntrusted`, True with the reason `UntrustedSigner` while a server does not list its active signing key in the NATS operator JWT it runs under, naming the key and how many servers do not list it, and False with the reason `SignerTrusted` otherwise.
@@ -220,7 +222,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `cluster-controller`, `jetstream-controller` and `auth-controller` presets subscribe only to their own inbox, `_INBOX.<preset>.>`; a JetStream controller account user whose `permissions` restrict subscriptions must allow `_INBOX.jetstream-controller.>`.
 - The `readonly` preset subscribes only to its own inbox, `_INBOX.readonly.>`, which its client dials with.
 
-[Unreleased]: https://github.com/mikluko/nats-operator/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/mikluko/nats-operator/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/mikluko/nats-operator/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/mikluko/nats-operator/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/mikluko/nats-operator/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/mikluko/nats-operator/compare/v0.2.0...v0.3.0
