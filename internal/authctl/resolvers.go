@@ -65,9 +65,9 @@ type resolverState struct {
 	roster map[string]bool
 	// misses counts, per server of roster, the polls in a row it missed.
 	misses map[string]int
-	// trust is, per server of roster that reported the NATS operator JWTs it
-	// runs under, the keys those list; a server absent from it is taken to
-	// trust every key.
+	// trust is, per server of roster that answered VARZ, the keys the NATS
+	// operator JWTs it reported list; a server absent from it, or listing
+	// none, is not known to trust any key.
 	trust map[string][]string
 	// newest is, per account public key, the issue time of the newest JWT a
 	// server acknowledged or held, and pushedAt when a server last
@@ -158,6 +158,7 @@ func (r *Resolvers) Push(ctx context.Context, operator types.NamespacedName, acc
 	}
 	r.mu.Lock()
 	distrusting := st.distrusting(roster, c.Issuer)
+	unknown := st.unknown(roster)
 	newest, known := st.newest[c.Subject]
 	r.mu.Unlock()
 	untrusted := fmt.Errorf("%w: %d of %d servers do not list %s, the signer of account %s, in their NATS operator JWT",
@@ -212,12 +213,17 @@ func (r *Resolvers) Push(ctx context.Context, operator types.NamespacedName, acc
 	if distrusting > 0 {
 		return untrusted
 	}
+	if unknown > 0 {
+		return fmt.Errorf("%w: %d of %d servers report no NATS operator JWT on VARZ, or do not answer it, so whether they trust %s, the signer of account %s, is unknown",
+			ErrTrustUnknown, unknown, len(roster), c.Issuer, c.Subject)
+	}
 	return nil
 }
 
 // Current is Distributor.Current over the roster; since lookup replies
 // carry no server ID it counts matching replies, at most as many as servers
-// trust the JWT's signer, and it knows only the pushes this Resolvers made.
+// are known to trust the JWT's signer, and it knows only the pushes this
+// Resolvers made.
 func (r *Resolvers) Current(ctx context.Context, operator types.NamespacedName, accountJWT string) (authv1beta1.Distribution, error) {
 	c, err := jwt.DecodeAccountClaims(accountJWT)
 	if err != nil {
@@ -243,7 +249,7 @@ func (r *Resolvers) Current(ctx context.Context, operator types.NamespacedName, 
 		}
 	}
 	r.mu.Lock()
-	current = min(current, len(roster)-st.distrusting(roster, c.Issuer))
+	current = min(current, len(roster)-st.distrusting(roster, c.Issuer)-st.unknown(roster))
 	out := authv1beta1.Distribution{Servers: int32(len(roster)), Current: int32(current)}
 	if at, ok := st.pushedAt[c.Subject]; ok {
 		out.LastPushTime = &metav1.Time{Time: at}
@@ -419,10 +425,10 @@ func (r *Resolvers) pollRoster(ctx context.Context, nc *nats.Conn) (map[string]b
 	return roster, trust, err
 }
 
-// pollTrust returns, per server answering VARZ within Wait with the NATS
-// operator JWTs it runs under, the identity and signing keys those list.
-// A system user without the VARZ permission gets no answer and so an empty
-// result.
+// pollTrust returns, per server answering VARZ within Wait, the identity and
+// signing keys the NATS operator JWTs it runs under list, none for a server
+// configured by trusted_keys. A system user without the VARZ permission gets
+// no answer and so an empty result.
 func (r *Resolvers) pollTrust(ctx context.Context, nc *nats.Conn) map[string][]string {
 	trust := map[string][]string{}
 	_ = collect(ctx, nc, subjPingVarz, []byte("{}"), r.wait(), 0, func(data []byte) {
@@ -443,9 +449,7 @@ func (r *Resolvers) pollTrust(ctx context.Context, nc *nats.Conn) map[string][]s
 				keys = append(append(keys, oc.Subject), oc.SigningKeys...)
 			}
 		}
-		if len(keys) > 0 {
-			trust[m.Server.ID] = keys
-		}
+		trust[m.Server.ID] = keys
 	})
 	return trust
 }
@@ -477,7 +481,8 @@ func (r *Resolvers) pollStatsz(ctx context.Context, nc *nats.Conn) (map[string]b
 // setRoster merges the servers that answered a poll into st's roster and
 // records trust over what earlier polls reported, and forgets the
 // acknowledgements and trust of servers that left it. It reports whether a
-// server joined, left or answered again after missing a poll.
+// server joined, left, answered again after missing a poll, or reported keys
+// other than it last did.
 func (r *Resolvers) setRoster(st *resolverState, answered map[string]bool, trust map[string][]string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -495,6 +500,11 @@ func (r *Resolvers) setRoster(st *resolverState, answered map[string]bool, trust
 	if st.trust == nil {
 		st.trust = map[string][]string{}
 	}
+	for id, keys := range trust {
+		if prev, ok := st.trust[id]; st.roster[id] && (!ok || !slices.Equal(prev, keys)) {
+			changed = true
+		}
+	}
 	maps.Copy(st.trust, trust)
 	maps.DeleteFunc(st.trust, func(id string, _ []string) bool { return !st.roster[id] })
 	return changed
@@ -505,7 +515,19 @@ func (r *Resolvers) setRoster(st *resolverState, answered map[string]bool, trust
 func (st *resolverState) distrusting(roster map[string]bool, issuer string) int {
 	var n int
 	for id := range roster {
-		if keys, ok := st.trust[id]; ok && !slices.Contains(keys, issuer) {
+		if keys := st.trust[id]; len(keys) > 0 && !slices.Contains(keys, issuer) {
+			n++
+		}
+	}
+	return n
+}
+
+// unknown counts the servers of roster that answered no VARZ or listed no
+// key on it; the caller holds Resolvers.mu.
+func (st *resolverState) unknown(roster map[string]bool) int {
+	var n int
+	for id := range roster {
+		if len(st.trust[id]) == 0 {
 			n++
 		}
 	}

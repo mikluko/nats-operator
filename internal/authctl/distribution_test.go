@@ -96,6 +96,13 @@ func TestDistribute(t *testing.T) {
 			wantStatus: metav1.ConditionFalse, wantReason: ReasonUntrustedSigner, wantAgain: distributionRecheck, wantPushes: 1,
 		},
 		{
+			name: "a server not known to trust the signer is a reason, not an error",
+			d: &countingDistributor{current: authv1beta1.Distribution{Servers: 3},
+				after: authv1beta1.Distribution{Servers: 3, Current: 2}, pushErr: fmt.Errorf("%w: 1 of 3", ErrTrustUnknown)},
+			token: "jwt", wantDist: &authv1beta1.Distribution{Servers: 3, Current: 2, LastPushTime: pushedAt},
+			wantStatus: metav1.ConditionFalse, wantReason: ReasonTrustUnknown, wantAgain: distributionRecheck, wantPushes: 1,
+		},
+		{
 			name: "a refused push is an error",
 			d: &countingDistributor{current: authv1beta1.Distribution{Servers: 3, Current: 2},
 				pushErr: ErrStaleJWT},

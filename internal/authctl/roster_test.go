@@ -37,3 +37,24 @@ func TestMergeRoster(t *testing.T) {
 		})
 	}
 }
+
+// TestSetRoster_Trust pins which servers count as known to trust a key, and
+// that a change in what a server reports on VARZ is a roster change.
+func TestSetRoster_Trust(t *testing.T) {
+	r := &Resolvers{}
+	st := &resolverState{}
+	all := map[string]bool{"a": true, "b": true, "c": true}
+	trust := func(st *resolverState) [2]int { return [2]int{st.distrusting(all, "K"), st.unknown(all)} }
+
+	require.True(t, r.setRoster(st, all, map[string][]string{"a": {"K"}, "b": nil}))
+	require.Equal(t, [2]int{0, 2}, trust(st), "b lists no key and c did not answer VARZ")
+
+	require.False(t, r.setRoster(st, all, map[string][]string{"a": {"K"}}), "a server that misses a VARZ poll keeps what it reported")
+	require.Equal(t, [2]int{0, 2}, trust(st))
+
+	require.True(t, r.setRoster(st, all, map[string][]string{"c": {"J"}}), "c answered VARZ")
+	require.Equal(t, [2]int{1, 1}, trust(st))
+
+	require.True(t, r.setRoster(st, all, map[string][]string{"a": nil}), "a reports no NATS operator JWT")
+	require.Equal(t, [2]int{1, 2}, trust(st))
+}
