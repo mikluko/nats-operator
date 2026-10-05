@@ -416,10 +416,13 @@ func requireConditions(t *testing.T, want, got []metav1.Condition) {
 // member is one NATS cluster of story 6 booted in-process, and the cluster
 // controller's system connection to it.
 type member struct {
-	nc   *clusterv1beta1.NatsCluster
-	plan *Plan
-	sys  *SystemConnections
-	url  string
+	nc    *clusterv1beta1.NatsCluster
+	plan  *Plan
+	sys   *SystemConnections
+	url   string
+	srvs  []*server.Server
+	files []string
+	plane testPlane
 }
 
 // supercluster boots story 6's east and west on loopback under one NATS
@@ -453,7 +456,7 @@ func supercluster(t *testing.T, mutate func(east, west *clusterv1beta1.NatsClust
 	t.Cleanup(pool.Close)
 	var eastGateway int
 	start := func(name string) *member {
-		m := &member{nc: ncs[name]}
+		m := &member{nc: ncs[name], plane: p}
 		for i, r := range m.nc.Spec.Gateway.Remotes {
 			if r.Name == "east" && eastGateway != 0 {
 				setRemoteHost(t, m.nc, i, fmt.Sprintf("127.0.0.1:%d", eastGateway))
@@ -462,13 +465,12 @@ func supercluster(t *testing.T, mutate func(east, west *clusterv1beta1.NatsClust
 		in := Inputs{Trust: p.trust}
 		m.plan, err = Render(m.nc, in)
 		require.NoError(t, err)
-		var srvs []*server.Server
-		_, srvs, m.url, _ = startRenderedWith(t, m.nc, in, m.plan.Revision, func(_ int, l *Layout) {
+		_, m.srvs, m.url, m.files = startRenderedWith(t, m.nc, in, m.plan.Revision, func(_ int, l *Layout) {
 			l.GatewayListen = natstest.Listen(0)
 			l.GatewayTLSDir = gwTLS
 		})
 		if name == "east" {
-			eastGateway = srvs[0].GatewayAddr().Port
+			eastGateway = m.srvs[0].GatewayAddr().Port
 		}
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Namespace: m.nc.Namespace, Name: m.nc.Spec.Auth.SystemCredentials.SecretKeyRef.Name},

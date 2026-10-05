@@ -2,10 +2,18 @@ package natscluster
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nkeys"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -17,6 +25,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
+	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"github.com/mikluko/nats-operator/internal/natsconn"
+	"github.com/mikluko/nats-operator/internal/natstest"
 	"github.com/mikluko/nats-operator/internal/sysobs"
 )
 
@@ -235,6 +246,132 @@ func TestReconcile_ClaimOlderThanNatsCluster(t *testing.T) {
 		requireProgressingCondition(t, got, metav1.ConditionTrue, ReasonCreating)
 		require.Equal(t, 3, sets(t, c))
 	})
+}
+
+// TestJetStreamEnabledAfterGateways_Live pins why enabling JetStream is
+// restart-only on nats-server 2.15.0: west's servers, started without it,
+// join east's meta group with east's stream intact whether a restart or a
+// reload enables it, but only after a restart can a stream be placed on west.
+func TestJetStreamEnabledAfterGateways_Live(t *testing.T) {
+	t.Run("enabled by restart", func(t *testing.T) { joinEast(t, false) })
+	t.Run("enabled by reload", func(t *testing.T) { joinEast(t, true) })
+}
+
+// joinEast boots story 6's east and west, west without JetStream until its
+// gateways connect and then with it, by reload when reload is set and by
+// restart otherwise, and requires west's servers in east's meta group,
+// east's stream intact, and a stream placed on west created after a restart
+// and refused after a reload.
+func joinEast(t *testing.T, reload bool) {
+	east, west := supercluster(t, func(_, west *clusterv1beta1.NatsCluster) { west.Spec.JetStream = nil })
+	west.eventuallyStatus(t, func(st clusterv1beta1.NatsClusterStatus) bool {
+		return meta.IsStatusConditionTrue(st.Conditions, ConditionGatewaysConnected)
+	})
+
+	p := east.plane
+	account := newTestKeys(t, nkeys.PrefixByteAccount)
+	accJWT, err := jwtplane.SignAccount(jwtplane.Account{Name: "orders", Keys: account,
+		Limits: jwtplane.Limits{JetStream: &jwtplane.JetStreamLimits{}}}, p.op, time.Now())
+	require.NoError(t, err)
+	admin, err := natsconn.Dial(natsconn.Endpoint{Servers: []string{east.url}, Creds: p.systemCreds(t, jwtplane.PresetAuthController)}, nats.CustomInboxPrefix(jwtplane.InboxPrefix(jwtplane.PresetAuthController)))
+	require.NoError(t, err)
+	t.Cleanup(admin.Close)
+	_, err = admin.Request("$SYS.REQ.CLAIMS.UPDATE", []byte(accJWT), 2*time.Second)
+	require.NoError(t, err)
+	userCreds := p.creds(t, account, jwtplane.User{Name: "orders"})
+	jsAt := func(url string) nats.JetStreamContext {
+		var conn *nats.Conn
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
+			var err error
+			conn, err = natsconn.Dial(natsconn.Endpoint{Servers: []string{url}, Creds: userCreds})
+			require.NoError(c, err)
+		}, 15*time.Second, 200*time.Millisecond, "orders user not admitted at %s", url)
+		t.Cleanup(conn.Close)
+		js, err := conn.JetStream()
+		require.NoError(t, err)
+		return js
+	}
+	eastJS := jsAt(east.url)
+	require.Eventually(t, func() bool {
+		_, err := eastJS.AddStream(&nats.StreamConfig{Name: "OLD", Subjects: []string{"old.>"}, Replicas: 3, Placement: &nats.Placement{Cluster: "east"}})
+		return err == nil
+	}, 30*time.Second, 200*time.Millisecond, "stream OLD not created on east")
+	for i := range 10 {
+		_, err := eastJS.Publish(fmt.Sprintf("old.%d", i), []byte("m"))
+		require.NoError(t, err)
+	}
+
+	westJS := jsAt(west.url)
+	withJS := west.nc.DeepCopy()
+	withJS.Spec.JetStream = &clusterv1beta1.JetStream{Limits: &clusterv1beta1.JetStreamLimits{MaxMemoryStore: quantity("256Mi"), MaxFileStore: quantity("1Gi")}}
+	for i, file := range west.files {
+		before, err := os.ReadFile(file)
+		require.NoError(t, err)
+		var cfg map[string]any
+		require.NoError(t, json.Unmarshal(before, &cfg))
+		block := serverConfig(withJS, Inputs{}, west.srvs[i].Name(), Layout{StoreDir: filepath.Join(t.TempDir(), "jetstream")}, "").JetStream
+		b, err := json.Marshal(block)
+		require.NoError(t, err)
+		var js map[string]any
+		require.NoError(t, json.Unmarshal(b, &js))
+		cfg["jetstream"] = js
+		after, err := json.Marshal(cfg)
+		require.NoError(t, err)
+		require.Equal(t, "jetstream is restart-only", restartReason("2.15.0", before, after))
+		if !reload {
+			west.srvs[i].Shutdown()
+			west.srvs[i].WaitForShutdown()
+		}
+		require.NoError(t, os.WriteFile(file, after, 0o600))
+		if reload {
+			require.NoError(t, west.srvs[i].Reload())
+		} else {
+			west.srvs[i] = natstest.Start(t, file).Server
+		}
+	}
+
+	all := append(slices.Clone(east.srvs), west.srvs...)
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		leaders := map[string]bool{}
+		for _, s := range all {
+			require.True(c, s.JetStreamEnabled(), s.Name())
+			g, ok := metaRaftz(s)
+			require.True(c, ok, "%s reports no meta group", s.Name())
+			require.Equal(c, len(all), g.Size, s.Name())
+			require.Len(c, g.Peers, len(all)-1, s.Name())
+			leaders[g.Leader] = true
+		}
+		require.Len(c, leaders, 1)
+	}, 60*time.Second, 250*time.Millisecond, "west did not join east's meta group")
+
+	info, err := westJS.StreamInfo("OLD")
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), info.State.Msgs)
+	require.Equal(t, "east", info.Cluster.Name)
+	add := func() error {
+		_, err := westJS.AddStream(&nats.StreamConfig{Name: "NEW", Subjects: []string{"new.>"}, Replicas: 3, Placement: &nats.Placement{Cluster: "west"}})
+		return err
+	}
+	if reload {
+		require.Never(t, func() bool { return add() == nil }, 10*time.Second, 500*time.Millisecond, "stream NEW created on west after a reload")
+		require.ErrorContains(t, add(), "account not found")
+		return
+	}
+	require.EventuallyWithT(t, func(c *assert.CollectT) { require.NoError(c, add()) }, 30*time.Second, 200*time.Millisecond, "stream NEW not created on west")
+}
+
+// metaRaftz is s's view of its JetStream meta group.
+func metaRaftz(s *server.Server) (server.RaftzGroup, bool) {
+	rz := s.Raftz(&server.RaftzOptions{})
+	if rz == nil {
+		return server.RaftzGroup{}, false
+	}
+	for _, groups := range *rz {
+		if g, ok := groups["_meta_"]; ok {
+			return g, true
+		}
+	}
+	return server.RaftzGroup{}, false
 }
 
 // endpointObserver observes the in-process servers at eps over their
