@@ -326,8 +326,8 @@ func mergePodSpec(base corev1.PodSpec, override *corev1.PodSpec) (corev1.PodSpec
 	return spec, nil
 }
 
-// setFieldsJSON encodes v with every null dropped, so that a field v leaves
-// unset does not delete it in a merge patch.
+// setFieldsJSON encodes v with every null and every zero handler port dropped,
+// so that a field v leaves unset does not delete or zero it in a merge patch.
 func setFieldsJSON(v any) ([]byte, error) {
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -337,7 +337,28 @@ func setFieldsJSON(v any) ([]byte, error) {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return nil, err
 	}
-	return json.Marshal(dropNulls(m))
+	return json.Marshal(dropZeroPorts(dropNulls(m)))
+}
+
+var handlerKeys = map[string]bool{"httpGet": true, "tcpSocket": true, "grpc": true}
+
+// dropZeroPorts drops a port of 0 from every httpGet, tcpSocket and grpc
+// handler in v, which encode an omitted port as 0.
+func dropZeroPorts(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, e := range t {
+			if h, ok := e.(map[string]any); ok && handlerKeys[k] && h["port"] == float64(0) {
+				delete(h, "port")
+			}
+			t[k] = dropZeroPorts(e)
+		}
+	case []any:
+		for i, e := range t {
+			t[i] = dropZeroPorts(e)
+		}
+	}
+	return v
 }
 
 func dropNulls(v any) any {

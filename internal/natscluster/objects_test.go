@@ -344,6 +344,75 @@ func TestRender_PodTemplateProbes(t *testing.T) {
 	require.Equal(t, "/healthz?js-server-only=true", nats.ReadinessProbe.HTTPGet.Path)
 }
 
+func TestRender_PodTemplateProbeWithoutPort(t *testing.T) {
+	nc := storyCluster(t)
+	nc.Spec.PodTemplate = &clusterv1beta1.PodTemplate{Spec: &corev1.PodSpec{Containers: []corev1.Container{{
+		Name: "nats",
+		StartupProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/healthz"}},
+		},
+		ReadinessProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{}},
+		},
+		LivenessProbe: &corev1.Probe{TimeoutSeconds: 5},
+	}}}}
+	p, err := Render(nc, Inputs{})
+	require.NoError(t, err)
+	nats := container(t, p.Servers[0].StatefulSet, "nats")
+
+	monitor := intstr.FromString("monitor")
+	require.Equal(t, "/healthz", nats.StartupProbe.HTTPGet.Path)
+	require.Equal(t, monitor, nats.StartupProbe.HTTPGet.Port)
+	require.Equal(t, "/healthz?js-server-only=true", nats.ReadinessProbe.HTTPGet.Path)
+	require.Equal(t, monitor, nats.ReadinessProbe.HTTPGet.Port)
+	require.Equal(t, int32(5), nats.LivenessProbe.TimeoutSeconds)
+	require.Equal(t, monitor, nats.LivenessProbe.HTTPGet.Port)
+}
+
+func TestMergePodSpec_HandlerWithoutPort(t *testing.T) {
+	tests := []struct {
+		name     string
+		base     corev1.ProbeHandler
+		override corev1.ProbeHandler
+		want     corev1.ProbeHandler
+	}{
+		{"httpGet",
+			corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/a", Port: intstr.FromInt32(8222)}},
+			corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/b"}},
+			corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/b", Port: intstr.FromInt32(8222)}}},
+		{"tcpSocket",
+			corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromString("client")}},
+			corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Host: "localhost"}},
+			corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Host: "localhost", Port: intstr.FromString("client")}}},
+		{"grpc",
+			corev1.ProbeHandler{GRPC: &corev1.GRPCAction{Port: 9000}},
+			corev1.ProbeHandler{GRPC: &corev1.GRPCAction{Service: ptr.To("health")}},
+			corev1.ProbeHandler{GRPC: &corev1.GRPCAction{Port: 9000, Service: ptr.To("health")}}},
+		{"a set port wins",
+			corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Port: intstr.FromInt32(8222)}},
+			corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Port: intstr.FromInt32(9222)}},
+			corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Port: intstr.FromInt32(9222)}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			base := corev1.PodSpec{Containers: []corev1.Container{{
+				Name:           "nats",
+				ReadinessProbe: &corev1.Probe{ProbeHandler: tt.base},
+				Lifecycle:      &corev1.Lifecycle{PostStart: &corev1.LifecycleHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt32(4222)}}},
+			}}}
+			override := &corev1.PodSpec{Containers: []corev1.Container{{
+				Name:           "nats",
+				ReadinessProbe: &corev1.Probe{ProbeHandler: tt.override},
+				Lifecycle:      &corev1.Lifecycle{PostStart: &corev1.LifecycleHandler{TCPSocket: &corev1.TCPSocketAction{}}},
+			}}}
+			got, err := mergePodSpec(base, override)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got.Containers[0].ReadinessProbe.ProbeHandler)
+			require.Equal(t, intstr.FromInt32(4222), got.Containers[0].Lifecycle.PostStart.TCPSocket.Port)
+		})
+	}
+}
+
 func TestRender_Volumes(t *testing.T) {
 	tests := []struct {
 		name   string
