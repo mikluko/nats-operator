@@ -67,8 +67,9 @@ const (
 
 // Observed is what one reconcile saw and did.
 type Observed struct {
-	// Held is the Progressing condition of a spec, trust or leaf remote
-	// that nothing is rendered past, nil when none holds the reconcile.
+	// Held is the Progressing condition of a spec, trust, leaf remote or
+	// meta group that nothing is rendered past, nil when none holds the
+	// reconcile.
 	Held *metav1.Condition
 	// CertWait says which certificate the servers wait for, with
 	// CertReason, "" when none.

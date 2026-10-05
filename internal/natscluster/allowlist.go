@@ -42,7 +42,9 @@ type reloadKey struct {
 // major.minor, read off that version's diffOptions in server/reload.go; any
 // other key restarts, as diffOptions rejects it or silently keeps the old
 // value. resolver is absent although diffOptions accepts it: 2.15's reload
-// swaps in a resolver it never starts. resolver_preload reloads only for the
+// swaps in a resolver it never starts. So is jetstream: 2.15 enables
+// JetStream on reload, but a stream cannot be placed on the server for an
+// account it already held. resolver_preload reloads only for the
 // system account, whose re-signed JWT reaches running servers as a claims
 // update.
 var reloadAllowLists = map[string][]reloadKey{

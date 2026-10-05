@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An `httpGet`, `tcpSocket` or `grpc` handler in a `podTemplate` probe or lifecycle hook that omits `port` keeps the rendered port, in place of port 0.
 - The revocation of a deleted or denied `NatsUser` whose `status.publicKey` is the `publicKey` of its spec lists the account's identity key among its `issuers`, and is kept after every signing key it lists is rotated out.
 - A revocation that a `NatsSystemAccount` takes from the JWT the servers hold lists the system account's identity key among its `issuers`, and is kept after its signing keys are rotated out.
+- A `NatsCluster` with `jetstream`, no `jetstream.domain` and `gateway.remotes` naming another member creates no server whose data volume claim is older than the `NatsCluster`, and renders no change to the gateway remotes, the domain or `jetstream` of servers that lead a JetStream meta group of their own; it reads `Progressing` False with the reason `OwnMetaGroup`. Such a change to servers that cannot be observed waits, with `Progressing` False and the reason `ObservationFailed`.
 
 ## [0.4.0] - 2026-10-05
 

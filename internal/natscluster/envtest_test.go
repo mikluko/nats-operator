@@ -726,6 +726,7 @@ func TestEnvtestReconcile(t *testing.T) {
 		for i := range snap.Servers {
 			snap.Servers[i].Gateways = &sysobs.Gateways{Outbound: []string{"east"}, Inbound: map[string]int{"east": 1}}
 		}
+		snap.Groups[0].Outside = []string{"east-0", "east-1", "east-2"}
 		obs.set(snap)
 		_, got = reconcile(t, got)
 		condition(t, got, ConditionGatewaysConnected, metav1.ConditionTrue, ReasonAllMembersReachable)

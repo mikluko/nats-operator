@@ -174,6 +174,20 @@ func TestMerge_GroupsAndLoad(t *testing.T) {
 	}, snap.Load())
 }
 
+func TestMerge_MetaOutside(t *testing.T) {
+	snap := merge(roster("s1", "s2"), map[string]*wireJSInfo{
+		"s1": info(&wireMeta{Leader: "s1", Replicas: []wirePeer{{Name: "x2", Offline: true}, ok("s2"), ok("x1")}}),
+		"s2": info(&wireMeta{Leader: "s1"}),
+	})
+	require.Equal(t, []Group{{Kind: KindMeta, Leader: "s1", Members: []Member{current("s1"), current("s2")}, Outside: []string{"x1", "x2"}}}, snap.Groups)
+
+	snap = merge(roster("s1", "s2"), map[string]*wireJSInfo{
+		"s1": info(&wireMeta{Leader: "s1", Replicas: []wirePeer{ok("s2")}}),
+		"s2": info(&wireMeta{Leader: "s1"}),
+	})
+	require.Nil(t, snap.Groups[0].Outside)
+}
+
 func TestMerge_LeaderlessGroupListsHolders(t *testing.T) {
 	snap := merge(roster("s1", "s2"), map[string]*wireJSInfo{
 		"s1": info(nil, streamOn("s9")),
