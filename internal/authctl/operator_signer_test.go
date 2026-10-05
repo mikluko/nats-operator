@@ -32,8 +32,10 @@ func TestSetSignerCondition(t *testing.T) {
 			"publish: closed", distributionRecheck},
 		{"NoServerDistrusts", &countingDistributor{current: three}, metav1.ConditionFalse, ReasonSignerTrusted,
 			"0 of 3 servers do not list signing key OSIGNER in their NATS operator JWT", 0},
-		{"SomeServersDistrust", &countingDistributor{current: three, distrusting: 2}, metav1.ConditionTrue, ReasonUntrustedSigner,
+		{"SomeServersDistrust", &countingDistributor{current: three, distrusting: 2, unknown: 1}, metav1.ConditionTrue, ReasonUntrustedSigner,
 			"2 of 3 servers do not list signing key OSIGNER in their NATS operator JWT", distributionRecheck},
+		{"TrustUnknown", &countingDistributor{current: three, unknown: 3}, metav1.ConditionUnknown, ReasonTrustUnknown,
+			"3 of 3 servers report no NATS operator JWT on VARZ, or do not answer it, so whether they list signing key OSIGNER is unknown", 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

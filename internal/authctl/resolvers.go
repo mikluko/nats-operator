@@ -331,19 +331,19 @@ func (r *Resolvers) Delete(ctx context.Context, operator types.NamespacedName, r
 
 // Distrusting is Distributor.Distrusting over the roster, counted as Push
 // and Current count the servers that do not trust a JWT's signer.
-func (r *Resolvers) Distrusting(ctx context.Context, operator types.NamespacedName, key string) (servers, distrusting int, err error) {
+func (r *Resolvers) Distrusting(ctx context.Context, operator types.NamespacedName, key string) (servers, distrusting, unknown int, err error) {
 	st := r.state(operator)
 	nc, err := r.conn(ctx, operator)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	roster, err := r.roster(ctx, st, nc)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return len(roster), st.distrusting(roster, key), nil
+	return len(roster), st.distrusting(roster, key), st.unknown(roster), nil
 }
 
 // sendDeletes sends operator's delete request once if a server in the

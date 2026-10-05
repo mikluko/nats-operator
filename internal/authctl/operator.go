@@ -320,7 +320,7 @@ func setSignerCondition(ctx context.Context, d Distributor, op *authv1beta1.Nats
 		set(metav1.ConditionUnknown, ReasonNoSystemConnection, "the auth controller runs without --system-connection: no server is asked which keys it trusts")
 		return 0
 	}
-	servers, distrusting, err := d.Distrusting(ctx, client.ObjectKeyFromObject(op), key)
+	servers, distrusting, unknown, err := d.Distrusting(ctx, client.ObjectKeyFromObject(op), key)
 	switch {
 	case errors.Is(err, ErrUnreachable):
 		set(metav1.ConditionUnknown, ReasonUnreachable, err.Error())
@@ -330,6 +330,10 @@ func setSignerCondition(ctx context.Context, d Distributor, op *authv1beta1.Nats
 		return distributionRecheck
 	}
 	msg := fmt.Sprintf("%d of %d servers do not list signing key %s in their NATS operator JWT", distrusting, servers, key)
+	if distrusting == 0 && unknown > 0 {
+		set(metav1.ConditionUnknown, ReasonTrustUnknown, fmt.Sprintf("%d of %d servers report no NATS operator JWT on VARZ, or do not answer it, so whether they list signing key %s is unknown", unknown, servers, key))
+		return 0
+	}
 	if distrusting == 0 {
 		set(metav1.ConditionFalse, ReasonSignerTrusted, msg)
 		return 0

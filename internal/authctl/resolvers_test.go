@@ -466,6 +466,18 @@ func TestResolvers_TrustedKeys(t *testing.T) {
 	require.ErrorIs(t, r.Push(t.Context(), testOperator, token), authctl.ErrTrustUnknown)
 	require.Equal(t, token, c.held(0, pub))
 	requireDistribution(t, r, token, 2, 1)
+	requireDistrusting(t, r, p.op, 2, 0, 1)
+}
+
+// requireDistrusting requires that r's Distrusting of signer's first signing
+// key reports servers, distrusting and unknown.
+func requireDistrusting(t *testing.T, r *authctl.Resolvers, signer jwtplane.Keys, servers, distrusting, unknown int) {
+	t.Helper()
+	key, err := signer.Signing[0].Pair.PublicKey()
+	require.NoError(t, err)
+	s, d, u, err := r.Distrusting(t.Context(), testOperator, key)
+	require.NoError(t, err)
+	require.Equal(t, [3]int{servers, distrusting, unknown}, [3]int{s, d, u})
 }
 
 // TestResolvers_NoVarzPermission pins that a server the system user may not
@@ -484,6 +496,7 @@ func TestResolvers_NoVarzPermission(t *testing.T) {
 		require.Equal(t, token, c.held(i, pub), "server %d was sent the JWT", i)
 	}
 	requireDistribution(t, r, token, 2, 0)
+	requireDistrusting(t, r, p.op, 2, 0, 2)
 }
 
 // TestResolvers_SystemAccountKeyPushed pins that nats-server takes an account
