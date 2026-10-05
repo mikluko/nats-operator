@@ -137,7 +137,7 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 		return 0, err
 	}
 	sd, err := recoverRevocations(ctx, r.Distributor, client.ObjectKeyFromObject(op), sys.Status.Revocations, prevJWT, sysPub, sysSigning, users,
-		unrecovered(st.Conditions), everDistributed(sys.Status.Distribution))
+		unrecovered(st.Conditions) || takeoverRefused(st.Conditions), everDistributed(sys.Status.Distribution))
 	if err != nil {
 		recordHeld(r.Recorder, op, st.Conditions, err)
 		return recoveryFailed(err, notReady)
@@ -152,6 +152,20 @@ func (r *OperatorReconciler) reconcile(ctx context.Context, op *authv1beta1.Nats
 	if err != nil {
 		notReady(ReasonInvalidKeys, err.Error())
 		return 0, nil
+	}
+	if sd.held != "" {
+		refused, err := refuseTakeover(sd.held, sysJWT, sys.Spec.Takeover, func(reason, msg string) {
+			notReady(reason, fmt.Sprintf("NatsSystemAccount %s: %s", client.ObjectKeyFromObject(sys), msg))
+		})
+		if err != nil {
+			return 0, err
+		}
+		if refused {
+			if prev != nil && prev.Name == sys.Name {
+				st.SystemAccount = nil
+			}
+			return 0, nil
+		}
 	}
 	resign := prev == nil || prev.Name != sys.Name || !sameAccountClaims(prev.JWT, sysJWT)
 	if !resign && !unrecovered(st.Conditions) {

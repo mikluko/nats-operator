@@ -54,6 +54,13 @@ var (
 
 func newNscSystem(t *testing.T, accounts ...*authv1beta1.NatsAccount) *nscSystem {
 	t.Helper()
+	return newNscSystemWith(t, func(*jwt.AccountClaims) {}, accounts...)
+}
+
+// newNscSystemWith is newNscSystem with the system account's claims edited
+// before they are signed.
+func newNscSystemWith(t *testing.T, edit func(c *jwt.AccountClaims), accounts ...*authv1beta1.NatsAccount) *nscSystem {
+	t.Helper()
 	pair := func(prefix nkeys.PrefixByte) (nkeys.KeyPair, string, []byte) {
 		kp, err := nkeys.CreatePair(prefix)
 		require.NoError(t, err)
@@ -92,6 +99,7 @@ func newNscSystem(t *testing.T, accounts ...*authv1beta1.NatsAccount) *nscSystem
 	sc.SigningKeys.Add(sysSKPub)
 	sc.Exports = jwtplane.MonitoringExports()
 	sc.Revoke(n.old.pub)
+	edit(sc)
 	n.sysJWT, err = sc.Encode(opSK)
 	require.NoError(t, err)
 
@@ -223,6 +231,45 @@ type lookupDistributor struct {
 
 func (d *lookupDistributor) Lookup(context.Context, types.NamespacedName, string) (string, error) {
 	return d.held, d.err
+}
+
+// TestSystemAccountTakeover_DropsClaims pins that a system account whose
+// JWT on the servers carries a claim no NatsSystemAccount expresses is not
+// signed, its NatsOperator and the NatsSystemAccount both reading Ready
+// False with the claim named, until spec.takeover.droppedClaims accepts the
+// loss; and that a changed name is not a drop.
+func TestSystemAccountTakeover_DropsClaims(t *testing.T) {
+	n := newNscSystemWith(t, func(c *jwt.AccountClaims) { c.Description = "made with nsc" })
+	d := &lookupDistributor{held: n.sysJWT}
+
+	res, op := n.reconcileOperator(t, d)
+	require.Zero(t, res.RequeueAfter)
+	ready := meta.FindStatusCondition(op.Status.Conditions, ConditionReady)
+	require.Equal(t, metav1.ConditionFalse, ready.Status)
+	require.Equal(t, ReasonTakeoverDropsClaims, ready.Reason)
+	require.Contains(t, ready.Message, "NatsSystemAccount ns/sys: ")
+	require.Contains(t, ready.Message, "description")
+	require.NotContains(t, ready.Message, "name")
+	require.Nil(t, op.Status.SystemAccount)
+	sys := n.reconcileSystemAccount(t, d)
+	require.Zero(t, d.pushes)
+	require.Equal(t, ready, meta.FindStatusCondition(sys.Status.Conditions, ConditionReady), "mirrored on the NatsSystemAccount")
+
+	_, op = n.reconcileOperator(t, d)
+	require.Equal(t, ReasonTakeoverDropsClaims, meta.FindStatusCondition(op.Status.Conditions, ConditionReady).Reason, "refused again while spec stands")
+
+	require.NoError(t, n.c.Get(t.Context(), takeoverSystem, sys))
+	sys.Spec.Takeover = &authv1beta1.Takeover{DroppedClaims: authv1beta1.TakeoverAcceptDroppedClaims}
+	require.NoError(t, n.c.Update(t.Context(), sys))
+	_, op = n.reconcileOperator(t, d)
+	require.True(t, meta.IsStatusConditionTrue(op.Status.Conditions, ConditionReady))
+	c, err := jwt.DecodeAccountClaims(op.Status.SystemAccount.JWT)
+	require.NoError(t, err)
+	require.Empty(t, c.Description)
+	require.Contains(t, c.Revocations, n.old.pub)
+	sys = n.reconcileSystemAccount(t, d)
+	require.Equal(t, 1, d.pushes)
+	require.True(t, meta.IsStatusConditionTrue(sys.Status.Conditions, ConditionReady))
 }
 
 // TestSystemAccountTakeover_ServersSilent pins that a system account first

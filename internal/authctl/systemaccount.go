@@ -7,6 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/events"
@@ -101,6 +102,11 @@ func (r *SystemAccountReconciler) reconcile(ctx context.Context, sys *authv1beta
 	}
 	signed := op.Status.SystemAccount
 	if signed == nil || signed.Name != sys.Name || signed.PublicKey != pub {
+		if takeoverRefused(op.Status.Conditions) {
+			c := meta.FindStatusCondition(op.Status.Conditions, ConditionReady)
+			notReady(c.Reason, c.Message)
+			return 0, nil
+		}
 		notReady(ReasonPending, fmt.Sprintf("NatsOperator %s has not signed this account yet", key))
 		return 0, nil
 	}

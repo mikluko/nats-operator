@@ -93,6 +93,9 @@ type recoveredRevocations struct {
 	revocations []authv1beta1.Revocation
 	// asked is set when the servers answered.
 	asked bool
+	// held is the newest JWT of the account the servers hold, where they
+	// were asked and one of them holds one.
+	held string
 	// unasked is why not every server could be asked for an account signed
 	// regardless; it wraps ErrUnreachable. The JWT signed is not to be
 	// pushed: a server not asked may hold revocations it lacks.
@@ -100,12 +103,13 @@ type recoveredRevocations struct {
 }
 
 // recoverRevocations returns accountRevocations merged with those of the
-// newest JWT d holds for pub wherever the status may have lost some.
-// Where not every server can be asked, the error wraps ErrUnreachable for a
-// distributed account, which is not to be signed.
-func recoverRevocations(ctx context.Context, d Distributor, operator types.NamespacedName, recorded []authv1beta1.Revocation, prev, pub string, signing []string, users []authv1beta1.NatsUser, unrecovered, distributed bool) (recoveredRevocations, error) {
+// newest JWT d holds for pub wherever the status may have lost some, or
+// where again says to ask the servers though it did not. Where not every
+// server can be asked, the error wraps ErrUnreachable for a distributed
+// account, which is not to be signed.
+func recoverRevocations(ctx context.Context, d Distributor, operator types.NamespacedName, recorded []authv1beta1.Revocation, prev, pub string, signing []string, users []authv1beta1.NatsUser, again, distributed bool) (recoveredRevocations, error) {
 	revs := accountRevocations(recorded, prev, pub, signing, users)
-	if d == nil || !unrecovered && (prev != "" || len(recorded) > 0) {
+	if d == nil || !again && (prev != "" || len(recorded) > 0) {
 		return recoveredRevocations{revocations: revs}, nil
 	}
 	held, err := d.Lookup(ctx, operator, pub)
@@ -115,7 +119,10 @@ func recoverRevocations(ctx context.Context, d Distributor, operator types.Names
 	case err != nil:
 		return recoveredRevocations{}, err
 	}
-	return recoveredRevocations{revocations: accountRevocations(append(revs, heldRevocations(held, pub)...), "", pub, signing, users), asked: true}, nil
+	if c, err := jwt.DecodeAccountClaims(held); err != nil || c.Subject != pub {
+		held = ""
+	}
+	return recoveredRevocations{revocations: accountRevocations(append(revs, heldRevocations(held, pub)...), "", pub, signing, users), asked: true, held: held}, nil
 }
 
 // recordRecovery sets ConditionRevocationsUnrecovered on conds from s: True
