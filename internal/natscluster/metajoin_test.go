@@ -261,7 +261,8 @@ func TestJetStreamEnabledAfterGateways_Live(t *testing.T) {
 // gateways connect and then with it, by reload when reload is set and by
 // restart otherwise, and requires west's servers in east's meta group,
 // east's stream intact, and a stream placed on west created after a restart
-// and refused after a reload.
+// and refused after a reload, asked over a connection made before the
+// reload.
 func joinEast(t *testing.T, reload bool) {
 	east, west := supercluster(t, func(_, west *clusterv1beta1.NatsCluster) { west.Spec.JetStream = nil })
 	west.eventuallyStatus(t, func(st clusterv1beta1.NatsClusterStatus) bool {
@@ -301,7 +302,10 @@ func joinEast(t *testing.T, reload bool) {
 		require.NoError(t, err)
 	}
 
-	westJS := jsAt(west.url)
+	var westJS nats.JetStreamContext
+	if reload {
+		westJS = jsAt(west.url)
+	}
 	withJS := west.nc.DeepCopy()
 	withJS.Spec.JetStream = &clusterv1beta1.JetStream{Limits: &clusterv1beta1.JetStreamLimits{MaxMemoryStore: quantity("256Mi"), MaxFileStore: quantity("1Gi")}}
 	for i, file := range west.files {
@@ -344,6 +348,9 @@ func joinEast(t *testing.T, reload bool) {
 		require.Len(c, leaders, 1)
 	}, 60*time.Second, 250*time.Millisecond, "west did not join east's meta group")
 
+	if westJS == nil {
+		westJS = jsAt(west.url)
+	}
 	info, err := westJS.StreamInfo("OLD")
 	require.NoError(t, err)
 	require.Equal(t, uint64(10), info.State.Msgs)
