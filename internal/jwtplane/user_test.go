@@ -73,7 +73,7 @@ func TestSignUser(t *testing.T) {
 			want: want{
 				pubAllow: []string{
 					"$SYS.REQ.CLAIMS.UPDATE", "$SYS.REQ.CLAIMS.DELETE", "$SYS.REQ.ACCOUNT.*.CLAIMS.LOOKUP",
-					"$SYS.REQ.SERVER.PING.STATSZ", "$SYS.REQ.SERVER.PING.CONNZ", "$SYS.REQ.SERVER.*.KICK",
+					"$SYS.REQ.SERVER.PING.STATSZ", "$SYS.REQ.SERVER.PING.VARZ", "$SYS.REQ.SERVER.PING.CONNZ", "$SYS.REQ.SERVER.*.KICK",
 				},
 				subAllow: []string{"_INBOX.auth-controller.>"},
 			},

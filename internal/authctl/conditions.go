@@ -49,6 +49,10 @@ const (
 	ReasonServersBehind      = "ServersBehind"
 	ReasonUnreachable        = "Unreachable"
 	ReasonUnobserved         = "Unobserved"
+	// ReasonUntrustedSigner is Distributed's reason on an account whose JWT
+	// is signed by a key that a server does not list in the NATS operator
+	// JWT it runs under; such a server is not counted current.
+	ReasonUntrustedSigner = "UntrustedSigner"
 	// ReasonRecovering is Ready's reason on an account whose status lost
 	// its JWT and its revocations but records it distributed, while no
 	// server can be asked for the JWT they are recovered from.
