@@ -106,7 +106,7 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 	}
 	if holder != "" {
 		if st.PublicKey == pub {
-			st.PublicKey, st.JWT, st.JWTHash = "", "", ""
+			st.PublicKey, st.JWT, st.JWTHash, st.Exports = "", "", "", nil
 		}
 		notReady(ReasonPublicKeyInUse, fmt.Sprintf("public key %s is held by %s under NatsOperator %s", pub, holder, opKey))
 		return reconcile.Result{}, nil
@@ -123,6 +123,8 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 		notReady(ReasonInvalidJWT, err.Error())
 		return reconcile.Result{}, nil
 	}
+	var unsigned []string
+	st.Exports, unsigned = keyImporterActivations(keys.Keys, exports, st.Exports)
 	imports, err := r.resolveImports(ctx, acc, pub)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -218,6 +220,9 @@ func (r *AccountReconciler) reconcile(ctx context.Context, acc *authv1beta1.Nats
 	} else {
 		conditions.Set(&st.Conditions, acc.Generation, metav1.Condition{Type: grant.ConditionReferencesResolved, Status: metav1.ConditionTrue, Reason: ReasonAllImportsResolved})
 		conditions.Set(&st.Conditions, acc.Generation, metav1.Condition{Type: ConditionReady, Status: metav1.ConditionTrue, Reason: ReasonSigned})
+	}
+	if len(unsigned) > 0 {
+		notReady(ReasonActivationsUnsigned, strings.Join(unsigned, "; "))
 	}
 	if held {
 		recordDistribution(&st.Conditions, acc.Generation, pushHeld(sd.unasked))
@@ -359,7 +364,41 @@ func (r *AccountReconciler) operatorKeys(ctx context.Context, key types.Namespac
 // specExport is one export as signed, with the importers spec lists for it.
 type specExport struct {
 	jwtplane.Export
-	importers []authv1beta1.AccountReference
+	importers []authv1beta1.Importer
+}
+
+// keyImporterActivations returns the status of exports' importers named by
+// public key, each with the activation token exporter signs for it, keeping
+// the token held where it still fits, and why any importer has none.
+func keyImporterActivations(exporter jwtplane.Keys, exports []specExport, held []authv1beta1.ExportStatus) ([]authv1beta1.ExportStatus, []string) {
+	heldToken := map[[2]string]string{}
+	for _, e := range held {
+		for _, i := range e.Importers {
+			heldToken[[2]string{e.Name, i.PublicKey}] = i.ActivationToken
+		}
+	}
+	var out []authv1beta1.ExportStatus
+	var unsigned []string
+	for _, e := range exports {
+		es := authv1beta1.ExportStatus{Name: e.Name}
+		for _, imp := range e.importers {
+			if imp.PublicKey == "" {
+				continue
+			}
+			x := e.Export
+			x.Importers = []string{imp.PublicKey}
+			token, err := jwtplane.KeepActivation(heldToken[[2]string{e.Name, imp.PublicKey}], exporter, x, imp.PublicKey)
+			if err != nil {
+				unsigned = append(unsigned, e.Name+"/"+imp.PublicKey+": "+err.Error())
+				continue
+			}
+			es.Importers = append(es.Importers, authv1beta1.ImporterStatus{PublicKey: imp.PublicKey, ActivationToken: token})
+		}
+		if len(es.Importers) > 0 {
+			out = append(out, es)
+		}
+	}
+	return out, unsigned
 }
 
 // accountExports expands acc's exports, presets included, in spec order.
@@ -726,9 +765,10 @@ func findExport(exports []specExport, name string) (specExport, bool) {
 }
 
 // listsImporter reports whether importers, listed in namespace, name acc.
-func listsImporter(importers []authv1beta1.AccountReference, namespace string, acc *authv1beta1.NatsAccount) bool {
-	for _, ref := range importers {
-		if ref.Kind == authv1beta1.AccountKindAccount && ref.ObjectKey(namespace) == client.ObjectKeyFromObject(acc) {
+func listsImporter(importers []authv1beta1.Importer, namespace string, acc *authv1beta1.NatsAccount) bool {
+	for _, imp := range importers {
+		ref := natsv1beta1.ObjectReference{Name: imp.Name, Namespace: imp.Namespace}
+		if imp.Kind == authv1beta1.AccountKindAccount && ref.ObjectKey(namespace) == client.ObjectKeyFromObject(acc) {
 			return true
 		}
 	}

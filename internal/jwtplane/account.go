@@ -425,6 +425,36 @@ func SignActivation(exporter Keys, e Export, importer string) (string, error) {
 	return c.Encode(signer)
 }
 
+// KeepActivation returns held where SignActivation would sign the same
+// claims with the same key, and a token SignActivation mints otherwise.
+func KeepActivation(held string, exporter Keys, e Export, importer string) (string, error) {
+	if held != "" && activationFits(held, exporter, e, importer) {
+		return held, nil
+	}
+	return SignActivation(exporter, e, importer)
+}
+
+func activationFits(held string, exporter Keys, e Export, importer string) bool {
+	c, err := jwt.DecodeActivationClaims(held)
+	if err != nil {
+		return false
+	}
+	pub, err := exporter.publicKey(nkeys.PrefixByteAccount)
+	if err != nil {
+		return false
+	}
+	signer, err := exporter.signer(nkeys.PrefixByteAccount)
+	if err != nil {
+		return false
+	}
+	signerPub, err := signer.PublicKey()
+	if err != nil {
+		return false
+	}
+	return c.Issuer == signerPub && c.IssuerAccount == pub && c.Subject == importer &&
+		c.Name == e.Name && c.ImportSubject == jwt.Subject(e.Subject) && c.ImportType == e.Type && c.Expires == 0
+}
+
 // RenewAt returns when an account JWT is due to be re-signed: halfway
 // between its issue and its expiry. A JWT that never expires is never due,
 // and the zero time is returned.

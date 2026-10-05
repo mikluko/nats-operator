@@ -242,7 +242,33 @@ type Export struct {
 
 	// Importers of a Private export, each minted an activation token.
 	// +optional
-	Importers []AccountReference `json:"importers,omitempty"`
+	Importers []Importer `json:"importers,omitempty"`
+}
+
+// Importer names an account a Private export admits: a NatsAccount or
+// NatsSystemAccount by kind and name, or any account by public key.
+// +kubebuilder:validation:XValidation:rule="has(self.name) != has(self.publicKey)",message="an importer is named by kind and name or by publicKey"
+// +kubebuilder:validation:XValidation:rule="has(self.name) ? has(self.kind) : !has(self.kind) && !has(self.namespace)",message="kind is set with name, and kind and namespace only with name"
+type Importer struct {
+	// Kind of the importing account, set with name.
+	// +optional
+	Kind AccountKind `json:"kind,omitempty"`
+
+	// Name of the importing account.
+	// +optional
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name,omitempty"`
+
+	// Namespace of the importing account, the exporter's own when omitted.
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+
+	// PublicKey names the importing account where no NatsAccount describes
+	// it; the auth controller mints its activation token into
+	// status.exports.
+	// +optional
+	// +kubebuilder:validation:MinLength=1
+	PublicKey string `json:"publicKey,omitempty"`
 }
 
 // Import takes another account's export by name, from a NatsAccount or
@@ -360,6 +386,36 @@ type NatsAccountStatus struct {
 	// Imports are the resolved imports.
 	// +optional
 	Imports []ImportStatus `json:"imports,omitempty"`
+
+	// Exports are the Private exports that list an importer by public key,
+	// with the activation token minted for each.
+	// +optional
+	Exports []ExportStatus `json:"exports,omitempty"`
+}
+
+// ExportStatus is a Private export's importers named by public key.
+type ExportStatus struct {
+	// Name of the export.
+	// +required
+	Name string `json:"name"`
+
+	// Importers are the importers named by public key, in spec order.
+	// +optional
+	Importers []ImporterStatus `json:"importers,omitempty"`
+}
+
+// ImporterStatus is the activation token minted for an importer named by
+// public key.
+type ImporterStatus struct {
+	// PublicKey is the importer's public key.
+	// +required
+	PublicKey string `json:"publicKey"`
+
+	// ActivationToken admits the importer to the export; it is re-minted
+	// when the signing key that signed it is no longer the one activation
+	// tokens are signed with.
+	// +required
+	ActivationToken string `json:"activationToken"`
 }
 
 // ImportStatus is a resolved import.
