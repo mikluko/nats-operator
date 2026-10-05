@@ -207,6 +207,10 @@ func (*lookupOnly) Current(context.Context, types.NamespacedName, string) (authv
 
 func (*lookupOnly) Delete(context.Context, types.NamespacedName, string) error { return nil }
 
+func (*lookupOnly) Distrusting(context.Context, types.NamespacedName, string) (int, int, error) {
+	return 0, 0, nil
+}
+
 func TestRecoverRevocations(t *testing.T) {
 	op := testKeys(t, nkeys.PrefixByteOperator, false)
 	acc := testKeys(t, nkeys.PrefixByteAccount, false)

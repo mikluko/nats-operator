@@ -21,12 +21,15 @@ import (
 )
 
 // countingDistributor answers Current with current until a Push, and with
-// after once pushed; Push answers pushErr.
+// after once pushed; Push answers pushErr, and Distrusting current's servers
+// with distrusting and distrustErr.
 type countingDistributor struct {
 	current, after authv1beta1.Distribution
 	currentErr     error
 	pushErr        error
 	pushes         int
+	distrusting    int
+	distrustErr    error
 }
 
 func (d *countingDistributor) Push(context.Context, types.NamespacedName, string) error {
@@ -46,6 +49,10 @@ func (*countingDistributor) Lookup(context.Context, types.NamespacedName, string
 }
 
 func (*countingDistributor) Delete(context.Context, types.NamespacedName, string) error { return nil }
+
+func (d *countingDistributor) Distrusting(context.Context, types.NamespacedName, string) (int, int, error) {
+	return int(d.current.Servers), d.distrusting, d.distrustErr
+}
 
 func TestDistribute(t *testing.T) {
 	pushedAt := &metav1.Time{Time: time.Unix(1000, 0)}

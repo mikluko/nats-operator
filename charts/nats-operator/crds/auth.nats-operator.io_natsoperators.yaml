@@ -238,8 +238,8 @@ spec:
             properties:
               conditions:
                 description: |-
-                  Conditions: Ready, ReferencesResolved, RetiringKeysInUse, and where it
-                  applies RevocationsUnrecovered.
+                  Conditions: Ready, ReferencesResolved, RetiringKeysInUse,
+                  SigningKeyUntrusted, and where it applies RevocationsUnrecovered.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

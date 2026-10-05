@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A `NatsOperator` has the condition `SigningKeyUntrusted`, True with the reason `UntrustedSigner` while a server does not list its active signing key in the NATS operator JWT it runs under, naming the key and how many servers do not list it, and False with the reason `SignerTrusted` otherwise.
+
 ## [0.4.0] - 2026-10-05
 
 ### Added

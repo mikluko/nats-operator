@@ -36,11 +36,12 @@ func seededPair(t *testing.T, prefix nkeys.PrefixByte) (kp nkeys.KeyPair, pub st
 // TestAdoption_UntrustedSigner adopts, with the identity seeds and a
 // NATS operator signing key the servers' NATS operator JWT does not list, a
 // NATS operator whose server holds an account made elsewhere: the server
-// keeps the JWTs it serves and both accounts say why.
+// keeps the JWTs it serves, both accounts say why, and the NatsOperator
+// names the key.
 func TestAdoption_UntrustedSigner(t *testing.T) {
 	opID, opPub, opIDSeed := seededPair(t, nkeys.PrefixByteOperator)
 	listed, listedPub, _ := seededPair(t, nkeys.PrefixByteOperator)
-	_, _, unlistedSeed := seededPair(t, nkeys.PrefixByteOperator)
+	_, unlistedPub, unlistedSeed := seededPair(t, nkeys.PrefixByteOperator)
 	sysID, sysPub, sysSeed := seededPair(t, nkeys.PrefixByteAccount)
 	_, accPub, accSeed := seededPair(t, nkeys.PrefixByteAccount)
 
@@ -132,4 +133,11 @@ func TestAdoption_UntrustedSigner(t *testing.T) {
 	requireUntrusted(acc.Status.Conditions, acc.Status.Distribution)
 	require.NoError(t, c.Get(t.Context(), client.ObjectKeyFromObject(sys), sys))
 	requireUntrusted(sys.Status.Conditions, sys.Status.Distribution)
+
+	require.NoError(t, c.Get(t.Context(), opKey, op))
+	cond := meta.FindStatusCondition(op.Status.Conditions, ConditionSigningKeyUntrusted)
+	require.NotNil(t, cond)
+	require.Equal(t, metav1.ConditionTrue, cond.Status, cond.Message)
+	require.Equal(t, ReasonUntrustedSigner, cond.Reason, cond.Message)
+	require.Equal(t, "1 of 1 servers do not list signing key "+unlistedPub+" in their NATS operator JWT", cond.Message)
 }

@@ -47,6 +47,10 @@ func (*pushLog) Lookup(context.Context, types.NamespacedName, string) (string, e
 
 func (*pushLog) Delete(context.Context, types.NamespacedName, string) error { return nil }
 
+func (*pushLog) Distrusting(context.Context, types.NamespacedName, string) (int, int, error) {
+	return 1, 0, nil
+}
+
 // importsPushed returns, per JWT pushed for the account named name, how many
 // imports it carries.
 func (d *pushLog) importsPushed(t *testing.T, name string) []int {

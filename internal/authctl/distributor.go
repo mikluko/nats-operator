@@ -49,6 +49,10 @@ type Distributor interface {
 	// server trusting operator is sent now and whenever it joins; "" sends
 	// none.
 	Delete(ctx context.Context, operator types.NamespacedName, request string) error
+
+	// Distrusting returns how many servers trust operator and how many of
+	// them do not list key in the NATS operator JWT they run under.
+	Distrusting(ctx context.Context, operator types.NamespacedName, key string) (servers, distrusting int, err error)
 }
 
 // push hands token to d, which may be nil.

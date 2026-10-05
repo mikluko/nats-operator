@@ -128,6 +128,7 @@ Replace each `<...>.nk` with the path of that seed.
 The servers trust the signing keys in the NATS operator JWT of their config, and nothing in this guide changes that config.
 The first signing key that you list for the NATS operator signs every account, so it must be a key that the JWT in the config lists.
 If it is not, the auth controller sends the servers no JWT, and the system account and each account read `Distributed` False with the reason `UntrustedSigner`.
+The `NatsOperator` reads `SigningKeyUntrusted` True with the same reason, and its message names the key and how many servers do not list it.
 
 If you keep an identity seed offline, leave `keys.identity` out.
 Set `jwt` of the `NatsOperator` to the NATS operator JWT, or `publicKey` of the account to its public key, and list at least one signing key.
