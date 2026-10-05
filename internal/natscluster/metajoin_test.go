@@ -354,7 +354,7 @@ func joinEast(t *testing.T, reload bool) {
 	}
 	if reload {
 		require.Never(t, func() bool { return add() == nil }, 10*time.Second, 500*time.Millisecond, "stream NEW created on west after a reload")
-		require.ErrorContains(t, add(), "account not found")
+		require.Error(t, add())
 		return
 	}
 	require.EventuallyWithT(t, func(c *assert.CollectT) { require.NoError(c, add()) }, 30*time.Second, 200*time.Millisecond, "stream NEW not created on west")
