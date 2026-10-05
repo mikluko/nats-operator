@@ -1,6 +1,7 @@
 package v1beta1
 
 import (
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
@@ -42,6 +43,49 @@ type SigningKey struct {
 	// signs nothing new with it. Nothing removes a retiring key from the list.
 	// +optional
 	Retiring bool `json:"retiring,omitempty"`
+
+	// Scope makes the key a scoped signing key of an account: it signs only
+	// the NatsUsers naming the scope's role, and the servers hold each of
+	// them to the scope. A NATS operator's signing key takes none.
+	// +optional
+	Scope *SigningKeyScope `json:"scope,omitempty"`
+}
+
+// SigningKeyScope is what every user signed by a scoped signing key is
+// held to, carried in the account JWT.
+type SigningKeyScope struct {
+	// Role names the scope; a NatsUser whose spec.role is this is signed by
+	// the first key of the role that is not retiring.
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	Role string `json:"role"`
+
+	// Permissions are the publish and subscribe permissions of the key's
+	// users.
+	// +optional
+	Permissions *Permissions `json:"permissions,omitempty"`
+
+	// ConnectionTypes restricts how the key's users may connect; empty
+	// allows any.
+	// +optional
+	// +listType=set
+	ConnectionTypes []ConnectionType `json:"connectionTypes,omitempty"`
+
+	// Limits are the limits of each of the key's users; an omitted limit is
+	// unlimited.
+	// +optional
+	Limits *UserLimits `json:"limits,omitempty"`
+}
+
+// UserLimits are the limits of one user's connection.
+type UserLimits struct {
+	// Subscriptions is the maximum number of subscriptions.
+	// +optional
+	Subscriptions *int64 `json:"subscriptions,omitempty"`
+
+	// Payload is the maximum message payload.
+	// +optional
+	Payload *resource.Quantity `json:"payload,omitempty"`
 }
 
 // SeedSecretKeySelector selects an nkey seed from a Secret in the

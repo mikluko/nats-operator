@@ -9,6 +9,7 @@ import (
 // NatsOperatorSpec is the desired state of a NATS operator.
 // +kubebuilder:validation:XValidation:rule="!has(self.jwt) || !has(self.keys) || !has(self.keys.identity)",message="jwt and keys.identity are mutually exclusive"
 // +kubebuilder:validation:XValidation:rule="!has(self.jwt) || (has(self.keys) && has(self.keys.signing) && size(self.keys.signing) > 0)",message="jwt requires at least one signing key"
+// +kubebuilder:validation:XValidation:rule="!has(self.keys) || !has(self.keys.signing) || self.keys.signing.all(k, !has(k.scope))",message="a NATS operator's signing key takes no scope"
 type NatsOperatorSpec struct {
 	// Keys adopts existing seeds.
 	// +optional

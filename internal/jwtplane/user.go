@@ -30,6 +30,10 @@ var (
 	// the wrong kind.
 	ErrPresetAccount = errors.New("preset not allowed in this account")
 
+	// ErrRoleAndClaims is returned when a user sets a role beside a preset,
+	// permissions or connection types.
+	ErrRoleAndClaims = errors.New("role excludes preset, permissions and connection types")
+
 	// ErrConnectionType is returned for an unknown connection type, or for
 	// connection types set beside a preset.
 	ErrConnectionType = errors.New("invalid allowed connection types")
@@ -47,6 +51,10 @@ type User struct {
 	// AllowedConnectionTypes restricts how the user may connect, from the
 	// jwt.ConnectionType* values; empty allows any. Exclusive with Preset.
 	AllowedConnectionTypes []string
+	// Role signs the user with the account's scoped signing key of that
+	// role and leaves its claims empty for the scope to fill; exclusive with
+	// Preset, Permissions and AllowedConnectionTypes.
+	Role string
 }
 
 // Permissions are a user's publish and subscribe permissions.
@@ -62,8 +70,9 @@ type SubjectPermissions struct {
 	Deny  []string
 }
 
-// SignUser returns the user JWT, signed by the account's active signing key
-// on behalf of the account's identity. It never expires.
+// SignUser returns the user JWT, signed on behalf of the account's identity
+// by the account's active signing key, or for a user with a role by its
+// active scoped signing key of that role. It never expires.
 func SignUser(u User, account Keys) (string, error) {
 	if !nkeys.IsValidPublicUserKey(u.PublicKey) {
 		return "", fmt.Errorf("%w: user %q is not a user public key", ErrWrongKeyType, u.PublicKey)
@@ -72,14 +81,23 @@ func SignUser(u User, account Keys) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	signer, err := account.signer(nkeys.PrefixByteAccount)
-	if err != nil {
-		return "", err
-	}
 	c := jwt.NewUserClaims(u.PublicKey)
 	c.Name = u.Name
 	c.IssuerAccount = acc
-	if err := applyUserClaims(&c.UserPermissionLimits, u); err != nil {
+	var signer nkeys.KeyPair
+	if u.Role != "" {
+		if u.Preset != "" || u.Permissions != nil || len(u.AllowedConnectionTypes) > 0 {
+			return "", fmt.Errorf("%w: %q", ErrRoleAndClaims, u.Role)
+		}
+		signer, err = account.scopedSigner(u.Role)
+		c.SetScoped(true)
+	} else {
+		signer, err = account.signer(nkeys.PrefixByteAccount)
+		if err == nil {
+			err = applyUserClaims(&c.UserPermissionLimits, u)
+		}
+	}
+	if err != nil {
 		return "", err
 	}
 	if err := validate(c); err != nil {
@@ -94,12 +112,7 @@ func applyUserClaims(dst *jwt.UserPermissionLimits, u User) error {
 			return err
 		}
 		dst.AllowedConnectionTypes.Add(u.AllowedConnectionTypes...)
-		if p := u.Permissions; p != nil {
-			dst.Pub.Allow.Add(p.Publish.Allow...)
-			dst.Pub.Deny.Add(p.Publish.Deny...)
-			dst.Sub.Allow.Add(p.Subscribe.Allow...)
-			dst.Sub.Deny.Add(p.Subscribe.Deny...)
-		}
+		applyPermissions(&dst.Permissions, u.Permissions)
 		return nil
 	}
 	if u.Permissions != nil {
@@ -119,6 +132,16 @@ func applyUserClaims(dst *jwt.UserPermissionLimits, u User) error {
 	dst.Sub.Allow.Add(p.sub...)
 	dst.AllowedConnectionTypes.Add(p.connectionTypes...)
 	return nil
+}
+
+func applyPermissions(dst *jwt.Permissions, p *Permissions) {
+	if p == nil {
+		return
+	}
+	dst.Pub.Allow.Add(p.Publish.Allow...)
+	dst.Pub.Deny.Add(p.Publish.Deny...)
+	dst.Sub.Allow.Add(p.Subscribe.Allow...)
+	dst.Sub.Deny.Add(p.Subscribe.Deny...)
 }
 
 func checkConnectionTypes(types []string) error {

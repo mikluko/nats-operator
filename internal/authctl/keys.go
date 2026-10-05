@@ -118,7 +118,7 @@ func resolveKeys(ctx context.Context, c client.Client, src keySource, generate b
 			if err != nil {
 				return out, fmt.Errorf("signing key %q: %w", sk.Name, err)
 			}
-			out.Signing = append(out.Signing, jwtplane.SigningKey{Name: sk.Name, Pair: kp, Retiring: sk.Retiring})
+			out.Signing = append(out.Signing, jwtplane.SigningKey{Name: sk.Name, Pair: kp, Retiring: sk.Retiring, Scope: userScope(sk.Scope)})
 		}
 		return out, nil
 	}
@@ -130,6 +130,35 @@ func resolveKeys(ctx context.Context, c client.Client, src keySource, generate b
 	out.Signing = []jwtplane.SigningKey{{Name: generatedSigningKeyName, Pair: kp}}
 	out.Generated.Signing = []string{name}
 	return out, nil
+}
+
+func userScope(s *authv1beta1.SigningKeyScope) *jwtplane.UserScope {
+	if s == nil {
+		return nil
+	}
+	out := &jwtplane.UserScope{Role: s.Role, Permissions: permissions(s.Permissions)}
+	for _, t := range s.ConnectionTypes {
+		out.AllowedConnectionTypes = append(out.AllowedConnectionTypes, string(t))
+	}
+	if l := s.Limits; l != nil {
+		out.Subscriptions = deref(l.Subscriptions)
+		out.Payload = quantity(l.Payload)
+	}
+	return out
+}
+
+func permissions(p *authv1beta1.Permissions) *jwtplane.Permissions {
+	if p == nil {
+		return nil
+	}
+	out := &jwtplane.Permissions{}
+	if p.Publish != nil {
+		out.Publish = jwtplane.SubjectPermissions{Allow: p.Publish.Allow, Deny: p.Publish.Deny}
+	}
+	if p.Subscribe != nil {
+		out.Subscribe = jwtplane.SubjectPermissions{Allow: p.Subscribe.Allow, Deny: p.Subscribe.Deny}
+	}
+	return out
 }
 
 // resolveIdentity is resolveKeys for the identity alone.

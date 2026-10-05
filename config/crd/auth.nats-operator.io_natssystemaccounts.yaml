@@ -86,6 +86,97 @@ spec:
                             Retiring keeps the key listed, so what it signed stays valid, and
                             signs nothing new with it. Nothing removes a retiring key from the list.
                           type: boolean
+                        scope:
+                          description: |-
+                            Scope makes the key a scoped signing key of an account: it signs only
+                            the NatsUsers naming the scope's role, and the servers hold each of
+                            them to the scope. A NATS operator's signing key takes none.
+                          properties:
+                            connectionTypes:
+                              description: |-
+                                ConnectionTypes restricts how the key's users may connect; empty
+                                allows any.
+                              items:
+                                description: ConnectionType is a NATS connection type
+                                  a user may connect as.
+                                enum:
+                                - STANDARD
+                                - WEBSOCKET
+                                - LEAFNODE
+                                - LEAFNODE_WS
+                                - MQTT
+                                - MQTT_WS
+                                - IN_PROCESS
+                                type: string
+                              type: array
+                              x-kubernetes-list-type: set
+                            limits:
+                              description: |-
+                                Limits are the limits of each of the key's users; an omitted limit is
+                                unlimited.
+                              properties:
+                                payload:
+                                  anyOf:
+                                  - type: integer
+                                  - type: string
+                                  description: Payload is the maximum message payload.
+                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                  x-kubernetes-int-or-string: true
+                                subscriptions:
+                                  description: Subscriptions is the maximum number
+                                    of subscriptions.
+                                  format: int64
+                                  type: integer
+                              type: object
+                            permissions:
+                              description: |-
+                                Permissions are the publish and subscribe permissions of the key's
+                                users.
+                              properties:
+                                publish:
+                                  description: Publish are the subjects the user may
+                                    publish to.
+                                  properties:
+                                    allow:
+                                      description: Allow are the subjects permitted;
+                                        empty, every subject is.
+                                      items:
+                                        type: string
+                                      type: array
+                                    deny:
+                                      description: Deny are the subjects refused,
+                                        even where Allow matches them.
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                subscribe:
+                                  description: Subscribe are the subjects the user
+                                    may subscribe to.
+                                  properties:
+                                    allow:
+                                      description: Allow are the subjects permitted;
+                                        empty, every subject is.
+                                      items:
+                                        type: string
+                                      type: array
+                                    deny:
+                                      description: Deny are the subjects refused,
+                                        even where Allow matches them.
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                              type: object
+                            role:
+                              description: |-
+                                Role names the scope; a NatsUser whose spec.role is this is signed by
+                                the first key of the role that is not retiring.
+                              minLength: 1
+                              type: string
+                          required:
+                          - role
+                          type: object
                         secretKeyRef:
                           description: SecretKeyRef selects the seed.
                           properties:

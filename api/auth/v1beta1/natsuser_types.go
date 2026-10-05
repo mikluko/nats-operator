@@ -40,6 +40,7 @@ const (
 // +kubebuilder:validation:XValidation:rule="!has(self.publicKey) || !has(self.credentials)",message="publicKey and credentials are mutually exclusive"
 // +kubebuilder:validation:XValidation:rule="!has(self.preset) || !(self.preset in ['cluster-controller', 'jetstream-controller', 'auth-controller']) || self.accountRef.kind == 'NatsSystemAccount'",message="a controller preset is for a NatsSystemAccount user"
 // +kubebuilder:validation:XValidation:rule="!has(self.preset) || self.preset != 'readonly' || self.accountRef.kind == 'NatsAccount'",message="the readonly preset is for a NatsAccount user"
+// +kubebuilder:validation:XValidation:rule="!has(self.role) || (!has(self.permissions) && !has(self.connectionTypes) && !has(self.preset))",message="role excludes permissions, connectionTypes and preset"
 type NatsUserSpec struct {
 	// AccountRef names the account the user belongs to.
 	// +required
@@ -59,6 +60,13 @@ type NatsUserSpec struct {
 	// ConnectionTypes.
 	// +optional
 	Preset UserPreset `json:"preset,omitempty"`
+
+	// Role signs the user with the account's scoped signing key of this
+	// role, in place of Permissions, ConnectionTypes and Preset: nats-server
+	// refuses a user JWT that carries its own under a scoped key.
+	// +optional
+	// +kubebuilder:validation:MinLength=1
+	Role string `json:"role,omitempty"`
 
 	// PublicKey is a key whose seed the client holds; the user then gets a
 	// signed JWT in status and no creds Secret.
