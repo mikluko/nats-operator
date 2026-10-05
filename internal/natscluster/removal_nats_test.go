@@ -67,7 +67,7 @@ func startRemovalCluster(t *testing.T, replicas int32) *removalCluster {
 	}
 
 	rc.nc.Spec.Replicas = 5
-	_, srvs, url, files := startRendered(t, rc.nc, p.trust, rc.plan.Revision)
+	eps, srvs, url, files := startRendered(t, rc.nc, p.trust, rc.plan.Revision)
 	rc.nc.Spec.Replicas = replicas
 	for i, s := range srvs {
 		rc.srvs[s.Name()], rc.files[s.Name()] = s, files[i]
@@ -82,10 +82,11 @@ func startRemovalCluster(t *testing.T, replicas int32) *removalCluster {
 	pool := natsconn.NewPool(natsconn.WithPreset(jwtplane.PresetClusterController))
 	t.Cleanup(pool.Close)
 	rc.sys = &SystemConnections{
-		Client:  fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build(),
-		Pool:    pool,
-		Servers: func(*clusterv1beta1.NatsCluster) []string { return []string{url} },
-		Wait:    time.Second,
+		Client:   fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build(),
+		Pool:     pool,
+		Fallback: monitorAt(eps),
+		Servers:  func(*clusterv1beta1.NatsCluster) []string { return []string{url} },
+		Wait:     time.Second,
 	}
 	rc.admin, err = rc.sys.Admin(t.Context(), rc.nc)
 	require.NoError(t, err)

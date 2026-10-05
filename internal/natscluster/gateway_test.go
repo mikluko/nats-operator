@@ -475,9 +475,10 @@ func supercluster(t *testing.T, mutate func(east, west *clusterv1beta1.NatsClust
 			Data:       map[string][]byte{natsconn.DefaultCredentialsKey: p.systemCreds(t, jwtplane.PresetClusterController)},
 		}
 		m.sys = &SystemConnections{
-			Client:  fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build(),
-			Pool:    pool,
-			Servers: func(*clusterv1beta1.NatsCluster) []string { return []string{m.url} },
+			Client:   fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build(),
+			Pool:     pool,
+			Fallback: &fakeObserver{},
+			Servers:  func(*clusterv1beta1.NatsCluster) []string { return []string{m.url} },
 		}
 		return m
 	}
