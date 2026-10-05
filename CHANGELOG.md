@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A probe or lifecycle hook `podTemplate` sets on the `nats` container with a handler of another kind than the rendered one replaces the rendered handler.
+
 ## [0.5.0] - 2026-10-05
 
 ### Added

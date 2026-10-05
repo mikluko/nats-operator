@@ -327,7 +327,9 @@ func mergePodSpec(base corev1.PodSpec, override *corev1.PodSpec) (corev1.PodSpec
 }
 
 // setFieldsJSON encodes v with every null and every zero handler port dropped,
-// so that a field v leaves unset does not delete or zero it in a merge patch.
+// so that a field v leaves unset does not delete or zero it in a merge patch,
+// and with every probe or lifecycle hook that names a handler deleting the
+// handlers it does not name, since an object may carry only one.
 func setFieldsJSON(v any) ([]byte, error) {
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -337,7 +339,35 @@ func setFieldsJSON(v any) ([]byte, error) {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return nil, err
 	}
-	return json.Marshal(dropZeroPorts(dropNulls(m)))
+	return json.Marshal(deleteOtherHandlers(dropZeroPorts(dropNulls(m))))
+}
+
+var (
+	handlerOwnerKeys = map[string]bool{"livenessProbe": true, "readinessProbe": true, "startupProbe": true, "postStart": true, "preStop": true}
+	handlerKindKeys  = []string{"exec", "httpGet", "tcpSocket", "grpc", "sleep"}
+)
+
+// deleteOtherHandlers sets to null, in every probe and lifecycle hook in v that
+// names a handler, each handler it does not name.
+func deleteOtherHandlers(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, e := range t {
+			if h, ok := e.(map[string]any); ok && handlerOwnerKeys[k] && slices.ContainsFunc(handlerKindKeys, func(kind string) bool { return h[kind] != nil }) {
+				for _, kind := range handlerKindKeys {
+					if _, set := h[kind]; !set {
+						h[kind] = nil
+					}
+				}
+			}
+			t[k] = deleteOtherHandlers(e)
+		}
+	case []any:
+		for i, e := range t {
+			t[i] = deleteOtherHandlers(e)
+		}
+	}
+	return v
 }
 
 var handlerKeys = map[string]bool{"httpGet": true, "tcpSocket": true, "grpc": true}
