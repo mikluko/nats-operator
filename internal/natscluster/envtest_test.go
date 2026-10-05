@@ -938,6 +938,92 @@ func TestEnvtestReconcile(t *testing.T) {
 			})
 		})
 
+		t.Run("adding or removing auth restarts every server together", func(t *testing.T) {
+			const ns = "auth-change"
+			rec := events.NewFakeRecorder(100)
+			rr := &Reconciler{Client: c, Observer: aobs, Recorder: rec,
+				Reloader: func(context.Context, *clusterv1beta1.NatsCluster) (ServerReloader, error) { return fake, nil }}
+			reconcileChange := func(t *testing.T, nc *clusterv1beta1.NatsCluster) *clusterv1beta1.NatsCluster {
+				t.Helper()
+				_, err := rr.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(nc)})
+				require.NoError(t, err)
+				got := &clusterv1beta1.NatsCluster{}
+				require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(nc), got))
+				return got
+			}
+			templates := func(t *testing.T) map[string]string {
+				t.Helper()
+				out := map[string]string{}
+				for name, sts := range statefulSets(t, ns) {
+					out[name] = sts.Spec.Template.Annotations[AnnotationConfigRevision]
+				}
+				return out
+			}
+			settle := func(t *testing.T, nc *clusterv1beta1.NatsCluster, trust *Trust) {
+				t.Helper()
+				for _, sts := range statefulSets(t, ns) {
+					sts.Status.ObservedGeneration = sts.Generation
+					sts.Status.Replicas, sts.Status.UpdatedReplicas, sts.Status.ReadyReplicas = 1, 1, 1
+					require.NoError(t, c.Status().Update(ctx, sts))
+				}
+				plan, err := Render(nc, Inputs{Trust: trust})
+				require.NoError(t, err)
+				aobs.set(settledSnapshot(plan, nc.Status.Config.Revision, "demo-0"))
+				fake.reset(ns)
+			}
+			requireHeld := func(t *testing.T, nc *clusterv1beta1.NatsCluster, change string, before map[string]string) {
+				t.Helper()
+				condition(t, nc, ConditionProgressing, metav1.ConditionFalse, ReasonAuthChangeBlocked)
+				require.Equal(t, change+" cannot roll out one server at a time, as a server with auth and one without cannot route to each other: "+
+					"annotate the NatsCluster cluster.nats-operator.io/restart-all to restart demo-2, demo-1, demo-0 together, or recreate it",
+					meta.FindStatusCondition(nc.Status.Conditions, ConditionProgressing).Message)
+				require.Equal(t, []string{"demo-2", "demo-1", "demo-0"}, nc.Status.Rollout.Pending)
+				require.Equal(t, before, templates(t), "a server restarted across the auth change")
+			}
+
+			nc := newCluster(t, ns, func(*clusterv1beta1.NatsCluster) {})
+			require.NoError(t, c.Create(ctx, literal(ns, p.trust)))
+			got := reconcileChange(t, nc)
+			settle(t, got, nil)
+			got = reconcileChange(t, got)
+			condition(t, got, ConditionProgressing, metav1.ConditionFalse, ReasonUpToDate)
+			first := templates(t)
+
+			got.Spec.Auth = story2.Spec.Auth.DeepCopy()
+			require.NoError(t, c.Update(ctx, got))
+			for range 2 {
+				got = reconcileChange(t, got)
+				requireHeld(t, got, "adding auth", first)
+			}
+
+			got.Annotations = map[string]string{clusterv1beta1.AnnotationRestartAll: "true"}
+			require.NoError(t, c.Update(ctx, got))
+			got = reconcileChange(t, got)
+			target := got.Status.Config.Revision
+			require.NotContains(t, got.Annotations, clusterv1beta1.AnnotationRestartAll)
+			condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonRollingRestart)
+			require.Equal(t, "adding auth: restarting demo-2, demo-1, demo-0 together; waiting for Settled",
+				meta.FindStatusCondition(got.Status.Conditions, ConditionProgressing).Message)
+			require.Equal(t, map[string]string{"demo-0": target, "demo-1": target, "demo-2": target}, templates(t))
+			requireTrustRendered(t, ns, p.trust)
+			require.Equal(t, []string{"Normal RolloutStep restarting demo-2, demo-1, demo-0 together"}, recorded(rec))
+
+			aobs.set(nil)
+			got = reconcileChange(t, got)
+			condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonRollingRestart)
+			require.Equal(t, GateSettled, got.Status.Rollout.Gate.WaitingFor)
+
+			settle(t, got, p.trust)
+			got = reconcileChange(t, got)
+			condition(t, got, ConditionProgressing, metav1.ConditionFalse, ReasonUpToDate)
+			require.Nil(t, got.Status.Rollout)
+
+			got.Spec.Auth = nil
+			require.NoError(t, c.Update(ctx, got))
+			got = reconcileChange(t, got)
+			requireHeld(t, got, "removing auth", templates(t))
+		})
+
 		t.Run("reference form waits for the auth controller", func(t *testing.T) {
 			const ns = "auth-ref"
 			nc := newAuthCluster(t, ns, func(*clusterv1beta1.Auth) {})
