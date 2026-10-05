@@ -24,7 +24,8 @@ import (
 
 // accountRevocations merges the revocations recorded, those prev carries for
 // pub, and those of users revoked in the account and of the keys they
-// replaced, less any none of whose issuers is pub or in signing.
+// replaced, less any none of whose issuers is pub or in signing. A revoked
+// user's key is issued by signing, and by pub too where the user claimed it.
 func accountRevocations(recorded []authv1beta1.Revocation, prev, pub string, signing []string, users []authv1beta1.NatsUser) []authv1beta1.Revocation {
 	byKey := map[string]*authv1beta1.Revocation{}
 	revoke := func(key string, at time.Time, issuers []string) {
@@ -53,7 +54,11 @@ func accountRevocations(recorded []authv1beta1.Revocation, prev, pub string, sig
 	}
 	for i := range users {
 		if t, ok := userRevokedAt(&users[i]); ok {
-			revoke(users[i].Status.PublicKey, t, signing)
+			issuers := signing
+			if claimed(&users[i]) {
+				issuers = append(slices.Clone(signing), pub)
+			}
+			revoke(users[i].Status.PublicKey, t, issuers)
 		}
 		for _, k := range users[i].Status.ReplacedKeys {
 			revoke(k.PublicKey, k.At.Time, signing)
@@ -196,6 +201,13 @@ func userRevokedAt(u *authv1beta1.NatsUser) (time.Time, bool) {
 		return cond.LastTransitionTime.Time, true
 	}
 	return time.Time{}, false
+}
+
+// claimed reports whether u holds a key the client brought by publicKey,
+// whose JWTs the account's identity key may have signed outside the
+// controller.
+func claimed(u *authv1beta1.NatsUser) bool {
+	return u.Spec.PublicKey != "" && u.Status.PublicKey == u.Spec.PublicKey
 }
 
 // revokedSince reports whether accountJWT revokes the user key pub at t or
