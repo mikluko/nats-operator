@@ -76,6 +76,10 @@ Write the whole spec before you apply it:
   Put that token in a Secret and name it under `activation.secretKeyRef`.
   An import whose token does not fit is left out of the JWT, and the condition `ReferencesResolved` of the `NatsAccount` says why.
 - Set `share` on an import of a service and `allowTrace` on an import of a stream if the claims set them.
+- List an importer of a private export by `publicKey` under `importers` if no `NatsAccount` describes the importing account, which may stay with `nsc`.
+  The auth controller mints that account an activation token into `status.exports`, under the name of the export and the public key.
+  Write the token to a file and give it to whoever holds the importing account, for `nsc add import --token`.
+  The auth controller mints a new token when the signing key that signed the old one is retiring or gone, and the importing account needs that one instead.
 - Set `jwtTTL`.
   A JWT from `nsc` does not expire unless you gave it an expiry.
   A JWT from the auth controller expires after `jwtTTL`, 48h by default, and the auth controller signs it again before then.

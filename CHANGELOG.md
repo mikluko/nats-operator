@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - A `NatsOperator` has the condition `SigningKeyUntrusted`, True with the reason `UntrustedSigner` while a server does not list its active signing key in the NATS operator JWT it runs under, naming the key and how many servers do not list it, and False with the reason `SignerTrusted` otherwise.
+- An importer of a private export of a `NatsAccount` takes `publicKey` in place of `kind` and `name`, for an account no `NatsAccount` describes; the auth controller mints its activation token into `status.exports[].importers[].activationToken`. A key it mints no token for leaves `Ready` False with the reason `ActivationsUnsigned`.
 
 ## [0.4.0] - 2026-10-05
 
