@@ -369,6 +369,44 @@ func TestRender_PodTemplateProbeWithoutPort(t *testing.T) {
 	require.Equal(t, monitor, nats.LivenessProbe.HTTPGet.Port)
 }
 
+func TestRender_PodTemplateHandlerOfAnotherKind(t *testing.T) {
+	nc := storyCluster(t)
+	nc.Spec.PodTemplate = &clusterv1beta1.PodTemplate{Spec: &corev1.PodSpec{Containers: []corev1.Container{
+		{
+			Name: "nats",
+			StartupProbe: &corev1.Probe{
+				ProbeHandler: corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromString("client")}},
+			},
+			ReadinessProbe: &corev1.Probe{
+				ProbeHandler:  corev1.ProbeHandler{GRPC: &corev1.GRPCAction{Port: 9000}},
+				PeriodSeconds: 5,
+			},
+			LivenessProbe: &corev1.Probe{
+				ProbeHandler: corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"true"}}},
+			},
+			Lifecycle: &corev1.Lifecycle{PreStop: &corev1.LifecycleHandler{Sleep: &corev1.SleepAction{Seconds: 5}}},
+		},
+		{
+			Name:           "sidecar",
+			Image:          "busybox",
+			ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt32(80)}}},
+		},
+	}}}
+	p, err := Render(nc, Inputs{})
+	require.NoError(t, err)
+	nats := container(t, p.Servers[0].StatefulSet, "nats")
+
+	require.Equal(t, corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromString("client")}}, nats.StartupProbe.ProbeHandler)
+	require.Equal(t, int32(90), nats.StartupProbe.FailureThreshold)
+	require.Equal(t, corev1.ProbeHandler{GRPC: &corev1.GRPCAction{Port: 9000}}, nats.ReadinessProbe.ProbeHandler)
+	require.Equal(t, int32(5), nats.ReadinessProbe.PeriodSeconds)
+	require.Equal(t, corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"true"}}}, nats.LivenessProbe.ProbeHandler)
+	require.Equal(t, corev1.LifecycleHandler{Sleep: &corev1.SleepAction{Seconds: 5}}, *nats.Lifecycle.PreStop)
+
+	sidecar := container(t, p.Servers[0].StatefulSet, "sidecar")
+	require.Equal(t, corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt32(80)}}, sidecar.ReadinessProbe.ProbeHandler)
+}
+
 func TestMergePodSpec_HandlerWithoutPort(t *testing.T) {
 	tests := []struct {
 		name     string
