@@ -111,6 +111,81 @@ func TestAdoption_OutsideImports(t *testing.T) {
 	require.ErrorIs(t, err, nats.ErrNoResponders, "and for no other key")
 }
 
+// TestAdoption_OutsideImporter pins, on an in-process server, that an
+// account signed outside the controller imports a NatsAccount's private
+// export with the activation token minted into status.exports for its
+// public key, and a message crosses the import.
+func TestAdoption_OutsideImporter(t *testing.T) {
+	x := newOutsideExporter(t)
+	billingSK := x.keys.Signing[0].Pair
+
+	_, ordersPub, ordersSeed := seededPair(t, nkeys.PrefixByteAccount)
+	ordersSK, _, ordersSKSeed := seededPair(t, nkeys.PrefixByteAccount)
+	ref := func(key string) authv1beta1.SeedSecretKeySelector {
+		return authv1beta1.SeedSecretKeySelector{Name: "orders-keys", Key: key}
+	}
+	orders := &authv1beta1.NatsAccount{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "orders", UID: "orders"},
+		Spec: authv1beta1.NatsAccountSpec{
+			OperatorRef: natsv1beta1.ObjectReference{Name: adoptionOperator.Name},
+			Keys: &authv1beta1.Keys{
+				Identity: &authv1beta1.IdentityKey{SecretKeyRef: ref("identity")},
+				Signing:  []authv1beta1.SigningKey{{Name: "signing-1", SecretKeyRef: ref("signing")}},
+			},
+			Exports: []authv1beta1.Export{{
+				Name: "events", Type: authv1beta1.ExportTypeStream, Subject: "orders.events.>",
+				Access: authv1beta1.ExportAccessPrivate, Importers: []authv1beta1.Importer{{PublicKey: x.pub}},
+			}},
+		},
+	}
+	n := newNscSystem(t, orders)
+	url := n.serve(t)
+	require.NoError(t, n.c.Create(t.Context(), &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "orders-keys"},
+		Data:       map[string][]byte{"identity": ordersSeed, "signing": ordersSKSeed},
+	}))
+
+	nc, err := n.sys.connect(url)
+	require.NoError(t, err)
+	t.Cleanup(nc.Close)
+	d := &Resolvers{Conn: func(context.Context, types.NamespacedName) (*nats.Conn, error) { return nc, nil }, Wait: 500 * time.Millisecond}
+	n.reconcileOperator(t, d)
+	n.reconcileSystemAccount(t, d)
+	ar := &AccountReconciler{Client: n.c, Distributor: d}
+	for range 2 {
+		_, err := ar.Reconcile(t.Context(), reconcile.Request{NamespacedName: client.ObjectKeyFromObject(orders)})
+		require.NoError(t, err)
+	}
+	require.NoError(t, n.c.Get(t.Context(), client.ObjectKeyFromObject(orders), orders))
+	requireReady(t, orders.Status, metav1.ConditionTrue, ReasonDistributed, ReasonAllImportsResolved)
+	require.Len(t, orders.Status.Exports, 1)
+	token := orders.Status.Exports[0].Importers[0].ActivationToken
+
+	bc := jwt.NewAccountClaims(x.pub)
+	bc.Name = "billing"
+	bc.SigningKeys.Add(pubOf(t, billingSK))
+	bc.Imports.Add(&jwt.Import{Name: "events", Account: ordersPub, Subject: "orders.events.>", LocalSubject: "upstream.orders.>", Type: jwt.Stream, Token: token})
+	billingJWT, err := bc.Encode(n.opSigning)
+	require.NoError(t, err)
+	require.NoError(t, d.Push(t.Context(), adoptionOperator, billingJWT))
+
+	billingConn, err := userOf(t, x.pub, billingSK).connect(url)
+	require.NoError(t, err)
+	t.Cleanup(billingConn.Close)
+	ordersConn, err := userOf(t, ordersPub, ordersSK).connect(url)
+	require.NoError(t, err)
+	t.Cleanup(ordersConn.Close)
+
+	sub, err := billingConn.SubscribeSync("upstream.orders.>")
+	require.NoError(t, err)
+	require.NoError(t, billingConn.Flush())
+	require.NoError(t, ordersConn.Publish("orders.events.created", []byte("1")))
+	msg, err := sub.NextMsg(5 * time.Second)
+	require.NoError(t, err, "the private export crosses the import")
+	require.Equal(t, "upstream.orders.created", msg.Subject)
+	require.Equal(t, "1", string(msg.Data))
+}
+
 func pubOf(t *testing.T, kp nkeys.KeyPair) string {
 	t.Helper()
 	p, err := kp.PublicKey()
