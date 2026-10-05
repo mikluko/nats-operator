@@ -301,6 +301,106 @@ func TestSignAccountImports(t *testing.T) {
 	}
 }
 
+func TestSignAccountImportFlags(t *testing.T) {
+	op := newKeys(t, nkeys.PrefixByteOperator, "s")
+	core := newKeys(t, nkeys.PrefixByteAccount, "s")
+	exporter := pub(t, newPair(t, nkeys.PrefixByteAccount))
+	stream := jwtplane.Export{Name: "events", Type: jwt.Stream, Subject: "events.>"}
+	service := jwtplane.Export{Name: "execute", Type: jwt.Service, Subject: "execute"}
+
+	tok, err := jwtplane.SignAccount(jwtplane.Account{Keys: core, Imports: []jwtplane.Import{
+		{Account: exporter, Export: stream, AllowTrace: true},
+		{Account: exporter, Export: service, Share: true},
+	}}, op, time.Now())
+	require.NoError(t, err)
+	c, err := jwt.DecodeAccountClaims(tok)
+	require.NoError(t, err)
+	flags := map[string][2]bool{}
+	for _, i := range c.Imports {
+		flags[i.Name] = [2]bool{i.Share, i.AllowTrace}
+	}
+	require.Equal(t, map[string][2]bool{"events": {false, true}, "execute": {true, false}}, flags)
+
+	for name, imp := range map[string]jwtplane.Import{
+		"share on a stream":        {Account: exporter, Export: stream, Share: true},
+		"allow trace on a service": {Account: exporter, Export: service, AllowTrace: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := jwtplane.SignAccount(jwtplane.Account{Keys: core, Imports: []jwtplane.Import{imp}}, op, time.Now())
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestValidateImport(t *testing.T) {
+	exporter := newKeys(t, nkeys.PrefixByteAccount, "s")
+	exporterPub := pub(t, exporter.Identity)
+	importer := pub(t, newPair(t, nkeys.PrefixByteAccount))
+	other := pub(t, newPair(t, nkeys.PrefixByteAccount))
+	private := jwtplane.Export{Name: "events", Type: jwt.Stream, Subject: "billing.events.>", Private: true, Importers: []string{importer, other}}
+	token, err := jwtplane.SignActivation(exporter, private, importer)
+	require.NoError(t, err)
+	forOther, err := jwtplane.SignActivation(exporter, private, other)
+	require.NoError(t, err)
+	byOther, err := jwtplane.SignActivation(newKeys(t, nkeys.PrefixByteAccount, "s"), private, importer)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name    string
+		imp     jwtplane.Import
+		wantErr string
+	}{
+		{name: "public", imp: jwtplane.Import{Account: exporterPub, Export: jwtplane.Export{Name: "events", Type: jwt.Stream, Subject: "billing.events.>"}}},
+		{name: "private with its token", imp: jwtplane.Import{Account: exporterPub, Export: private, Token: token}},
+		{name: "narrower than the token", imp: jwtplane.Import{Account: exporterPub, Export: jwtplane.Export{Name: "events", Type: jwt.Stream, Subject: "billing.events.eu.>", Private: true}, Token: token}},
+		{name: "private without a token", imp: jwtplane.Import{Account: exporterPub, Export: private}, wantErr: jwtplane.ErrActivationRequired.Error()},
+		{name: "token for another account", imp: jwtplane.Import{Account: exporterPub, Export: private, Token: forOther}, wantErr: "doesn't match account it is being included in"},
+		{name: "token by another account", imp: jwtplane.Import{Account: exporterPub, Export: private, Token: byOther}, wantErr: "doesn't match account for import"},
+		{name: "token for another subject", imp: jwtplane.Import{Account: exporterPub, Export: jwtplane.Export{Name: "events", Type: jwt.Stream, Subject: "billing.other.>", Private: true}, Token: token}, wantErr: "doesn't match import"},
+		{name: "token of another type", imp: jwtplane.Import{Account: exporterPub, Export: jwtplane.Export{Name: "events", Type: jwt.Service, Subject: "billing.events.>", Private: true}, Token: token}, wantErr: "mismatch between token import type"},
+		{name: "not a token", imp: jwtplane.Import{Account: exporterPub, Export: private, Token: "nope"}, wantErr: "invalid activation token"},
+		{name: "share on a stream", imp: jwtplane.Import{Account: exporterPub, Export: jwtplane.Export{Name: "events", Type: jwt.Stream, Subject: "billing.events.>"}, Share: true}, wantErr: "only valid for services"},
+		{name: "exporter not an account", imp: jwtplane.Import{Account: importer[1:], Export: private}, wantErr: jwtplane.ErrWrongKeyType.Error()},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := jwtplane.ValidateImport(tt.imp, importer)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestMonitoringImport(t *testing.T) {
+	sys := pub(t, newPair(t, nkeys.PrefixByteAccount))
+	importer := pub(t, newPair(t, nkeys.PrefixByteAccount))
+
+	services, ok := jwtplane.MonitoringImport("account-monitoring-services", sys, importer)
+	require.True(t, ok)
+	require.Equal(t, jwtplane.Import{Account: sys, Export: jwtplane.Export{
+		Name: "account-monitoring-services", Type: jwt.Service, Subject: "$SYS.REQ.ACCOUNT." + importer + ".*", ResponseType: jwt.ResponseTypeStream,
+	}}, services)
+
+	streams, ok := jwtplane.MonitoringImport("account-monitoring-streams", sys, importer)
+	require.True(t, ok)
+	require.Equal(t, jwtplane.Import{Account: sys, Export: jwtplane.Export{
+		Name: "account-monitoring-streams", Type: jwt.Stream, Subject: "$SYS.ACCOUNT." + importer + ".>",
+	}}, streams)
+
+	_, ok = jwtplane.MonitoringImport("events", sys, importer)
+	require.False(t, ok)
+
+	op := newKeys(t, nkeys.PrefixByteOperator, "s")
+	tok, err := jwtplane.SignAccount(jwtplane.Account{Keys: newKeys(t, nkeys.PrefixByteAccount, "s"), Imports: []jwtplane.Import{services, streams}}, op, time.Now())
+	require.NoError(t, err)
+	c, err := jwt.DecodeAccountClaims(tok)
+	require.NoError(t, err)
+	require.Len(t, c.Imports, 2)
+}
+
 func TestSignAccountRevocations(t *testing.T) {
 	op := newKeys(t, nkeys.PrefixByteOperator, "s")
 	acc := newKeys(t, nkeys.PrefixByteAccount, "s")
