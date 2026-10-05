@@ -138,7 +138,7 @@ func TestAccountExports(t *testing.T) {
 	acc := &authv1beta1.NatsAccount{Spec: authv1beta1.NatsAccountSpec{Exports: []authv1beta1.Export{
 		{Name: "results", Type: authv1beta1.ExportTypeStream, Subject: "r.>"},
 		{Name: "execute", Type: authv1beta1.ExportTypeService, Subject: "x", Access: authv1beta1.ExportAccessPrivate,
-			Importers: []authv1beta1.AccountReference{{Kind: authv1beta1.AccountKindAccount}}},
+			Importers: []authv1beta1.Importer{{Kind: authv1beta1.AccountKindAccount}}},
 		{Preset: authv1beta1.ExportPresetJetStreamStepdown},
 	}}}
 	got, err := accountExports(acc)

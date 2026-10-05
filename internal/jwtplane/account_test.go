@@ -495,3 +495,50 @@ func TestSignActivation(t *testing.T) {
 		})
 	}
 }
+
+func TestKeepActivation(t *testing.T) {
+	exporter := newKeys(t, nkeys.PrefixByteAccount, "s")
+	importer := pub(t, newPair(t, nkeys.PrefixByteAccount))
+	private := jwtplane.Export{Name: "events", Type: jwt.Stream, Subject: "billing.events.>", Private: true, Importers: []string{importer}}
+	hc := jwt.NewActivationClaims(importer)
+	hc.Name, hc.ImportSubject, hc.ImportType = private.Name, jwt.Subject(private.Subject), private.Type
+	hc.IssuerAccount = pub(t, exporter.Identity)
+	hc.Tags.Add("held")
+	held, err := hc.Encode(exporter.Signing[0].Pair)
+	require.NoError(t, err)
+
+	rotated := exporter
+	rotated.Signing = []jwtplane.SigningKey{{Name: "s2", Pair: newPair(t, nkeys.PrefixByteAccount)}, {Name: "s", Pair: exporter.Signing[0].Pair, Retiring: true}}
+	moved := private
+	moved.Subject = "billing.other.>"
+
+	tests := []struct {
+		name     string
+		held     string
+		exporter jwtplane.Keys
+		export   jwtplane.Export
+		kept     bool
+	}{
+		{name: "same key and claims", held: held, exporter: exporter, export: private, kept: true},
+		{name: "none held", exporter: exporter, export: private},
+		{name: "signing key rotated", held: held, exporter: rotated, export: private},
+		{name: "subject changed", held: held, exporter: exporter, export: moved},
+		{name: "not a token", held: "x", exporter: exporter, export: private},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tok, err := jwtplane.KeepActivation(tt.held, tt.exporter, tt.export, importer)
+			require.NoError(t, err)
+			if tt.kept {
+				require.Equal(t, held, tok)
+				return
+			}
+			c, err := jwt.DecodeActivationClaims(tok)
+			require.NoError(t, err)
+			require.Empty(t, c.Tags, "minted afresh")
+			require.Equal(t, pub(t, tt.exporter.Signing[0].Pair), c.Issuer)
+			require.Equal(t, importer, c.Subject)
+			require.Equal(t, jwt.Subject(tt.export.Subject), c.ImportSubject)
+		})
+	}
+}

@@ -247,6 +247,7 @@ func TestEnvtest(t *testing.T) {
 	t.Run("ImportFromOtherOperator", e.testImportFromOtherOperator)
 	t.Run("ImporterWaitsForExporter", e.testImporterWaitsForExporter)
 	t.Run("OutsideImports", e.testOutsideImports)
+	t.Run("OutsideImporter", e.testOutsideImporter)
 	t.Run("NoExpiryAndAccountTrust", e.testNoExpiryAndAccountTrust)
 	t.Run("Rotation", e.testRotation)
 	t.Run("OfflineIdentities", e.testOfflineIdentities)
@@ -525,7 +526,7 @@ spec:
 	e.update(t, key("nats-system", "monitoring"), &authv1beta1.NatsAccount{}, func(o client.Object) {
 		acc := o.(*authv1beta1.NatsAccount)
 		acc.Spec.Exports[1].Importers = append(acc.Spec.Exports[1].Importers,
-			authv1beta1.AccountReference{Kind: authv1beta1.AccountKindAccount, ObjectReference: natsv1beta1.ObjectReference{Name: "billing", Namespace: "team-a"}})
+			authv1beta1.Importer{Kind: authv1beta1.AccountKindAccount, Name: "billing", Namespace: "team-a"})
 	})
 	e.eventually(t, state(true, authctl.ReasonSigned, authctl.ReasonAllImportsResolved, "check-results", "execute"))
 

@@ -50,7 +50,7 @@ Appears on: [AccountJetStreamLimits](#AccountJetStreamLimits).
 ### AccountKind {#AccountKind}
 AccountKind is a kind that answers an account reference.\
 Type: {{< type "string" >}}\
-Appears on: [AccountReference](#AccountReference).
+Appears on: [AccountReference](#AccountReference), [Importer](#Importer).
 | Value | Description |
 | :---- | :---------- |
 | `NatsAccount` |  |
@@ -68,7 +68,7 @@ Appears on: [NatsAccountSpec](#NatsAccountSpec).
 
 ### AccountReference {#AccountReference}
 AccountReference names a NatsAccount or a NatsSystemAccount.\
-Appears on: [Export](#Export), [Import](#Import), [NatsUserSpec](#NatsUserSpec).
+Appears on: [Import](#Import), [NatsUserSpec](#NatsUserSpec).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `kind` | [{{< type "AccountKind" >}}](#AccountKind) | Yes | Kind of the account. |
@@ -157,7 +157,7 @@ Appears on: [NatsAccountSpec](#NatsAccountSpec).
 | `subject` | {{< type "string" >}} | No | Subject is signed into the account JWT as the export's subject. |
 | `responseType` | [{{< type "ResponseType" >}}](#ResponseType) | No | ResponseType of a service export, Singleton when omitted. |
 | `access` | [{{< type "ExportAccess" >}}](#ExportAccess) | No | Access is Public when omitted; a Private export is importable only by its importers. |
-| `importers` | [{{< type "[]AccountReference" >}}](#AccountReference) | No | Importers of a Private export, each minted an activation token. |
+| `importers` | [{{< type "[]Importer" >}}](#Importer) | No | Importers of a Private export, each minted an activation token. |
 
 ### ExportAccess {#ExportAccess}
 ExportAccess is who may import an export.\
@@ -175,6 +175,14 @@ Appears on: [Export](#Export).
 | Value | Description |
 | :---- | :---------- |
 | `jetstream-stepdown` | ExportPresetJetStreamStepdown exports the stream and consumer leader stepdown services, and imports them into the system account. |
+
+### ExportStatus {#ExportStatus}
+ExportStatus is a Private export's importers named by public key.\
+Appears on: [NatsAccountStatus](#NatsAccountStatus).
+| Field | Type | Required | Description |
+| :---- | :--- | :------: | :---------- |
+| `name` | {{< type "string" >}} | Yes | Name of the export. |
+| `importers` | [{{< type "[]ImporterStatus" >}}](#ImporterStatus) | No | Importers are the importers named by public key, in spec order. |
 
 ### ExportType {#ExportType}
 ExportType is the type of an export.\
@@ -217,6 +225,24 @@ Appears on: [NatsAccountStatus](#NatsAccountStatus).
 | `localSubject` | {{< type "string" >}} | No | LocalSubject is where the import appears in this account. |
 | `type` | [{{< type "ExportType" >}}](#ExportType) | No | Type is the type of the export taken. |
 | `activation` | [{{< type "ActivationState" >}}](#ActivationState) | No | Activation is the state of the activation token of a Private export. |
+
+### Importer {#Importer}
+Importer names an account a Private export admits: a NatsAccount or NatsSystemAccount by kind and name, or any account by public key.\
+Appears on: [Export](#Export).
+| Field | Type | Required | Description |
+| :---- | :--- | :------: | :---------- |
+| `kind` | [{{< type "AccountKind" >}}](#AccountKind) | No | Kind of the importing account, set with name. |
+| `name` | {{< type "string" >}} | No | Name of the importing account. |
+| `namespace` | {{< type "string" >}} | No | Namespace of the importing account, the exporter's own when omitted. |
+| `publicKey` | {{< type "string" >}} | No | PublicKey names the importing account where no NatsAccount describes it; the auth controller mints its activation token into status.exports. |
+
+### ImporterStatus {#ImporterStatus}
+ImporterStatus is the activation token minted for an importer named by public key.\
+Appears on: [ExportStatus](#ExportStatus).
+| Field | Type | Required | Description |
+| :---- | :--- | :------: | :---------- |
+| `publicKey` | {{< type "string" >}} | Yes | PublicKey is the importer's public key. |
+| `activationToken` | {{< type "string" >}} | Yes | ActivationToken admits the importer to the export; it is re-minted when the signing key that signed it is no longer the one activation tokens are signed with. |
 
 ### JetStreamTierName {#JetStreamTierName}
 JetStreamTierName names a JetStream tier: R followed by the replica count of the streams nats-server puts in it.\
@@ -275,6 +301,7 @@ Appears on: [NatsAccount](#NatsAccount).
 | `distribution` | [{{< type "Distribution" >}}](#Distribution) | No | Distribution is how many servers hold the current JWT. |
 | `revocations` | [{{< type "[]Revocation" >}}](#Revocation) | No | Revocations are the user keys the account JWT revokes. |
 | `imports` | [{{< type "[]ImportStatus" >}}](#ImportStatus) | No | Imports are the resolved imports. |
+| `exports` | [{{< type "[]ExportStatus" >}}](#ExportStatus) | No | Exports are the Private exports that list an importer by public key, with the activation token minted for each. |
 
 ### NatsOperator {#NatsOperator}
 NatsOperator is a NATS operator the auth controller signs for.

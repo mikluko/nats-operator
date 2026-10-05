@@ -65,7 +65,7 @@ Write the whole spec before you apply it:
   A limit that you omit is unlimited, and an account without `limits.jetstream` has no JetStream.
   If the account has JetStream limits by tier, list each tier under `limits.jetstream.tiers` by its name.
   The names are `R1` to `R5`: `R` and the replica count of the streams that the tier limits.
-  The auth controller refuses to adopt an account with a tier under any other name, with the reason `TierInexpressible`, whatever `adoption` says: nats-server never read such a tier, so remove it from the JWT and push the account before you take it over.
+  The auth controller refuses to adopt an account with a tier under any other name, with the reason `TierInexpressible`, whatever `adoption` says: nats-server never read such a tier, so remove it from the JWT and push the account before you adopt it.
 - Declare every export under `exports`, and every import under `imports`.
   Apply an account that exports before the accounts that import from it: an import from a `NatsAccount` that does not exist is left out of the JWT.
   While the exporting `NatsAccount` exists but has no public key yet, the importing account is not signed: its `NatsAccount` has the condition `Ready` False with the reason `ExporterPending`, and its JWT on the servers stays as it is.
@@ -76,6 +76,10 @@ Write the whole spec before you apply it:
   Put that token in a Secret and name it under `activation.secretKeyRef`.
   An import whose token does not fit is left out of the JWT, and the condition `ReferencesResolved` of the `NatsAccount` says why.
 - Set `share` on an import of a service and `allowTrace` on an import of a stream if the claims set them.
+- List an importer of a private export by `publicKey` under `importers` if no `NatsAccount` describes the importing account, which may stay with `nsc`.
+  The auth controller mints that account an activation token into `status.exports`, under the name of the export and the public key.
+  Write the token to a file and give it to whoever holds the importing account, for `nsc add import --token`.
+  The auth controller mints a new token when the signing key that signed the old one is retiring or gone, and the importing account needs that one instead.
 - Set `jwtTTL`.
   A JWT from `nsc` does not expire unless you gave it an expiry.
   A JWT from the auth controller expires after `jwtTTL`, 48h by default, and the auth controller signs it again before then.

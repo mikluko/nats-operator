@@ -80,27 +80,39 @@ spec:
                       description: Importers of a Private export, each minted an activation
                         token.
                       items:
-                        description: AccountReference names a NatsAccount or a NatsSystemAccount.
+                        description: |-
+                          Importer names an account a Private export admits: a NatsAccount or
+                          NatsSystemAccount by kind and name, or any account by public key.
                         properties:
                           kind:
-                            description: Kind of the account.
+                            description: Kind of the importing account, set with name.
                             enum:
                             - NatsAccount
                             - NatsSystemAccount
                             type: string
                           name:
-                            description: Name of the referenced object.
+                            description: Name of the importing account.
                             minLength: 1
                             type: string
                           namespace:
-                            description: |-
-                              Namespace of the referenced object, the referrer's own when omitted.
-                              Another namespace is admitted only by a NatsReferenceGrant there.
+                            description: Namespace of the importing account, the exporter's
+                              own when omitted.
                             type: string
-                        required:
-                        - kind
-                        - name
+                          publicKey:
+                            description: |-
+                              PublicKey names the importing account where no NatsAccount describes
+                              it; the auth controller mints its activation token into
+                              status.exports.
+                            minLength: 1
+                            type: string
                         type: object
+                        x-kubernetes-validations:
+                        - message: an importer is named by kind and name or by publicKey
+                          rule: has(self.name) != has(self.publicKey)
+                        - message: kind is set with name, and kind and namespace only
+                            with name
+                          rule: 'has(self.name) ? has(self.kind) : !has(self.kind)
+                            && !has(self.namespace)'
                       type: array
                     name:
                       description: Name is what imports name the export by.
@@ -678,6 +690,43 @@ spec:
                     format: int32
                     type: integer
                 type: object
+              exports:
+                description: |-
+                  Exports are the Private exports that list an importer by public key,
+                  with the activation token minted for each.
+                items:
+                  description: ExportStatus is a Private export's importers named
+                    by public key.
+                  properties:
+                    importers:
+                      description: Importers are the importers named by public key,
+                        in spec order.
+                      items:
+                        description: |-
+                          ImporterStatus is the activation token minted for an importer named by
+                          public key.
+                        properties:
+                          activationToken:
+                            description: |-
+                              ActivationToken admits the importer to the export; it is re-minted
+                              when the signing key that signed it is no longer the one activation
+                              tokens are signed with.
+                            type: string
+                          publicKey:
+                            description: PublicKey is the importer's public key.
+                            type: string
+                        required:
+                        - activationToken
+                        - publicKey
+                        type: object
+                      type: array
+                    name:
+                      description: Name of the export.
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
               imports:
                 description: Imports are the resolved imports.
                 items:

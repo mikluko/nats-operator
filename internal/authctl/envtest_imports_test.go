@@ -89,3 +89,69 @@ spec:
 		})
 	}
 }
+
+// testOutsideImporter checks that a Private export listing an importer by
+// public key beside one by reference mints that key an activation token into
+// status.exports, and that the API server refuses an importer named both
+// ways, by neither, or by public key with a kind.
+func (e *env) testOutsideImporter(t *testing.T) {
+	seed, err := jwtplane.GenerateSeed(nkeys.PrefixByteAccount)
+	require.NoError(t, err)
+	kp, err := nkeys.FromSeed(seed)
+	require.NoError(t, err)
+	outside, err := kp.PublicKey()
+	require.NoError(t, err)
+
+	e.apply(t, `
+apiVersion: auth.nats-operator.io/v1beta1
+kind: NatsAccount
+metadata: {name: ledger, namespace: nats-system}
+spec:
+  operatorRef: {name: demo}
+  exports:
+    - name: entries
+      type: Stream
+      subject: "ledger.entries.>"
+      access: Private
+      importers:
+        - {kind: NatsAccount, name: monitor}
+        - publicKey: `+outside+`
+`)
+	acc := &authv1beta1.NatsAccount{}
+	e.eventually(t, func(ct *assert.CollectT) {
+		e.get(ct, key("nats-system", "ledger"), acc)
+		ready(ct, acc.Status.Conditions, acc.Generation, authctl.ReasonSigned)
+		assert.Len(ct, acc.Status.Exports, 1)
+	})
+	require.Equal(t, "entries", acc.Status.Exports[0].Name)
+	require.Len(t, acc.Status.Exports[0].Importers, 1)
+	require.Equal(t, outside, acc.Status.Exports[0].Importers[0].PublicKey)
+	c, err := jwt.DecodeActivationClaims(acc.Status.Exports[0].Importers[0].ActivationToken)
+	require.NoError(t, err)
+	require.Equal(t, outside, c.Subject)
+	require.Equal(t, acc.Status.PublicKey, c.IssuerAccount)
+	require.Equal(t, jwt.Subject("ledger.entries.>"), c.ImportSubject)
+
+	for name, tt := range map[string]struct{ importer, message string }{
+		"both":            {`{kind: NatsAccount, name: monitor, publicKey: ` + outside + `}`, "an importer is named by kind and name or by publicKey"},
+		"neither":         {`{kind: NatsAccount}`, "an importer is named by kind and name or by publicKey"},
+		"name, no kind":   {`{name: monitor}`, "kind is set with name, and kind and namespace only with name"},
+		"key with kind":   {`{kind: NatsAccount, publicKey: ` + outside + `}`, "kind is set with name, and kind and namespace only with name"},
+		"key, namespaced": {`{namespace: x, publicKey: ` + outside + `}`, "kind is set with name, and kind and namespace only with name"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var m map[string]any
+			require.NoError(t, yaml.Unmarshal([]byte(`
+apiVersion: auth.nats-operator.io/v1beta1
+kind: NatsAccount
+metadata: {name: refused, namespace: nats-system}
+spec:
+  operatorRef: {name: demo}
+  exports: [{name: x, type: Stream, subject: x, access: Private, importers: [`+tt.importer+`]}]
+`), &m))
+			err := e.c.Create(t.Context(), &unstructured.Unstructured{Object: m})
+			require.True(t, apierrors.IsInvalid(err), "got %v", err)
+			require.ErrorContains(t, err, tt.message)
+		})
+	}
+}

@@ -406,6 +406,62 @@ func TestAccountReconciler_KeyImportWithActivation(t *testing.T) {
 	require.Equal(t, token, imports[0].Token)
 }
 
+// keyExporter is a NatsAccount ns/billing whose Private export events lists
+// an importer by each of keys.
+func keyExporter(keys ...string) *authv1beta1.NatsAccount {
+	acc := importingAccount("billing", []string{"events"})
+	acc.Spec.Exports[0].Access = authv1beta1.ExportAccessPrivate
+	for _, k := range keys {
+		acc.Spec.Exports[0].Importers = append(acc.Spec.Exports[0].Importers, authv1beta1.Importer{PublicKey: k})
+	}
+	return acc
+}
+
+func TestAccountReconciler_KeyImporterActivation(t *testing.T) {
+	_, outside, _ := seededPair(t, nkeys.PrefixByteAccount)
+	e := newImportsEnv(t, keyExporter(outside))
+
+	st := e.reconcile(t, "billing")
+	requireReady(t, st, metav1.ConditionTrue, ReasonDistributed, ReasonAllImportsResolved)
+	require.Len(t, st.Exports, 1)
+	require.Equal(t, "events", st.Exports[0].Name)
+	require.Len(t, st.Exports[0].Importers, 1)
+	got := st.Exports[0].Importers[0]
+	require.Equal(t, outside, got.PublicKey)
+
+	c, err := jwt.DecodeActivationClaims(got.ActivationToken)
+	require.NoError(t, err)
+	require.Equal(t, outside, c.Subject)
+	require.Equal(t, st.PublicKey, c.IssuerAccount)
+	require.Equal(t, jwt.Subject("billing.events.>"), c.ImportSubject)
+	require.Equal(t, jwt.Stream, c.ImportType)
+	require.Equal(t, "events", c.Name)
+	ac, err := jwt.DecodeAccountClaims(st.JWT)
+	require.NoError(t, err)
+	require.Contains(t, ac.SigningKeys, c.Issuer, "signed by a signing key the account JWT lists")
+
+	imp := jwtplane.Import{Account: st.PublicKey, Export: jwtplane.Export{Name: "events", Type: jwt.Stream, Subject: "billing.events.>", Private: true}, Token: got.ActivationToken}
+	require.NoError(t, jwtplane.ValidateImport(imp, outside), "the importer's JWT may carry it")
+
+	require.Equal(t, got.ActivationToken, e.reconcile(t, "billing").Exports[0].Importers[0].ActivationToken, "kept across reconciles")
+}
+
+func TestAccountReconciler_KeyImporterUnsigned(t *testing.T) {
+	_, user, _ := seededPair(t, nkeys.PrefixByteUser)
+	_, outside, _ := seededPair(t, nkeys.PrefixByteAccount)
+	e := newImportsEnv(t, keyExporter(user, outside))
+
+	st := e.reconcile(t, "billing")
+	ready := meta.FindStatusCondition(st.Conditions, ConditionReady)
+	require.Equal(t, metav1.ConditionFalse, ready.Status)
+	require.Equal(t, ReasonActivationsUnsigned, ready.Reason)
+	require.Contains(t, ready.Message, "events/"+user+": ")
+	require.NotEmpty(t, st.JWT, "signed regardless")
+	require.Len(t, st.Exports, 1)
+	require.Len(t, st.Exports[0].Importers, 1)
+	require.Equal(t, outside, st.Exports[0].Importers[0].PublicKey)
+}
+
 func TestIndexes_ActivationSecret(t *testing.T) {
 	x := newOutsideExporter(t)
 	acc := importingAccount("orders", nil)

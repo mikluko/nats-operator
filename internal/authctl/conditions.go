@@ -99,6 +99,10 @@ const (
 	// JetStream tier of the JWT the servers hold that no spec names; nothing
 	// is signed, whatever spec.adoption says.
 	ReasonTierInexpressible = "TierInexpressible"
+	// ReasonActivationsUnsigned is Ready's reason on a NatsAccount with an
+	// importer listed by a public key it mints no activation token for,
+	// named in the message; the account is signed regardless.
+	ReasonActivationsUnsigned = "ActivationsUnsigned"
 )
 
 // observe records the outcome err of reconciling generation gen: success sets
