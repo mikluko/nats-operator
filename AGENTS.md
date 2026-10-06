@@ -2,6 +2,8 @@
 
 Three Kubernetes controllers that deploy NATS clusters, own their auth plane, and manage and balance JetStream. `CONTEXT.md` is the glossary and `docs/design/v1.md` is the design; both are read before anything is written, and "operator" unqualified is not used.
 
+Clusters: `upeks-dev` (dev), `upeks-stage`, `upeks-produs` (production), `upsidian-dev`, `upsidian-prod` (production), `upops`; contexts of the same names.
+
 ## Changelog
 
 `CHANGELOG.md` is Keep a Changelog 2.0.0, newest version first. An entry states what is different for the reader and nothing else: no reason, no history, no account of the work. Those belong in the commit and the pull request. An entry that needs a *because* is cut back to the change, and if nothing is left it is not an entry.
