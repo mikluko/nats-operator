@@ -1,0 +1,51 @@
+{
+  "meta_cluster": {
+    "leader": "hub-0"
+  },
+  "account_details": [
+    {
+      "name": "orders",
+      "id": "AORDERS",
+      "stream_detail": [
+        {
+          "name": "ORDERS",
+          "cluster": {
+            "raft_group": "S-ORDERS",
+            "leader": "west-2"
+          },
+          "consumer_detail": [
+            {
+              "name": "worker",
+              "cluster": {
+                "raft_group": "C-WORKER",
+                "leader": "west-1"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "events",
+      "id": "AEVENTS",
+      "stream_detail": [
+        {
+          "name": "EVENTS",
+          "cluster": {
+            "raft_group": "S-EVENTS",
+            "leader": "west-1"
+          },
+          "consumer_detail": [
+            {
+              "name": "sink",
+              "cluster": {
+                "raft_group": "C-SINK",
+                "leader": "west-1"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
