@@ -36,7 +36,7 @@ require (
 	golang.org/x/net v0.58.0
 	golang.org/x/tools v0.49.0
 	google.golang.org/protobuf v1.36.12
-	k8s.io/api v0.36.3
+	k8s.io/api v0.37.1
 	k8s.io/apiextensions-apiserver v0.36.3
 	k8s.io/apimachinery v0.36.3
 	k8s.io/apiserver v0.36.3
