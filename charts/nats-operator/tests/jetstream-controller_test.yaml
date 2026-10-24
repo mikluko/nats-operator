@@ -104,7 +104,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/mikluko/nats-operator/jetstream-controller:9.8.7
+          value: sarak.sh/mikluko/nats-operator/jetstream-controller:9.8.7
   - it: tags its image with jetstream.image.tag when set
     set:
       jetstream.image.tag: v9
@@ -112,7 +112,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/mikluko/nats-operator/jetstream-controller:v9
+          value: sarak.sh/mikluko/nats-operator/jetstream-controller:v9
   - it: pins its image to jetstream.image.digest after the tag when set
     chart:
       appVersion: 9.8.7
@@ -122,7 +122,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/mikluko/nats-operator/jetstream-controller:9.8.7@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          value: sarak.sh/mikluko/nats-operator/jetstream-controller:9.8.7@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   - it: keeps jetstream.image.digest on a jetstream.image.tag equal to appVersion
     chart:
       appVersion: 9.8.7
@@ -133,7 +133,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/mikluko/nats-operator/jetstream-controller:9.8.7@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          value: sarak.sh/mikluko/nats-operator/jetstream-controller:9.8.7@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   - it: drops jetstream.image.digest on a jetstream.image.tag other than appVersion
     chart:
       appVersion: 9.8.7
@@ -144,7 +144,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/mikluko/nats-operator/jetstream-controller:v9
+          value: sarak.sh/mikluko/nats-operator/jetstream-controller:v9
   - it: drops the leader election Role and passes --leader-elect=false while leaderElection.enabled is false
     set:
       leaderElection.enabled: false

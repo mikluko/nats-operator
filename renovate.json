@@ -4,7 +4,7 @@
   "minimumReleaseAge": "7 days",
   "semanticCommits": "enabled",
   "dockerfile": {
-    "managerFilePatterns": ["/(^|/)machine\\.Containerfile$/"]
+    "managerFilePatterns": ["/(^|/)machine\\.Containerfile$/", "/^docs/Containerfile$/"]
   },
   "postUpdateOptions": ["gomodTidy"],
   "packageRules": [
@@ -20,7 +20,7 @@
     },
     {
       "description": "A kind node image is built for one kind release",
-      "matchPackageNames": ["sigs.k8s.io/kind", "kubernetes-sigs/kind", "kindest/node"],
+      "matchPackageNames": ["sigs.k8s.io/kind", "kindest/node"],
       "groupName": "kind"
     }
   ],
@@ -28,8 +28,8 @@
     {
       "customType": "regex",
       "description": "Helm, wherever setup-helm installs it",
-      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yaml$/"],
-      "matchStrings": ["uses: azure/setup-helm@\\S+\\s+with:\\s+version: (?<currentValue>v\\S+)"],
+      "managerFilePatterns": ["/^\\.forgejo/workflows/[^/]+\\.yaml$/"],
+      "matchStrings": ["uses: https://github\\.com/azure/setup-helm@\\S+\\s+with:\\s+version: (?<currentValue>v\\S+)"],
       "depNameTemplate": "helm/helm",
       "datasourceTemplate": "github-releases"
     },
@@ -44,7 +44,7 @@
     {
       "customType": "regex",
       "description": "helm-unittest; the PR fails ci until HELM_UNITTEST_SHA256 is the new release's",
-      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yaml$/"],
+      "managerFilePatterns": ["/^\\.forgejo/workflows/[^/]+\\.yaml$/"],
       "matchStrings": ["HELM_UNITTEST_VERSION: (?<currentValue>v\\S+)\\s+HELM_UNITTEST_SHA256: [0-9a-f]{64}"],
       "depNameTemplate": "helm-unittest/helm-unittest",
       "datasourceTemplate": "github-releases"
@@ -52,24 +52,24 @@
     {
       "customType": "regex",
       "description": "ko, wherever setup-ko installs it",
-      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yaml$/"],
-      "matchStrings": ["uses: ko-build/setup-ko@\\S+\\s+with:\\s+version: (?<currentValue>v\\S+)"],
+      "managerFilePatterns": ["/^\\.forgejo/workflows/[^/]+\\.yaml$/"],
+      "matchStrings": ["uses: https://github\\.com/ko-build/setup-ko@\\S+\\s+with:\\s+version: (?<currentValue>v\\S+)"],
       "depNameTemplate": "ko-build/ko",
       "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
       "description": "just, wherever setup-just installs it",
-      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yaml$/"],
-      "matchStrings": ["uses: extractions/setup-just@\\S+\\s+with:\\s+just-version: (?<currentValue>\\S+)"],
+      "managerFilePatterns": ["/^\\.forgejo/workflows/[^/]+\\.yaml$/"],
+      "matchStrings": ["uses: https://github\\.com/extractions/setup-just@\\S+\\s+with:\\s+just-version: (?<currentValue>\\S+)"],
       "depNameTemplate": "casey/just",
       "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
-      "description": "zizmor, wherever zizmor-action runs it",
-      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yaml$/"],
-      "matchStrings": ["uses: zizmorcore/zizmor-action@\\S+\\s+with:\\s+version: (?<currentValue>\\S+)"],
+      "description": "zizmor; the PR fails ci until ZIZMOR_SHA256 is the new release's",
+      "managerFilePatterns": ["/^\\.forgejo/workflows/[^/]+\\.yaml$/"],
+      "matchStrings": ["ZIZMOR_VERSION: (?<currentValue>\\S+)\\s+ZIZMOR_SHA256: [0-9a-f]{64}"],
       "depNameTemplate": "zizmorcore/zizmor",
       "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^v(?<version>.+)$"
@@ -77,21 +77,21 @@
     {
       "customType": "regex",
       "description": "Renovate, wherever a workflow runs its config validator",
-      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yaml$/"],
+      "managerFilePatterns": ["/^\\.forgejo/workflows/[^/]+\\.yaml$/"],
       "matchStrings": ["npx --yes --package (?<depName>renovate)@(?<currentValue>\\S+) "],
       "datasourceTemplate": "npm"
     },
     {
       "customType": "regex",
       "description": "Go commands a workflow runs at a version",
-      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yaml$/"],
+      "managerFilePatterns": ["/^\\.forgejo/workflows/[^/]+\\.yaml$/"],
       "matchStrings": ["go run (?<depName>[^@\\s]+?)/cmd/[^@\\s]+@(?<currentValue>v\\S+)"],
       "datasourceTemplate": "go"
     },
     {
       "customType": "regex",
       "description": "Hugo; the PR fails ci until HUGO_SHA256 is the new release's",
-      "managerFilePatterns": ["/^\\.github/actions/setup-hugo/action\\.yaml$/"],
+      "managerFilePatterns": ["/^\\.forgejo/actions/setup-hugo/action\\.yaml$/"],
       "matchStrings": ["HUGO_VERSION: (?<currentValue>\\S+)"],
       "depNameTemplate": "gohugoio/hugo",
       "datasourceTemplate": "github-releases",
@@ -124,25 +124,25 @@
     },
     {
       "customType": "regex",
-      "description": "chart-testing, wherever chart-testing-action installs it",
-      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yaml$/"],
-      "matchStrings": ["uses: helm/chart-testing-action@\\S+\\s+with:\\s+version: (?<currentValue>\\S+)"],
+      "description": "chart-testing; the PR fails ci until CT_SHA256 is the new release's",
+      "managerFilePatterns": ["/^\\.forgejo/actions/setup-chart-testing/action\\.yaml$/"],
+      "matchStrings": ["CT_VERSION: (?<currentValue>\\S+)\\s+CT_SHA256: [0-9a-f]{64}"],
       "depNameTemplate": "helm/chart-testing",
       "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^v(?<version>.+)$"
     },
     {
       "customType": "regex",
-      "description": "kind, wherever kind-action installs it",
-      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yaml$/"],
-      "matchStrings": ["uses: helm/kind-action@\\S+\\s+with:\\s+version: (?<currentValue>v\\S+)"],
-      "depNameTemplate": "kubernetes-sigs/kind",
+      "description": "kubectl; the PR fails ci until KUBECTL_SHA256 is the new release's",
+      "managerFilePatterns": ["/^\\.forgejo/workflows/[^/]+\\.yaml$/"],
+      "matchStrings": ["KUBECTL_VERSION: (?<currentValue>v\\S+)\\s+KUBECTL_SHA256: [0-9a-f]{64}"],
+      "depNameTemplate": "kubernetes/kubernetes",
       "datasourceTemplate": "github-releases"
     },
     {
       "customType": "regex",
       "description": "The kind node image, by tag and digest",
-      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yaml$/", "/^internal/e2e/kind\\.go$/"],
+      "managerFilePatterns": ["/^\\.forgejo/workflows/[^/]+\\.yaml$/", "/^internal/e2e/kind\\.go$/"],
       "matchStrings": ["(?<depName>kindest/node):(?<currentValue>v[0-9.]+)@(?<currentDigest>sha256:[0-9a-f]{64})"],
       "datasourceTemplate": "docker"
     },

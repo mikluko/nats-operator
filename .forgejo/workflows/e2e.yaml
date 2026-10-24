@@ -36,29 +36,33 @@ permissions:
 
 jobs:
   stories:
-    runs-on: ubuntu-latest
+    runs-on: privileged
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7
+      - uses: https://github.com/actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - uses: extractions/setup-just@v4
+      - uses: https://github.com/extractions/setup-just@v4
         with:
           just-version: 1.58.0
-      - uses: azure/setup-helm@v5
+      - uses: https://github.com/azure/setup-helm@v5
         with:
           version: v4.3.0
-      - uses: ko-build/setup-ko@v0.10
+      - uses: https://github.com/ko-build/setup-ko@v0.10
         with:
           version: v0.19.1
+        env:
+          KO_DOCKER_REPO: localhost/nats-operator
       - name: Rootful podman
         run: |
-          sudo apt-get update
-          sudo apt-get install -y podman
-          sudo systemctl enable --now podman.socket
+          if ! sudo test -S /run/podman/podman.sock; then
+            sudo apt-get update
+            sudo apt-get install -y podman
+            sudo systemctl enable --now podman.socket
+          fi
           sudo test -S /run/podman/podman.sock
       - name: Stories
         env:

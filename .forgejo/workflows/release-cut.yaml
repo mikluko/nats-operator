@@ -14,25 +14,19 @@ concurrency:
 
 jobs:
   ci:
-    uses: ./.github/workflows/ci.yaml
+    uses: ./.forgejo/workflows/ci.yaml
 
   cut:
     needs: ci
     runs-on: ubuntu-latest
     steps:
-      - id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          client-id: ${{ vars.RELEASER_APP_CLIENT_ID }}
-          private-key: ${{ secrets.RELEASER_APP_CERT }}
-          permission-contents: write
-      # A tag pushed with GITHUB_TOKEN triggers no workflow, so the checkout keeps the app's token for the push.
-      - uses: actions/checkout@v7
+      # A tag pushed with the automatic token triggers no workflow, so the checkout keeps agent's token for the push.
+      - uses: https://github.com/actions/checkout@v7
         with: # zizmor: ignore[artipacked] the Cut step pushes with this token, and the job uploads no artifact
           fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
+          token: ${{ secrets.RELEASE_TOKEN }}
       - id: changelog
-        uses: mikluko/action-changelog@v1
+        uses: https://forge.sarak.sh/actions/changelog@v1
       - name: Cut
         if: steps.changelog.outputs.due == 'true'
         env:
@@ -40,4 +34,3 @@ jobs:
         run: |
           git tag "v$VERSION"
           git push origin "refs/tags/v$VERSION"
-          echo "Cut **v$VERSION**." >>"$GITHUB_STEP_SUMMARY"

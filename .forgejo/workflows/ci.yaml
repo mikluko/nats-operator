@@ -13,31 +13,31 @@ jobs:
     name: go test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7
+      - uses: https://github.com/actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: false
       - id: go-cache
-        uses: actions/cache/restore@v6
+        uses: https://github.com/actions/cache/restore@v6
         with:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
           key: go-${{ runner.os }}-${{ hashFiles('go.sum', 'hack/tools/go.sum') }}-${{ github.sha }}
           restore-keys: go-${{ runner.os }}-${{ hashFiles('go.sum', 'hack/tools/go.sum') }}-
-      - uses: extractions/setup-just@v4
+      - uses: https://github.com/extractions/setup-just@v4
         with:
           just-version: 1.58.0
-      - uses: ./.github/actions/setup-hugo
+      - uses: ./.forgejo/actions/setup-hugo
       - run: just verify
       - run: just build
       - run: just test
       - run: just lint
       - if: github.ref == 'refs/heads/main' && steps.go-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
+        uses: https://github.com/actions/cache/save@v6
         with:
           path: |
             ~/go/pkg/mod
@@ -48,28 +48,28 @@ jobs:
     name: go race
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7
+      - uses: https://github.com/actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: false
       - id: go-cache
-        uses: actions/cache/restore@v6
+        uses: https://github.com/actions/cache/restore@v6
         with:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
           key: go-race-${{ runner.os }}-${{ hashFiles('go.sum', 'hack/tools/go.sum') }}-${{ github.sha }}
           restore-keys: go-race-${{ runner.os }}-${{ hashFiles('go.sum', 'hack/tools/go.sum') }}-
-      - uses: extractions/setup-just@v4
+      - uses: https://github.com/extractions/setup-just@v4
         with:
           just-version: 1.58.0
-      - uses: ./.github/actions/setup-hugo
+      - uses: ./.forgejo/actions/setup-hugo
       - run: just test -race
       - if: github.ref == 'refs/heads/main' && steps.go-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
+        uses: https://github.com/actions/cache/save@v6
         with:
           path: |
             ~/go/pkg/mod
@@ -80,27 +80,27 @@ jobs:
     name: go envtest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7
+      - uses: https://github.com/actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: false
       - id: go-cache
-        uses: actions/cache/restore@v6
+        uses: https://github.com/actions/cache/restore@v6
         with:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
           key: go-envtest-${{ runner.os }}-${{ hashFiles('go.sum', 'hack/tools/go.sum') }}-${{ github.sha }}
           restore-keys: go-envtest-${{ runner.os }}-${{ hashFiles('go.sum', 'hack/tools/go.sum') }}-
-      - uses: extractions/setup-just@v4
+      - uses: https://github.com/extractions/setup-just@v4
         with:
           just-version: 1.58.0
       - run: just envtest
       - if: github.ref == 'refs/heads/main' && steps.go-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
+        uses: https://github.com/actions/cache/save@v6
         with:
           path: |
             ~/go/pkg/mod
@@ -110,10 +110,10 @@ jobs:
   govulncheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7
+      - uses: https://github.com/actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache-dependency-path: |
@@ -124,63 +124,72 @@ jobs:
   actionlint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7
+      - uses: https://github.com/actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache-dependency-path: |
             go.sum
             hack/tools/go.sum
-      - run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -config-file .forgejo/actionlint.yaml .forgejo/workflows/*.yaml
 
   renovate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: https://github.com/actions/setup-node@v7
         with:
           node-version: 24
-      - run: npx --yes --package renovate@44.117.2 -- renovate-config-validator --strict --no-global .github/renovate.json
+      - run: npx --yes --package renovate@44.117.2 -- renovate-config-validator --strict --no-global renovate.json
 
   zizmor:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: zizmorcore/zizmor-action@v0.6.4
-        with:
-          version: 1.30.1
-          config: .github/zizmor.yaml
-          advanced-security: false
-          annotations: true
+      - name: Install zizmor
+        env:
+          ZIZMOR_VERSION: 1.30.1
+          ZIZMOR_SHA256: e65324f4430c2717591937edcec90ccbefaf14c174f8ec9415e03ca875b46e1a
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/zizmor.tar.gz" \
+            "https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/zizmor-x86_64-unknown-linux-gnu.tar.gz"
+          echo "$ZIZMOR_SHA256  $RUNNER_TEMP/zizmor.tar.gz" | sha256sum -c --quiet
+          mkdir -p "$RUNNER_TEMP/zizmor"
+          tar -xzf "$RUNNER_TEMP/zizmor.tar.gz" -C "$RUNNER_TEMP/zizmor" zizmor
+          echo "$RUNNER_TEMP/zizmor" >>"$GITHUB_PATH"
+      - run: zizmor --offline --config .forgejo/zizmor.yaml .forgejo/workflows/*.yaml .forgejo/actions/*/action.yaml
 
   e2e:
-    name: acceptance (${{ matrix.watch-namespaces && 'watched namespaces' || 'every namespace' }})
-    strategy:
-      fail-fast: false
-      matrix:
-        watch-namespaces: [false, true]
-    uses: ./.github/workflows/e2e.yaml
+    name: acceptance (every namespace)
+    uses: ./.forgejo/workflows/e2e.yaml
     with:
       stories: "1"
-      watch-namespaces: ${{ matrix.watch-namespaces }}
+      watch-namespaces: false
+
+  e2e-watched:
+    name: acceptance (watched namespaces)
+    uses: ./.forgejo/workflows/e2e.yaml
+    with:
+      stories: "1"
+      watch-namespaces: true
 
   helm:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: azure/setup-helm@v5
+      - uses: https://github.com/azure/setup-helm@v5
         with:
           version: v4.3.0
-      - uses: extractions/setup-just@v4
+      - uses: https://github.com/extractions/setup-just@v4
         with:
           just-version: 1.58.0
       - name: Install helm-unittest
@@ -196,29 +205,68 @@ jobs:
           tar -xzf "$RUNNER_TEMP/helm-unittest.tgz" -C "$plugin"
           helm unittest --help >/dev/null
       - run: just chart
-      - uses: helm/chart-testing-action@v2
-        with:
-          version: 3.14.0
+      - uses: ./.forgejo/actions/setup-chart-testing
       - run: ct lint --charts charts/nats-operator --check-version-increment=false
-      - uses: actions/setup-go@v7
+
+  chart-install:
+    runs-on: privileged
+    steps:
+      - uses: https://github.com/actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: https://github.com/azure/setup-helm@v5
+        with:
+          version: v4.3.0
+      - uses: ./.forgejo/actions/setup-chart-testing
+      - uses: https://github.com/actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache-dependency-path: |
             go.sum
             hack/tools/go.sum
-      - uses: ko-build/setup-ko@v0.10
+      - uses: https://github.com/ko-build/setup-ko@v0.10
         with:
           version: v0.19.1
-      - uses: helm/kind-action@v1.15.0
-        with:
-          version: v0.33.0
-          node_image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+        env:
+          KO_DOCKER_REPO: ci.local/nats-operator
+      - name: Install kubectl and kind
+        env:
+          KUBECTL_VERSION: v1.37.0
+          KUBECTL_SHA256: 6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSLo "$RUNNER_TEMP/bin/kubectl" "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          echo "$KUBECTL_SHA256  $RUNNER_TEMP/bin/kubectl" | sha256sum -c --quiet
+          chmod +x "$RUNNER_TEMP/bin/kubectl"
+          go build -o "$RUNNER_TEMP/bin/kind" sigs.k8s.io/kind
+          echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
+      - name: Rootful podman
+        run: |
+          if ! sudo test -S /run/podman/podman.sock; then
+            sudo apt-get update
+            sudo apt-get install -y podman
+            sudo systemctl enable --now podman.socket
+          fi
+          sudo test -S /run/podman/podman.sock
+      - name: Create the kind cluster
+        env:
+          KIND_NODE_IMAGE: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+        run: |
+          sudo env KIND_EXPERIMENTAL_PROVIDER=podman "$RUNNER_TEMP/bin/kind" create cluster \
+            --name chart-testing --image "$KIND_NODE_IMAGE" --wait 5m \
+            --kubeconfig "$RUNNER_TEMP/kubeconfig"
+          sudo chown "$(id -u):$(id -g)" "$RUNNER_TEMP/kubeconfig"
+          echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >>"$GITHUB_ENV"
       - name: Load the controller images into kind
         env:
-          KO_DOCKER_REPO: kind.local
-          KIND_CLUSTER_NAME: chart-testing
+          KO_DOCKER_REPO: ci.local/nats-operator
           VERSION: ci
-        run: ko build --base-import-paths --tags ci ./cmd/*-controller
+        run: |
+          ko build --push=false --base-import-paths --tags ci \
+            --tarball "$RUNNER_TEMP/images.tar" ./cmd/*-controller
+          sudo env KIND_EXPERIMENTAL_PROVIDER=podman "$RUNNER_TEMP/bin/kind" load image-archive \
+            "$RUNNER_TEMP/images.tar" --name chart-testing
       - name: Create the namespaces ci/namespaced-values.yaml watches
         run: |
           for ns in $(yq '.watchNamespaces[]' charts/nats-operator/ci/namespaced-values.yaml); do
@@ -227,7 +275,7 @@ jobs:
       - run: |
           set=
           for c in cluster auth jetstream; do
-            set="$set --set=$c.image.repository=kind.local/$c-controller --set=$c.image.tag=ci"
+            set="$set --set=$c.image.repository=ci.local/nats-operator/$c-controller --set=$c.image.tag=ci"
           done
           ct install --charts charts/nats-operator --helm-extra-set-args "$set" \
             --namespace "$(yq '.watchNamespaces[0]' charts/nats-operator/ci/namespaced-values.yaml)"
@@ -236,8 +284,8 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: mikluko/action-changelog@v1
+      - uses: https://forge.sarak.sh/actions/changelog@v1

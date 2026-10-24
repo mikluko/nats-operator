@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	yamlv3 "go.yaml.in/yaml/v3"
+	"golang.org/x/mod/modfile"
 )
 
 // triggers is a workflow's on: the events it names, sorted, and what it says
@@ -24,7 +25,7 @@ type triggers struct {
 
 func readTriggers(t *testing.T, name string) triggers {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("../.github/workflows", name))
+	b, err := os.ReadFile(filepath.Join("../.forgejo/workflows", name))
 	require.NoError(t, err)
 	var wf struct {
 		On map[string]yamlv3.Node `yaml:"on"`
@@ -52,12 +53,12 @@ echo "$*" >>"$STUB/calls"
 // carries.
 const publishes = "needs.plan.outputs.publish == 'true'"
 
-// TestCut_TagsAsTheAppAfterCI pins that release-cut runs on a push to main
-// and on nothing else, that its cut waits on ci.yaml called as a job, which no
-// push starts by itself, and that the cut pushes the tag only where the
-// changelog action reports a release due, on the pushed commit, with the
-// app's token, which its GITHUB_TOKEN cannot do.
-func TestCut_TagsAsTheAppAfterCI(t *testing.T) {
+// TestCut_TagsWithReleaseTokenAfterCI pins that release-cut runs on a push to
+// main and on nothing else, that its cut waits on ci.yaml called as a job,
+// which no push starts by itself, and that the cut pushes the tag only where
+// the changelog action reports a release due, on the pushed commit, with
+// RELEASE_TOKEN, as a tag pushed with the automatic token starts no workflow.
+func TestCut_TagsWithReleaseTokenAfterCI(t *testing.T) {
 	on := readTriggers(t, "release-cut.yaml")
 	require.Equal(t, []string{"push"}, on.Events)
 	require.Equal(t, []string{"main"}, on.Push.Branches)
@@ -67,30 +68,23 @@ func TestCut_TagsAsTheAppAfterCI(t *testing.T) {
 	wf := readWorkflow(t, "release-cut.yaml")
 	require.Equal(t, map[string]string{"contents": "read"}, wf.Permissions)
 	require.Len(t, wf.Jobs, 2)
-	require.Equal(t, "./.github/workflows/ci.yaml", wf.Jobs["ci"].Uses)
+	require.Equal(t, "./.forgejo/workflows/ci.yaml", wf.Jobs["ci"].Uses)
 	require.Empty(t, wf.Jobs["ci"].If)
 	cut := wf.Jobs["cut"]
 	require.Equal(t, needs{"ci"}, cut.Needs)
 	require.Empty(t, cut.If)
 	require.Empty(t, cut.Permissions)
 
-	require.Len(t, cut.Steps, 4)
-	app, checkout, changelog, tag := cut.Steps[0], cut.Steps[1], cut.Steps[2], cut.Steps[3]
-	require.Equal(t, "app-token", app.ID)
-	require.True(t, strings.HasPrefix(app.Uses, "actions/create-github-app-token@"), app.Uses)
-	require.Equal(t, inputs{
-		"client-id":           "${{ vars.RELEASER_APP_CLIENT_ID }}",
-		"private-key":         "${{ secrets.RELEASER_APP_CERT }}",
-		"permission-contents": "write",
-	}, app.With)
-
-	require.True(t, strings.HasPrefix(checkout.Uses, "actions/checkout@"), checkout.Uses)
+	require.Len(t, cut.Steps, 3)
+	checkout, changelog, tag := cut.Steps[0], cut.Steps[1], cut.Steps[2]
+	require.True(t, strings.HasPrefix(checkout.Uses, gh+"actions/checkout@"), checkout.Uses)
 	require.Equal(t, inputs{
 		"fetch-depth": "0",
-		"token":       "${{ steps.app-token.outputs.token }}",
+		"token":       "${{ secrets.RELEASE_TOKEN }}",
 	}, checkout.With)
 
 	require.Equal(t, "changelog", changelog.ID)
+	require.True(t, strings.HasPrefix(changelog.Uses, changelogAction), changelog.Uses)
 	require.Empty(t, changelog.With)
 	require.Equal(t, "Cut", tag.Name)
 	require.Equal(t, "steps.changelog.outputs.due == 'true'", tag.If)
@@ -99,14 +93,12 @@ func TestCut_TagsAsTheAppAfterCI(t *testing.T) {
 	bash, err := exec.LookPath("bash")
 	require.NoError(t, err)
 	for _, tc := range []struct {
-		name    string
-		fail    string
-		exit    int
-		summary string
+		name string
+		fail string
+		exit int
 	}{
 		{
-			name:    "the tag is pushed",
-			summary: "Cut **v0.1.0**.\n",
+			name: "the tag is pushed",
 		},
 		{
 			name: "the push is refused",
@@ -120,14 +112,11 @@ func TestCut_TagsAsTheAppAfterCI(t *testing.T) {
 			require.NoError(t, os.Mkdir(bin, 0o755))
 			require.NoError(t, os.WriteFile(filepath.Join(bin, "git"), []byte(stubGit), 0o755))
 			require.NoError(t, os.WriteFile(filepath.Join(stub, "fail"), []byte(tc.fail), 0o644))
-			summary := filepath.Join(stub, "summary")
-			require.NoError(t, os.WriteFile(summary, nil, 0o644))
 
 			cmd := exec.Command(bash, "--noprofile", "--norc", "-e", "-c", tag.Run)
 			cmd.Env = []string{
 				"PATH=" + bin + ":" + filepath.Dir(bash) + ":/usr/bin:/bin",
 				"STUB=" + stub,
-				"GITHUB_STEP_SUMMARY=" + summary,
 				"VERSION=0.1.0",
 			}
 			out, err := cmd.CombinedOutput()
@@ -142,9 +131,6 @@ func TestCut_TagsAsTheAppAfterCI(t *testing.T) {
 			calls, err := os.ReadFile(filepath.Join(stub, "calls"))
 			require.NoError(t, err)
 			require.Equal(t, "tag v0.1.0\npush origin refs/tags/v0.1.0\n", string(calls))
-			b, err := os.ReadFile(summary)
-			require.NoError(t, err)
-			require.Equal(t, tc.summary, string(b))
 		})
 	}
 }
@@ -153,14 +139,14 @@ func TestCut_TagsAsTheAppAfterCI(t *testing.T) {
 // workflow to persist-credentials: false, apart from the one cut pushes the
 // tag through.
 func TestWorkflows_OneCheckoutKeepsCredentials(t *testing.T) {
-	files, err := filepath.Glob("../.github/workflows/*.yaml")
+	files, err := filepath.Glob("../.forgejo/workflows/*.yaml")
 	require.NoError(t, err)
 	var keeps []string
 	for _, f := range files {
 		name := filepath.Base(f)
 		for job, j := range readWorkflow(t, name).Jobs {
 			for _, s := range j.Steps {
-				if !strings.HasPrefix(s.Uses, "actions/checkout@") {
+				if !strings.HasPrefix(s.Uses, gh+"actions/checkout@") {
 					continue
 				}
 				if s.With["persist-credentials"] != "false" {
@@ -184,7 +170,7 @@ func TestRelease_VersionFromTag(t *testing.T) {
 	require.Equal(t, []string{"v*"}, on.Push.Tags)
 	require.Empty(t, on.Push.Branches)
 
-	b, err := os.ReadFile("../.github/workflows/release-roll.yaml")
+	b, err := os.ReadFile("../.forgejo/workflows/release-roll.yaml")
 	require.NoError(t, err)
 	var titled struct {
 		RunName string `yaml:"run-name"`
@@ -354,7 +340,7 @@ func TestRelease_VersionFromTag(t *testing.T) {
 }
 
 // TestRelease_DispatchPublishesNothing holds every step of release-roll.yaml that
-// logs in to a registry, pushes, signs, attests or creates a release to a
+// logs in to a registry, pushes, signs, creates a release or announces it to a
 // run that publishes, which a run by hand is not, and holds the release to
 // the tag that triggered the run.
 func TestRelease_DispatchPublishesNothing(t *testing.T) {
@@ -363,10 +349,9 @@ func TestRelease_DispatchPublishesNothing(t *testing.T) {
 	for name, job := range wf.Jobs {
 		for _, s := range job.Steps {
 			var publishing bool
-			for _, cmd := range []string{"docker login", "helm registry login", "helm push", "cosign sign", "gh release", "git push", "git tag"} {
+			for _, cmd := range []string{"docker login", "ko login", "helm registry login", "helm push", "cosign sign", "/releases", "proxy.golang.org", "git push", "git tag"} {
 				publishing = publishing || strings.Contains(s.Run, cmd)
 			}
-			publishing = publishing || strings.HasPrefix(s.Uses, "actions/attest-build-provenance@")
 			if !publishing {
 				continue
 			}
@@ -385,6 +370,34 @@ func TestRelease_DispatchPublishesNothing(t *testing.T) {
 
 	release := stepByName(t, wf.Jobs["release"].Steps, "Release")
 	require.Equal(t, "${{ needs.plan.outputs.tag }}", release.Env["TAG"])
-	require.Contains(t, release.Run, `gh release create "$TAG" --verify-tag `)
-	require.NotContains(t, release.Run, "--target")
+	require.Equal(t, "${{ secrets.GITHUB_TOKEN }}", release.Env["TOKEN"])
+	require.Contains(t, release.Run, `{tag_name: $tag, name: $tag, body: $body, prerelease: $pre}`)
+	require.Contains(t, release.Run, `-X POST`)
+	require.Contains(t, release.Run, `"$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/releases"`)
+	require.NotContains(t, release.Run, "target_commitish", "a release names the tag that started the run, which Forgejo would otherwise create")
+}
+
+// TestRelease_AnnouncesModule pins that a published release asks the Go proxy
+// for its tag of the module go.mod names, after the release exists.
+func TestRelease_AnnouncesModule(t *testing.T) {
+	b, err := os.ReadFile("../go.mod")
+	require.NoError(t, err)
+	wf := readWorkflow(t, "release-roll.yaml")
+	require.Equal(t, modfile.ModulePath(b), wf.Env["MODULE"])
+
+	steps := wf.Jobs["release"].Steps
+	var release, announce int
+	for i, s := range steps {
+		switch s.Name {
+		case "Release":
+			release = i
+		case "Announce to the Go proxy":
+			announce = i
+			require.Equal(t, publishes, s.If)
+			require.Equal(t, "${{ needs.plan.outputs.tag }}", s.Env["TAG"])
+			require.Equal(t, `curl --fail-with-body -sS "https://proxy.golang.org/$MODULE/@v/$TAG.info"`, s.Run)
+		}
+	}
+	require.NotZero(t, announce)
+	require.Less(t, release, announce)
 }
