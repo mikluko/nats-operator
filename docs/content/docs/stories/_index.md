@@ -34,4 +34,4 @@ The other stories are how-to guides:
 ## Running the stories
 
 To run the stories end to end on kind clusters from a checkout of the repository, run `just e2e`.
-[`hack/e2e`](https://github.com/mikluko/nats-operator/tree/main/hack/e2e) describes what the harness needs.
+[`hack/e2e`](https://forge.sarak.sh/mikluko/nats-operator/src/branch/main/hack/e2e) describes what the harness needs.

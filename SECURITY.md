@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Report a vulnerability privately, through [GitHub's private vulnerability reporting](https://github.com/mikluko/nats-operator/security/advisories/new) on this repository.
+Report a vulnerability privately to the maintainer, [mikluko](https://forge.sarak.sh/mikluko).
 Do not open a public issue.
 You get an acknowledgement within seven days.
 
@@ -44,13 +44,27 @@ A reference crosses into another namespace only where a `NatsReferenceGrant` in 
 
 ## Verifying a release
 
-The release workflow signs each release's three controller images and its chart keylessly with cosign, and gives each a GitHub build provenance attestation.
-To verify them, you need [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) and the [GitHub CLI](https://cli.github.com/).
+The release workflow signs each release's three controller images and its chart with cosign, with the key whose public half is `cosign.pub` at the root of this repository.
+To verify them, you need [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) and `cosign.pub`.
 In the commands below, replace `<version>` with a release's version without the `v`, such as `0.1.1`.
 
-The commands verify a release later than 0.3.1, which is built from its tag.
-Releases 0.1.0 through 0.3.1 were built from `main` by another workflow file.
-To verify one of them, see [Releases 0.1.0 through 0.3.1](#releases-010-through-031).
+The commands verify a release later than 0.5.1, which is published at `sarak.sh`.
+Releases 0.5.1 and earlier were published at `ghcr.io` and signed by GitHub Actions.
+To verify one of them, see [Releases 0.5.1 and earlier](#releases-051-and-earlier).
+
+```sh
+for c in cluster-controller auth-controller jetstream-controller; do
+  cosign verify --key cosign.pub "sarak.sh/mikluko/nats-operator/$c:<version>"
+done
+
+cosign verify --key cosign.pub "sarak.sh/mikluko/nats-operator/charts/nats-operator:<version>"
+```
+
+### Releases 0.5.1 and earlier
+
+Releases 0.4.0 through 0.5.1 are built from their tag.
+Releases 0.1.0 through 0.3.1 were built from `main` by another workflow file; see [Releases 0.1.0 through 0.3.1](#releases-010-through-031).
+To verify them, you also need the [GitHub CLI](https://cli.github.com/).
 
 1. Verify the signatures of the images and the chart:
 
@@ -77,7 +91,7 @@ To verify one of them, see [Releases 0.1.0 through 0.3.1](#releases-010-through-
 
    To verify another, replace `cluster-controller` with `auth-controller`, `jetstream-controller` or `charts/nats-operator`.
 
-### Releases 0.1.0 through 0.3.1
+#### Releases 0.1.0 through 0.3.1
 
 Run the same commands with these arguments changed:
 

@@ -14,14 +14,18 @@ Clusters: `upeks-dev` (dev), `upeks-stage`, `upeks-produs` (production), `upsidi
 
 ## Releases
 
-The changelog decides the version. Cutting one is renaming `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and opening a fresh `[Unreleased]` above it. `mikluko/action-changelog` validates the file on every pull request. A push to `main` runs `release-cut.yaml`: it runs ci, then tags the pushed commit `vX.Y.Z` as the releaser GitHub App where `mikluko/action-changelog` reports the newest entry due: it names a version, no tag names it, and it is not a prerelease. ci runs on `main` only as that job. The pushed tag starts `release-roll.yaml`, which fails unless the tag is the newest entry of `CHANGELOG.md` at that commit, then builds, signs and publishes the images and the chart, and creates the GitHub release last. A tag whose `release-roll.yaml` run failed is not cut again: re-run that run. Run by hand, `release-roll.yaml` builds the changelog's newest version if it is due, a prerelease included, and publishes nothing. Nothing else sets a version.
+The repository lives at `forge.sarak.sh/mikluko/nats-operator`, and its workflows under `.forgejo/workflows` run on that Forgejo's runners: `ubuntu-latest` by default, `privileged` for the jobs that run kind on rootful podman.
 
-Before the first release is announced, a human:
+The changelog decides the version. Cutting one is renaming `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and opening a fresh `[Unreleased]` above it. `https://forge.sarak.sh/actions/changelog` validates the file on every pull request. A push to `main` runs `release-cut.yaml`: it runs ci, then tags the pushed commit `vX.Y.Z` with `RELEASE_TOKEN` where the changelog action reports the newest entry due: it names a version, no tag names it, and it is not a prerelease. ci runs on `main` only as that job. The pushed tag starts `release-roll.yaml`, which fails unless the tag is the newest entry of `CHANGELOG.md` at that commit, then builds, signs with the key `cosign.pub` verifies, and publishes the images under `sarak.sh/mikluko/nats-operator` and the chart at `oci://sarak.sh/mikluko/nats-operator/charts`, creates the Forgejo release last, and asks the Go proxy for the tag. A tag whose `release-roll.yaml` run failed is not cut again: re-run that run. Run by hand, `release-roll.yaml` builds the changelog's newest version if it is due, a prerelease included, and publishes nothing. Nothing else sets a version.
 
+A push to `main` also runs `docs.yaml`, which pushes the site as the image `sarak.sh/mikluko/nats-operator/docs` for Flux to deploy at `https://nats-operator.sarak.sh/`.
+
+Before the first release from the forge is announced, a human:
+
+- sets the repository's Actions secrets `REGISTRY_TOKEN`, a package-write token of `agent`; `RELEASE_TOKEN`, a token that may push tags; and `COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD`, of a key pair `cosign generate-key-pair` makes
+- commits that pair's public key as `cosign.pub` at the repository root, which `SECURITY.md` verifies with
 - runs `release-roll.yaml` by hand on a branch whose `CHANGELOG.md` has the version cut, before cutting it on `main`; the run publishes nothing and proves the plan
-- makes the ghcr packages `nats-operator/cluster-controller`, `nats-operator/auth-controller`, `nats-operator/jetstream-controller` and `nats-operator/charts/nats-operator` public; new packages of a personal account are private
-- sets the repository's Pages source to GitHub Actions, before the first push to `main` deploys the site
-- turns on private vulnerability reporting, which `SECURITY.md` links to
+- makes the packages `nats-operator/cluster-controller`, `nats-operator/auth-controller`, `nats-operator/jetstream-controller`, `nats-operator/charts/nats-operator` and `nats-operator/docs` public, where the owner's packages are not already
 
 ## Fenced acts
 
