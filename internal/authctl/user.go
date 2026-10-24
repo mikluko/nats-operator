@@ -22,14 +22,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
-	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/conditions"
-	"github.com/mikluko/nats-operator/internal/grant"
-	"github.com/mikluko/nats-operator/internal/jwtplane"
-	"github.com/mikluko/nats-operator/internal/natsconn"
-	"github.com/mikluko/nats-operator/internal/refindex"
-	"github.com/mikluko/nats-operator/internal/telemetry"
+	authv1beta1 "sarak.sh/mikluko/nats-operator/api/auth/v1beta1"
+	natsv1beta1 "sarak.sh/mikluko/nats-operator/api/nats/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/conditions"
+	"sarak.sh/mikluko/nats-operator/internal/grant"
+	"sarak.sh/mikluko/nats-operator/internal/jwtplane"
+	"sarak.sh/mikluko/nats-operator/internal/natsconn"
+	"sarak.sh/mikluko/nats-operator/internal/refindex"
+	"sarak.sh/mikluko/nats-operator/internal/telemetry"
 )
 
 // UserFinalizer holds a deleted NatsUser until its key is revoked, the

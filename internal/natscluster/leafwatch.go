@@ -11,10 +11,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
-	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/natsconn"
-	"github.com/mikluko/nats-operator/internal/refindex"
+	clusterv1beta1 "sarak.sh/mikluko/nats-operator/api/cluster/v1beta1"
+	natsv1beta1 "sarak.sh/mikluko/nats-operator/api/nats/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/natsconn"
+	"sarak.sh/mikluko/nats-operator/internal/refindex"
 )
 
 // Field indexes on NatsClusters: the namespace/name of every NatsConnection

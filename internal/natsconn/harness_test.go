@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	natsv1beta1 "sarak.sh/mikluko/nats-operator/api/nats/v1beta1"
 )
 
 // testNATS is a nats-server under a NATS operator requiring TLS, with one

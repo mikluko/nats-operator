@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
-	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
+	clusterv1beta1 "sarak.sh/mikluko/nats-operator/api/cluster/v1beta1"
 )
 
 // podSecurityVariants are NatsClusters whose pods differ in containers and

@@ -3,7 +3,7 @@ package fixtures
 import (
 	"github.com/nats-io/nkeys"
 
-	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"sarak.sh/mikluko/nats-operator/internal/jwtplane"
 )
 
 // evacuation writes story 11's fixtures into dir.

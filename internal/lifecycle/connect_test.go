@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/mikluko/nats-operator/internal/grant"
+	"sarak.sh/mikluko/nats-operator/internal/grant"
 )
 
 func TestNoConnReleased(t *testing.T) {

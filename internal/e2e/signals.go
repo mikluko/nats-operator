@@ -11,12 +11,12 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/mikluko/nats-operator/internal/authctl"
-	"github.com/mikluko/nats-operator/internal/balancectl"
-	"github.com/mikluko/nats-operator/internal/lifecycle"
-	"github.com/mikluko/nats-operator/internal/natscluster"
-	"github.com/mikluko/nats-operator/internal/natsconn"
-	"github.com/mikluko/nats-operator/internal/streamctl"
+	"sarak.sh/mikluko/nats-operator/internal/authctl"
+	"sarak.sh/mikluko/nats-operator/internal/balancectl"
+	"sarak.sh/mikluko/nats-operator/internal/lifecycle"
+	"sarak.sh/mikluko/nats-operator/internal/natscluster"
+	"sarak.sh/mikluko/nats-operator/internal/natsconn"
+	"sarak.sh/mikluko/nats-operator/internal/streamctl"
 )
 
 // stuckWaiting are the container waiting reasons that no wait ends.

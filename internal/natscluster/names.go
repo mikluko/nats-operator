@@ -3,7 +3,7 @@ package natscluster
 import (
 	"fmt"
 
-	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
+	clusterv1beta1 "sarak.sh/mikluko/nats-operator/api/cluster/v1beta1"
 )
 
 // Labels and annotations the cluster controller sets on what it renders.

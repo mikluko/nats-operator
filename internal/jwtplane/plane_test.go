@@ -12,7 +12,7 @@ import (
 	"github.com/nats-io/nkeys"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"sarak.sh/mikluko/nats-operator/internal/jwtplane"
 )
 
 // plane is an auth plane signed by this package and served by one

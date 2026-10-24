@@ -19,9 +19,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/types"
 
-	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
-	"github.com/mikluko/nats-operator/internal/authctl"
-	"github.com/mikluko/nats-operator/internal/jwtplane"
+	authv1beta1 "sarak.sh/mikluko/nats-operator/api/auth/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/authctl"
+	"sarak.sh/mikluko/nats-operator/internal/jwtplane"
 )
 
 // fullCluster is a routed NATS cluster trusting a plane's NATS operator,

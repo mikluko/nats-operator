@@ -12,7 +12,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"sarak.sh/mikluko/nats-operator/internal/jwtplane"
 )
 
 // Key names the resource a pooled connection belongs to.

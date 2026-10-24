@@ -5,7 +5,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 
-	jetstreamv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
+	jetstreamv1beta1 "sarak.sh/mikluko/nats-operator/api/jetstream/v1beta1"
 )
 
 // Metadata keys of the ownership marker.

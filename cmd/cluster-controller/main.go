@@ -19,14 +19,14 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
-	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/jwtplane"
-	"github.com/mikluko/nats-operator/internal/manager"
-	"github.com/mikluko/nats-operator/internal/natscluster"
-	"github.com/mikluko/nats-operator/internal/natsconn"
-	"github.com/mikluko/nats-operator/internal/sysobs"
-	"github.com/mikluko/nats-operator/internal/telemetry"
+	clusterv1beta1 "sarak.sh/mikluko/nats-operator/api/cluster/v1beta1"
+	natsv1beta1 "sarak.sh/mikluko/nats-operator/api/nats/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/jwtplane"
+	"sarak.sh/mikluko/nats-operator/internal/manager"
+	"sarak.sh/mikluko/nats-operator/internal/natscluster"
+	"sarak.sh/mikluko/nats-operator/internal/natsconn"
+	"sarak.sh/mikluko/nats-operator/internal/sysobs"
+	"sarak.sh/mikluko/nats-operator/internal/telemetry"
 )
 
 func main() {

@@ -16,9 +16,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
-	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
-	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/e2e/placeholders"
+	js "sarak.sh/mikluko/nats-operator/api/jetstream/v1beta1"
+	natsv1beta1 "sarak.sh/mikluko/nats-operator/api/nats/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/e2e/placeholders"
 )
 
 // testStory8 pins that the NatsStream of story 8 reads each of the story's

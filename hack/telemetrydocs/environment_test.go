@@ -23,7 +23,7 @@ import (
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/mikluko/nats-operator/internal/telemetry"
+	"sarak.sh/mikluko/nats-operator/internal/telemetry"
 )
 
 // envVar is one row of the environment table.

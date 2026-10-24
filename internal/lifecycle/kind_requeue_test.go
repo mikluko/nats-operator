@@ -13,8 +13,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	jetstreamv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
-	"github.com/mikluko/nats-operator/internal/natsconn"
+	jetstreamv1beta1 "sarak.sh/mikluko/nats-operator/api/jetstream/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/natsconn"
 )
 
 func TestSync_ResolveResult(t *testing.T) {

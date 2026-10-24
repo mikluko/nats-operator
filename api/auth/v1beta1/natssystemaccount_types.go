@@ -3,7 +3,7 @@ package v1beta1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	natsv1beta1 "sarak.sh/mikluko/nats-operator/api/nats/v1beta1"
 )
 
 // NatsSystemAccountSpec is the desired state of a system account.

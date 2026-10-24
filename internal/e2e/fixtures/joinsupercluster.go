@@ -6,7 +6,7 @@ import (
 
 	"github.com/nats-io/nkeys"
 
-	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"sarak.sh/mikluko/nats-operator/internal/jwtplane"
 )
 
 // joinAccounts are the accounts story 13's existing NATS cluster preloads and

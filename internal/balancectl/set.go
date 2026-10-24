@@ -7,7 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/mikluko/nats-operator/internal/balance"
+	"sarak.sh/mikluko/nats-operator/internal/balance"
 )
 
 // A balancerSet holds each balancer resource's [balance.Balancer], kept

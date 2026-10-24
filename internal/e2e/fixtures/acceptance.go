@@ -3,7 +3,7 @@ package fixtures
 import (
 	"github.com/nats-io/nkeys"
 
-	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"sarak.sh/mikluko/nats-operator/internal/jwtplane"
 )
 
 // acceptanceData is what acceptanceTemplate renders.

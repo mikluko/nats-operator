@@ -12,10 +12,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
-	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
-	"github.com/mikluko/nats-operator/internal/conditions"
-	"github.com/mikluko/nats-operator/internal/jsapi"
-	"github.com/mikluko/nats-operator/internal/lifecycle"
+	js "sarak.sh/mikluko/nats-operator/api/jetstream/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/conditions"
+	"sarak.sh/mikluko/nats-operator/internal/jsapi"
+	"sarak.sh/mikluko/nats-operator/internal/lifecycle"
 )
 
 // ReasonMoving is Synced's reason, False, while a NatsStream's spec is

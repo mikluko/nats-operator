@@ -9,10 +9,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
-	"github.com/mikluko/nats-operator/internal/balance"
-	"github.com/mikluko/nats-operator/internal/lifecycle"
-	"github.com/mikluko/nats-operator/internal/sysobs"
+	js "sarak.sh/mikluko/nats-operator/api/jetstream/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/balance"
+	"sarak.sh/mikluko/nats-operator/internal/lifecycle"
+	"sarak.sh/mikluko/nats-operator/internal/sysobs"
 )
 
 func TestPlanEvacuation(t *testing.T) {

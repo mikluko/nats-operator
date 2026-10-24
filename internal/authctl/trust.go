@@ -13,12 +13,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
-	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/conditions"
-	"github.com/mikluko/nats-operator/internal/grant"
-	"github.com/mikluko/nats-operator/internal/refindex"
-	"github.com/mikluko/nats-operator/internal/telemetry"
+	authv1beta1 "sarak.sh/mikluko/nats-operator/api/auth/v1beta1"
+	natsv1beta1 "sarak.sh/mikluko/nats-operator/api/nats/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/conditions"
+	"sarak.sh/mikluko/nats-operator/internal/grant"
+	"sarak.sh/mikluko/nats-operator/internal/refindex"
+	"sarak.sh/mikluko/nats-operator/internal/telemetry"
 )
 
 // OperatorTrustReconciler mirrors into a reference-form NatsOperatorTrust's

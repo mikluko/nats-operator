@@ -13,11 +13,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
-	"github.com/mikluko/nats-operator/internal/balance"
-	"github.com/mikluko/nats-operator/internal/lifecycle"
-	"github.com/mikluko/nats-operator/internal/natsconn"
-	"github.com/mikluko/nats-operator/internal/sysobs"
+	js "sarak.sh/mikluko/nats-operator/api/jetstream/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/balance"
+	"sarak.sh/mikluko/nats-operator/internal/lifecycle"
+	"sarak.sh/mikluko/nats-operator/internal/natsconn"
+	"sarak.sh/mikluko/nats-operator/internal/sysobs"
 )
 
 // jszSubject asks the server whose ID fills it for its JetStream state, which

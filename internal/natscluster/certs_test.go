@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/nats-operator/internal/sysobs"
+	"sarak.sh/mikluko/nats-operator/internal/sysobs"
 )
 
 func TestCertsLoaded(t *testing.T) {

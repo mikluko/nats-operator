@@ -13,7 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
+	authv1beta1 "sarak.sh/mikluko/nats-operator/api/auth/v1beta1"
 )
 
 // silentServer is a pushLog whose lookup wraps ErrUnreachable until answers

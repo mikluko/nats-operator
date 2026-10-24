@@ -22,7 +22,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/mikluko/nats-operator/internal/telemetry"
+	"sarak.sh/mikluko/nats-operator/internal/telemetry"
 )
 
 // ReconciledKinds returns, in registration order, the kind each controller

@@ -9,7 +9,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
+	js "sarak.sh/mikluko/nats-operator/api/jetstream/v1beta1"
 )
 
 func TestInCluster(t *testing.T) {

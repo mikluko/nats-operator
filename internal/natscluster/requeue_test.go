@@ -13,8 +13,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
-	"github.com/mikluko/nats-operator/internal/sysobs"
+	clusterv1beta1 "sarak.sh/mikluko/nats-operator/api/cluster/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/sysobs"
 )
 
 // unobservable is an Observer that never reaches the NATS cluster.

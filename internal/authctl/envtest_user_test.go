@@ -23,11 +23,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
-	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
-	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/authctl"
-	"github.com/mikluko/nats-operator/internal/grant"
-	"github.com/mikluko/nats-operator/internal/natsconn"
+	authv1beta1 "sarak.sh/mikluko/nats-operator/api/auth/v1beta1"
+	natsv1beta1 "sarak.sh/mikluko/nats-operator/api/nats/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/authctl"
+	"sarak.sh/mikluko/nats-operator/internal/grant"
+	"sarak.sh/mikluko/nats-operator/internal/natsconn"
 )
 
 // errNoSystemConnection is what the env's Sessions answer before a subtest

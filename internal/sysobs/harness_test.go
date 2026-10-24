@@ -6,7 +6,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/nats-operator/internal/natstest"
+	"sarak.sh/mikluko/nats-operator/internal/natstest"
 )
 
 // newTestCluster is a NATS cluster of size servers with account A, whose

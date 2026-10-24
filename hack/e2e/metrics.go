@@ -25,8 +25,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
-	"github.com/mikluko/nats-operator/internal/e2e"
-	"github.com/mikluko/nats-operator/internal/e2e/fixtures"
+	"sarak.sh/mikluko/nats-operator/internal/e2e"
+	"sarak.sh/mikluko/nats-operator/internal/e2e/fixtures"
 )
 
 // What a story that scrapes metrics runs under: the Secret metrics are

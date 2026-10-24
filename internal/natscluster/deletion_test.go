@@ -10,7 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
+	clusterv1beta1 "sarak.sh/mikluko/nats-operator/api/cluster/v1beta1"
 )
 
 // TestFinalize_ForceDeleteNotCleared pins that force-delete releases a

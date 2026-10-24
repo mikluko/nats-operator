@@ -9,9 +9,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
-	"github.com/mikluko/nats-operator/internal/manager"
-	"github.com/mikluko/nats-operator/internal/manager/managertest"
-	"github.com/mikluko/nats-operator/internal/manager/secretreads"
+	"sarak.sh/mikluko/nats-operator/internal/manager"
+	"sarak.sh/mikluko/nats-operator/internal/manager/managertest"
+	"sarak.sh/mikluko/nats-operator/internal/manager/secretreads"
 )
 
 // TestEnvtestSecretMetadata pins that setup, in the manager New builds,

@@ -5,7 +5,7 @@ import (
 
 	"k8s.io/utils/ptr"
 
-	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
+	js "sarak.sh/mikluko/nats-operator/api/jetstream/v1beta1"
 )
 
 var (

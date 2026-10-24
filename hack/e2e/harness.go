@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	kindcmd "sigs.k8s.io/kind/pkg/cmd"
 
-	"github.com/mikluko/nats-operator/internal/e2e"
+	"sarak.sh/mikluko/nats-operator/internal/e2e"
 )
 
 const (

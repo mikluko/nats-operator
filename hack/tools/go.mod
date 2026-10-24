@@ -1,4 +1,4 @@
-module github.com/mikluko/nats-operator/hack/tools
+module sarak.sh/mikluko/nats-operator/hack/tools
 
 go 1.27
 

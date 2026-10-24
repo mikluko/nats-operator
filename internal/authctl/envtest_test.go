@@ -38,12 +38,12 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/yaml"
 
-	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
-	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/authctl"
-	"github.com/mikluko/nats-operator/internal/grant"
-	"github.com/mikluko/nats-operator/internal/jwtplane"
-	"github.com/mikluko/nats-operator/internal/manager"
+	authv1beta1 "sarak.sh/mikluko/nats-operator/api/auth/v1beta1"
+	natsv1beta1 "sarak.sh/mikluko/nats-operator/api/nats/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/authctl"
+	"sarak.sh/mikluko/nats-operator/internal/grant"
+	"sarak.sh/mikluko/nats-operator/internal/jwtplane"
+	"sarak.sh/mikluko/nats-operator/internal/manager"
 )
 
 const storiesDir = "../../docs/content/docs/stories"

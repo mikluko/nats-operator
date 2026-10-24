@@ -5,7 +5,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/mikluko/nats-operator/internal/conditions"
+	"sarak.sh/mikluko/nats-operator/internal/conditions"
 )
 
 // The condition types the reconcilers of this package set in status.

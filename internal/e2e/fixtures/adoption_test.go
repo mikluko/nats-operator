@@ -13,7 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/yaml"
 
-	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
+	authv1beta1 "sarak.sh/mikluko/nats-operator/api/auth/v1beta1"
 )
 
 // checkAdoption requires that story 14's existing NATS cluster runs a full

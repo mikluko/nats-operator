@@ -9,7 +9,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
-	"github.com/mikluko/nats-operator/internal/jsapi"
+	"sarak.sh/mikluko/nats-operator/internal/jsapi"
 )
 
 // API makes JetStream API requests in the account the connection signs

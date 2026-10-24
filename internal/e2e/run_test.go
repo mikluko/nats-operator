@@ -21,7 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	jsv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
+	jsv1beta1 "sarak.sh/mikluko/nats-operator/api/jetstream/v1beta1"
 )
 
 func TestPoll_RetriesErrors(t *testing.T) {

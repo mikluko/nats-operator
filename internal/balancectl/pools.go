@@ -11,10 +11,10 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
-	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/balance"
-	"github.com/mikluko/nats-operator/internal/streamctl"
+	js "sarak.sh/mikluko/nats-operator/api/jetstream/v1beta1"
+	natsv1beta1 "sarak.sh/mikluko/nats-operator/api/nats/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/balance"
+	"sarak.sh/mikluko/nats-operator/internal/streamctl"
 )
 
 // A member is a resource a pool can select: a NatsStream, NatsKeyValue or

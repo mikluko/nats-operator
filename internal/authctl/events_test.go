@@ -18,8 +18,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
-	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	authv1beta1 "sarak.sh/mikluko/nats-operator/api/auth/v1beta1"
+	natsv1beta1 "sarak.sh/mikluko/nats-operator/api/nats/v1beta1"
 )
 
 // drained is every event rec holds.

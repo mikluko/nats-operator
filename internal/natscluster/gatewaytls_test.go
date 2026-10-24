@@ -21,7 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/yaml"
 
-	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
+	clusterv1beta1 "sarak.sh/mikluko/nats-operator/api/cluster/v1beta1"
 )
 
 // quickstartWithGateway is story 1's NatsCluster with a gateway that has no

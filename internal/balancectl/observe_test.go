@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/nats-operator/internal/balance"
-	"github.com/mikluko/nats-operator/internal/sysobs"
+	"sarak.sh/mikluko/nats-operator/internal/balance"
+	"sarak.sh/mikluko/nats-operator/internal/sysobs"
 )
 
 func TestObservation(t *testing.T) {

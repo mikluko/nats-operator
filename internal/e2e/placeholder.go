@@ -5,7 +5,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/mikluko/nats-operator/internal/e2e/placeholders"
+	"sarak.sh/mikluko/nats-operator/internal/e2e/placeholders"
 )
 
 // placeholder stands in the expected tree for a value tagged placeholders.Tag.

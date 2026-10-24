@@ -5,9 +5,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/nats-operator/internal/authctl"
-	"github.com/mikluko/nats-operator/internal/lifecycle"
-	"github.com/mikluko/nats-operator/internal/natscluster"
+	"sarak.sh/mikluko/nats-operator/internal/authctl"
+	"sarak.sh/mikluko/nats-operator/internal/lifecycle"
+	"sarak.sh/mikluko/nats-operator/internal/natscluster"
 )
 
 func TestControllerFinalizers(t *testing.T) {

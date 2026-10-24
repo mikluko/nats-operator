@@ -21,7 +21,7 @@ import (
 	ctrlmanager "sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/yaml"
 
-	"github.com/mikluko/nats-operator/internal/manager"
+	"sarak.sh/mikluko/nats-operator/internal/manager"
 )
 
 // ReadyUnderRoles fails the test unless setup's manager, confined to two

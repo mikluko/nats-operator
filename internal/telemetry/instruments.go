@@ -15,10 +15,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
-	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
-	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
-	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	authv1beta1 "sarak.sh/mikluko/nats-operator/api/auth/v1beta1"
+	clusterv1beta1 "sarak.sh/mikluko/nats-operator/api/cluster/v1beta1"
+	js "sarak.sh/mikluko/nats-operator/api/jetstream/v1beta1"
+	natsv1beta1 "sarak.sh/mikluko/nats-operator/api/nats/v1beta1"
 )
 
 // Attribute keys the instruments and reconcile spans carry.

@@ -34,7 +34,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/mikluko/nats-operator/internal/manager/secretreads"
+	"sarak.sh/mikluko/nats-operator/internal/manager/secretreads"
 )
 
 // startEnvtest starts an API server for the test, its admin's config in

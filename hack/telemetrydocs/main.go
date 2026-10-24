@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mikluko/nats-operator/internal/telemetry"
+	"sarak.sh/mikluko/nats-operator/internal/telemetry"
 )
 
 // page is the page's path from the repository root.

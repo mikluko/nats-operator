@@ -20,7 +20,7 @@ import (
 	"golang.org/x/mod/semver"
 	"sigs.k8s.io/yaml"
 
-	"github.com/mikluko/nats-operator/internal/e2e"
+	"sarak.sh/mikluko/nats-operator/internal/e2e"
 )
 
 type step struct {
@@ -690,7 +690,7 @@ func TestCI_HelmUnittestPinned(t *testing.T) {
 // versionPkg and versionVar name the variable .ko.yaml's ldflags set to the
 // release.
 const (
-	versionPkg = "github.com/mikluko/nats-operator/internal/manager"
+	versionPkg = "sarak.sh/mikluko/nats-operator/internal/manager"
 	versionVar = "Version"
 )
 

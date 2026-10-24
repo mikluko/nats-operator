@@ -10,7 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-const tracerName = "github.com/mikluko/nats-operator/internal/telemetry"
+const tracerName = "sarak.sh/mikluko/nats-operator/internal/telemetry"
 
 // Traced wraps r so each reconcile of a resource of kind runs in a span
 // named "Reconcile <kind>" of the global tracer provider, carrying the

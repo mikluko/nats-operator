@@ -13,15 +13,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	jetstreamv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
-	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/balancectl"
-	"github.com/mikluko/nats-operator/internal/jwtplane"
-	"github.com/mikluko/nats-operator/internal/lifecycle"
-	"github.com/mikluko/nats-operator/internal/manager"
-	"github.com/mikluko/nats-operator/internal/natsconn"
-	"github.com/mikluko/nats-operator/internal/streamctl"
-	"github.com/mikluko/nats-operator/internal/telemetry"
+	jetstreamv1beta1 "sarak.sh/mikluko/nats-operator/api/jetstream/v1beta1"
+	natsv1beta1 "sarak.sh/mikluko/nats-operator/api/nats/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/balancectl"
+	"sarak.sh/mikluko/nats-operator/internal/jwtplane"
+	"sarak.sh/mikluko/nats-operator/internal/lifecycle"
+	"sarak.sh/mikluko/nats-operator/internal/manager"
+	"sarak.sh/mikluko/nats-operator/internal/natsconn"
+	"sarak.sh/mikluko/nats-operator/internal/streamctl"
+	"sarak.sh/mikluko/nats-operator/internal/telemetry"
 )
 
 func main() {

@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/require"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/mikluko/nats-operator/internal/manager"
-	"github.com/mikluko/nats-operator/internal/manager/managertest"
-	"github.com/mikluko/nats-operator/internal/telemetry"
+	"sarak.sh/mikluko/nats-operator/internal/manager"
+	"sarak.sh/mikluko/nats-operator/internal/manager/managertest"
+	"sarak.sh/mikluko/nats-operator/internal/telemetry"
 )
 
 // TestReconciledKinds pins telemetry.ClusterKinds, whose conditions the
