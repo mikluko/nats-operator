@@ -19,7 +19,7 @@ import (
 )
 
 func withClientTLS(nc *clusterv1beta1.NatsCluster, src clusterv1beta1.CertificateSource) *clusterv1beta1.NatsCluster {
-	nc.Spec.TLS = &clusterv1beta1.ListenerTLS{CertificateSource: src}
+	nc.Spec.TLS = &clusterv1beta1.ClientTLS{CertificateSource: src}
 	return nc
 }
 
@@ -36,6 +36,21 @@ func TestClientTLS_Render(t *testing.T) {
 	require.Equal(t, &ListenerTLSConfig{CertFile: "/etc/nats-client-tls/tls.crt", KeyFile: "/etc/nats-client-tls/tls.key"},
 		serverConfig(nc, Inputs{}, "demo-0", podLayout(nc), "").TLS)
 	require.Equal(t, "tls://demo.nats-system.svc:4222", clientURL(nc))
+	rendered, err := serverConfig(nc, Inputs{}, "demo-0", podLayout(nc), "").Render()
+	require.NoError(t, err)
+	require.NotContains(t, string(rendered), "allow_non_tls")
+
+	t.Run("allowNonTLS", func(t *testing.T) {
+		nc := withClientTLS(storyCluster(t), clusterv1beta1.CertificateSource{SecretRef: &natsv1beta1.SecretReference{Name: "clients"}})
+		nc.Spec.TLS.AllowNonTLS = true
+		c := serverConfig(nc, Inputs{}, "demo-0", podLayout(nc), "")
+		require.Equal(t, &ListenerTLSConfig{CertFile: "/etc/nats-client-tls/tls.crt", KeyFile: "/etc/nats-client-tls/tls.key"}, c.TLS)
+		require.True(t, c.AllowNonTLS)
+		rendered, err := c.Render()
+		require.NoError(t, err)
+		require.Contains(t, string(rendered), `"allow_non_tls": true`)
+		require.Equal(t, "nats://demo.nats-system.svc:4222", clientURL(nc))
+	})
 
 	plan, err := Render(nc, Inputs{})
 	require.NoError(t, err)
@@ -58,14 +73,14 @@ func TestClientTLS_Render(t *testing.T) {
 	}, cert.Object["spec"])
 }
 
-// TestClientTLS_Server boots nats-server on a config rendered with
-// spec.tls: a client holding the issuing CA connects over TLS, and one
-// without it is refused.
-func TestClientTLS_Server(t *testing.T) {
-	nc := withClientTLS(storyCluster(t), clusterv1beta1.CertificateSource{SecretRef: &natsv1beta1.SecretReference{Name: "clients"}})
+// bootClientTLS boots nats-server on nc's config rendered with spec.tls,
+// its client certificate self-signed, and returns the server's address and
+// the directory holding the certificate's ca.crt.
+func bootClientTLS(t *testing.T, nc *clusterv1beta1.NatsCluster) (addr, certDir string) {
+	t.Helper()
 	nc.Spec.JetStream = nil
 	nc.Spec.Routes = &clusterv1beta1.Routes{TLS: &clusterv1beta1.RoutesTLS{Enabled: new(bool)}}
-	certDir := writeRouteCert(t, nc)
+	certDir = writeRouteCert(t, nc)
 	dir := t.TempDir()
 	l := Layout{
 		ClientListen:  natstest.Listen(0),
@@ -79,9 +94,17 @@ func TestClientTLS_Server(t *testing.T) {
 	require.NoError(t, err)
 	f := filepath.Join(dir, "nats.conf")
 	require.NoError(t, os.WriteFile(f, b, 0o600))
-	s := startFile(t, f)
+	return startFile(t, f).Addr().String(), certDir
+}
 
-	url := fmt.Sprintf("tls://%s", s.Addr())
+// TestClientTLS_Server boots nats-server on a config rendered with
+// spec.tls: a client holding the issuing CA connects over TLS, and one
+// without it is refused.
+func TestClientTLS_Server(t *testing.T) {
+	nc := withClientTLS(storyCluster(t), clusterv1beta1.CertificateSource{SecretRef: &natsv1beta1.SecretReference{Name: "clients"}})
+	addr, certDir := bootClientTLS(t, nc)
+
+	url := fmt.Sprintf("tls://%s", addr)
 	conn, err := nats.Connect(url, nats.RootCAs(filepath.Join(certDir, caKey)), nats.Timeout(5*time.Second))
 	require.NoError(t, err)
 	require.True(t, conn.TLSRequired())
@@ -91,8 +114,32 @@ func TestClientTLS_Server(t *testing.T) {
 	require.Error(t, err, "a client without the CA connected")
 }
 
+// TestClientTLS_Server_AllowNonTLS boots nats-server on a config rendered
+// with spec.tls.allowNonTLS: a client holding the issuing CA connects over
+// TLS, and one dialing nats:// connects in the clear.
+func TestClientTLS_Server_AllowNonTLS(t *testing.T) {
+	nc := withClientTLS(storyCluster(t), clusterv1beta1.CertificateSource{SecretRef: &natsv1beta1.SecretReference{Name: "clients"}})
+	nc.Spec.TLS.AllowNonTLS = true
+	addr, certDir := bootClientTLS(t, nc)
+
+	conn, err := nats.Connect("tls://"+addr, nats.RootCAs(filepath.Join(certDir, caKey)), nats.Timeout(5*time.Second))
+	require.NoError(t, err)
+	state, err := conn.TLSConnectionState()
+	require.NoError(t, err)
+	require.True(t, state.HandshakeComplete)
+	conn.Close()
+
+	conn, err = nats.Connect("nats://"+addr, nats.Timeout(5*time.Second))
+	require.NoError(t, err)
+	require.False(t, conn.TLSRequired())
+	_, err = conn.TLSConnectionState()
+	require.ErrorIs(t, err, nats.ErrConnectionNotTLS)
+	conn.Close()
+}
+
 // TestClientCA pins the CA the cluster controller's system connection
-// trusts: the client certificate Secret's ca.crt under client TLS.
+// trusts: the client certificate Secret's ca.crt under client TLS, and
+// none while plain clients are allowed, when it connects in the clear.
 func TestClientCA(t *testing.T) {
 	nc := withClientTLS(storyCluster(t), clusterv1beta1.CertificateSource{SecretRef: &natsv1beta1.SecretReference{Name: "clients"}})
 	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: nc.Namespace, Name: "clients"}, Data: map[string][]byte{caKey: []byte("CA")}}
@@ -105,6 +152,14 @@ func TestClientCA(t *testing.T) {
 	ca, err = s.clientCA(t.Context(), storyCluster(t))
 	require.NoError(t, err)
 	require.Nil(t, ca, "a CA read without client TLS")
+
+	plain := nc.DeepCopy()
+	plain.Spec.TLS.AllowNonTLS = true
+	ca, err = s.clientCA(t.Context(), plain)
+	require.NoError(t, err)
+	require.Nil(t, ca, "a CA read for a connection in the clear")
+	_, err = (&SystemConnections{Client: fake.NewClientBuilder().Build()}).clientCA(t.Context(), plain)
+	require.NoError(t, err, "the Secret read for a connection in the clear")
 
 	delete(secret.Data, caKey)
 	s.Client = fake.NewClientBuilder().WithObjects(secret).Build()

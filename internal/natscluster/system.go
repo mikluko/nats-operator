@@ -130,13 +130,13 @@ func (s *SystemConnections) client(ctx context.Context, nc *clusterv1beta1.NatsC
 	return sysobs.New(conn, nc.Name, opts...), nil
 }
 
-// clientCA is the ca.crt of nc's client certificate Secret, nil when nc
-// has no client TLS or the Secret holds none.
+// clientCA is the ca.crt of nc's client certificate Secret, nil when the
+// connection is in the clear or the Secret holds none.
 func (s *SystemConnections) clientCA(ctx context.Context, nc *clusterv1beta1.NatsCluster) ([]byte, error) {
-	name := clientCertSecret(nc)
-	if name == "" {
+	if clientPlain(nc) {
 		return nil, nil
 	}
+	name := clientCertSecret(nc)
 	secret := &corev1.Secret{}
 	if err := s.Client.Get(ctx, client.ObjectKey{Namespace: nc.Namespace, Name: name}, secret); err != nil {
 		return nil, fmt.Errorf("read client certificate Secret %s: %w", name, err)

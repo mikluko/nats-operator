@@ -529,18 +529,27 @@ Appears on: [NatsClusterSpec](#NatsClusterSpec).
 
 ### CertManagerCertificate {#CertManagerCertificate}
 CertManagerCertificate is a certificate cert-manager issues.\
-Appears on: [CertificateSource](#CertificateSource), [ListenerTLS](#ListenerTLS), [RoutesTLS](#RoutesTLS).
+Appears on: [CertificateSource](#CertificateSource), [ClientTLS](#ClientTLS), [ListenerTLS](#ListenerTLS), [RoutesTLS](#RoutesTLS).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `issuerRef` | [{{< type "IssuerReference" >}}](#IssuerReference) | Yes | IssuerRef is copied into the Certificate the cluster controller creates in the NatsCluster's namespace. |
 
 ### CertificateSource {#CertificateSource}
 CertificateSource names where a listener's certificate comes from.\
-Appears on: [ListenerTLS](#ListenerTLS), [RoutesTLS](#RoutesTLS).
+Appears on: [ClientTLS](#ClientTLS), [ListenerTLS](#ListenerTLS), [RoutesTLS](#RoutesTLS).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `secretRef` | [{{< type "SecretReference" >}}](#SecretReference) | No | SecretRef names a kubernetes.io/tls Secret. |
 | `certManager` | [{{< type "CertManagerCertificate" >}}](#CertManagerCertificate) | No | CertManager has cert-manager issue the certificate. |
+
+### ClientTLS {#ClientTLS}
+ClientTLS is TLS on the client listener.\
+Appears on: [NatsClusterSpec](#NatsClusterSpec).
+| Field | Type | Required | Description |
+| :---- | :--- | :------: | :---------- |
+| `secretRef` | [{{< type "SecretReference" >}}](#SecretReference) | No | SecretRef names a kubernetes.io/tls Secret. |
+| `certManager` | [{{< type "CertManagerCertificate" >}}](#CertManagerCertificate) | No | CertManager has cert-manager issue the certificate. |
+| `allowNonTLS` | {{< type "bool" >}} | No | AllowNonTLS has the listener take clients that connect in the clear beside those that connect over TLS. The cluster controller then connects in the clear, and status.endpoints.client reads nats://. |
 
 ### ConfigApplyMethod {#ConfigApplyMethod}
 ConfigApplyMethod is how a rendered config reached the servers.\
@@ -706,7 +715,7 @@ Appears on: [NatsClusterSpec](#NatsClusterSpec).
 
 ### ListenerTLS {#ListenerTLS}
 ListenerTLS is TLS on a listener that has it only when configured.\
-Appears on: [Gateway](#Gateway), [Leafnodes](#Leafnodes), [NatsClusterSpec](#NatsClusterSpec).
+Appears on: [Gateway](#Gateway), [Leafnodes](#Leafnodes).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `secretRef` | [{{< type "SecretReference" >}}](#SecretReference) | No | SecretRef names a kubernetes.io/tls Secret. |
@@ -743,7 +752,7 @@ Appears on: [NatsCluster](#NatsCluster).
 | `podTemplate` | [{{< type "PodTemplate" >}}](#PodTemplate) | No | PodTemplate is merged into every server's pod, over its security context and automountServiceAccountToken too: whoever may write a NatsCluster runs pods with any privilege its namespace admits. Its affinity, when set, replaces the rendered preferred anti-affinity across nodes. |
 | `exporter` | [{{< type "Exporter" >}}](#Exporter) | No | Exporter configures the prometheus-nats-exporter sidecar; absent, it runs. |
 | `monitor` | [{{< type "Monitor" >}}](#Monitor) | No | Monitor configures access to the monitoring port, 8222, which has no authentication. |
-| `tls` | [{{< type "ListenerTLS" >}}](#ListenerTLS) | No | TLS on the client listener; absent, clients connect in the clear. The cluster controller verifies it against the Secret's ca.crt, or the system roots without one. |
+| `tls` | [{{< type "ClientTLS" >}}](#ClientTLS) | No | TLS on the client listener; absent, clients connect in the clear. The cluster controller verifies it against the Secret's ca.crt, or the system roots without one. |
 | `routes` | [{{< type "Routes" >}}](#Routes) | No | Routes configures the route listener; absent, route TLS is on and self-signed. |
 | `auth` | [{{< type "Auth" >}}](#Auth) | No | Auth puts the NATS cluster under a NATS operator; absent, servers run with no accounts and no client auth. |
 | `gateway` | [{{< type "Gateway" >}}](#Gateway) | No | Gateway joins the NATS cluster into a supercluster under its own name, the NatsCluster's name. |
@@ -1892,7 +1901,7 @@ Appears on: [NatsReferenceGrantSpec](#NatsReferenceGrantSpec).
 
 ### SecretReference {#SecretReference}
 SecretReference names a Secret in the referrer's namespace.\
-Appears on: [CertificateSource](#CertificateSource), [ListenerTLS](#ListenerTLS), [RoutesTLS](#RoutesTLS).
+Appears on: [CertificateSource](#CertificateSource), [ClientTLS](#ClientTLS), [ListenerTLS](#ListenerTLS), [RoutesTLS](#RoutesTLS).
 | Field | Type | Required | Description |
 | :---- | :--- | :------: | :---------- |
 | `name` | {{< type "string" >}} | Yes | Name of a Secret in the referrer's namespace. |

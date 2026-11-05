@@ -82,7 +82,7 @@ type NatsClusterSpec struct {
 	// cluster controller verifies it against the Secret's ca.crt, or the
 	// system roots without one.
 	// +optional
-	TLS *ListenerTLS `json:"tls,omitempty"`
+	TLS *ClientTLS `json:"tls,omitempty"`
 
 	// Routes configures the route listener; absent, route TLS is on and
 	// self-signed.
@@ -216,6 +216,18 @@ type IssuerReference struct {
 // +kubebuilder:validation:XValidation:rule="has(self.secretRef) != has(self.certManager)",message="set exactly one of secretRef and certManager"
 type ListenerTLS struct {
 	CertificateSource `json:",inline"`
+}
+
+// ClientTLS is TLS on the client listener.
+// +kubebuilder:validation:XValidation:rule="has(self.secretRef) != has(self.certManager)",message="set exactly one of secretRef and certManager"
+type ClientTLS struct {
+	CertificateSource `json:",inline"`
+
+	// AllowNonTLS has the listener take clients that connect in the clear
+	// beside those that connect over TLS. The cluster controller then
+	// connects in the clear, and status.endpoints.client reads nats://.
+	// +optional
+	AllowNonTLS bool `json:"allowNonTLS,omitempty"`
 }
 
 // Routes configures the route listener.

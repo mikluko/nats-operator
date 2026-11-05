@@ -97,6 +97,11 @@ With `spec.tls` set, `status.endpoints.client` starts with `tls://`.
 Every client then needs the CA that issued the certificate, and that includes each `NatsConnection` that the JetStream controller and the auth controller use, which takes it under `tls.ca`.
 The cluster controller takes the CA from `ca.crt` of the certificate Secret.
 
+With `spec.tls.allowNonTLS: true`, the listener also takes clients that connect in the clear, on the same port.
+A client that dials `tls://` connects over TLS and a client that dials `nats://` connects in the clear.
+The cluster controller connects in the clear, and `status.endpoints.client` starts with `nats://`.
+This is for a certificate whose names do not cover the client Service, such as one a public issuer issued for a name on the internet, while the clients inside the Kubernetes cluster dial the Service.
+
 ## Upgrade
 
 Helm installs the CRDs in the chart's `crds/` directory on the first install only.

@@ -636,7 +636,7 @@ func TestEnvtestReconcile(t *testing.T) {
 
 	t.Run("client TLS", func(t *testing.T) {
 		nc := newCluster(t, "clienttls", func(nc *clusterv1beta1.NatsCluster) {
-			nc.Spec.TLS = &clusterv1beta1.ListenerTLS{CertificateSource: clusterv1beta1.CertificateSource{SecretRef: &natsv1beta1.SecretReference{Name: "clients"}}}
+			nc.Spec.TLS = &clusterv1beta1.ClientTLS{CertificateSource: clusterv1beta1.CertificateSource{SecretRef: &natsv1beta1.SecretReference{Name: "clients"}}}
 		})
 		_, got := reconcile(t, nc)
 		condition(t, got, ConditionProgressing, metav1.ConditionTrue, ReasonClientCertNotReady)
@@ -655,6 +655,12 @@ func TestEnvtestReconcile(t *testing.T) {
 		var cfg Config
 		require.NoError(t, json.Unmarshal([]byte(cm.Data[configFile]), &cfg))
 		require.Equal(t, &ListenerTLSConfig{CertFile: clientTLSDir + "/tls.crt", KeyFile: clientTLSDir + "/tls.key"}, cfg.TLS)
+		require.False(t, cfg.AllowNonTLS)
+
+		got.Spec.TLS.AllowNonTLS = true
+		require.NoError(t, c.Update(ctx, got))
+		_, got = reconcile(t, got)
+		require.Equal(t, "nats://demo.clienttls.svc:4222", got.Status.Endpoints.Client)
 
 		got.Spec.TLS.CertManager = &clusterv1beta1.CertManagerCertificate{IssuerRef: clusterv1beta1.IssuerReference{Name: "ca"}}
 		err = c.Update(ctx, got)
