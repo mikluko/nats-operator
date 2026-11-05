@@ -135,6 +135,7 @@ func configCases(nc *clusterv1beta1.NatsCluster) []configCase {
 			setPath(m, "jetstream.store_dir", t.TempDir())
 		}, "jetstream.store_dir is restart-only"},
 		{"server_name", none, set("server_name", "other"), "server_name is restart-only"},
+		{"allow_non_tls", none, set("allow_non_tls", true), "allow_non_tls is restart-only"},
 		{"gateway added", none, testGateway("nats://127.0.0.1:1"), "gateway is restart-only"},
 		{"gateway remote", testGateway("nats://127.0.0.1:2"), otherRemote, "gateway.gateways is restart-only"},
 		{"TLS certificate and gateway remote", testGateway("nats://127.0.0.1:2"), func(t *testing.T, m map[string]any) {

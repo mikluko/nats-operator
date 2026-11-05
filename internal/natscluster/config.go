@@ -28,6 +28,7 @@ type Config struct {
 	JetStream      *JetStreamConfig   `json:"jetstream,omitempty"`
 	Leafnodes      *LeafnodesConfig   `json:"leafnodes,omitempty"`
 	TLS            *ListenerTLSConfig `json:"tls,omitempty"`
+	AllowNonTLS    bool               `json:"allow_non_tls,omitempty"`
 
 	Operator        string            `json:"operator,omitempty"`
 	SystemAccount   string            `json:"system_account,omitempty"`
@@ -239,11 +240,12 @@ func serverConfig(nc *clusterv1beta1.NatsCluster, in Inputs, server string, l La
 	if revision != "" {
 		c.ServerMetadata = map[string]string{MetadataConfigRevision: revision}
 	}
-	if nc.Spec.TLS != nil {
+	if t := nc.Spec.TLS; t != nil {
 		c.TLS = &ListenerTLSConfig{
 			CertFile: l.ClientTLSDir + "/" + corev1.TLSCertKey,
 			KeyFile:  l.ClientTLSDir + "/" + corev1.TLSPrivateKeyKey,
 		}
+		c.AllowNonTLS = t.AllowNonTLS
 	}
 	if routeTLSEnabled(&nc.Spec) {
 		c.Cluster.TLS = &TLSConfig{

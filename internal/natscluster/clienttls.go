@@ -8,13 +8,21 @@ import (
 	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
 )
 
-// clientURL is the URL of nc's client Service, tls:// under client TLS.
+// clientURL is the URL of nc's client Service: tls:// under client TLS,
+// nats:// without it or while plain clients are allowed.
 func clientURL(nc *clusterv1beta1.NatsCluster) string {
-	scheme := "nats"
-	if nc.Spec.TLS != nil {
-		scheme = "tls"
+	scheme := "tls"
+	if clientPlain(nc) {
+		scheme = "nats"
 	}
 	return fmt.Sprintf("%s://%s.%s.svc:%d", scheme, clientServiceName(nc), nc.Namespace, PortClient)
+}
+
+// clientPlain reports whether the cluster controller connects to nc's
+// client Service in the clear: without client TLS, or with plain clients
+// allowed.
+func clientPlain(nc *clusterv1beta1.NatsCluster) bool {
+	return nc.Spec.TLS == nil || nc.Spec.TLS.AllowNonTLS
 }
 
 func clientCertSecretName(nc *clusterv1beta1.NatsCluster) string { return nc.Name + "-client-tls" }

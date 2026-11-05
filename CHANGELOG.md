@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A `NatsCluster` with `spec.tls.allowNonTLS: true` takes clients that connect in the clear on the client port beside those that connect over TLS; the cluster controller then connects in the clear, and `status.endpoints.client` reads `nats://`.
+
 ## [0.5.1] - 2026-10-05
 
 ### Fixed

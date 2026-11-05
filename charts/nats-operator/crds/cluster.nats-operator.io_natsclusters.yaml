@@ -1110,6 +1110,12 @@ spec:
                   cluster controller verifies it against the Secret's ca.crt, or the
                   system roots without one.
                 properties:
+                  allowNonTLS:
+                    description: |-
+                      AllowNonTLS has the listener take clients that connect in the clear
+                      beside those that connect over TLS. The cluster controller then
+                      connects in the clear, and status.endpoints.client reads nats://.
+                    type: boolean
                   certManager:
                     description: CertManager has cert-manager issue the certificate.
                     properties:
