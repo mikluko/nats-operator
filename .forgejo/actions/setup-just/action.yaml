@@ -1,0 +1,23 @@
+name: setup-just
+description: Installs the just release the Justfile is run with, for the runner's architecture.
+runs:
+  using: composite
+  steps:
+    - name: Install just
+      shell: bash
+      env:
+        JUST_VERSION: 1.58.0
+        JUST_SHA256_X86_64: 4a5cc2f53e6f0f8c59092a6cc38291eb729d46a7dd95d3ae582008881b84931d
+        JUST_SHA256_AARCH64: 748237128c4c40cbdabc65e841d05ceba13cc23a91eaba395495894c1d9764df
+      run: | # zizmor: ignore[github-env] the action writes fixed paths under RUNNER_TEMP, nothing a caller passes
+        case "$(uname -m)" in
+          x86_64) arch=x86_64 sum=$JUST_SHA256_X86_64 ;;
+          aarch64|arm64) arch=aarch64 sum=$JUST_SHA256_AARCH64 ;;
+          *) echo "no just build for $(uname -m)" >&2; exit 1 ;;
+        esac
+        curl -fsSLo "$RUNNER_TEMP/just.tar.gz" \
+          "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${arch}-unknown-linux-musl.tar.gz"
+        echo "$sum  $RUNNER_TEMP/just.tar.gz" | sha256sum -c --quiet
+        mkdir -p "$RUNNER_TEMP/just"
+        tar -xzf "$RUNNER_TEMP/just.tar.gz" -C "$RUNNER_TEMP/just" just
+        echo "$RUNNER_TEMP/just" >>"$GITHUB_PATH"

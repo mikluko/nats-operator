@@ -28,9 +28,7 @@ jobs:
             ~/.cache/go-build
           key: go-${{ runner.os }}-${{ hashFiles('go.sum', 'hack/tools/go.sum') }}-${{ github.sha }}
           restore-keys: go-${{ runner.os }}-${{ hashFiles('go.sum', 'hack/tools/go.sum') }}-
-      - uses: https://github.com/extractions/setup-just@v4
-        with:
-          just-version: 1.58.0
+      - uses: ./.forgejo/actions/setup-just
       - uses: ./.forgejo/actions/setup-hugo
       - run: just verify
       - run: just build
@@ -63,9 +61,7 @@ jobs:
             ~/.cache/go-build
           key: go-race-${{ runner.os }}-${{ hashFiles('go.sum', 'hack/tools/go.sum') }}-${{ github.sha }}
           restore-keys: go-race-${{ runner.os }}-${{ hashFiles('go.sum', 'hack/tools/go.sum') }}-
-      - uses: https://github.com/extractions/setup-just@v4
-        with:
-          just-version: 1.58.0
+      - uses: ./.forgejo/actions/setup-just
       - uses: ./.forgejo/actions/setup-hugo
       - run: just test -race
       - if: github.ref == 'refs/heads/main' && steps.go-cache.outputs.cache-hit != 'true'
@@ -95,9 +91,7 @@ jobs:
             ~/.cache/go-build
           key: go-envtest-${{ runner.os }}-${{ hashFiles('go.sum', 'hack/tools/go.sum') }}-${{ github.sha }}
           restore-keys: go-envtest-${{ runner.os }}-${{ hashFiles('go.sum', 'hack/tools/go.sum') }}-
-      - uses: https://github.com/extractions/setup-just@v4
-        with:
-          just-version: 1.58.0
+      - uses: ./.forgejo/actions/setup-just
       - run: just envtest
       - if: github.ref == 'refs/heads/main' && steps.go-cache.outputs.cache-hit != 'true'
         uses: https://github.com/actions/cache/save@v6
@@ -189,9 +183,7 @@ jobs:
       - uses: https://github.com/azure/setup-helm@v5
         with:
           version: v4.3.0
-      - uses: https://github.com/extractions/setup-just@v4
-        with:
-          just-version: 1.58.0
+      - uses: ./.forgejo/actions/setup-just
       - name: Install helm-unittest
         env:
           HELM_UNITTEST_VERSION: v1.1.2
@@ -241,12 +233,25 @@ jobs:
           chmod +x "$RUNNER_TEMP/bin/kubectl"
           go build -o "$RUNNER_TEMP/bin/kind" sigs.k8s.io/kind
           echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
+      # The privileged runner is a pod without systemd, so the service is
+      # started by hand there; a host with systemd gets its socket unit.
       - name: Rootful podman
         run: |
           if ! sudo test -S /run/podman/podman.sock; then
-            sudo apt-get update
-            sudo apt-get install -y podman
-            sudo systemctl enable --now podman.socket
+            if ! command -v podman >/dev/null; then
+              sudo apt-get update
+              sudo apt-get install -y podman
+            fi
+            if [ -d /run/systemd/system ]; then
+              sudo systemctl enable --now podman.socket
+            else
+              sudo mkdir -p /run/podman
+              sudo sh -c 'nohup podman system service --time=0 unix:///run/podman/podman.sock >/var/log/podman-service.log 2>&1 &'
+              for _ in $(seq 1 30); do
+                sudo test -S /run/podman/podman.sock && break
+                sleep 1
+              done
+            fi
           fi
           sudo test -S /run/podman/podman.sock
       - name: Create the kind cluster
@@ -288,4 +293,4 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: https://forge.sarak.sh/actions/changelog@v1
+      - uses: https://sarak.sh/actions/changelog@v1

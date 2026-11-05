@@ -1,6 +1,6 @@
 # docs
 
-This directory is the Hugo site published at <https://nats-operator.sarak.sh/>.
+This directory is the Hugo site published at <https://sarak.sh/nats-operator/>.
 Its theme is this directory's own `layouts/` and `assets/`, with the Geist Mono and Manrope fonts under `static/fonts/` beside their licenses.
 This guide shows you how to build the site and check it before you open a pull request.
 [`STYLE.md`](STYLE.md) is the writing style for the site's pages.

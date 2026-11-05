@@ -31,5 +31,5 @@ Table: The switch of each controller.
 
 ## Documentation
 
-[Install](https://nats-operator.sarak.sh/docs/install/) has the prerequisites, and how to upgrade and uninstall.
-[Chart and controller flags](https://nats-operator.sarak.sh/docs/reference/chart/) lists every value.
+[Install](https://sarak.sh/nats-operator/docs/install/) has the prerequisites, and how to upgrade and uninstall.
+[Chart and controller flags](https://sarak.sh/nats-operator/docs/reference/chart/) lists every value.

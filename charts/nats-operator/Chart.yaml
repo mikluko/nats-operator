@@ -5,11 +5,11 @@ type: application
 version: 0.1.0
 appVersion: "0.1.0"
 kubeVersion: ">=1.33.0-0"
-home: https://nats-operator.sarak.sh/
+home: https://sarak.sh/nats-operator/
 sources:
-  - https://forge.sarak.sh/mikluko/nats-operator
+  - https://sarak.sh/mikluko/nats-operator
 annotations:
   artifacthub.io/license: Apache-2.0
 maintainers:
   - name: mikluko
-    url: https://forge.sarak.sh/mikluko
+    url: https://sarak.sh/mikluko

@@ -26,16 +26,16 @@ helm test nats-operator --namespace nats-operator --logs
 
 To leave a controller out, set `cluster.enabled`, `auth.enabled` or `jetstream.enabled` to `false`.
 
-Then follow [the quickstart](https://nats-operator.sarak.sh/docs/stories/01-quickstart/) to deploy a NATS cluster with JetStream.
+Then follow [the quickstart](https://sarak.sh/nats-operator/docs/stories/01-quickstart/) to deploy a NATS cluster with JetStream.
 
 ## Documentation
 
 The site documents `main`.
 For a release, read `docs/` at its tag.
 
-- [Install](https://nats-operator.sarak.sh/docs/install/): prerequisites, install, upgrade and uninstall.
-- [Stories](https://nats-operator.sarak.sh/docs/stories/): the quickstart tutorial, then one guide per task.
-- Reference: [API](https://nats-operator.sarak.sh/docs/reference/api/), [NATS permissions](https://nats-operator.sarak.sh/docs/reference/nats-permissions/), [telemetry](https://nats-operator.sarak.sh/docs/reference/telemetry/), and the [chart's values, flags and RBAC](https://nats-operator.sarak.sh/docs/reference/chart/).
+- [Install](https://sarak.sh/nats-operator/docs/install/): prerequisites, install, upgrade and uninstall.
+- [Stories](https://sarak.sh/nats-operator/docs/stories/): the quickstart tutorial, then one guide per task.
+- Reference: [API](https://sarak.sh/nats-operator/docs/reference/api/), [NATS permissions](https://sarak.sh/nats-operator/docs/reference/nats-permissions/), [telemetry](https://sarak.sh/nats-operator/docs/reference/telemetry/), and the [chart's values, flags and RBAC](https://sarak.sh/nats-operator/docs/reference/chart/).
 - [Design](docs/design/v1.md) and [ADRs](docs/adr/).
 - [Security](SECURITY.md): how to report a vulnerability, the trust boundaries, and how to verify a release.
 

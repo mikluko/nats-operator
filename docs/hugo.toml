@@ -1,4 +1,4 @@
-baseURL = "https://nats-operator.sarak.sh/"
+baseURL = "https://sarak.sh/nats-operator/"
 title = "nats-operator"
 locale = "en"
 disableKinds = ["taxonomy", "term", "RSS", "sitemap"]
@@ -23,7 +23,7 @@ enableGitInfo = true
 
 [[menus.main]]
   name = "Source"
-  url = "https://forge.sarak.sh/mikluko/nats-operator"
+  url = "https://sarak.sh/mikluko/nats-operator"
   weight = 2
 
 [markup.highlight]

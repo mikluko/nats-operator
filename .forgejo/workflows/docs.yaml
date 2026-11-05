@@ -26,9 +26,7 @@ jobs:
         with:
           go-version-file: go.mod
       - uses: ./.forgejo/actions/setup-hugo
-      - uses: https://github.com/extractions/setup-just@v4
-        with:
-          just-version: 1.58.0
+      - uses: ./.forgejo/actions/setup-just
       - name: Site check
         run: just site-check
       - name: Build

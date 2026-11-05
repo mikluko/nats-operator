@@ -35,7 +35,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - id: changelog
-        uses: https://forge.sarak.sh/actions/changelog@v1
+        uses: https://sarak.sh/actions/changelog@v1
         with:
           due-prerelease: true
       - id: version

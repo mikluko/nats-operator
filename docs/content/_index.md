@@ -23,7 +23,7 @@ params:
       page: /docs/reference/api
     - name: Source
       icon: code
-      url: https://forge.sarak.sh/mikluko/nats-operator
+      url: https://sarak.sh/mikluko/nats-operator
   controllersHeading: Controllers
   controllers:
     - name: Cluster controller
@@ -79,4 +79,4 @@ Then follow [the quickstart]({{< relref "docs/stories/01-quickstart" >}}) to dep
 [Install]({{< relref "docs/install" >}}) shows how to install a subset of the controllers, upgrade and uninstall.
 [Chart and controller flags]({{< relref "docs/reference/chart" >}}) lists the chart's values and the RBAC of each controller.
 The images and the chart are signed with cosign.
-[Verifying a release](https://forge.sarak.sh/mikluko/nats-operator/src/branch/main/SECURITY.md#verifying-a-release) has the commands that check the signatures.
+[Verifying a release](https://sarak.sh/mikluko/nats-operator/src/branch/main/SECURITY.md#verifying-a-release) has the commands that check the signatures.

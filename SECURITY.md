@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Report a vulnerability privately to the maintainer, [mikluko](https://forge.sarak.sh/mikluko).
+Report a vulnerability privately to the maintainer, [mikluko](https://sarak.sh/mikluko).
 Do not open a public issue.
 You get an acknowledgement within seven days.
 

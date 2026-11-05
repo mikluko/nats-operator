@@ -59,9 +59,9 @@
     },
     {
       "customType": "regex",
-      "description": "just, wherever setup-just installs it",
-      "managerFilePatterns": ["/^\\.forgejo/workflows/[^/]+\\.yaml$/"],
-      "matchStrings": ["uses: https://github\\.com/extractions/setup-just@\\S+\\s+with:\\s+just-version: (?<currentValue>\\S+)"],
+      "description": "just; the PR fails ci until JUST_SHA256_X86_64 and JUST_SHA256_AARCH64 are the new release's",
+      "managerFilePatterns": ["/^\\.forgejo/actions/setup-just/action\\.yaml$/"],
+      "matchStrings": ["JUST_VERSION: (?<currentValue>\\S+)"],
       "depNameTemplate": "casey/just",
       "datasourceTemplate": "github-releases"
     },

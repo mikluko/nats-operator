@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** the Go module path is `sarak.sh/mikluko/nats-operator`.
 - **Breaking:** the controller images are published at `sarak.sh/mikluko/nats-operator/<controller>` and the chart at `oci://sarak.sh/mikluko/nats-operator/charts/nats-operator`, and the chart's `image.repository` values default to those images.
 - The images and the chart are signed with the cosign key that `cosign.pub` verifies, in place of keyless signatures and build provenance attestations; `SECURITY.md` has the commands.
+- The documentation site is at <https://sarak.sh/nats-operator/>.
 
 ## [0.5.1] - 2026-10-05
 
@@ -234,12 +235,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `cluster-controller`, `jetstream-controller` and `auth-controller` presets subscribe only to their own inbox, `_INBOX.<preset>.>`; a JetStream controller account user whose `permissions` restrict subscriptions must allow `_INBOX.jetstream-controller.>`.
 - The `readonly` preset subscribes only to its own inbox, `_INBOX.readonly.>`, which its client dials with.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/nats-operator/compare/v0.5.1...HEAD
-[0.5.1]: https://forge.sarak.sh/mikluko/nats-operator/compare/v0.5.0...v0.5.1
-[0.5.0]: https://forge.sarak.sh/mikluko/nats-operator/compare/v0.4.0...v0.5.0
-[0.4.0]: https://forge.sarak.sh/mikluko/nats-operator/compare/v0.3.1...v0.4.0
-[0.3.1]: https://forge.sarak.sh/mikluko/nats-operator/compare/v0.3.0...v0.3.1
-[0.3.0]: https://forge.sarak.sh/mikluko/nats-operator/compare/v0.2.0...v0.3.0
-[0.2.0]: https://forge.sarak.sh/mikluko/nats-operator/compare/v0.1.1...v0.2.0
-[0.1.1]: https://forge.sarak.sh/mikluko/nats-operator/compare/v0.1.0...v0.1.1
-[0.1.0]: https://forge.sarak.sh/mikluko/nats-operator/releases/tag/v0.1.0
+[Unreleased]: https://sarak.sh/mikluko/nats-operator/compare/v0.5.1...HEAD
+[0.5.1]: https://sarak.sh/mikluko/nats-operator/compare/v0.5.0...v0.5.1
+[0.5.0]: https://sarak.sh/mikluko/nats-operator/compare/v0.4.0...v0.5.0
+[0.4.0]: https://sarak.sh/mikluko/nats-operator/compare/v0.3.1...v0.4.0
+[0.3.1]: https://sarak.sh/mikluko/nats-operator/compare/v0.3.0...v0.3.1
+[0.3.0]: https://sarak.sh/mikluko/nats-operator/compare/v0.2.0...v0.3.0
+[0.2.0]: https://sarak.sh/mikluko/nats-operator/compare/v0.1.1...v0.2.0
+[0.1.1]: https://sarak.sh/mikluko/nats-operator/compare/v0.1.0...v0.1.1
+[0.1.0]: https://sarak.sh/mikluko/nats-operator/releases/tag/v0.1.0

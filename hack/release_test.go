@@ -103,14 +103,14 @@ func workflowFiles(t *testing.T) []string {
 // is the forge's own changelog action.
 const (
 	gh              = "https://github.com/"
-	changelogAction = "https://forge.sarak.sh/actions/changelog@"
+	changelogAction = "https://sarak.sh/actions/changelog@"
 )
 
 // TestWorkflows_ActionsByURL holds every action a workflow uses to a full URL
 // at a ref, or to a local action, and every called workflow to a local one;
 // Forgejo resolves a bare owner/repo against its own default instead.
 func TestWorkflows_ActionsByURL(t *testing.T) {
-	remote := regexp.MustCompile(`^https://(github\.com|forge\.sarak\.sh)/[^/@\s]+/[^@\s]+@\S+$`)
+	remote := regexp.MustCompile(`^https://(github\.com|sarak\.sh)/[^/@\s]+/[^@\s]+@\S+$`)
 	for _, name := range workflowFiles(t) {
 		for job, j := range readWorkflow(t, name).Jobs {
 			if j.Uses != "" {
@@ -695,7 +695,6 @@ func TestRenovate_WatchesToolPins(t *testing.T) {
 	inputs := []struct{ prefix, input, dep string }{
 		{gh + "azure/setup-helm@", "version", "helm/helm"},
 		{gh + "ko-build/setup-ko@", "version", "ko-build/ko"},
-		{gh + "extractions/setup-just@", "just-version", "casey/just"},
 	}
 	pinned := map[string]int{}
 	var nodeImages int
@@ -721,6 +720,7 @@ func TestRenovate_WatchesToolPins(t *testing.T) {
 	for _, dep := range []string{
 		"helm-unittest/helm-unittest",
 		"gohugoio/hugo",
+		"casey/just",
 		"helm/chart-testing",
 		"kubernetes/kubernetes",
 		"zizmorcore/zizmor",
