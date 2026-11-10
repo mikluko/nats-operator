@@ -152,7 +152,7 @@ Table: The values of the `helm test` pods. [Helm test](#helm-test) describes the
 |---|---|---|
 | `tests.image.repository` | `busybox` | Image repository of the `helm test` pods. |
 | `tests.image.tag` | `"1.38.0"` | Image tag. |
-| `tests.image.digest` | `"sha256:fd7dc98638c8e305f4dc34e979f1c0fdfdcaeb0fbf8fcff77ae834b6da3d7e6e"` | A digest, as `sha256:<hex>`, appended to the image reference as `@<digest>`. |
+| `tests.image.digest` | `"sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4"` | A digest, as `sha256:<hex>`, appended to the image reference as `@<digest>`. |
 | `tests.image.pullPolicy` | `IfNotPresent` | Image pull policy. |
 
 ## Controller flags
