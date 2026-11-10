@@ -15,11 +15,11 @@ import (
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
-	"github.com/mikluko/nats-operator/internal/conditions"
-	"github.com/mikluko/nats-operator/internal/grant"
-	"github.com/mikluko/nats-operator/internal/jwtplane"
-	"github.com/mikluko/nats-operator/internal/telemetry"
+	authv1beta1 "sarak.sh/mikluko/nats-operator/api/auth/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/conditions"
+	"sarak.sh/mikluko/nats-operator/internal/grant"
+	"sarak.sh/mikluko/nats-operator/internal/jwtplane"
+	"sarak.sh/mikluko/nats-operator/internal/telemetry"
 )
 
 // accountRevocations merges the revocations recorded, those prev carries for

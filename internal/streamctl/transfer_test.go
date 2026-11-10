@@ -16,8 +16,8 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
-	"github.com/mikluko/nats-operator/internal/lifecycle"
+	js "sarak.sh/mikluko/nats-operator/api/jetstream/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/lifecycle"
 )
 
 func TestStreamTransferFromClusterInfo(t *testing.T) {

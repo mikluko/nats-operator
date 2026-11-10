@@ -11,8 +11,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
-	"github.com/mikluko/nats-operator/internal/jwtplane"
+	authv1beta1 "sarak.sh/mikluko/nats-operator/api/auth/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/jwtplane"
 )
 
 // SeedKey is the key a generated seed Secret holds its seed under.

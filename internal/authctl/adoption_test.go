@@ -8,7 +8,7 @@ import (
 	"github.com/nats-io/nkeys"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"sarak.sh/mikluko/nats-operator/internal/jwtplane"
 )
 
 // TestCompareAdoption pins what the first JWT signed from spec loses of the

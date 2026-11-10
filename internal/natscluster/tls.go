@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
+	clusterv1beta1 "sarak.sh/mikluko/nats-operator/api/cluster/v1beta1"
 )
 
 const caKey = "ca.crt"

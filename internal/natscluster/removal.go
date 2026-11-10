@@ -18,8 +18,8 @@ import (
 	k8slabels "k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
-	"github.com/mikluko/nats-operator/internal/sysobs"
+	clusterv1beta1 "sarak.sh/mikluko/nats-operator/api/cluster/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/sysobs"
 )
 
 // ServerAdmin evacuates servers of one NATS cluster and removes them from

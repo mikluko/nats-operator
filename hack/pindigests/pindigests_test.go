@@ -10,7 +10,7 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-const registry = "ghcr.io/mikluko/nats-operator"
+const registry = "sarak.sh/mikluko/nats-operator"
 
 func digest(c byte) string { return "sha256:" + strings.Repeat(string(c), 64) }
 

@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/yaml"
 
-	"github.com/mikluko/nats-operator/internal/e2e"
+	"sarak.sh/mikluko/nats-operator/internal/e2e"
 )
 
 // metricsSecretData returns the stringData of the Secret secret in the

@@ -13,9 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
-	"github.com/mikluko/nats-operator/internal/jwtplane"
-	"github.com/mikluko/nats-operator/internal/natstest"
+	authv1beta1 "sarak.sh/mikluko/nats-operator/api/auth/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/jwtplane"
+	"sarak.sh/mikluko/nats-operator/internal/natstest"
 )
 
 // TestAccountLimits_TiersServed signs an account from tiered limits in spec

@@ -27,10 +27,10 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/yaml"
 
-	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
-	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
-	jetstreamv1beta1 "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
-	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
+	authv1beta1 "sarak.sh/mikluko/nats-operator/api/auth/v1beta1"
+	clusterv1beta1 "sarak.sh/mikluko/nats-operator/api/cluster/v1beta1"
+	jetstreamv1beta1 "sarak.sh/mikluko/nats-operator/api/jetstream/v1beta1"
+	natsv1beta1 "sarak.sh/mikluko/nats-operator/api/nats/v1beta1"
 )
 
 // fixtureScheme returns a scheme holding Kubernetes' kinds and every kind of

@@ -11,9 +11,9 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
 
-	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
-	"github.com/mikluko/nats-operator/internal/authctl"
-	"github.com/mikluko/nats-operator/internal/jwtplane"
+	authv1beta1 "sarak.sh/mikluko/nats-operator/api/auth/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/authctl"
+	"sarak.sh/mikluko/nats-operator/internal/jwtplane"
 )
 
 // testOutsideImports checks that an account's imports from the system

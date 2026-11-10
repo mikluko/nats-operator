@@ -7,7 +7,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
+	js "sarak.sh/mikluko/nats-operator/api/jetstream/v1beta1"
 )
 
 func TestBalancerSet(t *testing.T) {

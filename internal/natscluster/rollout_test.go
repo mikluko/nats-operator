@@ -9,8 +9,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
-	"github.com/mikluko/nats-operator/internal/sysobs"
+	clusterv1beta1 "sarak.sh/mikluko/nats-operator/api/cluster/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/sysobs"
 )
 
 // fakeCluster is a NATS cluster as decide sees it, moved along by the

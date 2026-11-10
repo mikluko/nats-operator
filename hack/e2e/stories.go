@@ -12,8 +12,8 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/mikluko/nats-operator/internal/e2e"
-	"github.com/mikluko/nats-operator/internal/e2e/fixtures"
+	"sarak.sh/mikluko/nats-operator/internal/e2e"
+	"sarak.sh/mikluko/nats-operator/internal/e2e/fixtures"
 )
 
 // Runner timings besides the per-step wait: how long a previous story's

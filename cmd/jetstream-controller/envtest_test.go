@@ -15,12 +15,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
-	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/lifecycle"
-	"github.com/mikluko/nats-operator/internal/manager"
-	"github.com/mikluko/nats-operator/internal/manager/managertest"
-	"github.com/mikluko/nats-operator/internal/manager/secretreads"
-	"github.com/mikluko/nats-operator/internal/natsconn"
+	natsv1beta1 "sarak.sh/mikluko/nats-operator/api/nats/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/lifecycle"
+	"sarak.sh/mikluko/nats-operator/internal/manager"
+	"sarak.sh/mikluko/nats-operator/internal/manager/managertest"
+	"sarak.sh/mikluko/nats-operator/internal/manager/secretreads"
+	"sarak.sh/mikluko/nats-operator/internal/natsconn"
 )
 
 // TestEnvtestSecretMetadata pins that setup, in the manager New builds,

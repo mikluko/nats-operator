@@ -19,11 +19,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/yaml"
 
-	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
-	"github.com/mikluko/nats-operator/internal/manager"
-	"github.com/mikluko/nats-operator/internal/manager/managertest"
-	"github.com/mikluko/nats-operator/internal/manager/secretreads"
-	"github.com/mikluko/nats-operator/internal/natscluster"
+	clusterv1beta1 "sarak.sh/mikluko/nats-operator/api/cluster/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/manager"
+	"sarak.sh/mikluko/nats-operator/internal/manager/managertest"
+	"sarak.sh/mikluko/nats-operator/internal/manager/secretreads"
+	"sarak.sh/mikluko/nats-operator/internal/natscluster"
 )
 
 const (

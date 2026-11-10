@@ -25,13 +25,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
-	natsv1beta1 "github.com/mikluko/nats-operator/api/nats/v1beta1"
-	"github.com/mikluko/nats-operator/internal/conditions"
-	"github.com/mikluko/nats-operator/internal/grant"
-	"github.com/mikluko/nats-operator/internal/refindex"
-	"github.com/mikluko/nats-operator/internal/sysobs"
-	"github.com/mikluko/nats-operator/internal/telemetry"
+	clusterv1beta1 "sarak.sh/mikluko/nats-operator/api/cluster/v1beta1"
+	natsv1beta1 "sarak.sh/mikluko/nats-operator/api/nats/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/conditions"
+	"sarak.sh/mikluko/nats-operator/internal/grant"
+	"sarak.sh/mikluko/nats-operator/internal/refindex"
+	"sarak.sh/mikluko/nats-operator/internal/sysobs"
+	"sarak.sh/mikluko/nats-operator/internal/telemetry"
 )
 
 // Observer observes the NATS cluster a NatsCluster deployed: its Raft

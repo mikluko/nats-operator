@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	authv1beta1 "github.com/mikluko/nats-operator/api/auth/v1beta1"
+	authv1beta1 "sarak.sh/mikluko/nats-operator/api/auth/v1beta1"
 )
 
 func TestGeneratedSecretName_Injective(t *testing.T) {

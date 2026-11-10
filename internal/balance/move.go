@@ -7,7 +7,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
-	"github.com/mikluko/nats-operator/internal/jsapi"
+	"sarak.sh/mikluko/nats-operator/internal/jsapi"
 )
 
 // A LeaderMover makes leader moves.

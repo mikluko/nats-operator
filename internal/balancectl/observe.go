@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/mikluko/nats-operator/internal/balance"
-	"github.com/mikluko/nats-operator/internal/sysobs"
+	"sarak.sh/mikluko/nats-operator/internal/balance"
+	"sarak.sh/mikluko/nats-operator/internal/sysobs"
 )
 
 // SystemObserver is a [balance.Observer] of one NATS cluster over every

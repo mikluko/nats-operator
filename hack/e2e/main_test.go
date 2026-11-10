@@ -303,7 +303,7 @@ func TestMachineVersions(t *testing.T) {
 		got[tool] = version
 	}
 
-	b, err := os.ReadFile("../../.github/workflows/ci.yaml")
+	b, err := os.ReadFile("../../.forgejo/workflows/ci.yaml")
 	require.NoError(t, err)
 	var ci struct {
 		Jobs map[string]struct {
@@ -317,7 +317,7 @@ func TestMachineVersions(t *testing.T) {
 	var helms int
 	for job, j := range ci.Jobs {
 		for _, s := range j.Steps {
-			if strings.HasPrefix(s.Uses, "azure/setup-helm@") {
+			if strings.HasPrefix(s.Uses, "https://github.com/azure/setup-helm@") {
 				helms++
 				require.Equal(t, got["helm"], s.With["version"], "ci.yaml job %s", job)
 			}

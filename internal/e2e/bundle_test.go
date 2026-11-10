@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/nats-operator/internal/e2e/fixtures"
+	"sarak.sh/mikluko/nats-operator/internal/e2e/fixtures"
 )
 
 const storiesDir = "../../docs/content/docs/stories"

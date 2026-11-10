@@ -13,7 +13,7 @@ You need Kubernetes 1.33, Helm 3.14 and nats-server 2.15.0, or later.
 To install the chart with all three controllers, run this command with `<version>` replaced by a release version, such as `0.1.1`:
 
 ```sh
-helm install nats-operator oci://ghcr.io/mikluko/nats-operator/charts/nats-operator \
+helm install nats-operator oci://sarak.sh/mikluko/nats-operator/charts/nats-operator \
   --version <version> \
   --namespace nats-operator --create-namespace
 ```
@@ -31,5 +31,5 @@ Table: The switch of each controller.
 
 ## Documentation
 
-[Install](https://mikluko.github.io/nats-operator/docs/install/) has the prerequisites, and how to upgrade and uninstall.
-[Chart and controller flags](https://mikluko.github.io/nats-operator/docs/reference/chart/) lists every value.
+[Install](https://sarak.sh/nats-operator/docs/install/) has the prerequisites, and how to upgrade and uninstall.
+[Chart and controller flags](https://sarak.sh/nats-operator/docs/reference/chart/) lists every value.

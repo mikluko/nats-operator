@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-const module = "github.com/mikluko/nats-operator"
+const module = "sarak.sh/mikluko/nats-operator"
 
 func main() {
 	if err := run(); err != nil {

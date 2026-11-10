@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"github.com/mikluko/nats-operator/internal/telemetry"
+	"sarak.sh/mikluko/nats-operator/internal/telemetry"
 )
 
 const readyWait = time.Second

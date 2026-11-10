@@ -20,7 +20,7 @@ import (
 	"golang.org/x/mod/semver"
 	"sigs.k8s.io/yaml"
 
-	"github.com/mikluko/nats-operator/internal/e2e"
+	"sarak.sh/mikluko/nats-operator/internal/e2e"
 )
 
 type step struct {
@@ -65,27 +65,88 @@ type workflow struct {
 	Env         map[string]string `json:"env"`
 	Permissions map[string]string `json:"permissions"`
 	Jobs        map[string]struct {
+		RunsOn      string            `json:"runs-on"`
 		If          string            `json:"if"`
 		Needs       needs             `json:"needs"`
 		Permissions map[string]string `json:"permissions"`
 		Outputs     map[string]string `json:"outputs"`
 		Env         map[string]string `json:"env"`
-		Strategy    struct {
-			Matrix map[string]any `json:"matrix"`
-		} `json:"strategy"`
-		Steps []step            `json:"steps"`
-		Uses  string            `json:"uses"`
-		With  map[string]string `json:"with"`
+		Steps       []step            `json:"steps"`
+		Uses        string            `json:"uses"`
+		With        inputs            `json:"with"`
 	} `json:"jobs"`
 }
 
 func readWorkflow(t *testing.T, name string) workflow {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("../.github/workflows", name))
+	b, err := os.ReadFile(filepath.Join("../.forgejo/workflows", name))
 	require.NoError(t, err)
 	var wf workflow
 	require.NoError(t, yaml.Unmarshal(b, &wf))
 	return wf
+}
+
+// workflowFiles returns the base name of every workflow under .forgejo/workflows.
+func workflowFiles(t *testing.T) []string {
+	t.Helper()
+	files, err := filepath.Glob("../.forgejo/workflows/*.yaml")
+	require.NoError(t, err)
+	require.NotEmpty(t, files)
+	names := make([]string, len(files))
+	for i, f := range files {
+		names[i] = filepath.Base(f)
+	}
+	return names
+}
+
+// gh prefixes an action Forgejo resolves from github.com, and changelogAction
+// is the forge's own changelog action.
+const (
+	gh              = "https://github.com/"
+	changelogAction = "https://sarak.sh/actions/changelog@"
+)
+
+// TestWorkflows_ActionsByURL holds every action a workflow uses to a full URL
+// at a ref, or to a local action, and every called workflow to a local one;
+// Forgejo resolves a bare owner/repo against its own default instead.
+func TestWorkflows_ActionsByURL(t *testing.T) {
+	remote := regexp.MustCompile(`^https://(github\.com|sarak\.sh)/[^/@\s]+/[^@\s]+@\S+$`)
+	for _, name := range workflowFiles(t) {
+		for job, j := range readWorkflow(t, name).Jobs {
+			if j.Uses != "" {
+				require.True(t, strings.HasPrefix(j.Uses, "./.forgejo/workflows/"), "%s job %s: %s", name, job, j.Uses)
+			}
+			for _, s := range j.Steps {
+				if s.Uses == "" || strings.HasPrefix(s.Uses, "./.forgejo/actions/") {
+					continue
+				}
+				require.Regexp(t, remote, s.Uses, "%s job %s", name, job)
+			}
+		}
+	}
+}
+
+// TestWorkflows_RunnerLabels pins the jobs that need kind on rootful podman,
+// the acceptance stories and the chart install, to the privileged runner, and
+// every other job to the default one.
+func TestWorkflows_RunnerLabels(t *testing.T) {
+	privileged := map[string]bool{"e2e.yaml stories": true, "ci.yaml chart-install": true}
+	var seen int
+	for _, name := range workflowFiles(t) {
+		for job, j := range readWorkflow(t, name).Jobs {
+			if j.Uses != "" {
+				require.Empty(t, j.RunsOn, "%s job %s calls a workflow, whose jobs pick their runners", name, job)
+				continue
+			}
+			want := "ubuntu-latest"
+			if privileged[name+" "+job] {
+				want = "privileged"
+				seen++
+			}
+			require.Equal(t, want, j.RunsOn, "%s job %s", name, job)
+		}
+	}
+	require.Equal(t, len(privileged), seen)
 }
 
 // TestRelease_FailOnAndCIName holds cut and release to a changelog action that
@@ -96,7 +157,7 @@ func TestRelease_FailOnAndCIName(t *testing.T) {
 		{"release-roll.yaml", "plan"},
 	} {
 		changelog := stepByID(t, readWorkflow(t, tc.workflow).Jobs[tc.job].Steps, "changelog")
-		require.True(t, strings.HasPrefix(changelog.Uses, "mikluko/action-changelog@"), changelog.Uses)
+		require.True(t, strings.HasPrefix(changelog.Uses, changelogAction), changelog.Uses)
 		require.Contains(t, []string{"", "error"}, changelog.With["fail-on"], tc.workflow)
 	}
 }
@@ -121,7 +182,7 @@ func TestE2E_Nightly(t *testing.T) {
 			} `yaml:"workflow_dispatch"`
 		} `yaml:"on"`
 	}
-	b, err := os.ReadFile("../.github/workflows/e2e.yaml")
+	b, err := os.ReadFile("../.forgejo/workflows/e2e.yaml")
 	require.NoError(t, err)
 	require.NoError(t, yamlv3.Unmarshal(b, &e2eWorkflow))
 	require.Len(t, e2eWorkflow.On.Schedule, 2)
@@ -146,6 +207,20 @@ func TestE2E_Nightly(t *testing.T) {
 	require.Equal(t, "${{ github.event_name == 'schedule' && (github.event.schedule == '"+weekly+"' && '3' || '2') || inputs.clusters || '1' }}", run.Env["E2E_CLUSTERS"])
 	require.Equal(t, "${{ inputs.stories }}", run.Env["E2E_STORIES"])
 	require.Equal(t, "${{ inputs.watch-namespaces }}", run.Env["E2E_WATCH_NAMESPACES"])
+}
+
+// TestCI_AcceptanceBothScopes pins that ci runs the first story through e2e.yaml
+// once with the chart watching every namespace and once watching the stories'.
+func TestCI_AcceptanceBothScopes(t *testing.T) {
+	var scopes []string
+	for _, j := range readWorkflow(t, "ci.yaml").Jobs {
+		if j.Uses != "./.forgejo/workflows/e2e.yaml" {
+			continue
+		}
+		require.Equal(t, "1", j.With["stories"])
+		scopes = append(scopes, j.With["watch-namespaces"])
+	}
+	require.ElementsMatch(t, []string{"false", "true"}, scopes)
 }
 
 func stepByID(t *testing.T, steps []step, id string) step {
@@ -198,7 +273,7 @@ func TestRelease_PublishesWhatTheChartPulls(t *testing.T) {
 	}
 
 	registry := wf.Env["REGISTRY"]
-	require.Equal(t, "ghcr.io/mikluko/nats-operator", registry)
+	require.Equal(t, "sarak.sh/mikluko/nats-operator", registry)
 	var pushed []string
 	for _, c := range controllers(t) {
 		pushed = append(pushed, registry+"/"+c)
@@ -263,14 +338,16 @@ func TestRelease_OneDigestList(t *testing.T) {
 	}
 	require.Equal(t, 1, builds)
 	require.Equal(t, 1, signs)
-	require.Equal(t, "${{ fromJSON(needs.images.outputs.digests) }}", wf.Jobs["provenance"].Strategy.Matrix["subject"])
 }
 
-// TestDocs_BuildJob holds the Pages build job to the permission
-// configure-pages reads the site with, and to one Hugo build on a pull request.
+// TestDocs_BuildJob holds the docs job to checking the site and building it
+// on every run, then building its image for both platforms Flux may schedule
+// it on, tagged main-<sha>-<unix time>, and pushing it only on a push.
 func TestDocs_BuildJob(t *testing.T) {
-	build := readWorkflow(t, "docs.yaml").Jobs["build"]
-	require.Equal(t, map[string]string{"contents": "read", "pages": "read"}, build.Permissions)
+	wf := readWorkflow(t, "docs.yaml")
+	require.Equal(t, "sarak.sh/mikluko/nats-operator/docs", wf.Env["IMAGE"])
+	build := wf.Jobs["build"]
+	require.Empty(t, build.Permissions)
 
 	var hugo []step
 	for _, s := range build.Steps {
@@ -282,10 +359,32 @@ func TestDocs_BuildJob(t *testing.T) {
 	require.Contains(t, hugo[0].Run, "just site-check")
 	require.Empty(t, hugo[0].If)
 	require.Empty(t, hugo[1].If)
+	require.NotContains(t, hugo[1].Run, "--baseURL")
+
+	login := stepByName(t, build.Steps, "Log in")
+	require.Equal(t, "github.event_name == 'push'", login.If)
+	require.Equal(t, "${{ secrets.REGISTRY_TOKEN }}", login.Env["TOKEN"])
+	require.Contains(t, login.Run, "docker login sarak.sh --username agent --password-stdin")
+
+	image := stepByName(t, build.Steps, "Image")
+	require.Empty(t, image.If)
+	require.Equal(t, "${{ github.event_name == 'push' }}", image.Env["PUSH"])
+	require.Contains(t, image.Run, `if [ "$PUSH" = true ]; then push=--push; fi`)
+	require.Contains(t, image.Run, "docker buildx build $push")
+	require.Contains(t, image.Run, "--platform linux/amd64,linux/arm64")
+	require.Contains(t, image.Run, `--tag "$IMAGE:main-${GITHUB_SHA::7}-$(date +%s)"`)
+	require.Contains(t, image.Run, "--file docs/Containerfile docs")
 }
 
-// TestDocs_Deploy pins that the site deploys from the docs workflow on a push
-// to main, and that no release job deploys it.
+// TestDocs_ImageBasePinned holds the site image's base to a digest.
+func TestDocs_ImageBasePinned(t *testing.T) {
+	b, err := os.ReadFile("../docs/Containerfile")
+	require.NoError(t, err)
+	require.Regexp(t, `(?m)^FROM \S+@sha256:[0-9a-f]{64}$`, string(b))
+}
+
+// TestDocs_Deploy pins that the site's image is built from the docs workflow
+// on a push to main, and that no release job builds it.
 func TestDocs_Deploy(t *testing.T) {
 	var docs struct {
 		On struct {
@@ -294,7 +393,7 @@ func TestDocs_Deploy(t *testing.T) {
 			} `yaml:"push"`
 		} `yaml:"on"`
 	}
-	b, err := os.ReadFile("../.github/workflows/docs.yaml")
+	b, err := os.ReadFile("../.forgejo/workflows/docs.yaml")
 	require.NoError(t, err)
 	require.NoError(t, yamlv3.Unmarshal(b, &docs))
 	require.Equal(t, []string{"main"}, docs.On.Push.Branches)
@@ -303,11 +402,12 @@ func TestDocs_Deploy(t *testing.T) {
 	}
 	require.NoError(t, yamlv3.Unmarshal(b, &triggers))
 	require.NotContains(t, triggers.On, "pull_request")
-	require.Equal(t, "github.event_name == 'push'", readWorkflow(t, "docs.yaml").Jobs["deploy"].If)
 
 	for name, job := range readWorkflow(t, "release-roll.yaml").Jobs {
 		require.NotContains(t, job.Uses, "docs.yaml", name)
-		require.NotContains(t, job.Permissions, "pages", name)
+		for _, s := range job.Steps {
+			require.NotContains(t, s.Run, "docs/Containerfile", name)
+		}
 	}
 }
 
@@ -321,10 +421,10 @@ func TestControllerList(t *testing.T) {
 	require.ElementsMatch(t, controllers(t), strings.Fields(string(out)))
 }
 
-const setupHugo = "./.github/actions/setup-hugo"
+const setupHugo = "./.forgejo/actions/setup-hugo"
 
 func TestHugoInstalledOnce(t *testing.T) {
-	b, err := os.ReadFile("../.github/actions/setup-hugo/action.yaml")
+	b, err := os.ReadFile("../.forgejo/actions/setup-hugo/action.yaml")
 	require.NoError(t, err)
 	var action struct {
 		Runs struct {
@@ -364,13 +464,13 @@ func TestGoToolchainOnce(t *testing.T) {
 	require.NoError(t, json.Unmarshal(out, &mod))
 	require.Regexp(t, `^go1\.\d+\.\d+$`, mod.Toolchain)
 
-	files, err := filepath.Glob("../.github/workflows/*.yaml")
+	files, err := filepath.Glob("../.forgejo/workflows/*.yaml")
 	require.NoError(t, err)
 	var setups int
 	for _, f := range files {
 		for job, j := range readWorkflow(t, filepath.Base(f)).Jobs {
 			for _, s := range j.Steps {
-				if strings.HasPrefix(s.Uses, "actions/setup-go@") {
+				if strings.HasPrefix(s.Uses, gh+"actions/setup-go@") {
 					setups++
 					require.Equal(t, "go.mod", s.With["go-version-file"], "%s job %s", f, job)
 					require.Empty(t, s.With["go-version"], "%s job %s", f, job)
@@ -388,14 +488,14 @@ func TestGoToolchainOnce(t *testing.T) {
 // TestHelmVersionOnce holds every job that installs Helm to the one release
 // ci tests the chart with.
 func TestHelmVersionOnce(t *testing.T) {
-	files, err := filepath.Glob("../.github/workflows/*.yaml")
+	files, err := filepath.Glob("../.forgejo/workflows/*.yaml")
 	require.NoError(t, err)
 	versions := map[string]bool{}
 	for _, f := range files {
 		name := filepath.Base(f)
 		for job, j := range readWorkflow(t, name).Jobs {
 			for _, s := range j.Steps {
-				if strings.HasPrefix(s.Uses, "azure/setup-helm@") {
+				if strings.HasPrefix(s.Uses, gh+"azure/setup-helm@") {
 					require.NotEmpty(t, s.With["version"], "%s job %s", name, job)
 					versions[s.With["version"]] = true
 				}
@@ -427,7 +527,7 @@ func TestRelease_GoUncached(t *testing.T) {
 	var setups int
 	for job, j := range readWorkflow(t, "release-roll.yaml").Jobs {
 		for _, s := range j.Steps {
-			if strings.HasPrefix(s.Uses, "actions/setup-go@") {
+			if strings.HasPrefix(s.Uses, gh+"actions/setup-go@") {
 				setups++
 				require.Equal(t, "false", s.With["cache"], job)
 			}
@@ -436,15 +536,27 @@ func TestRelease_GoUncached(t *testing.T) {
 	require.NotZero(t, setups)
 }
 
-func TestRelease_AttestsBeforeRelease(t *testing.T) {
+// TestRelease_SignsBeforeRelease holds the images and the chart to being
+// signed with the key in COSIGN_PRIVATE_KEY, which cosign.pub verifies,
+// before the release is created, and no job to asking for an OIDC token.
+func TestRelease_SignsBeforeRelease(t *testing.T) {
 	wf := readWorkflow(t, "release-roll.yaml")
-	require.Subset(t, wf.Jobs["release"].Needs, []string{"images", "provenance", "chart"})
-	for _, job := range []string{"provenance", "chart"} {
-		var attests bool
+	require.Subset(t, wf.Jobs["release"].Needs, []string{"images", "chart"})
+	for name, job := range wf.Jobs {
+		require.NotContains(t, job.Permissions, "id-token", name)
+	}
+	for _, job := range []string{"images", "chart"} {
+		var signs int
 		for _, s := range wf.Jobs[job].Steps {
-			attests = attests || strings.HasPrefix(s.Uses, "actions/attest-build-provenance@")
+			if !strings.Contains(s.Run, "cosign sign") {
+				continue
+			}
+			signs++
+			require.Contains(t, s.Run, "cosign sign --yes --key env://COSIGN_PRIVATE_KEY ", job)
+			require.Equal(t, "${{ secrets.COSIGN_PRIVATE_KEY }}", s.Env["COSIGN_PRIVATE_KEY"], job)
+			require.Equal(t, "${{ secrets.COSIGN_PASSWORD }}", s.Env["COSIGN_PASSWORD"], job)
 		}
-		require.True(t, attests, "job %s does not attest", job)
+		require.Equal(t, 1, signs, "job %s", job)
 	}
 }
 
@@ -455,12 +567,12 @@ const toolsModfile = "hack/tools/go.mod"
 // the golangci-lint toolsModfile requires, the one pin of its version.
 func TestCI_LintsWithToolsPin(t *testing.T) {
 	var lints int
-	files, err := filepath.Glob("../.github/workflows/*.yaml")
+	files, err := filepath.Glob("../.forgejo/workflows/*.yaml")
 	require.NoError(t, err)
 	for _, f := range files {
 		for job, j := range readWorkflow(t, filepath.Base(f)).Jobs {
 			for _, s := range j.Steps {
-				require.False(t, strings.HasPrefix(s.Uses, "golangci/golangci-lint-action@"), "%s job %s", f, job)
+				require.False(t, strings.HasPrefix(s.Uses, gh+"golangci/golangci-lint-action@"), "%s job %s", f, job)
 				require.NotContains(t, s.Run, "golangci-lint ", "%s job %s", f, job)
 				if s.Run == "just lint" {
 					lints++
@@ -522,7 +634,7 @@ func TestCI_LintsWithToolsPin(t *testing.T) {
 	require.Equal(t, strings.TrimPrefix(version, "v"), strings.TrimSpace(string(out)))
 }
 
-// renovateConfig is the part of .github/renovate.json its regex managers
+// renovateConfig is the part of renovate.json its regex managers
 // are read from.
 type renovateConfig struct {
 	CustomManagers []struct {
@@ -574,44 +686,44 @@ func renovateMatches(t *testing.T, cfg renovateConfig) map[string]int {
 }
 
 func TestRenovate_WatchesToolPins(t *testing.T) {
-	b, err := os.ReadFile("../.github/renovate.json")
+	b, err := os.ReadFile("../renovate.json")
 	require.NoError(t, err)
 	var cfg renovateConfig
 	require.NoError(t, json.Unmarshal(b, &cfg))
 	found := renovateMatches(t, cfg)
 
 	inputs := []struct{ prefix, input, dep string }{
-		{"azure/setup-helm@", "version", "helm/helm"},
-		{"ko-build/setup-ko@", "version", "ko-build/ko"},
-		{"extractions/setup-just@", "just-version", "casey/just"},
-		{"zizmorcore/zizmor-action@", "version", "zizmorcore/zizmor"},
-		{"helm/chart-testing-action@", "version", "helm/chart-testing"},
-		{"helm/kind-action@", "version", "kubernetes-sigs/kind"},
-		{"helm/kind-action@", "node_image", "kindest/node"},
+		{gh + "azure/setup-helm@", "version", "helm/helm"},
+		{gh + "ko-build/setup-ko@", "version", "ko-build/ko"},
 	}
-	files, err := filepath.Glob("../.github/workflows/*.yaml")
-	require.NoError(t, err)
 	pinned := map[string]int{}
-	for _, f := range files {
-		for job, j := range readWorkflow(t, filepath.Base(f)).Jobs {
+	var nodeImages int
+	for _, name := range workflowFiles(t) {
+		for job, j := range readWorkflow(t, name).Jobs {
 			for _, s := range j.Steps {
 				for _, in := range inputs {
 					if strings.HasPrefix(s.Uses, in.prefix) {
-						require.NotEmpty(t, s.With[in.input], "%s job %s: %s", f, job, s.Uses)
+						require.NotEmpty(t, s.With[in.input], "%s job %s: %s", name, job, s.Uses)
 						pinned[in.dep]++
 					}
+				}
+				if s.Env["KIND_NODE_IMAGE"] != "" {
+					nodeImages++
 				}
 			}
 		}
 	}
-	require.NotZero(t, pinned["helm/chart-testing"])
-	require.NotZero(t, pinned["kindest/node"])
+	require.NotZero(t, nodeImages)
 	for dep, n := range pinned {
 		require.GreaterOrEqual(t, found[dep], n, dep)
 	}
 	for _, dep := range []string{
 		"helm-unittest/helm-unittest",
 		"gohugoio/hugo",
+		"casey/just",
+		"helm/chart-testing",
+		"kubernetes/kubernetes",
+		"zizmorcore/zizmor",
 		"lycheeverse/lychee",
 		"cgr.dev/chainguard/static",
 		"natsio/prometheus-nats-exporter",
@@ -621,8 +733,20 @@ func TestRenovate_WatchesToolPins(t *testing.T) {
 	} {
 		require.NotZero(t, found[dep], dep)
 	}
-	require.Equal(t, pinned["kindest/node"]+1, found["kindest/node"], "internal/e2e.KindNodeImage")
+	require.Equal(t, nodeImages+1, found["kindest/node"], "internal/e2e.KindNodeImage")
 	require.Equal(t, 2, found["busybox"], "values.yaml and reference/chart.md")
+
+	var dockerfile struct {
+		Dockerfile struct {
+			ManagerFilePatterns []string `json:"managerFilePatterns"`
+		} `json:"dockerfile"`
+	}
+	require.NoError(t, json.Unmarshal(b, &dockerfile))
+	for _, f := range []string{"hack/machine.Containerfile", "docs/Containerfile"} {
+		require.True(t, slices.ContainsFunc(dockerfile.Dockerfile.ManagerFilePatterns, func(p string) bool {
+			return regexp.MustCompile(p[1 : len(p)-1]).MatchString(f)
+		}), "dockerfile manager misses %s", f)
+	}
 
 	var gomod struct {
 		Gomod struct {
@@ -640,7 +764,7 @@ func TestRenovate_WatchesToolPins(t *testing.T) {
 }
 
 func TestRenovate_OwnsActionsAndGomod(t *testing.T) {
-	b, err := os.ReadFile("../.github/renovate.json")
+	b, err := os.ReadFile("../renovate.json")
 	require.NoError(t, err)
 	var cfg struct {
 		EnabledManagers []string `json:"enabledManagers"`
@@ -652,23 +776,95 @@ func TestRenovate_OwnsActionsAndGomod(t *testing.T) {
 	}
 }
 
-// TestKindPinnedOnce holds ci's kind-action to the kind module and node image
-// the e2e harness creates clusters with.
+// TestKindPinnedOnce holds ci's chart install to the kind module go.mod
+// requires and the node image the e2e harness creates clusters with.
 func TestKindPinnedOnce(t *testing.T) {
-	out, err := exec.Command("go", "list", "-m", "-f", "{{.Version}}", "sigs.k8s.io/kind").Output()
-	require.NoError(t, err)
-
-	var runs int
-	for _, j := range readWorkflow(t, "ci.yaml").Jobs {
-		for _, s := range j.Steps {
-			if strings.HasPrefix(s.Uses, "helm/kind-action@") {
-				runs++
-				require.Equal(t, strings.TrimSpace(string(out)), s.With["version"])
-				require.Equal(t, e2e.KindNodeImage, s.With["node_image"])
+	var builds, creates int
+	for _, s := range readWorkflow(t, "ci.yaml").Jobs["chart-install"].Steps {
+		if strings.Contains(s.Run, "sigs.k8s.io/kind") {
+			builds++
+			require.Contains(t, s.Run, `go build -o "$RUNNER_TEMP/bin/kind" sigs.k8s.io/kind`+"\n")
+		}
+		if strings.Contains(s.Run, "kind\" create cluster") {
+			creates++
+			require.Equal(t, e2e.KindNodeImage, s.Env["KIND_NODE_IMAGE"])
+			require.Contains(t, s.Run, `--image "$KIND_NODE_IMAGE"`)
+		}
+	}
+	require.Equal(t, 1, builds)
+	require.Equal(t, 1, creates)
+	for _, name := range workflowFiles(t) {
+		for job, j := range readWorkflow(t, name).Jobs {
+			for _, s := range j.Steps {
+				require.NotContains(t, s.Uses, "kind-action", "%s job %s", name, job)
 			}
 		}
 	}
-	require.NotZero(t, runs)
+}
+
+// TestDownloadsPinned holds every tool a workflow or local action downloads
+// under a <TOOL>_VERSION to a <TOOL>_SHA256 the same step checks.
+func TestDownloadsPinned(t *testing.T) {
+	var steps []step
+	for _, name := range workflowFiles(t) {
+		for _, j := range readWorkflow(t, name).Jobs {
+			steps = append(steps, j.Steps...)
+		}
+	}
+	actions, err := filepath.Glob("../.forgejo/actions/*/action.yaml")
+	require.NoError(t, err)
+	require.NotEmpty(t, actions)
+	for _, f := range actions {
+		b, err := os.ReadFile(f)
+		require.NoError(t, err)
+		var action struct {
+			Runs struct {
+				Steps []step `json:"steps"`
+			} `json:"runs"`
+		}
+		require.NoError(t, yaml.Unmarshal(b, &action))
+		steps = append(steps, action.Runs.Steps...)
+	}
+
+	tools := map[string]bool{}
+	for _, s := range steps {
+		for k, v := range s.Env {
+			tool, ok := strings.CutSuffix(k, "_SHA256")
+			if !ok {
+				continue
+			}
+			tools[tool] = true
+			require.Regexp(t, `^[0-9a-f]{64}$`, v, k)
+			require.Regexp(t, `^v?\d+\.\d+\.\d+$`, s.Env[tool+"_VERSION"], tool)
+			require.Contains(t, s.Run, "sha256sum -c", tool)
+		}
+	}
+	for _, tool := range []string{"HELM_UNITTEST", "HUGO", "CT", "KUBECTL", "ZIZMOR"} {
+		require.True(t, tools[tool], tool)
+	}
+}
+
+// TestCI_LintsWorkflows holds ci's actionlint and zizmor to the configs under
+// .forgejo, which neither finds there by itself, over every workflow.
+func TestCI_LintsWorkflows(t *testing.T) {
+	ci := readWorkflow(t, "ci.yaml")
+	var actionlint, zizmor int
+	for _, s := range ci.Jobs["actionlint"].Steps {
+		if strings.Contains(s.Run, "actionlint") {
+			actionlint++
+			require.Contains(t, s.Run, " -config-file .forgejo/actionlint.yaml .forgejo/workflows/*.yaml")
+		}
+	}
+	for _, s := range ci.Jobs["zizmor"].Steps {
+		if strings.HasPrefix(s.Run, "zizmor ") {
+			zizmor++
+			require.Contains(t, s.Run, " --config .forgejo/zizmor.yaml .forgejo/workflows/*.yaml .forgejo/actions/*/action.yaml")
+		}
+	}
+	require.Equal(t, 1, actionlint)
+	require.Equal(t, 1, zizmor)
+	require.FileExists(t, "../.forgejo/actionlint.yaml")
+	require.FileExists(t, "../.forgejo/zizmor.yaml")
 }
 
 // TestCI_HelmUnittestPinned holds ci's one helm-unittest install to a release
@@ -690,7 +886,7 @@ func TestCI_HelmUnittestPinned(t *testing.T) {
 // versionPkg and versionVar name the variable .ko.yaml's ldflags set to the
 // release.
 const (
-	versionPkg = "github.com/mikluko/nats-operator/internal/manager"
+	versionPkg = "sarak.sh/mikluko/nats-operator/internal/manager"
 	versionVar = "Version"
 )
 
@@ -761,7 +957,7 @@ func stringVar(t *testing.T, dir, name string) bool {
 // TestKo_BuildsSetVersion holds every ko build ci, release and the Justfile
 // run to setting VERSION, which .ko.yaml's ldflags read.
 func TestKo_BuildsSetVersion(t *testing.T) {
-	files, err := filepath.Glob("../.github/workflows/*.yaml")
+	files, err := filepath.Glob("../.forgejo/workflows/*.yaml")
 	require.NoError(t, err)
 	var builds int
 	for _, f := range files {
@@ -821,7 +1017,7 @@ func stepByName(t *testing.T, steps []step, name string) step {
 var renovateVersion = regexp.MustCompile(`^renovate@\d+\.\d+\.\d+$`)
 
 // TestCI_ValidatesRenovateConfig holds ci to running Renovate's own validator,
-// strict and at a pinned release, over .github/renovate.json as a repository
+// strict and at a pinned release, over renovate.json as a repository
 // config.
 func TestCI_ValidatesRenovateConfig(t *testing.T) {
 	var runs int
@@ -834,10 +1030,10 @@ func TestCI_ValidatesRenovateConfig(t *testing.T) {
 			runs++
 			require.Equal(t, []string{"npx", "--yes", "--package"}, args[:3], job)
 			require.Regexp(t, renovateVersion, args[3], job)
-			require.Equal(t, []string{"--", "renovate-config-validator", "--strict", "--no-global", ".github/renovate.json"}, args[4:], job)
+			require.Equal(t, []string{"--", "renovate-config-validator", "--strict", "--no-global", "renovate.json"}, args[4:], job)
 			var node bool
 			for _, prior := range j.Steps {
-				node = node || strings.HasPrefix(prior.Uses, "actions/setup-node@")
+				node = node || strings.HasPrefix(prior.Uses, gh+"actions/setup-node@")
 			}
 			require.True(t, node, "job %s runs npx without setup-node", job)
 		}

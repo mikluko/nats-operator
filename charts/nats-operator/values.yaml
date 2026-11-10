@@ -36,7 +36,7 @@ cluster:
   # without tls; false, such a NatsCluster is refused.
   allowGatewayWithoutTLS: false
   image:
-    repository: ghcr.io/mikluko/nats-operator/cluster-controller
+    repository: sarak.sh/mikluko/nats-operator/cluster-controller
     # Defaults to the chart's appVersion.
     tag: ""
     # sha256:<hex>, appended to the tag to pin the image while the tag is
@@ -67,7 +67,7 @@ auth:
   # receives an account JWT.
   systemConnection: ""
   image:
-    repository: ghcr.io/mikluko/nats-operator/auth-controller
+    repository: sarak.sh/mikluko/nats-operator/auth-controller
     # Defaults to the chart's appVersion.
     tag: ""
     # sha256:<hex>, appended to the tag to pin the image while the tag is
@@ -94,7 +94,7 @@ jetstream:
   enabled: true
   replicas: 1
   image:
-    repository: ghcr.io/mikluko/nats-operator/jetstream-controller
+    repository: sarak.sh/mikluko/nats-operator/jetstream-controller
     # Defaults to the chart's appVersion.
     tag: ""
     # sha256:<hex>, appended to the tag to pin the image while the tag is

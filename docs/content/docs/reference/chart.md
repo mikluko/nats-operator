@@ -10,10 +10,10 @@ Each enabled controller has its own ServiceAccount, ClusterRole and Deployment.
 
 ## Published chart and images
 
-Each release publishes the chart at `oci://ghcr.io/mikluko/nats-operator/charts/nats-operator`.
+Each release publishes the chart at `oci://sarak.sh/mikluko/nats-operator/charts/nats-operator`.
 The release's version is the chart's `version` and its `appVersion`.
 
-Each release publishes the three images at `ghcr.io/mikluko/nats-operator/<controller>:<version>`.
+Each release publishes the three images at `sarak.sh/mikluko/nats-operator/<controller>:<version>`.
 The published chart pins each image by digest.
 A controller whose `image.tag` is set to another tag runs that tag, unpinned.
 
@@ -56,7 +56,7 @@ Table: The values of the cluster controller.
 | `cluster.enabled` | `true` | Installs the cluster controller. |
 | `cluster.replicas` | `1` | Replicas of the Deployment. |
 | `cluster.allowGatewayWithoutTLS` | `false` | Passes `--allow-gateway-without-tls` to the cluster controller. When the value is `false`, the chart does not pass the flag, and the cluster controller refuses a `NatsCluster` that has a gateway without `tls`. |
-| `cluster.image.repository` | `ghcr.io/mikluko/nats-operator/cluster-controller` | Image repository. |
+| `cluster.image.repository` | `sarak.sh/mikluko/nats-operator/cluster-controller` | Image repository. |
 | `cluster.image.tag` | `""` | Image tag. When the value is empty, the tag is the chart's `appVersion`. |
 | `cluster.image.digest` | The release's image digest. `""` in the source tree. | A digest, as `sha256:<hex>`, appended to the image reference as `@<digest>`. The chart appends it only while the tag is the chart's `appVersion`. |
 | `cluster.image.pullPolicy` | `IfNotPresent` | Image pull policy. |
@@ -80,7 +80,7 @@ Table: The values of the auth controller.
 | `auth.enabled` | `true` | Installs the auth controller. |
 | `auth.replicas` | `1` | Replicas of the Deployment. |
 | `auth.systemConnection` | `""` | Passes `--system-connection` to the auth controller, as `namespace/name`. When the value is empty, the chart does not pass the flag. No server then receives an account JWT, a deleted `NatsUser` keeps its connections, and accounts and users have the condition `Distributed` False with the reason `NoSystemConnection`. |
-| `auth.image.repository` | `ghcr.io/mikluko/nats-operator/auth-controller` | Image repository. |
+| `auth.image.repository` | `sarak.sh/mikluko/nats-operator/auth-controller` | Image repository. |
 | `auth.image.tag` | `""` | Image tag. When the value is empty, the tag is the chart's `appVersion`. |
 | `auth.image.digest` | The release's image digest. `""` in the source tree. | A digest, as `sha256:<hex>`, appended to the image reference as `@<digest>`. The chart appends it only while the tag is the chart's `appVersion`. |
 | `auth.image.pullPolicy` | `IfNotPresent` | Image pull policy. |
@@ -103,7 +103,7 @@ Table: The values of the JetStream controller.
 |---|---|---|
 | `jetstream.enabled` | `true` | Installs the JetStream controller. |
 | `jetstream.replicas` | `1` | Replicas of the Deployment. |
-| `jetstream.image.repository` | `ghcr.io/mikluko/nats-operator/jetstream-controller` | Image repository. |
+| `jetstream.image.repository` | `sarak.sh/mikluko/nats-operator/jetstream-controller` | Image repository. |
 | `jetstream.image.tag` | `""` | Image tag. When the value is empty, the tag is the chart's `appVersion`. |
 | `jetstream.image.digest` | The release's image digest. `""` in the source tree. | A digest, as `sha256:<hex>`, appended to the image reference as `@<digest>`. The chart appends it only while the tag is the chart's `appVersion`. |
 | `jetstream.image.pullPolicy` | `IfNotPresent` | Image pull policy. |

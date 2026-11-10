@@ -5,7 +5,7 @@ import (
 
 	"github.com/nats-io/nkeys"
 
-	"github.com/mikluko/nats-operator/internal/jwtplane"
+	"sarak.sh/mikluko/nats-operator/internal/jwtplane"
 )
 
 // superclusterData is what superclusterTemplate renders.

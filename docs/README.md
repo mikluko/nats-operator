@@ -1,6 +1,6 @@
 # docs
 
-This directory is the Hugo site published at <https://mikluko.github.io/nats-operator/>.
+This directory is the Hugo site published at <https://sarak.sh/nats-operator/>.
 Its theme is this directory's own `layouts/` and `assets/`, with the Geist Mono and Manrope fonts under `static/fonts/` beside their licenses.
 This guide shows you how to build the site and check it before you open a pull request.
 [`STYLE.md`](STYLE.md) is the writing style for the site's pages.
@@ -53,7 +53,6 @@ From the repository root:
 
 ## Publish the site
 
-`.github/workflows/docs.yaml` builds the site and deploys it on every push to `main`.
-Run by hand, the workflow keeps the build as the run's `github-pages` artifact and deploys nothing.
-
-The deployment needs one repository setting, made once: **Settings > Pages > Build and deployment > Source: GitHub Actions**.
+`.forgejo/workflows/docs.yaml` builds the site on every push to `main`, and pushes it as the image `sarak.sh/mikluko/nats-operator/docs`, tagged `main-<short sha>-<unix time>`.
+The image serves the site with nginx on port 8080, as `Containerfile` here builds it.
+Run by hand, the workflow builds the image and pushes nothing.

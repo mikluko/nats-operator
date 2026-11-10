@@ -57,7 +57,7 @@ params:
 {{- if or (eq $e.Kind 4) (eq $e.Kind 5) }}{{ $e = $e.UnderlyingType }}{{ else if eq $e.Kind 3 }}{{ $e = $e.ValueType }}{{ end -}}
 {{- end -}}
 {{- $link := "" -}}
-{{- if hasPrefix "github.com/mikluko/nats-operator/api/" $e.Package }}{{ $link = print "#" $e.Name }}
+{{- if hasPrefix "sarak.sh/mikluko/nats-operator/api/" $e.Package }}{{ $link = print "#" $e.Name }}
 {{- else if hasPrefix "k8s.io/" $e.Package }}{{ $link = print "https://pkg.go.dev/" $e.Package "#" $e.Name }}
 {{- end -}}
 {{- if $link }}[{{ template "typebadge" . }}]({{ $link }}){{ else }}{{ template "typebadge" . }}{{ end -}}

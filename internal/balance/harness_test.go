@@ -13,7 +13,7 @@ import (
 	"github.com/nats-io/nkeys"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/nats-operator/internal/natstest"
+	"sarak.sh/mikluko/nats-operator/internal/natstest"
 )
 
 // testCluster is the NATS cluster name every harness server joins.

@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/client-go/tools/events"
 
-	"github.com/mikluko/nats-operator/internal/jwtplane"
-	"github.com/mikluko/nats-operator/internal/natstest"
+	"sarak.sh/mikluko/nats-operator/internal/jwtplane"
+	"sarak.sh/mikluko/nats-operator/internal/natstest"
 )
 
 // A plane is an auth plane signed by jwtplane: account A carries the

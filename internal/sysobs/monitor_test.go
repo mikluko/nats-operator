@@ -12,7 +12,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/nats-operator/internal/natstest"
+	"sarak.sh/mikluko/nats-operator/internal/natstest"
 )
 
 // startNoAuthCluster starts a NATS cluster with no accounts, no client auth

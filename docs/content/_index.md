@@ -21,9 +21,9 @@ params:
     - name: API reference
       icon: book
       page: /docs/reference/api
-    - name: GitHub
-      icon: github
-      url: https://github.com/mikluko/nats-operator
+    - name: Source
+      icon: code
+      url: https://sarak.sh/mikluko/nats-operator
   controllersHeading: Controllers
   controllers:
     - name: Cluster controller
@@ -69,7 +69,7 @@ You need Kubernetes 1.33, Helm 3.14 and nats-server 2.15.0, or later.
 To install all three controllers, run this command with `<version>` replaced by a release version:
 
 ```sh
-helm install nats-operator oci://ghcr.io/mikluko/nats-operator/charts/nats-operator \
+helm install nats-operator oci://sarak.sh/mikluko/nats-operator/charts/nats-operator \
   --version <version> \
   --namespace nats-operator --create-namespace
 ```
@@ -78,5 +78,5 @@ Then follow [the quickstart]({{< relref "docs/stories/01-quickstart" >}}) to dep
 
 [Install]({{< relref "docs/install" >}}) shows how to install a subset of the controllers, upgrade and uninstall.
 [Chart and controller flags]({{< relref "docs/reference/chart" >}}) lists the chart's values and the RBAC of each controller.
-The images and the chart are signed keylessly with cosign and carry a GitHub build provenance attestation.
-[Verifying a release](https://github.com/mikluko/nats-operator/blob/main/SECURITY.md#verifying-a-release) has the commands that check both.
+The images and the chart are signed with cosign.
+[Verifying a release](https://sarak.sh/mikluko/nats-operator/src/branch/main/SECURITY.md#verifying-a-release) has the commands that check the signatures.

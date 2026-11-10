@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/yaml"
 
-	"github.com/mikluko/nats-operator/internal/e2e/placeholders"
+	"sarak.sh/mikluko/nats-operator/internal/e2e/placeholders"
 )
 
 // TestEnvtest pins, against the generated CRDs in a real API server, that

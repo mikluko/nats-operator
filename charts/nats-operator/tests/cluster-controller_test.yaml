@@ -119,7 +119,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/mikluko/nats-operator/cluster-controller:9.8.7
+          value: sarak.sh/mikluko/nats-operator/cluster-controller:9.8.7
   - it: tags its image with cluster.image.tag when set
     set:
       cluster.image.tag: v9
@@ -127,7 +127,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/mikluko/nats-operator/cluster-controller:v9
+          value: sarak.sh/mikluko/nats-operator/cluster-controller:v9
   - it: pins its image to cluster.image.digest after the tag when set
     chart:
       appVersion: 9.8.7
@@ -137,7 +137,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/mikluko/nats-operator/cluster-controller:9.8.7@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          value: sarak.sh/mikluko/nats-operator/cluster-controller:9.8.7@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   - it: keeps cluster.image.digest on a cluster.image.tag equal to appVersion
     chart:
       appVersion: 9.8.7
@@ -148,7 +148,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/mikluko/nats-operator/cluster-controller:9.8.7@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          value: sarak.sh/mikluko/nats-operator/cluster-controller:9.8.7@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   - it: drops cluster.image.digest on a cluster.image.tag other than appVersion
     chart:
       appVersion: 9.8.7
@@ -159,7 +159,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/mikluko/nats-operator/cluster-controller:v9
+          value: sarak.sh/mikluko/nats-operator/cluster-controller:v9
   - it: refuses more than one replica while leaderElection.enabled is false
     set:
       leaderElection.enabled: false

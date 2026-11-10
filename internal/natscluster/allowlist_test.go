@@ -13,8 +13,8 @@ import (
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/stretchr/testify/require"
 
-	clusterv1beta1 "github.com/mikluko/nats-operator/api/cluster/v1beta1"
-	"github.com/mikluko/nats-operator/internal/natstest"
+	clusterv1beta1 "sarak.sh/mikluko/nats-operator/api/cluster/v1beta1"
+	"sarak.sh/mikluko/nats-operator/internal/natstest"
 )
 
 // TestReloadAllowLists_EverySupportedVersion pins a reload allow-list for

@@ -36,29 +36,44 @@ permissions:
 
 jobs:
   stories:
-    runs-on: ubuntu-latest
+    runs-on: privileged
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7
+      - uses: https://github.com/actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - uses: extractions/setup-just@v4
-        with:
-          just-version: 1.58.0
-      - uses: azure/setup-helm@v5
+      - uses: ./.forgejo/actions/setup-just
+      - uses: https://github.com/azure/setup-helm@v5
         with:
           version: v4.3.0
-      - uses: ko-build/setup-ko@v0.10
+      - uses: https://github.com/ko-build/setup-ko@v0.10
         with:
           version: v0.19.1
+        env:
+          KO_DOCKER_REPO: localhost/nats-operator
+      # The privileged runner is a pod without systemd, so the service is
+      # started by hand there; a host with systemd gets its socket unit.
       - name: Rootful podman
         run: |
-          sudo apt-get update
-          sudo apt-get install -y podman
-          sudo systemctl enable --now podman.socket
+          if ! sudo test -S /run/podman/podman.sock; then
+            if ! command -v podman >/dev/null; then
+              sudo apt-get update
+              sudo apt-get install -y podman
+            fi
+            if [ -d /run/systemd/system ]; then
+              sudo systemctl enable --now podman.socket
+            else
+              sudo mkdir -p /run/podman
+              sudo sh -c 'nohup podman system service --time=0 unix:///run/podman/podman.sock >/var/log/podman-service.log 2>&1 &'
+              for _ in $(seq 1 30); do
+                sudo test -S /run/podman/podman.sock && break
+                sleep 1
+              done
+            fi
+          fi
           sudo test -S /run/podman/podman.sock
       - name: Stories
         env:

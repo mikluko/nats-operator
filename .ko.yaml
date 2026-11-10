@@ -4,12 +4,12 @@ builds:
   - id: cluster-controller
     main: ./cmd/cluster-controller
     ldflags:
-      - -X github.com/mikluko/nats-operator/internal/manager.Version={{.Env.VERSION}}
+      - -X sarak.sh/mikluko/nats-operator/internal/manager.Version={{.Env.VERSION}}
   - id: auth-controller
     main: ./cmd/auth-controller
     ldflags:
-      - -X github.com/mikluko/nats-operator/internal/manager.Version={{.Env.VERSION}}
+      - -X sarak.sh/mikluko/nats-operator/internal/manager.Version={{.Env.VERSION}}
   - id: jetstream-controller
     main: ./cmd/jetstream-controller
     ldflags:
-      - -X github.com/mikluko/nats-operator/internal/manager.Version={{.Env.VERSION}}
+      - -X sarak.sh/mikluko/nats-operator/internal/manager.Version={{.Env.VERSION}}

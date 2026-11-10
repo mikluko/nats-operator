@@ -1,0 +1,8 @@
+self-hosted-runner:
+  labels:
+    - privileged
+paths:
+  .forgejo/workflows/*.yaml:
+    ignore:
+      # actionlint v1.7.12 reads only owner/repo@ref, not the full URLs Forgejo resolves actions by.
+      - 'specifying action "https://[^"]+" in invalid format.+'

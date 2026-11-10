@@ -1,4 +1,4 @@
-baseURL = "https://mikluko.github.io/nats-operator/"
+baseURL = "https://sarak.sh/nats-operator/"
 title = "nats-operator"
 locale = "en"
 disableKinds = ["taxonomy", "term", "RSS", "sitemap"]
@@ -22,8 +22,8 @@ enableGitInfo = true
   weight = 1
 
 [[menus.main]]
-  name = "GitHub"
-  url = "https://github.com/mikluko/nats-operator"
+  name = "Source"
+  url = "https://sarak.sh/mikluko/nats-operator"
   weight = 2
 
 [markup.highlight]

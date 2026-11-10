@@ -7,7 +7,7 @@ package streamctl
 import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	js "github.com/mikluko/nats-operator/api/jetstream/v1beta1"
+	js "sarak.sh/mikluko/nats-operator/api/jetstream/v1beta1"
 )
 
 // ServerStream is the server-side stream obj stands for: a NatsStream's own,

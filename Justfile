@@ -19,7 +19,7 @@ image platform=("linux/" + if arch() == "aarch64" { "arm64" } else { "amd64" }):
     for c in {{ controllers }}; do
         set -- "$@" "./cmd/$c"
     done
-    VERSION="${VERSION:-dev}" KO_DOCKER_REPO=ghcr.io/mikluko/nats-operator ko build --push=false -B --platform "{{ platform }}" "$@"
+    VERSION="${VERSION:-dev}" KO_DOCKER_REPO=sarak.sh/mikluko/nats-operator ko build --push=false -B --platform "{{ platform }}" "$@"
 
 # Arguments go to go test: `just test -race`.
 test *args:

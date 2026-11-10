@@ -33,7 +33,7 @@ You need:
    To install all three controllers, run this command with `<version>` replaced by a release version, such as `0.2.0`:
 
    ```sh
-   helm install nats-operator oci://ghcr.io/mikluko/nats-operator/charts/nats-operator \
+   helm install nats-operator oci://sarak.sh/mikluko/nats-operator/charts/nats-operator \
      --version <version> \
      --namespace nats-operator --create-namespace
    ```
@@ -42,7 +42,7 @@ You need:
    This command installs the cluster controller alone:
 
    ```sh
-   helm install nats-operator oci://ghcr.io/mikluko/nats-operator/charts/nats-operator \
+   helm install nats-operator oci://sarak.sh/mikluko/nats-operator/charts/nats-operator \
      --version <version> \
      --namespace nats-operator --create-namespace \
      --set auth.enabled=false --set jetstream.enabled=false
@@ -107,7 +107,7 @@ If the installed version is 0.2.x or earlier, follow [Upgrade from 0.2.x or earl
 1. Pull the chart of the new version:
 
    ```sh
-   helm pull oci://ghcr.io/mikluko/nats-operator/charts/nats-operator --version <version> --untar
+   helm pull oci://sarak.sh/mikluko/nats-operator/charts/nats-operator --version <version> --untar
    ```
 
    Helm unpacks the chart into the directory `nats-operator`.
@@ -123,7 +123,7 @@ If the installed version is 0.2.x or earlier, follow [Upgrade from 0.2.x or earl
 1. Upgrade the release:
 
    ```sh
-   helm upgrade nats-operator oci://ghcr.io/mikluko/nats-operator/charts/nats-operator \
+   helm upgrade nats-operator oci://sarak.sh/mikluko/nats-operator/charts/nats-operator \
      --version <version> --namespace nats-operator --reset-then-reuse-values
    ```
 

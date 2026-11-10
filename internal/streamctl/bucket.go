@@ -9,8 +9,8 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/mikluko/nats-operator/internal/jsapi"
-	"github.com/mikluko/nats-operator/internal/lifecycle"
+	"sarak.sh/mikluko/nats-operator/internal/jsapi"
+	"sarak.sh/mikluko/nats-operator/internal/lifecycle"
 )
 
 // ReasonNotABucket is Terminal's reason when the stream a bucket would be

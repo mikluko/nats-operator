@@ -14,8 +14,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  REGISTRY: ghcr.io/mikluko/nats-operator
-  CHART_REPOSITORY: oci://ghcr.io/mikluko/nats-operator/charts
+  REGISTRY: sarak.sh/mikluko/nats-operator
+  CHART_REPOSITORY: oci://sarak.sh/mikluko/nats-operator/charts
+  MODULE: sarak.sh/mikluko/nats-operator
 
 jobs:
   plan:
@@ -29,12 +30,12 @@ jobs:
       notes: ${{ steps.changelog.outputs.notes }}
       publish: ${{ steps.version.outputs.publish }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
       - id: changelog
-        uses: mikluko/action-changelog@v1
+        uses: https://sarak.sh/actions/changelog@v1
         with:
           due-prerelease: true
       - id: version
@@ -75,27 +76,27 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write
     outputs:
       digests: ${{ steps.digests.outputs.digests }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7
+      - uses: https://github.com/actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: false
-      - uses: ko-build/setup-ko@v0.10
+      - uses: https://github.com/ko-build/setup-ko@v0.10
         with:
           version: v0.19.1
-      - uses: sigstore/cosign-installer@v4.1.2
+        env:
+          KO_DOCKER_REPO: ${{ env.REGISTRY }}
+      - uses: https://github.com/sigstore/cosign-installer@v4.1.2
       - name: Log in
         if: needs.plan.outputs.publish == 'true'
         env:
-          ACTOR: ${{ github.actor }}
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: printf '%s' "$TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
+          TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: printf '%s' "$TOKEN" | ko login sarak.sh --username agent --password-stdin
       - name: Build
         env:
           KO_DOCKER_REPO: ${{ env.REGISTRY }}
@@ -128,33 +129,12 @@ jobs:
         if: needs.plan.outputs.publish == 'true'
         env:
           DIGESTS: ${{ steps.digests.outputs.digests }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
           jq -r '.[] | "\(.name)@\(.digest)"' <<<"$DIGESTS" | while read -r ref; do
-            cosign sign --yes "$ref"
+            cosign sign --yes --key env://COSIGN_PRIVATE_KEY "$ref"
           done
-
-  provenance:
-    needs: [plan, images]
-    if: needs.plan.outputs.publish == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-      id-token: write
-      attestations: write
-    strategy:
-      matrix:
-        subject: ${{ fromJSON(needs.images.outputs.digests) }}
-    steps:
-      - name: Log in
-        env:
-          ACTOR: ${{ github.actor }}
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: printf '%s' "$TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
-      - uses: actions/attest-build-provenance@v4
-        with:
-          subject-name: ${{ matrix.subject.name }}
-          subject-digest: ${{ matrix.subject.digest }}
-          push-to-registry: true
 
   chart:
     needs: [plan, images]
@@ -163,17 +143,15 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write
-      attestations: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: azure/setup-helm@v5
+      - uses: https://github.com/azure/setup-helm@v5
         with:
           version: v4.3.0
-      - uses: sigstore/cosign-installer@v4.1.2
-      - uses: actions/setup-go@v7
+      - uses: https://github.com/sigstore/cosign-installer@v4.1.2
+      - uses: https://github.com/actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: false
@@ -195,28 +173,20 @@ jobs:
         shell: bash
         env:
           VERSION: ${{ needs.plan.outputs.version }}
-          ACTOR: ${{ github.actor }}
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
-          printf '%s' "$TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
-          printf '%s' "$TOKEN" | helm registry login ghcr.io --username "$ACTOR" --password-stdin
+          printf '%s' "$TOKEN" | docker login sarak.sh --username agent --password-stdin
+          printf '%s' "$TOKEN" | helm registry login sarak.sh --username agent --password-stdin
           helm push "$RUNNER_TEMP/chart/nats-operator-$VERSION.tgz" "$CHART_REPOSITORY" 2>&1 | tee "$RUNNER_TEMP/push.log"
           digest=$(awk '$1 == "Digest:" { print $2 }' "$RUNNER_TEMP/push.log")
           test -n "$digest"
-          name=${CHART_REPOSITORY#oci://}/nats-operator
-          cosign sign --yes "$name@$digest"
-          echo "name=$name" >>"$GITHUB_OUTPUT"
-          echo "digest=$digest" >>"$GITHUB_OUTPUT"
-      - if: needs.plan.outputs.publish == 'true'
-        uses: actions/attest-build-provenance@v4
-        with:
-          subject-name: ${{ steps.push.outputs.name }}
-          subject-digest: ${{ steps.push.outputs.digest }}
-          push-to-registry: true
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY "${CHART_REPOSITORY#oci://}/nats-operator@$digest"
 
   # Last, so a release exists only once every artifact it names does.
   release:
-    needs: [plan, images, provenance, chart]
+    needs: [plan, images, chart]
     if: ${{ !cancelled() && !failure() && needs.plan.outputs.due == 'true' }}
     runs-on: ubuntu-latest
     permissions:
@@ -233,12 +203,18 @@ jobs:
       - name: Release
         if: needs.plan.outputs.publish == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.plan.outputs.tag }}
           PRERELEASE: ${{ needs.plan.outputs.prerelease }}
         run: |
-          flags=
-          if [ "$PRERELEASE" = true ]; then flags=--prerelease; fi
-          gh release create "$TAG" --verify-tag --title "$TAG" \
-            --notes-file "$RUNNER_TEMP/notes.md" $flags
+          jq -n --arg tag "$TAG" --rawfile body "$RUNNER_TEMP/notes.md" --argjson pre "$PRERELEASE" \
+            '{tag_name: $tag, name: $tag, body: $body, prerelease: $pre}' |
+            curl --fail-with-body -sS -X POST \
+              -H "Authorization: token $TOKEN" -H 'Content-Type: application/json' \
+              -d @- "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/releases"
+      # The proxy fetches a version on first request; asking now lists it on pkg.go.dev.
+      - name: Announce to the Go proxy
+        if: needs.plan.outputs.publish == 'true'
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: curl --fail-with-body -sS "https://proxy.golang.org/$MODULE/@v/$TAG.info"

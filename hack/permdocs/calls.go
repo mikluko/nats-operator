@@ -1,6 +1,6 @@
 package main
 
-import "github.com/mikluko/nats-operator/internal/jwtplane"
+import "sarak.sh/mikluko/nats-operator/internal/jwtplane"
 
 // natsGo marks a call made inside nats.go's jetstream package rather than by
 // a subject in this module's code.

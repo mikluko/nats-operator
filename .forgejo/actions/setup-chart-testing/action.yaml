@@ -1,0 +1,24 @@
+name: setup-chart-testing
+description: Installs chart-testing, and the yamllint and yamale its lint runs.
+runs:
+  using: composite
+  steps:
+    - name: Install chart-testing
+      shell: bash
+      env:
+        CT_VERSION: 3.14.0
+        CT_SHA256: d16f0583616885423826241164ce1f6589c6fe5332fa74f374ebd2bd3cb3fe1f
+        YAMLLINT_VERSION: 1.33.0
+        YAMALE_VERSION: 6.0.0
+      run: | # zizmor: ignore[github-env] the action writes fixed paths under RUNNER_TEMP, nothing a caller passes
+        dir="$RUNNER_TEMP/chart-testing"
+        mkdir -p "$dir"
+        curl -fsSLo "$dir/ct.tar.gz" \
+          "https://github.com/helm/chart-testing/releases/download/v${CT_VERSION}/chart-testing_${CT_VERSION}_linux_amd64.tar.gz"
+        echo "$CT_SHA256  $dir/ct.tar.gz" | sha256sum -c --quiet
+        tar -xzf "$dir/ct.tar.gz" -C "$dir"
+        python3 -m venv "$dir/venv"
+        "$dir/venv/bin/pip" install --quiet "yamllint==$YAMLLINT_VERSION" "yamale==$YAMALE_VERSION"
+        echo "$dir" >>"$GITHUB_PATH"
+        echo "$dir/venv/bin" >>"$GITHUB_PATH"
+        echo "CT_CONFIG_DIR=$dir/etc" >>"$GITHUB_ENV"
