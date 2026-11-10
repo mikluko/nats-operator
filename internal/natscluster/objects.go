@@ -29,8 +29,8 @@ import (
 const (
 	DefaultImage       = "nats"
 	ExporterRepository = "natsio/prometheus-nats-exporter"
-	ExporterTag        = "0.20.2"
-	ExporterDigest     = "sha256:c623b608e148e31e1c1c878673a197f1828e58ce90de4f01d22f1baa84c8fee9"
+	ExporterTag        = "0.20.3"
+	ExporterDigest     = "sha256:4b8ddc1c86fec360b5cd3d5e1fbc6fb52bdafd5805bba3901cc52926538af255"
 )
 
 var exporterResources = corev1.ResourceRequirements{
