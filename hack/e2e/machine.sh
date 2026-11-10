@@ -5,7 +5,7 @@
 # it prints the helm version it installs and does nothing else.
 set -eu
 
-helm_version=v4.3.0
+helm_version=v4.3.1
 if [ "${1:-}" = versions ]; then
 	echo "helm $helm_version"
 	exit 0

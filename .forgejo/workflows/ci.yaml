@@ -182,7 +182,7 @@ jobs:
           fetch-depth: 0
       - uses: https://github.com/azure/setup-helm@v5
         with:
-          version: v4.3.0
+          version: v4.3.1
       - uses: ./.forgejo/actions/setup-just
       - name: Install helm-unittest
         env:
@@ -209,7 +209,7 @@ jobs:
           fetch-depth: 0
       - uses: https://github.com/azure/setup-helm@v5
         with:
-          version: v4.3.0
+          version: v4.3.1
       - uses: ./.forgejo/actions/setup-chart-testing
       - uses: https://github.com/actions/setup-go@v7
         with:
