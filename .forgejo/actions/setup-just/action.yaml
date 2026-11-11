@@ -6,7 +6,7 @@ runs:
     - name: Install just
       shell: bash
       env:
-        JUST_VERSION: 1.58.0
+        JUST_VERSION: 1.59.0
         JUST_SHA256_X86_64: 4a5cc2f53e6f0f8c59092a6cc38291eb729d46a7dd95d3ae582008881b84931d
         JUST_SHA256_AARCH64: 748237128c4c40cbdabc65e841d05ceba13cc23a91eaba395495894c1d9764df
       run: | # zizmor: ignore[github-env] the action writes fixed paths under RUNNER_TEMP, nothing a caller passes
