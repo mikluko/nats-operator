@@ -6,7 +6,7 @@ runs:
     - name: Install Hugo
       shell: bash
       env:
-        HUGO_VERSION: 0.166.0
+        HUGO_VERSION: 0.169.0
         HUGO_SHA256: 0e39b901e3f919f1daae05c8ff64f0c14c8a348ef46886d63f8e6d1bb2653885
       run: | # zizmor: ignore[github-env] the action writes fixed paths under RUNNER_TEMP, nothing a caller passes
         curl -fsSLo "$RUNNER_TEMP/hugo.tar.gz" \
