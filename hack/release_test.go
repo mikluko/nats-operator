@@ -103,7 +103,7 @@ func workflowFiles(t *testing.T) []string {
 // is the forge's own changelog action.
 const (
 	gh              = "https://github.com/"
-	changelogAction = "https://sarak.sh/actions/changelog@"
+	changelogAction = "https://sarak.sh/mikluko/changelog@"
 )
 
 // TestWorkflows_ActionsByURL holds every action a workflow uses to a full URL

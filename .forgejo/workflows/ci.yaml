@@ -293,4 +293,4 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: https://sarak.sh/actions/changelog@v1
+      - uses: https://sarak.sh/mikluko/changelog@v1
