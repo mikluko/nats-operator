@@ -113,7 +113,7 @@ jobs:
           cache-dependency-path: |
             go.sum
             hack/tools/go.sum
-      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
   actionlint:
     runs-on: ubuntu-latest
