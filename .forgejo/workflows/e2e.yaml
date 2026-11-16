@@ -48,7 +48,7 @@ jobs:
       - uses: ./.forgejo/actions/setup-just
       - uses: https://github.com/azure/setup-helm@v5
         with:
-          version: v4.3.0
+          version: v4.3.1
       - uses: https://github.com/ko-build/setup-ko@v0.10
         with:
           version: v0.19.1
