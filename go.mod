@@ -14,10 +14,10 @@ require (
 	github.com/distribution/reference v0.6.0
 	github.com/go-logr/logr v1.4.4
 	github.com/google/cel-go v0.30.0
-	github.com/nats-io/jwt/v2 v2.8.2
+	github.com/nats-io/jwt/v2 v2.8.3
 	github.com/nats-io/nats-server/v2 v2.15.0
 	github.com/nats-io/nats.go v1.54.0
-	github.com/nats-io/nkeys v0.4.16
+	github.com/nats-io/nkeys v0.4.17
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/common v0.70.1
 	github.com/prometheus/otlptranslator v1.0.0
