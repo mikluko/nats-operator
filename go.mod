@@ -2,7 +2,7 @@ module sarak.sh/mikluko/nats-operator
 
 go 1.27
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 tool (
 	github.com/elastic/crd-ref-docs
